@@ -104,7 +104,7 @@ function checkWorktrees() {
 }
 function checkApiKeys() {
     const ch = outputChannel();
-    ch.appendLine("The ai-router reads API keys from environment variables at session start.");
+    ch.appendLine("The ai_router reads API keys from environment variables at session start.");
     ch.appendLine("");
     ch.appendLine("Keys used (depending on configured providers):");
     ch.appendLine("  ANTHROPIC_API_KEY  — Claude (claude.ai)");
@@ -137,7 +137,7 @@ function checkLayout() {
     const dirs = [
         path.join("docs", "session-sets"),
         path.join("docs", "planning"),
-        "ai-router",
+        "ai_router",
     ];
     ch.appendLine(`Expected layout under: ${root}`);
     ch.appendLine("");
@@ -170,7 +170,7 @@ function registerTroubleshootCommand(context) {
             },
             {
                 label: "$(key) API key not found",
-                detail: "Show which environment variables the ai-router expects",
+                detail: "Show which environment variables the ai_router expects",
                 run: checkApiKeys,
             },
             {

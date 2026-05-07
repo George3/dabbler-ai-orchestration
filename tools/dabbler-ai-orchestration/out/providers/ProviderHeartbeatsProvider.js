@@ -40,6 +40,7 @@ exports.buildTreeItem = buildTreeItem;
 exports.parseFetchResult = parseFetchResult;
 const vscode = __importStar(require("vscode"));
 const pythonRunner_1 = require("../utils/pythonRunner");
+const aiRouterInstall_1 = require("../utils/aiRouterInstall");
 /**
  * Tree view backing the ``Provider Heartbeats`` activity-bar entry.
  *
@@ -66,6 +67,7 @@ class ProviderHeartbeatsProvider {
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this._cache = null;
         this._lastError = null;
+        this._lastErrorReason = null;
         this._inFlight = null;
     }
     refresh() {
@@ -86,6 +88,9 @@ class ProviderHeartbeatsProvider {
         return buildTreeItem(element);
     }
     async getChildren(element) {
+        if (element?.kind === "notInstalled") {
+            return [{ kind: "notInstalledAction" }];
+        }
         if (element)
             return [];
         const root = this.deps.getWorkspaceRoot();
@@ -95,6 +100,9 @@ class ProviderHeartbeatsProvider {
         const settings = this._readSettings();
         const payload = await this._getPayload(root, settings.lookbackMinutes);
         if (!payload) {
+            if (this._lastErrorReason === "module_not_installed") {
+                return [{ kind: "notInstalled" }];
+            }
             const detail = this._lastError ?? "Unknown error.";
             return [
                 {
@@ -153,9 +161,14 @@ class ProviderHeartbeatsProvider {
                     lookback,
                 };
                 this._lastError = null;
+                this._lastErrorReason = null;
             }
             else {
                 this._lastError = result.message;
+                this._lastErrorReason = result.reason ?? null;
+                // Round-5 verifier catch: clear the cache so the failure
+                // surfaces. See ProviderQueuesProvider for the full rationale.
+                this._cache = null;
             }
         })();
         try {
@@ -221,6 +234,22 @@ function buildTreeItem(node) {
             item.contextValue = node.isError ? "heartbeatInfo:error" : "heartbeatInfo";
             return item;
         }
+        case "notInstalled": {
+            const item = new vscode.TreeItem("ai_router not installed in this Python environment.", vscode.TreeItemCollapsibleState.Expanded);
+            item.iconPath = new vscode.ThemeIcon("info");
+            item.contextValue = "heartbeatInfo:notInstalled";
+            return item;
+        }
+        case "notInstalledAction": {
+            const item = new vscode.TreeItem('Click here to run "Dabbler: Install ai-router"', vscode.TreeItemCollapsibleState.None);
+            item.iconPath = new vscode.ThemeIcon("cloud-download");
+            item.command = {
+                command: "dabblerSessionSets.installAiRouter",
+                title: "Install ai-router",
+            };
+            item.contextValue = "heartbeatInfo:notInstalledAction";
+            return item;
+        }
     }
 }
 function buildProviderTooltip(provider, d, silent) {
@@ -254,6 +283,13 @@ function parseFetchResult(result, lookbackMinutes) {
         return { ok: false, message: "heartbeat_status timed out (10s)" };
     }
     if (result.exitCode !== 0) {
+        if ((0, aiRouterInstall_1.isAiRouterNotInstalled)(result.stderr)) {
+            return {
+                ok: false,
+                message: "ai_router is not installed in the configured Python environment.",
+                reason: "module_not_installed",
+            };
+        }
         const trimmed = (result.stderr || result.stdout).trim();
         const detail = trimmed ? ` — ${trimmed.split("\n").slice(-3).join(" / ")}` : "";
         return {

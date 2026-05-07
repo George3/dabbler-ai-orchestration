@@ -23,6 +23,7 @@ export interface LiveSession {
     startedAt: string | null;
     completedAt: string | null;
     verificationVerdict: string | null;
+    forceClosed: boolean | null;
 }
 export interface SessionSet {
     name: string;

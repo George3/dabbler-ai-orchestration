@@ -1,5 +1,5 @@
 export interface PythonRunOptions {
-    /** Path to the workspace root that owns the ai-router/ directory. */
+    /** Path to the workspace root that owns the ai_router/ directory. */
     cwd: string;
     /** Module name passed to ``python -m`` (e.g. ``ai_router.queue_status``). */
     module: string;

@@ -1287,7 +1287,7 @@ function parseSessionSetConfig(specPath) {
   const headingMatch = text.match(
     /##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i
   );
-  const block = headingMatch ? headingMatch[1] : text.slice(0, 4e3);
+  const block = headingMatch ? headingMatch[1] : text;
   const flagRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(true|false)\\s*$`, "im");
   const stringRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*([\\w-]+)\\s*$`, "im");
   const uat = block.match(flagRe("requiresUAT"));

@@ -17,7 +17,7 @@ export interface HeartbeatStatusPayload {
     providers: Record<string, ProviderHeartbeat>;
     disclaimer: string;
 }
-export type HeartbeatTreeNode = ProviderNode | InfoNode;
+export type HeartbeatTreeNode = ProviderNode | InfoNode | NotInstalledNode | NotInstalledActionNode;
 interface ProviderNode {
     kind: "provider";
     provider: string;
@@ -30,6 +30,13 @@ interface InfoNode {
     detail?: string;
     isError?: boolean;
 }
+/** See ProviderQueuesProvider.NotInstalledNode — same shape, same purpose. */
+interface NotInstalledNode {
+    kind: "notInstalled";
+}
+interface NotInstalledActionNode {
+    kind: "notInstalledAction";
+}
 export interface ProviderHeartbeatsDeps {
     getWorkspaceRoot: () => string | undefined;
     /** Override for tests. */
@@ -39,6 +46,7 @@ export interface ProviderHeartbeatsDeps {
     } | {
         ok: false;
         message: string;
+        reason?: "module_not_installed";
     }>;
     /** Override for tests. */
     getSettings?: () => {
@@ -54,6 +62,7 @@ export declare class ProviderHeartbeatsProvider implements vscode.TreeDataProvid
     readonly onDidChangeTreeData: vscode.Event<void | HeartbeatTreeNode | undefined>;
     private _cache;
     private _lastError;
+    private _lastErrorReason;
     private _inFlight;
     constructor(deps: ProviderHeartbeatsDeps);
     refresh(): void;
@@ -73,5 +82,6 @@ export declare function parseFetchResult(result: PythonRunResult, lookbackMinute
 } | {
     ok: false;
     message: string;
+    reason?: "module_not_installed";
 };
 export {};

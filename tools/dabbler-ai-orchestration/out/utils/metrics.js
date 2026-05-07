@@ -40,7 +40,7 @@ exports.buildSparkline = buildSparkline;
 exports.exportToCsv = exportToCsv;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-exports.METRICS_FILE = path.join("ai-router", "metrics.jsonl");
+exports.METRICS_FILE = path.join("ai_router", "metrics.jsonl");
 function readMetrics(workspaceRoot) {
     const metricsPath = path.join(workspaceRoot, exports.METRICS_FILE);
     if (!fs.existsSync(metricsPath))

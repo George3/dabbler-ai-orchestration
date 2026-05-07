@@ -43,7 +43,7 @@ export interface ProviderQueueInfo {
 export interface QueueStatusPayload {
     providers: Record<string, ProviderQueueInfo>;
 }
-export type QueueTreeNode = RootNode | ProviderNode | StateGroupNode | MessageNode | InfoNode;
+export type QueueTreeNode = RootNode | ProviderNode | StateGroupNode | MessageNode | InfoNode | NotInstalledNode | NotInstalledActionNode;
 interface RootNode {
     kind: "root";
 }
@@ -70,8 +70,22 @@ interface InfoNode {
     detail?: string;
     isError?: boolean;
 }
+/**
+ * Surfaced when ``python -m ai_router.queue_status`` fails because the
+ * ``ai_router`` package is not installed in the configured Python
+ * environment. Has one child :class:`NotInstalledActionNode` carrying
+ * the install command — separate from the generic red-error info node
+ * so first-time users get a single click to the fix instead of an opaque
+ * traceback.
+ */
+interface NotInstalledNode {
+    kind: "notInstalled";
+}
+interface NotInstalledActionNode {
+    kind: "notInstalledAction";
+}
 export interface ProviderQueuesDeps {
-    /** Returns the workspace root that owns ``ai-router/`` and ``provider-queues/``. */
+    /** Returns the workspace root that owns ``ai_router/`` and ``provider-queues/``. */
     getWorkspaceRoot: () => string | undefined;
     /** Spawn helper. Injected for tests. */
     fetchPayload?: (workspaceRoot: string) => Promise<{
@@ -80,6 +94,7 @@ export interface ProviderQueuesDeps {
     } | {
         ok: false;
         message: string;
+        reason?: "module_not_installed";
     }>;
     /** Clock — overridable for tests. */
     now?: () => number;
@@ -90,6 +105,7 @@ export declare class ProviderQueuesProvider implements vscode.TreeDataProvider<Q
     readonly onDidChangeTreeData: vscode.Event<void | QueueTreeNode | undefined>;
     private _cache;
     private _lastError;
+    private _lastErrorReason;
     private _inFlight;
     constructor(deps: ProviderQueuesDeps);
     refresh(): void;
@@ -106,5 +122,6 @@ export declare function parseFetchResult(result: PythonRunResult): {
 } | {
     ok: false;
     message: string;
+    reason?: "module_not_installed";
 };
 export {};

@@ -44,7 +44,7 @@ const simple_git_1 = __importDefault(require("simple-git"));
 const SCAFFOLD_DIRS = [
     path.join("docs", "session-sets"),
     path.join("docs", "planning"),
-    "ai-router",
+    "ai_router",
 ];
 async function pickDirectory() {
     const picked = await vscode.window.showOpenDialog({

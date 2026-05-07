@@ -38,6 +38,7 @@ exports.buildTreeItem = buildTreeItem;
 exports.parseFetchResult = parseFetchResult;
 const vscode = __importStar(require("vscode"));
 const pythonRunner_1 = require("../utils/pythonRunner");
+const aiRouterInstall_1 = require("../utils/aiRouterInstall");
 /**
  * Tree view backing the ``Provider Queues`` activity-bar entry.
  *
@@ -84,6 +85,7 @@ class ProviderQueuesProvider {
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this._cache = null;
         this._lastError = null;
+        this._lastErrorReason = null;
         this._inFlight = null;
     }
     refresh() {
@@ -109,6 +111,9 @@ class ProviderQueuesProvider {
         if (!element || element.kind === "root") {
             const payload = await this._getPayload(root);
             if (!payload) {
+                if (this._lastErrorReason === "module_not_installed") {
+                    return [{ kind: "notInstalled" }];
+                }
                 const detail = this._lastError ?? "Unknown error.";
                 return [
                     { kind: "info", label: "Failed to read queue status.", detail, isError: true },
@@ -153,6 +158,9 @@ class ProviderQueuesProvider {
                 };
             });
         }
+        if (element.kind === "notInstalled") {
+            return [{ kind: "notInstalledAction" }];
+        }
         if (element.kind === "stateGroup") {
             // The Python helper caps the message list (--limit, default 50). When the
             // count exceeds the messages we got back, surface the gap so the operator
@@ -189,9 +197,17 @@ class ProviderQueuesProvider {
             if (result.ok) {
                 this._cache = { fetchedAt: this.deps.now?.() ?? Date.now(), payload: result.payload };
                 this._lastError = null;
+                this._lastErrorReason = null;
             }
             else {
                 this._lastError = result.message;
+                this._lastErrorReason = result.reason ?? null;
+                // Round-5 verifier catch: clear the cache on failure so the
+                // failure surfaces. Otherwise a previously-successful fetch
+                // would mask the new ``module_not_installed`` / red-error
+                // states until the next successful refresh, which on the
+                // not-installed path never comes.
+                this._cache = null;
             }
         })();
         try {
@@ -285,6 +301,25 @@ function buildTreeItem(node) {
             item.contextValue = node.isError ? "queueInfo:error" : "queueInfo";
             return item;
         }
+        case "notInstalled": {
+            const item = new vscode.TreeItem("ai_router not installed in this Python environment.", vscode.TreeItemCollapsibleState.Expanded);
+            // Neutral info icon — this is a "configuration needed" state, not
+            // an error. The red-error path remains for genuine failures (other
+            // non-zero exits, malformed JSON, timeouts).
+            item.iconPath = new vscode.ThemeIcon("info");
+            item.contextValue = "queueInfo:notInstalled";
+            return item;
+        }
+        case "notInstalledAction": {
+            const item = new vscode.TreeItem('Click here to run "Dabbler: Install ai-router"', vscode.TreeItemCollapsibleState.None);
+            item.iconPath = new vscode.ThemeIcon("cloud-download");
+            item.command = {
+                command: "dabblerSessionSets.installAiRouter",
+                title: "Install ai-router",
+            };
+            item.contextValue = "queueInfo:notInstalledAction";
+            return item;
+        }
     }
 }
 function buildMessageTooltip(provider, m) {
@@ -322,6 +357,13 @@ function parseFetchResult(result) {
         return { ok: false, message: "queue_status timed out (10s)" };
     }
     if (result.exitCode !== 0) {
+        if ((0, aiRouterInstall_1.isAiRouterNotInstalled)(result.stderr)) {
+            return {
+                ok: false,
+                message: "ai_router is not installed in the configured Python environment.",
+                reason: "module_not_installed",
+            };
+        }
         const trimmed = (result.stderr || result.stdout).trim();
         const detail = trimmed ? ` — ${trimmed.split("\n").slice(-3).join(" / ")}` : "";
         return {
