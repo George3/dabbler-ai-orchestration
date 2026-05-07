@@ -83,8 +83,18 @@ Orchestrator (Claude / Codex / Gemini)
 
 ## Cost-budgeted verification modes
 
-Every project that adopts this workflow declares an outsourcing/API
-**budget threshold** during the adoption-bootstrap flow (see
+> **Adoption tier vs. budget tier.** This section's tier vocabulary
+> is the **budget tier** — a within-Full-adoption concept that
+> governs how verification calls are paid for. The **adoption
+> tier** (Lightweight vs. Full) is a different dimension chosen at
+> Step 4.5 of `docs/adoption-bootstrap.md`. Lightweight-tier
+> projects opt out of cross-provider verification and the
+> `ai_router/` machinery entirely as part of choosing that tier —
+> not as a cost-budgeted exception. Everything below applies only
+> to Full-adoption projects.
+
+Every Full-adoption project declares an outsourcing/API **budget
+threshold** during the adoption-bootstrap flow (see
 `docs/adoption-bootstrap.md`). The threshold is recorded in
 `ai_router/budget.yaml` and governs which verification path the
 project uses. Four tiers, with two sub-options under the zero tier:

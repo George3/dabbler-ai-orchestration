@@ -1,5 +1,25 @@
 # `dabbler-homehealthcare-accessdb` migration to canonical Option B layout
 
+> **⚠ Scope reshape (2026-05-07).** Session 1's audit found the
+> repo is not a git repository, has no `ai_router/`, no Python
+> venv, no session-set scaffolding, and runs a custom BATON-based
+> session protocol with the standalone HTML UAT Checklist Editor
+> against an active 21-session ledger embedded in CLAUDE.md — the
+> "migrate to Option B" frame did not fit. Operator redirected
+> Set 018 toward an **abstraction-level change in the orchestrator
+> itself**: add a *lightweight adoption tier* (Explorer + session-set
+> organization only, no `ai_router/`) and an organization-design
+> dialog with an abstract pattern catalog to
+> `docs/adoption-bootstrap.md`, so a downstream orchestrator
+> launched from the extension's bootstrap prompt can apply the
+> right pattern to repos like healthcare-accessdb without any work
+> happening here. **The actual deliverable plan executed in Session
+> 1 is [`ai-assignment.md`](ai-assignment.md);** this spec body
+> stays readable as historical context. healthcare-accessdb is
+> *not* touched by Set 018 — that work is owned by whichever
+> orchestrator the operator launches via the extension prompt at
+> their UAT-pause convenience.
+
 > **Status:** Reserved. Not yet started. Run when the operator's
 > active UAT cadence in `dabbler-homehealthcare-accessdb` allows
 > a brief migration window. The set's design is deliberately

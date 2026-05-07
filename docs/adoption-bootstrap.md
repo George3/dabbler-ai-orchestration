@@ -137,17 +137,56 @@ If you came from State B sub-path (1) (greenfield design), skip this step — th
 
 ## Step 4 — Brief education on session sets
 
-The human is about to make decisions about budgets and verification modes. They need to know what those decisions are *for*. Give a short, plain-language explanation. Two paragraphs max:
+The human is about to make decisions about adoption tier, budget, and verification modes. They need to know what those decisions are *for*. Give a short, plain-language explanation. Two paragraphs max:
 
-> **Quick context on how Dabbler organizes AI-led work.** Dabbler breaks a project into **session sets** — planned bodies of work with 1–6 sessions each. A session set is something like "user authentication" or "checkout flow" — focused enough that one human review pass at the end makes sense. Each session is one AI conversation with you (or a different orchestrator next time), ending in a commit and a verification check.
+> **Quick context on how Dabbler organizes AI-led work.** Dabbler breaks a project into **session sets** — planned bodies of work with 1–6 sessions each. A session set is something like "user authentication" or "checkout flow" — focused enough that one human review pass at the end makes sense. Each session is one AI conversation with you (or a different orchestrator next time), ending in a commit and (optionally) a verification check.
 >
-> **Why this shape helps.** It gives every change a small, reviewable scope. It keeps cost trackable per-set so you can see what you're spending. And it builds in **cross-provider verification** — at the end of each session, the work goes to a *different* AI provider (Anthropic, Google, OpenAI) for review. That catches the bias-induced misses each provider tends to have. The full canonical workflow lives at `docs/ai-led-session-workflow.md` — you'll see it referenced throughout.
+> **Why this shape helps.** It gives every change a small, reviewable scope. The Session Set Explorer in VS Code shows the whole project's work-shape at a glance. On top of that organizational layer, the framework can *optionally* run **cross-provider verification** at the end of each session — the work goes to a *different* AI provider (Anthropic, Google, OpenAI) for review, catching the bias-induced misses each provider tends to have. Whether to use the verification layer is the **adoption-tier** decision in the next step. The full canonical workflow lives at `docs/ai-led-session-workflow.md` — you'll see it referenced throughout.
 
-Don't overdo this. The human can read the canonical workflow doc when they want depth. Your job here is to give them enough context to decide on a budget intelligently.
+Don't overdo this. The human can read the canonical workflow doc when they want depth. Your job here is to give them enough context to make the next two decisions intelligently — adoption tier (Step 4.5) and (if applicable) budget (Step 5).
+
+---
+
+## Step 4.5 — Adoption tier
+
+Adoption tier is a different dimension from budget tier. Some projects benefit from the **organizational layer** (Session Set Explorer + the `docs/session-sets/<set>/spec.md` convention) without taking on the **router and verification machinery** (`ai_router/`, budgeted cross-provider verification, automated close-out, metrics, cost reports). The bootstrap supports both shapes as first-class choices.
+
+Ask the human:
+
+> **Which adoption tier fits this project?**
+>
+> **(L) Lightweight — Explorer + session-set organization only.** You get session sets visible in the VS Code Session Set Explorer, organized as `docs/session-sets/<set>/spec.md` files. No `ai_router/`, no Python venv, no budget config, no close-out machinery, no cross-provider verification. **Best for:** working test fixtures, repos that already have their own established session protocol (BATON files, custom ledgers, etc.), side projects, or any repo where the value is in *organizing* the work rather than running it through the full router. You can upgrade to Full later by re-running this bootstrap.
+>
+> **(F) Full — Explorer + `ai_router/` + close-out + cross-provider verification.** The complete framework: budgeted verification, metrics, cost reports, automated close-out, the works. **Best for:** projects where AI-led work is the primary mode of development, where reviewable cost tracking matters, or where you want orchestration support beyond just session-set organization.
+
+Wait for a clear pick — `L` / `lightweight` or `F` / `full`. Branch from here:
+
+- **If (L):** **Skip Step 5 entirely.** Lightweight projects don't have a budget threshold to set — there's no router doing metered calls. Go directly to Step 6.
+- **If (F):** Continue to Step 5 (budget-threshold dialog). The budget tiers ($0 / limited / middle / ample) only apply within Full adoption.
+
+### Coexistence with existing session protocols
+
+If the project already has its own session protocol — BATON files, a session ledger inside `CLAUDE.md`, per-session journals, or anything similar — **explicitly ask the human how the new session-set tree should relate to it**:
+
+> I see you already have a session protocol (briefly describe what you found: BATON files, ledger in CLAUDE.md, etc.). Which of these fits how you want the new session-sets tree to coexist with it?
+>
+> 1. **Replace** — the session-sets tree becomes the new authoritative organization; the old protocol is archived or retired.
+> 2. **Parallel** — both coexist. The old protocol stays authoritative for per-session records (one BATON per session, etc.); the session-sets tree adds a thematic grouping layer on top.
+> 3. **Index** — the session-sets tree is purely a set of pointers back into the existing protocol's files (each `spec.md` references the relevant BATONs); the old protocol stays authoritative for everything.
+
+Pick one with the human. The bootstrap doc names the three modes; the choice shapes Step 6's organization-design dialog and Step 7's checklist (e.g., a *parallel* or *index* setup writes far less than a *replace* setup).
+
+### Confirm and note
+
+Once the human picks a tier (and a coexistence mode if applicable), confirm the choice back to them. Note it for the action checklist (Step 7) so it's visible alongside everything else they're approving.
 
 ---
 
 ## Step 5 — Budget-threshold dialog
+
+> **Skip this step entirely if the human picked Lightweight (L) in Step 4.5.** The budget threshold is a Full-tier-only concept — lightweight projects have nothing to budget because nothing in the router is making metered calls. Go straight to Step 6.
+
+
 
 Ask the human two questions:
 
@@ -208,27 +247,61 @@ Once the human picks a tier (and a sub-option, for $0), confirm the recommendati
 
 ## Step 6 — Plan alignment dialog
 
-Walk the human through what's done and what's remaining, then propose a session-set decomposition.
+Walk the human through what's done and what's remaining, then propose a session-set decomposition. **Reminder for lightweight-tier projects:** the action checklist at Step 7 will only contain `docs/session-sets/<set>/spec.md` files plus (if needed) a small `CLAUDE.md` amendment naming the new tree. No `ai_router/`, no `budget.yaml`, no `router-config.yaml` — adapt your spec drafts accordingly so they don't reference router-only mechanics.
 
-For an **existing project** (workspace path):
+### How to derive a decomposition
 
-- "Based on what I canvased and what you told me, here's what I'd organize as remaining work, broken into session sets. We'll tune these together before I commit to anything."
-- Propose 2–6 session sets, each with a short name (slug-style: `user-auth`, `checkout-flow`), a 1-sentence purpose, and a rough session count (1–6).
-- Show the human the list. Ask which sets they agree with, which need editing, and which they'd skip or rename.
+A naïve "propose 2–6 session sets" prompts gives shallow results. The human almost always benefits from seeing **multiple visibly different cuts** of their work, not slight variants on one cut. Use the abstract pattern catalog below as a thinking tool: which cuts genuinely fit the evidence you canvased, and which are forced? Then propose **2–4 candidate organizations** to the human, each cross-cut by a different pattern, each with a one-line tradeoff, and let them pick (or hybridize) before you draft any spec content.
 
-For a **greenfield project** (State B sub-path 1):
+### Abstract patterns the AI should consider
 
-- Run a planning conversation: project goals → scope boundaries → technology choices → key user flows → constraints → known risks.
-- Once you have enough material, propose a session-set decomposition the same way as for existing projects.
-- The first session set in a greenfield project is usually **`001-foundations`** — repo scaffolding, choose stack, initial dependencies, basic CI.
+These patterns are **non-exclusive** — most projects can plausibly cut multiple ways, and the value to the human is seeing those alternatives side-by-side. **Don't enumerate all of them every time.** Pick the 2–4 that genuinely fit *this* project's evidence and propose those.
 
-The human steers throughout. You propose; they approve, edit, or reject. **Don't commit to a decomposition until Step 7's checklist is approved.**
+| Pattern | What it groups by | When it fits | Example |
+|---|---|---|---|
+| **Input artifacts** | Source materials the work consumes | When the work is reactive to incoming data/specs | Schema files, raw datasets, requirements docs, UAT checklists, BATON ledger, RFCs |
+| **Output artifacts** | Things the work produces | When deliverables are the dominant frame | Reports, deployable modules, documentation, datasets, releases |
+| **Cross-cutting themes** | Concerns spanning multiple components | When the project's stated value is exercising/improving a particular axis | Access-feature coverage in a migration test fixture; security; observability; performance |
+| **Stated objectives** | What the project says it's trying to achieve | When `project-plan.md` / README / OKRs articulate clear goals | Goals from `project-plan.md`, release-criteria checklists, OKRs |
+| **Inferred organizational patterns** | What the existing folder structure / docs already imply | When the project has been running a while and patterns are visible | Existing CLAUDE.md ledger, BATON sequence, file-tree groupings, branch naming |
+| **Risk / dependency layers** | Foundational vs dependent work | When some work strictly gates other work | Foundation → fix → test → ship; data prep → pipeline → analysis → reporting |
+| **Stakeholder review boundaries** | Where natural review pauses already exist | When non-AI stakeholders sign off at specific gates | Per UI section, per release candidate, per regulatory milestone |
+
+### Propose 2–4 candidates, ask the human to pick
+
+Frame the proposal something like:
+
+> Based on the canvas, I see a few different ways to cut this project into session sets. Here are the candidates I think genuinely fit — each cut by a different organizing pattern. Tell me which one fits how you actually think about this work, or if you want a hybrid.
+
+Then list the candidates. For each, give:
+
+- **One-line label** naming the pattern (e.g., "Cut by Access-feature coverage", "Cut by stated objectives in `project-plan.md`").
+- **The session sets** it produces, each with slug, 1-sentence purpose, and rough session count (1–6).
+- **The tradeoff** in one line — what this cut emphasizes, what it loses.
+
+Watch out for these failure modes:
+
+- **Over-decomposing.** A 16-session "set" violates the 1–6 guideline; a 14-set proposal for a small project is overkill. If a single pattern produces too many sets, either pick a coarser-grained version of the same pattern or explicitly note that the project may not need that much structure yet.
+- **Forced cuts.** If a pattern doesn't really fit the project's evidence, don't propose it just to round out the candidate list. Two strong cuts beat four weak ones.
+- **Slight variants of one cut.** "Cut by feature A vs. cut by feature A but split set 003" is one cut, not two. Each candidate must be visibly *different* — different boundaries, different size, different review rhythm.
+
+### Greenfield projects (State B sub-path 1)
+
+For a fully greenfield project (no existing code or canvas), run a planning conversation first: project goals → scope boundaries → technology choices → key user flows → constraints → known risks. Once you have enough material, the **stated objectives** and **risk/dependency layers** patterns above are usually the strongest fits; propose 2–4 candidates within those. The first session set in a greenfield project is usually `001-foundations` — repo scaffolding, choose stack, initial dependencies, basic CI.
+
+### Existing projects with their own session protocol
+
+If the human chose **Parallel** or **Index** in Step 4.5's coexistence dialog, your candidate organizations should respect what already exists. **Inferred organizational patterns** is usually the strongest starting cut — propose the decomposition that mirrors how the human already thinks about this work (per their existing ledger, BATON sequence, etc.) and offer one or two alternatives that re-cut by a different pattern (e.g., **Cross-cutting themes** or **Stated objectives**) for comparison.
+
+The human steers throughout. You propose; they approve, edit, or reject. **Don't draft any spec content until they've picked a candidate (or hybrid).** And don't commit to writing files until Step 7's checklist is approved.
 
 ---
 
 ## Step 7 — Build the action checklist
 
 This is the gate. Aggregate every concrete write / config update / scaffolding action you propose to do, in order, into a numbered list. For non-trivial files (`docs/planning/project-plan.md`, each session set's `spec.md`), show inline drafts so the human can read what you're about to write.
+
+> **Lightweight-tier checklists are a strict subset.** If the human picked Lightweight (L) in Step 4.5, your checklist must omit `ai_router/budget.yaml`, `ai_router/router-config.yaml`, the `ai_router/` directory itself, and any pip-install steps. A typical lightweight checklist contains only `docs/session-sets/<set>/spec.md` files (one per chosen set), optionally a `docs/planning/project-plan.md` if it doesn't exist yet, and a small `CLAUDE.md` amendment naming the new tree's relationship to any existing protocol per the Step 4.5 coexistence choice. **The example below is a Full-tier checklist** — adapt it down for lightweight; don't pad lightweight checklists with router items the human explicitly opted out of.
 
 ### Example
 
@@ -300,7 +373,7 @@ The human can interrupt at any point. If they do, stop, ask what they want to ch
 
 ## Step 9 — Closing pointers
 
-Once execution completes, give the human these pointers:
+Once execution completes, give the human these pointers. **Lightweight-tier projects skip the Budget monitoring and General cost monitoring sections** (no router → no metrics → no spend to report); jump straight to "More info" and "Starting the next session", and use the Lightweight closing note at the bottom in place of the zero-budget reminder.
 
 ### Budget monitoring
 
@@ -333,6 +406,12 @@ If the human chose **zero-budget mode**, remind them how verification will happe
 
 - **Option (a) — manual via different engine:** they open a *different* AI assistant, hand it the verification template + the work, and copy the verdict back. They do this at the end of every session. Their `ai_router/budget.yaml` records `verification_method: "manual-via-other-engine"`.
 - **Option (b) — skipped:** every session's `change-log.md` records that verification was explicitly skipped. Their `ai_router/budget.yaml` records `verification_method: "skipped"`.
+
+If the human chose **lightweight tier (L)** in Step 4.5, give them this closing note instead:
+
+- **No budget, no metrics, no automated verification** — by tier choice, not by exception. Cross-provider verification (Rules 1–2 in `docs/ai-led-session-workflow.md`) is a Full-tier feature; lightweight projects opt out of that whole layer when they pick L. If you ever want it, re-run the bootstrap and pick F to upgrade in place.
+- **The Session Set Explorer is your dashboard.** Sets render from `docs/session-sets/<set>/spec.md` and graceful-degrade if optional artifacts are missing.
+- **"Start the next session" still works.** The downstream orchestrator reads whichever set is active and runs against your existing protocol per the Step 4.5 coexistence choice (replace / parallel / index).
 
 ---
 
