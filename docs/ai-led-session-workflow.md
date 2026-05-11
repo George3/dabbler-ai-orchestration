@@ -355,11 +355,13 @@ time.
   emit the same byte-for-byte format (LF newlines, UTF-8 no BOM,
   ISO-8601 local timestamps).
 
-**Detection precedence** (highest first): `CANCELLED.md` →
-`change-log.md` (done) → `activity-log.json` or `session-state.json`
-(in-progress) → otherwise not-started. `CANCELLED.md` always wins:
-a partially-completed set with both `change-log.md` and `CANCELLED.md`
-shows as cancelled, not done.
+**Detection precedence** (highest first): `CANCELLED.md` present →
+`session-state.json` `status` field (`"complete"` → done,
+`"in-progress"` → in-progress, otherwise → not-started).
+`CANCELLED.md` always wins: a partially-completed set that has been
+cancelled shows as cancelled, not done. Do **not** infer state from
+file presence (`activity-log.json`, `change-log.md`) — read
+`session-state.json` directly.
 
 **`RESTORED.md` is audit-only.** Once a cancelled set is restored,
 `CANCELLED.md` is renamed to `RESTORED.md` and the file is kept
@@ -867,10 +869,16 @@ If keys are missing, stop and tell the human.
 
 ### Step 1: Identify the Active Session Set and Register Session Start
 
-The `find_active_session_set()` function auto-detects:
-- Folder with `spec.md` + `activity-log.json` but no `change-log.md` = in-progress
-- Folder with `spec.md` only = not-started (use if no in-progress exists)
-- Folder with `change-log.md` = complete (skip)
+The `find_active_session_set()` function reads the `status` field in
+each set's `session-state.json` (see **§ Session-Set Lifecycle and
+State File** above):
+- `status: "in-progress"` = active — pick this set (or the named slug)
+- `status: "not-started"` = use this if no in-progress set exists
+- `status: "complete"` or `CANCELLED.md` present = skip
+
+Do **not** infer state from file presence. The old heuristic
+(`activity-log.json` present but no `change-log.md` = in-progress)
+is retired — `session-state.json` is the only correct signal.
 
 If the trigger phrase named a specific slug (e.g., "Start the next
 session of `<slug>`"), use that slug directly rather than calling
