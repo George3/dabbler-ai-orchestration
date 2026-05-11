@@ -670,14 +670,21 @@ def run_gate_checks(
     """
     disposition = read_disposition(session_set_dir)
     if disposition is None:
+        disposition_path = os.path.join(session_set_dir, "disposition.json")
         return [
             GateResult(
                 check="disposition_present",
                 passed=False,
                 remediation=(
-                    "disposition.json is required for close-out — write it "
-                    "before calling mark_session_complete (or pass force=True "
-                    "to bypass the gate; incident-recovery use only)."
+                    f"disposition.json is required for close-out at "
+                    f"{disposition_path}. Required fields: status, summary, "
+                    "verification_method, files_changed, next_orchestrator "
+                    "(when status='completed' and not the final session), "
+                    "blockers (when reason='switch-due-to-blocker'). "
+                    "Schema: docs/disposition-schema.md "
+                    "(or the Disposition dataclass in ai_router/disposition.py). "
+                    "Pass force=True to bypass — incident-recovery only; "
+                    "emits closeout_force_used event."
                 ),
             )
         ]
@@ -1302,11 +1309,18 @@ def run(
     # handoff the close-out script reads to know what was done and how
     # it was verified.
     if disposition is None and not args.force:
+        disposition_path = os.path.join(session_set_dir, "disposition.json")
         outcome.result = "invalid_invocation"
         outcome.messages.append(
-            "disposition.json is required (or pass --force to bypass; "
-            "incident-recovery use only — see ai_router/docs/close-out.md "
-            "Section 5)"
+            f"disposition.json is required at {disposition_path}. "
+            "Required fields: status, summary, verification_method, "
+            "files_changed, next_orchestrator (when status='completed' "
+            "and not the final session), blockers (when "
+            "reason='switch-due-to-blocker'). Schema: "
+            "docs/disposition-schema.md (or the Disposition dataclass in "
+            "ai_router/disposition.py). Pass --force to bypass — "
+            "incident-recovery use only; see ai_router/docs/close-out.md "
+            "Section 5."
         )
         return outcome
 

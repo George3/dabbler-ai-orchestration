@@ -1099,22 +1099,42 @@ in its "Verifier findings & adjudication" section.
 ### Step 8: Close Out the Session
 
 When session work is verified complete, the orchestrator (or the
-fresh close-out turn agent) **commits and pushes the work, then runs
-`python -m ai_router.close_session`, then fires the session-complete
-notification** in that order. The close-out script is the **sole
-synchronization barrier** between session work and the session being
-marked complete: it runs deterministic gate checks (including
-`check_pushed_to_remote`, which enforces that the push already
-landed), waits on verification, emits ledger events, and writes
-idempotent state (cost report sourcing, `ai-assignment.md` actuals,
-next-orchestrator recommendation every session, change-log generation
-on the last session, `mark_session_complete`). It does **not** run
-git commit / push / notification — those are the caller's
-responsibility, ordered around the close-out call. See
-`ai_router/docs/close-out.md` Section 1 ("Ownership of commit / push
-/ notification") for the full contract and rationale. For
-outsource-last sessions, see also
+fresh close-out turn agent) **authors `disposition.json`, commits
+and pushes the work, then runs `python -m ai_router.close_session`,
+then fires the session-complete notification** in that order. The
+close-out script is the **sole synchronization barrier** between
+session work and the session being marked complete: it runs
+deterministic gate checks (including `check_pushed_to_remote`,
+which enforces that the push already landed), waits on
+verification, emits ledger events, and writes idempotent state
+(cost report sourcing, `ai-assignment.md` actuals, next-orchestrator
+recommendation every session, change-log generation on the last
+session, `mark_session_complete`). It does **not** run git commit /
+push / notification — those are the caller's responsibility,
+ordered around the close-out call. See `ai_router/docs/close-out.md`
+Section 1 ("Ownership of commit / push / notification") for the
+full contract and rationale. For outsource-last sessions, see also
 `ai_router/docs/two-cli-workflow.md` for daemon setup and recovery.
+
+**Authoring `disposition.json`.** The disposition is the structured
+per-session outcome record the gate validates (`disposition_present`)
+and the close-out machinery consumes. Schema:
+[`docs/disposition-schema.md`](disposition-schema.md) (or the
+`Disposition` dataclass in
+[`ai_router/disposition.py`](../ai_router/disposition.py)). The gate
+enforces that the file exists; the dataclass validator
+(`validate_disposition`) enforces its shape. **`next_orchestrator`
+and `blockers` are the two most-frequently-missed fields.**
+`next_orchestrator` is required when `status == "completed"` AND
+the closing session is not the final session of the set (a mid-set
+completion without a recommended pickup point is a structural bug);
+`blockers` must be non-empty when
+`next_orchestrator.reason.code == "switch-due-to-blocker"`.
+Skipping either is the most common cause of a first-attempt
+close-out failure for orchestrators new to the workflow. The
+`--force` flag bypasses the gate but is hard-scoped to
+incident-recovery use only — do not reach for it as a shortcut
+around authoring the disposition.
 
 Notification ordering matters: the caller fires the session-complete
 Pushover notification (`send_session_complete_notification` in
