@@ -49,69 +49,12 @@ export function discoverRoots(): string[] {
   return order;
 }
 
-// v0.13.2: positive-evidence check for "in-progress" status. The
-// principle is: default Not Started; require positive evidence to
-// escalate. Done is already evidence-gated (change-log.md presence
-// via close_session); Cancelled is evidence-gated (CANCELLED.md);
-// In Progress now joins them.
-//
-// Two evidence signals, either is sufficient:
-//   1. session-events.jsonl exists and contains at least one
-//      `work_started` event. This is the strongest signal —
-//      `register_session_start` writes the event before flipping
-//      session-state.json's status.
-//   2. activity-log.json exists with at least one entry. Real
-//      session work has been logged.
-//
-// A session-state.json claiming `in-progress` without either signal
-// is treated as not-started. This handles two failure modes the
-// user has reported:
-//   (a) stale `status: "in-progress"` from past partial work that
-//       was abandoned without closing the session.
-//   (b) migrations / manual file edits that flipped the status
-//       prematurely.
-export function hasInProgressEvidence(sessionSetDir: string): boolean {
-  // session-events.jsonl is the strongest signal. It's append-only
-  // newline-delimited JSON; one `work_started` event per session.
-  // We don't need to parse — string-search for the event-type marker.
-  const eventsPath = path.join(sessionSetDir, "session-events.jsonl");
-  if (fs.existsSync(eventsPath)) {
-    try {
-      const text = fs.readFileSync(eventsPath, "utf8");
-      if (text.includes('"event_type": "work_started"') ||
-          text.includes('"event_type":"work_started"')) {
-        return true;
-      }
-    } catch {
-      /* fall through to the activity-log check */
-    }
-  }
-  // activity-log.json: secondary evidence. Has entries iff actual work
-  // was logged via SessionLog.log_step().
-  const activityPath = path.join(sessionSetDir, "activity-log.json");
-  if (fs.existsSync(activityPath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(activityPath, "utf8")) as {
-        entries?: unknown[];
-      };
-      if (Array.isArray(data.entries) && data.entries.length > 0) {
-        return true;
-      }
-    } catch {
-      /* malformed activity log — no evidence */
-    }
-  }
-  return false;
-}
-
 export function parseSessionSetConfig(specPath: string): SessionSetConfig {
-  // outsourceMode defaults to "first" — matches the AI router's documented
-  // backward-compat default when the spec omits the field.
   const config: SessionSetConfig = {
     requiresUAT: false,
     requiresE2E: false,
     uatScope: "none",
-    outsourceMode: "first",
+    outsourceMode: null,
   };
   if (!fs.existsSync(specPath)) return config;
   let text: string;
@@ -217,27 +160,10 @@ export function readSessionSets(root: string): SessionSet[] {
     if (isCancelled(dir)) {
       state = "cancelled";
     } else {
-      // Set 7 invariant: state is read directly from session-state.json's
-      // canonical `status`. v0.13.2 layers an evidence-corroboration
-      // rule on top: an `in-progress` status is trusted only when
-      // there's a positive corroborating signal (an `activity-log.json`
-      // with at least one entry, or a `session-events.jsonl` containing
-      // a `work_started` event). Without corroboration, the state
-      // decays to `not-started` — which is what the user wants when a
-      // session set's `session-state.json` was written eagerly by
-      // `register_session_start` but the session never actually
-      // produced any work, or when a stale partial-migration leaves an
-      // `in-progress` status field with no underlying activity.
-      //
-      // The principle: default Not Started; require positive evidence
-      // to escalate to In Progress / Done / Cancelled. `Done` is
-      // already evidence-gated (close_session writes `change-log.md`
-      // before flipping the snapshot); `Cancelled` is evidence-gated
-      // by the `CANCELLED.md` marker; `In Progress` now joins them.
       const status = readStatus(dir);
       if (status === "complete") {
         state = "done";
-      } else if (status === "in-progress" && hasInProgressEvidence(dir)) {
+      } else if (status === "in-progress") {
         state = "in-progress";
       } else {
         state = "not-started";
@@ -291,6 +217,11 @@ export function readSessionSets(root: string): SessionSet[] {
           verificationVerdict: sd.verificationVerdict ?? null,
           forceClosed: sd.forceClosed ?? null,
         };
+        // When no activity-log exists, derive completed count from currentSession:
+        // sessions before the current one are done.
+        if (sessionsCompleted === 0 && typeof sd.currentSession === "number" && sd.currentSession > 1) {
+          sessionsCompleted = sd.currentSession - 1;
+        }
       } catch { /* ignore */ }
     }
 
@@ -316,12 +247,9 @@ export function readSessionSets(root: string): SessionSet[] {
       root,
     });
   }
-  // v0.13.2 diagnostic: one-line summary so the dev console shows what
-  // the extension thinks the bucketing should be, independently of how
-  // the tree renders. If the user reports "set X showed in In Progress
-  // but session-state.json says not-started", the dev console line
-  // here will show whether the extension classified set X correctly
-  // (a UI/cache bug) or incorrectly (a state-derivation bug).
+  // Diagnostic: one-line summary in the dev console showing how the
+  // extension bucketed each root. Useful for spotting UI/cache bugs vs.
+  // state-derivation bugs without needing a breakpoint.
   if (sets.length > 0) {
     const counts = sets.reduce(
       (acc, s) => {

@@ -125,7 +125,6 @@ suite("fileSystem — readSessionSets", () => {
     const setDir = path.join(dir, "docs", "session-sets", "feature-a");
     fs.mkdirSync(setDir, { recursive: true });
     fs.writeFileSync(path.join(setDir, "spec.md"), "# feature-a\n");
-    fs.writeFileSync(path.join(setDir, "activity-log.json"), JSON.stringify({ entries: [] }));
     fs.writeFileSync(
       path.join(setDir, "session-state.json"),
       JSON.stringify({ schemaVersion: 2, status: "in-progress" })

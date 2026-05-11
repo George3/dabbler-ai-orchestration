@@ -6,7 +6,7 @@ export interface SessionSetConfig {
   requiresUAT: boolean;
   requiresE2E: boolean;
   uatScope: string;
-  outsourceMode: OutsourceMode;
+  outsourceMode: OutsourceMode | null;
 }
 
 export interface UatSummary {
