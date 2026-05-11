@@ -1,5 +1,15 @@
 # AI-Led Session-Set Workflow
 
+> **New here?** Start with [`docs/quick-start.md`](quick-start.md) for a
+> 5-minute orientation. Then return to this document for the full procedure.
+>
+> **Simple session shortcut:** if the active spec declares
+> `requiresUAT: false` and `outsourceMode: first` (the common case), you
+> only need **Steps 0–10, the Rules list, and the Session Set Configuration
+> table.** Jump to [§Step 0](#step-0-verify-api-keys-and-read-guidance).
+> The UAT procedures and AI Router details below that marker are reference
+> material for specific features — read them when they apply.
+
 This document describes the orchestration pattern used to develop features in
 this repository. An AI coding agent (Claude Code, Codex, or a Gemini-based
 tool) acts as the **orchestrator**, executing a predefined session plan one
@@ -407,10 +417,14 @@ structure:
 ## Session Set Configuration
 
 ```yaml
-requiresUAT: false      # see When-UAT-Is-Required heuristic in authoring guide
-requiresE2E: false      # see When-E2E-Is-Required heuristic in authoring guide
-uatStyle: ad-hoc        # dsl | ad-hoc; only meaningful when requiresUAT: true. Default ad-hoc.
-uatScope: none          # per-session | per-set | none
+totalSessions: <estimate>
+requiresUAT: false       # true only for sets with human-reviewed UI/UAT checklists
+requiresE2E: false       # true only for sets shipping user-visible browser behavior
+outsourceMode: first     # first (synchronous, default) | last (queue-mediated daemon)
+# Optional — only when requiresUAT: true:
+# uatStyle: ad-hoc       # ad-hoc (default, non-web) | dsl (web/Playwright)
+# uatScope: per-set      # per-session | per-set
+# effort: normal         # low | normal | high
 ```
 
 > Rationale: <one or two sentences justifying the flags>
@@ -654,6 +668,14 @@ inform spec authors are documented in
 `docs/planning/session-set-authoring-guide.md`. This doc owns
 *execution-time* behavior gated by the spec; the authoring guide
 owns *which spec flags to set in the first place.*
+
+---
+
+> **Reference material — skip if `requiresUAT: false`.**
+> The sections below (UAT Checklist Rules, DSL-driven path, Ad-hoc path,
+> When UAT Is Required) only apply when the active spec declares
+> `requiresUAT: true`. If your set has `requiresUAT: false`, jump directly
+> to [§Step 0](#step-0-verify-api-keys-and-read-guidance).
 
 ### UAT Checklist Rule (shared preamble)
 

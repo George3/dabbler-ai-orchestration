@@ -26,8 +26,11 @@ For each session set, produce a spec.md file with this exact structure:
 totalSessions: <estimate 1–6>
 requiresUAT: <true|false>
 requiresE2E: <true|false>
-uatStyle: <ad-hoc|dsl>      # only when requiresUAT: true; default ad-hoc; dsl = web w/ Playwright via dabbler-uat-dsl
-effort: <low|normal|high>
+outsourceMode: first          # first (default, synchronous) | last (queue-mediated daemon)
+# Optional — set only when requiresUAT: true:
+# uatStyle: <ad-hoc|dsl>     # ad-hoc (default, non-web) | dsl (web/Playwright via dabbler-uat-dsl)
+# uatScope: <per-session|per-set>
+# effort: <low|normal|high>  # default normal
 \`\`\`
 
 ## Context

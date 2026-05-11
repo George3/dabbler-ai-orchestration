@@ -253,19 +253,26 @@ Walk the human through what's done and what's remaining, then propose a session-
 
 A naïve "propose 2–6 session sets" prompts gives shallow results. The human almost always benefits from seeing **multiple visibly different cuts** of their work, not slight variants on one cut. Use the abstract pattern catalog below as a thinking tool: which cuts genuinely fit the evidence you canvased, and which are forced? Then propose **2–4 candidate organizations** to the human, each cross-cut by a different pattern, each with a one-line tradeoff, and let them pick (or hybridize) before you draft any spec content.
 
-### Abstract patterns the AI should consider
+### How to cut the work into session sets
 
-These patterns are **non-exclusive** — most projects can plausibly cut multiple ways, and the value to the human is seeing those alternatives side-by-side. **Don't enumerate all of them every time.** Pick the 2–4 that genuinely fit *this* project's evidence and propose those.
+Three common organizations that work well in practice:
 
-| Pattern | What it groups by | When it fits | Example |
-|---|---|---|---|
-| **Input artifacts** | Source materials the work consumes | When the work is reactive to incoming data/specs | Schema files, raw datasets, requirements docs, UAT checklists, BATON ledger, RFCs |
-| **Output artifacts** | Things the work produces | When deliverables are the dominant frame | Reports, deployable modules, documentation, datasets, releases |
-| **Cross-cutting themes** | Concerns spanning multiple components | When the project's stated value is exercising/improving a particular axis | Access-feature coverage in a migration test fixture; security; observability; performance |
-| **Stated objectives** | What the project says it's trying to achieve | When `project-plan.md` / README / OKRs articulate clear goals | Goals from `project-plan.md`, release-criteria checklists, OKRs |
-| **Inferred organizational patterns** | What the existing folder structure / docs already imply | When the project has been running a while and patterns are visible | Existing CLAUDE.md ledger, BATON sequence, file-tree groupings, branch naming |
-| **Risk / dependency layers** | Foundational vs dependent work | When some work strictly gates other work | Foundation → fix → test → ship; data prep → pipeline → analysis → reporting |
-| **Stakeholder review boundaries** | Where natural review pauses already exist | When non-AI stakeholders sign off at specific gates | Per UI section, per release candidate, per regulatory milestone |
+- **By deliverable.** One session set per shippable piece (a UI form, an API
+  endpoint group, a data pipeline stage). Natural when work flows in clear
+  output units. Example: `001-user-auth`, `002-dashboard`, `003-export`.
+- **By risk/dependency layer.** Foundational work first; dependent work after.
+  Example: `001-schema-foundations`, `002-etl-pipeline`, `003-reporting-layer`.
+- **By stated objective.** Mirror the project plan's goals. Example:
+  `001-login-flow`, `002-admin-roles`, `003-audit-log`.
+
+Pick the cut that matches how the team already thinks about the work. Then
+propose 2–4 concrete candidates — each with a slug, a one-sentence purpose,
+and a rough session count — and let the human pick before drafting specs.
+
+> **Going deeper:** for projects with complex organizational trade-offs, an
+> abstract pattern catalog (input artifacts, cross-cutting themes, stakeholder
+> review boundaries, etc.) can surface non-obvious cuts. Ask the human if they
+> want to explore those alternatives after seeing the initial candidates.
 
 ### Propose 2–4 candidates, ask the human to pick
 

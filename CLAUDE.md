@@ -68,6 +68,12 @@ worktree pattern and the retired bare-repo + flat-worktree pattern),
 drift recovery, deactivate-mode recipe, and gotchas. Consumer repos
 point their own agent-instruction files at this doc.
 
+## Quick start
+
+New to this repo? Read [`docs/quick-start.md`](docs/quick-start.md) first —
+it explains the framework in five minutes and points to the right reference
+docs from there.
+
 ## Close-out and outsource-last
 
 Step 8 of `docs/ai-led-session-workflow.md` is collapsed to a single

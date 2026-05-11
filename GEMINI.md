@@ -5,6 +5,12 @@
 > describe the same role and rules — only the agent-specific bootstrap
 > differs.
 
+## Quick start
+
+New to this repo? Read [`docs/quick-start.md`](docs/quick-start.md) first —
+it explains the framework in five minutes and points to the right reference
+docs from there.
+
 ## Purpose
 
 This repo is the canonical source of truth for shared AI orchestration
