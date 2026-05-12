@@ -422,6 +422,31 @@ If the human chose **lightweight tier (L)** in Step 4.5, give them this closing 
 
 ---
 
+## Reference: canonical schemas
+
+Two schema docs apply to every session set you generate during this
+bootstrap. Read them when drafting `spec.md` content (Step 7) and any
+state files you write or update during sessions:
+
+- **[`docs/spec-md-schema.md`](spec-md-schema.md)** — the strict surface
+  of every `docs/session-sets/<slug>/spec.md`: title, frontmatter
+  blockquote, `## Session Set Configuration` yaml block, `## Sessions`
+  parent, and per-session `### Session K of N: <title>` headings.
+  Lightweight-tier specs follow the same shape as Full-tier; only the
+  yaml block contents differ.
+- **[`docs/session-state-schema.md`](session-state-schema.md)** — the
+  canonical field set for `session-state.json`: `schemaVersion`,
+  `status` (exactly one of `"not-started" | "in-progress" | "complete"
+  | "cancelled"` — `"completed"` and `"done"` are read-time aliases,
+  never written), `lifecycleState`, the optional `completedSessions`
+  array (recommended on Lightweight tier), and tier-specific
+  expectations. Drift causes silent display bugs in the Session Set
+  Explorer.
+
+If you write a hand-maintained `session-state.json` on a Lightweight
+project — even one — include `completedSessions: [1, 2, ...]` so the
+extension doesn't fall back to the `currentSession − 1` estimation.
+
 ## Reference: `ai_router/budget.yaml` schema
 
 This is the file you'll write per-project in Step 7 / 8. Embed it in the action checklist with the human's chosen values:

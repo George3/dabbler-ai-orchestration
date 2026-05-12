@@ -208,7 +208,7 @@ session set lives in `docs/session-sets/<name>/` and contains:
 | File | Purpose |
 |---|---|
 | `spec.md` | The full plan: goals, features, configuration block, and per-session step lists |
-| `session-state.json` | Live status (current session, orchestrator metadata, latest verdict). Written at Step 1; flipped to `complete` at Step 8. |
+| `session-state.json` | Live status (current session, orchestrator metadata, latest verdict). Written at Step 1; flipped to `complete` at Step 8. See [`docs/session-state-schema.md`](session-state-schema.md) for the canonical field set, status values, and the alias map applied at the read boundary. |
 | `ai-assignment.md` | Per-session ledger of cheapest-capable AI for each step + next-session recommendation. Authored on Session 1; appended each session. |
 | `activity-log.json` | Machine-readable log of every step across all sessions |
 | `session-reviews/session-NNN.md` | Raw verifier output for each session (never edited) |

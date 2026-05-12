@@ -1404,7 +1404,7 @@ function readSessionSets(root) {
         if (Array.isArray(sd.completedSessions)) {
           sessionsCompleted = sd.completedSessions.length;
         } else if (sessionsCompleted === 0) {
-          if (sd.status === "complete" && typeof totalSessions === "number") {
+          if (state === "done" && typeof totalSessions === "number") {
             sessionsCompleted = totalSessions;
           } else if (typeof sd.currentSession === "number" && sd.currentSession > 1) {
             sessionsCompleted = sd.currentSession - 1;

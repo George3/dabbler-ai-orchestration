@@ -232,6 +232,33 @@ suite("fileSystem — readSessionSets", () => {
     fs.rmSync(dir, { recursive: true });
   });
 
+  // Regression for ctelr-spec drift (2026-05-12): a Lightweight-tier
+  // consumer hand-wrote `status: "completed"` (past participle) instead
+  // of the canonical `"complete"`. readStatus() aliased it for bucketing
+  // (so the set landed in Done), but the count-derivation branch used
+  // raw `sd.status` and missed the alias, falling through to
+  // currentSession-1 and displaying N-1/N. Using `state` (already
+  // canonicalized via readStatus) keeps both reads in lockstep.
+  test("status='completed' alias flips count to totalSessions, not currentSession-1", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "completed-alias");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# completed-alias\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        status: "completed",
+        currentSession: 3,
+        totalSessions: 3,
+      })
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].state, "done");
+    assert.strictEqual(sets[0].sessionsCompleted, 3);
+    fs.rmSync(dir, { recursive: true });
+  });
+
   test("status='complete' with currentSession === totalSessions reads as done", () => {
     const dir = makeTmpDir();
     const setDir = path.join(dir, "docs", "session-sets", "real-done");

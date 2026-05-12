@@ -252,17 +252,25 @@ export function readSessionSets(root: string): SessionSet[] {
         //     under schema v2. Hand-maintained on Lightweight tier;
         //     written by ai_router on Full tier.
         //  2. activity-log.json unique sessionNumbers (set above).
-        //  3. Derived from status + currentSession when neither exists.
-        //     - status="complete" => all sessions done; count = totalSessions.
-        //     - status="in-progress" with currentSession>1 => assume the
-        //       current session is in progress, so currentSession-1 are
-        //       done. This can be off by one when the latest session is
-        //       itself complete and the set is still open; only used when
-        //       no more precise signal is available.
+        //  3. Derived from `state` + currentSession when neither exists.
+        //     - state="done" => all sessions done; count = totalSessions.
+        //       Using the already-canonicalized `state` (via readStatus)
+        //       instead of raw `sd.status` ensures the same alias map
+        //       ("completed", "done" -> "complete") applies here as it
+        //       does for Done/Active bucketing. A pre-Set-7 state file
+        //       carrying `status: "completed"` would otherwise fall
+        //       through to the currentSession-1 fallback and display
+        //       N-1/N. Also naturally skips the mid-set-complete case,
+        //       where state is downgraded to "in-progress".
+        //     - currentSession>1 (non-done) => assume the current session
+        //       is in progress, so currentSession-1 are done. This can
+        //       be off by one when the latest session is itself complete
+        //       and the set is still open; only used when no more
+        //       precise signal is available.
         if (Array.isArray(sd.completedSessions)) {
           sessionsCompleted = sd.completedSessions.length;
         } else if (sessionsCompleted === 0) {
-          if (sd.status === "complete" && typeof totalSessions === "number") {
+          if (state === "done" && typeof totalSessions === "number") {
             sessionsCompleted = totalSessions;
           } else if (typeof sd.currentSession === "number" && sd.currentSession > 1) {
             sessionsCompleted = sd.currentSession - 1;

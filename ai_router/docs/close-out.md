@@ -195,10 +195,12 @@ returns the corresponding exit code without touching downstream state.
    stores `pid`, `worker_id`, and `acquired_at`. A stale lock (dead PID, or
    acquired more than the stale-window ago) is reaped automatically.
    A live lock fails closed with exit 3.
-4. **Idempotency check.** Read `session-state.json`. If the current
-   session's lifecycle state is already `complete`, exit 0 with
-   `noop_already_closed` — emit nothing, write nothing, release the
-   lock cleanly.
+4. **Idempotency check.** Read `session-state.json` (see
+   [`docs/session-state-schema.md`](../../docs/session-state-schema.md)
+   for the full schema, canonical status values, and the alias map
+   applied at the read boundary). If the current session's lifecycle
+   state is already `complete`, exit 0 with `noop_already_closed` —
+   emit nothing, write nothing, release the lock cleanly.
 5. **Read `disposition.json`** (`ai_router.disposition.read_disposition`).
    Must exist with `status: "completed"`. Missing or non-`completed`
    → gate failure unless `--force` or `--repair` is set.
