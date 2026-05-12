@@ -49,6 +49,29 @@ export function discoverRoots(): string[] {
   return order;
 }
 
+// Detect the stale "status=complete with currentSession < totalSessions"
+// shape that pre-0.2.1 ai_router (and any manual edit) could leave on
+// disk between sessions. Returns true iff the snapshot makes both
+// session numbers available and the count says more sessions remain.
+// On any read/parse failure, returns false — trust the canonical
+// status field rather than second-guessing on garbled input.
+export function isMidSetComplete(statePath: string): boolean {
+  if (!fs.existsSync(statePath)) return false;
+  try {
+    const sd = JSON.parse(fs.readFileSync(statePath, "utf8")) as {
+      currentSession?: number;
+      totalSessions?: number;
+    };
+    return (
+      typeof sd.currentSession === "number" &&
+      typeof sd.totalSessions === "number" &&
+      sd.currentSession < sd.totalSessions
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function parseSessionSetConfig(specPath: string): SessionSetConfig {
   const config: SessionSetConfig = {
     requiresUAT: false,
@@ -162,7 +185,13 @@ export function readSessionSets(root: string): SessionSet[] {
     } else {
       const status = readStatus(dir);
       if (status === "complete") {
-        state = "done";
+        // Defensive: a status of "complete" with currentSession <
+        // totalSessions is a stale mid-set close-out — written either
+        // by ai_router < 0.2.1 (which flipped to complete after every
+        // session), a manual edit, or a snapshot a consumer repo
+        // hasn't refreshed yet. Treat as in-progress so the set
+        // doesn't briefly show Done in the window between sessions.
+        state = isMidSetComplete(statePath) ? "in-progress" : "done";
       } else if (status === "in-progress") {
         state = "in-progress";
       } else {

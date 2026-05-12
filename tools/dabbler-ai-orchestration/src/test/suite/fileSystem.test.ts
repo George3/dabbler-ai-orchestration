@@ -163,6 +163,50 @@ suite("fileSystem — readSessionSets", () => {
     fs.rmSync(dir, { recursive: true });
   });
 
+  // Defensive: pre-0.2.1 ai_router flipped status to "complete" after
+  // every session's close-out, not just the last. Stale snapshots and
+  // consumer repos that haven't upgraded yet still produce that shape,
+  // which would briefly render the set as Done between sessions. The
+  // extension cross-checks currentSession vs totalSessions and treats
+  // a mid-set "complete" as in-progress instead.
+  test("status='complete' with currentSession < totalSessions reads as in-progress", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "mid-set-stale");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# mid-set-stale\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        status: "complete",
+        currentSession: 3,
+        totalSessions: 5,
+      })
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].state, "in-progress");
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("status='complete' with currentSession === totalSessions reads as done", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "real-done");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# real-done\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        status: "complete",
+        currentSession: 5,
+        totalSessions: 5,
+      })
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].state, "done");
+    fs.rmSync(dir, { recursive: true });
+  });
+
   // Set 7: the canonical contract is "status beats file presence."
   // These contradictory fixtures lock that in — without them, the old
   // file-presence implementation could still pass the basic in-progress

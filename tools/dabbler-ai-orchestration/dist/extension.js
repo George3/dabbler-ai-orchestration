@@ -1246,6 +1246,16 @@ function discoverRoots() {
   }
   return order;
 }
+function isMidSetComplete(statePath) {
+  if (!fs3.existsSync(statePath))
+    return false;
+  try {
+    const sd = JSON.parse(fs3.readFileSync(statePath, "utf8"));
+    return typeof sd.currentSession === "number" && typeof sd.totalSessions === "number" && sd.currentSession < sd.totalSessions;
+  } catch {
+    return false;
+  }
+}
 function parseSessionSetConfig(specPath) {
   const config = {
     requiresUAT: false,
@@ -1346,7 +1356,7 @@ function readSessionSets(root) {
     } else {
       const status = readStatus(dir);
       if (status === "complete") {
-        state = "done";
+        state = isMidSetComplete(statePath) ? "in-progress" : "done";
       } else if (status === "in-progress") {
         state = "in-progress";
       } else {
