@@ -86,15 +86,21 @@ def _valid_next_orc() -> NextOrchestrator:
 
 @pytest.fixture
 def started_session_set(tmp_path: Path) -> str:
-    """A session-set directory with session-state.json + spec.md only.
+    """A session-set directory with session-state.json + spec.md + change-log.md.
 
-    Just enough state for ``mark_session_complete`` to find the snapshot
-    and read currentSession. The gate's verdict is whatever the test
-    stubs ``run_gate_checks`` to return.
+    Just enough state for ``mark_session_complete`` to find the snapshot,
+    read currentSession, and recognize this as the last session of the
+    set (via ``change-log.md`` presence — the signal that gates the
+    SET-level flip to ``complete``). The gate's verdict is whatever the
+    test stubs ``run_gate_checks`` to return.
     """
     set_dir = tmp_path / "test-set"
     set_dir.mkdir()
     (set_dir / "spec.md").write_text("# spec\n", encoding="utf-8")
+    (set_dir / "change-log.md").write_text(
+        "# change log\n\nlast-session marker so the snapshot flip fires.\n",
+        encoding="utf-8",
+    )
     register_session_start(
         session_set=str(set_dir),
         session_number=1,
@@ -502,6 +508,12 @@ def integration_set(tmp_path: Path) -> Path:
     set_dir = root / "docs" / "session-sets" / "test-set"
     set_dir.mkdir(parents=True)
     (set_dir / "spec.md").write_text("# spec\n", encoding="utf-8")
+    # change-log.md present so mark_session_complete recognizes this as
+    # the last session and actually flips the snapshot.
+    (set_dir / "change-log.md").write_text(
+        "# change log\n\nlast-session marker so the snapshot flip fires.\n",
+        encoding="utf-8",
+    )
     register_session_start(
         session_set=str(set_dir),
         session_number=1,

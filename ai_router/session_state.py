@@ -292,9 +292,25 @@ def _flip_state_to_closed(
     # Migrate v1 → v2 in-memory before rewriting, so the on-disk file
     # comes out as v2 on the next write (per the schema migration contract).
     state = _migrate_v1_to_v2_inplace(state)
-    state["status"] = "complete"
-    state["lifecycleState"] = SessionLifecycleState.CLOSED.value
-    state["completedAt"] = _now_iso()
+
+    # Only mark the SET as complete when this is the last session of
+    # the set. The orchestrator authors change-log.md at the end of the
+    # last session (per close-out.md step 9, "Last session only: write
+    # change-log.md"); its presence is the signal. A force-close also
+    # implies last session (incident recovery — the operator is
+    # explicitly asserting the set is done, possibly bypassing gates
+    # like change_log_fresh). For mid-set session close-outs the set is
+    # still in progress — leave status and lifecycleState as
+    # register_session_start set them so the Session Set Explorer keeps
+    # showing the set as In Progress rather than toggling to Done after
+    # every session.
+    is_last_session = forced or os.path.isfile(
+        os.path.join(session_set, "change-log.md")
+    )
+    if is_last_session:
+        state["status"] = "complete"
+        state["lifecycleState"] = SessionLifecycleState.CLOSED.value
+        state["completedAt"] = _now_iso()
     if verification_verdict is not None:
         state["verificationVerdict"] = verification_verdict
     if forced:
@@ -303,13 +319,11 @@ def _flip_state_to_closed(
         json.dump(state, f, indent=2)
         f.write("\n")
 
-    # If the orchestrator just authored change-log.md (this is the last
-    # session of the set) and the activity log's totalSessions is still
-    # missing or zero, finalize it from the unique sessionNumbers
-    # recorded in entries. Catches the "spec said 4-5 sessions; we ended
-    # at 4" case where no earlier register_session_start had a definitive
-    # total to propagate.
-    if os.path.isfile(os.path.join(session_set, "change-log.md")):
+    # On the last session, finalize activity-log totalSessions from
+    # unique sessionNumbers if it's still missing or zero. Catches the
+    # "spec said 4-5 sessions; we ended at 4" case where no earlier
+    # register_session_start had a definitive total to propagate.
+    if is_last_session:
         _finalize_total_sessions_from_entries(session_set)
 
     return path

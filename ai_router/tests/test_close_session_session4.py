@@ -347,6 +347,12 @@ def test_repair_detects_state_says_closed_but_no_event(
     # actually reproduce the legacy "snapshot flipped, ledger silent"
     # drift case — the post-Set 4 mark_session_complete writes a
     # closeout_succeeded event itself, which would defeat the test.
+    # change-log.md must exist for _flip_state_to_closed to actually
+    # flip the SET status (mid-set close-outs no longer flip).
+    (closeable_set / "change-log.md").write_text(
+        "# change log\n\nlast-session marker for the drift fixture.\n",
+        encoding="utf-8",
+    )
     _flip_state_to_closed(str(closeable_set), verification_verdict="VERIFIED")
 
     # Diagnostic: drift surfaces, exit 5, ledger untouched.
@@ -397,6 +403,13 @@ def test_repair_detects_event_says_closed_but_state_lagging(
     flips the snapshot.
     """
     # Append the closeout trio but leave session-state.json untouched.
+    # change-log.md must exist so the repair's flip helper recognizes
+    # this as a last-session close-out (mid-set repairs no longer touch
+    # the SET-level status).
+    (closeable_set / "change-log.md").write_text(
+        "# change log\n\nlast-session marker for the lagging-state drift fixture.\n",
+        encoding="utf-8",
+    )
     append_event(
         str(closeable_set), "closeout_requested", 1,
     )
@@ -599,6 +612,12 @@ def test_e2e_bootstrapping_recovery_via_repair_apply(
     # Legacy close-out: state-only, no events. Use the gate-bypass
     # internal flip helper to faithfully reproduce the legacy drift —
     # mark_session_complete itself would now emit closeout_succeeded.
+    # change-log.md must exist so the flip helper recognizes this as a
+    # last-session close-out (mid-set close-outs no longer flip).
+    (closeable_set / "change-log.md").write_text(
+        "# change log\n\nlast-session marker for the bootstrapping fixture.\n",
+        encoding="utf-8",
+    )
     _flip_state_to_closed(str(closeable_set), verification_verdict="VERIFIED")
     events_before = read_events(str(closeable_set))
     assert not any(

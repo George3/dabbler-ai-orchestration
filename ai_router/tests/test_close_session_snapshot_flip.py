@@ -444,10 +444,18 @@ def test_close_session_multi_session_set_clean(tmp_path: Path):
     assert s1_outcome.result == "succeeded", s1_outcome.messages
     s1_state = read_session_state(str(set_dir))
     assert s1_state is not None
-    assert s1_state["lifecycleState"] == "closed", (
-        "session 1 snapshot must be flipped to closed by the success path "
-        "(Set 014 (b))"
+    # Mid-set close-out: the SESSION closed out successfully (event
+    # ledger records closeout_succeeded), but the SET is not done —
+    # change-log.md is only written on the last session of the set, so
+    # _flip_state_to_closed leaves status/lifecycleState alone. This
+    # prevents the Session Set Explorer from toggling the set to Done
+    # after every session.
+    assert s1_state["status"] == "in-progress", (
+        "session 1 is mid-set; status should stay in-progress until the "
+        "last session writes change-log.md"
     )
+    assert s1_state["lifecycleState"] == "work_in_progress"
+    assert s1_state.get("completedAt") is None
 
     # The events ledger has a session-1 work_started (manually emitted
     # by the test fixture's register_session_start call — Set 014 (a))
@@ -566,3 +574,52 @@ def test_close_session_multi_session_set_clean(tmp_path: Path):
     assert current_lifecycle_state(events_after_s2) == (
         SessionLifecycleState.CLOSED
     )
+
+
+def test_mid_set_close_out_does_not_flip_set_to_complete(tmp_path: Path):
+    """Regression: a mid-set session close-out (change-log.md absent and
+    --force not used) must leave the set's ``status`` at ``in-progress``.
+
+    The original bug: ``_flip_state_to_closed`` unconditionally wrote
+    ``status: "complete"`` at the end of every session, so the Session
+    Set Explorer briefly toggled the set to Done after each session,
+    then back to In Progress when the next session's
+    ``register_session_start`` re-flipped it. For a 5-session set the
+    operator saw "Done" four spurious times before the real one. Gate
+    on change-log.md (or ``forced``) so the SET-level flip only happens
+    on the actual last session.
+    """
+    repo, set_dir = _build_repo_with_set(tmp_path, total_sessions=5)
+    write_disposition(str(set_dir), Disposition(
+        status="completed",
+        summary="session 1 of 5",
+        verification_method="api",
+        files_changed=[],
+        verification_message_ids=[],
+        next_orchestrator=_valid_next_orc(),
+        blockers=[],
+    ))
+    # Deliberately do NOT write change-log.md — this is session 1 of 5,
+    # not the last session.
+    _commit_and_push(repo, "land session 1 work")
+
+    outcome = close_session.run(_ns(session_set_dir=str(set_dir)))
+    assert outcome.result == "succeeded", outcome.messages
+
+    state = read_session_state(str(set_dir))
+    assert state is not None
+    assert state["status"] == "in-progress", (
+        f"mid-set close-out must not flip SET status to complete; got "
+        f"status={state.get('status')!r}"
+    )
+    assert state["lifecycleState"] == "work_in_progress"
+    assert state.get("completedAt") is None
+
+    # The closeout_succeeded event for THIS session still lands — the
+    # event ledger tracks per-session close-outs, separate from the
+    # SET-level flip.
+    events = read_events(str(set_dir))
+    assert any(
+        e.event_type == "closeout_succeeded" and e.session_number == 1
+        for e in events
+    ), "session-level closeout_succeeded event must still be recorded"

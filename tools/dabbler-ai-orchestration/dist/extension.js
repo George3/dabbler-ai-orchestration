@@ -1466,9 +1466,6 @@ function iconUriFor(extensionUri, state) {
   return file ? vscode2.Uri.joinPath(extensionUri, "media", file) : void 0;
 }
 function progressText(set) {
-  if (set.state === "done") {
-    return set.sessionsCompleted > 0 ? `${set.sessionsCompleted}/${set.sessionsCompleted}` : "";
-  }
   if (set.totalSessions && set.totalSessions > 0) {
     return `${set.sessionsCompleted}/${set.totalSessions}`;
   }
