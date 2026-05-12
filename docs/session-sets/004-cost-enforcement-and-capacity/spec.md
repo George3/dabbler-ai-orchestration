@@ -43,7 +43,7 @@ The capacity heartbeat is in this set rather than its own set because it's tight
 
 ## Sessions
 
-### Session 1: Dual-sourced `print_cost_report()` (outsource-first mode)
+### Session 1 of 4: Dual-sourced `print_cost_report()` (outsource-first mode)
 
 **Goal:** Update the cost report to read from both data sources, flag discrepancies, and clearly state which is authoritative.
 
@@ -65,7 +65,7 @@ The capacity heartbeat is in this set rather than its own set because it's tight
 - `--format json` output is parseable
 - Existing callers of `get_costs()` continue to work
 
-### Session 2: Subscription-window utilization heuristic + capacity_signal.json
+### Session 2 of 4: Subscription-window utilization heuristic + capacity_signal.json
 
 **Goal:** Add the outsource-last cost-equivalent (subscription utilization) and the per-provider capacity heartbeat. Frame as **heartbeat-only**, NOT as routing intelligence (per GPT-5.4 review).
 
@@ -93,7 +93,7 @@ The capacity heartbeat is in this set rather than its own set because it's tight
 - Outsource-last cost report shows utilization metrics with explicit heartbeat framing
 - Documentation makes clear: this is observational data, not predictive
 
-### Session 3: Wire `mark_session_complete()` to the gate; add `--force` transitional
+### Session 3 of 4: Wire `mark_session_complete()` to the gate; add `--force` transitional
 
 **Goal:** `mark_session_complete()` now invokes the gate from Set 3. Failed checks block the status flip.
 
@@ -115,7 +115,7 @@ The capacity heartbeat is in this set rather than its own set because it's tight
 - The event log records whether close-out was forced or clean
 - Existing call sites continue to work; they get the gate enforcement automatically
 
-### Session 4: Schema-drift fix — generator script for session-state.json example
+### Session 4 of 4: Schema-drift fix — generator script for session-state.json example
 
 **Goal:** Replace the stale static `session-state.json` example with a generator script that produces a fresh example from the current schema.
 

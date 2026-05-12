@@ -41,7 +41,7 @@ Doc changes and fresh-turn routing are the most visible parts of the redesign bu
 
 ## Sessions
 
-### Session 1: Docs collapse + close-out doc + two-CLI workflow doc
+### Session 1 of 3: Docs collapse + close-out doc + two-CLI workflow doc
 
 **Goal:** Move close-out detail out of the main workflow doc; create the operational guide for outsource-last.
 
@@ -81,7 +81,7 @@ Doc changes and fresh-turn routing are the most visible parts of the redesign bu
 - `ai-router/docs/two-cli-workflow.md` is learnable for first-time outsource-last users
 - `close_session --help` surfaces the same content the doc shows
 
-### Session 2: Fresh close-out turn (mode-aware) + reconciler hook
+### Session 2 of 3: Fresh close-out turn (mode-aware) + reconciler hook
 
 **Goal:** Wire the orchestration layer to spawn a fresh close-out turn after work verification terminates. Mode-aware: API call in outsource-first, orchestrator self-invokes close-out as part of its loop in outsource-last.
 
@@ -106,7 +106,7 @@ Doc changes and fresh-turn routing are the most visible parts of the redesign bu
 - Outsource-last has NO additional API cost from the fresh-turn pattern (since it self-invokes)
 - Failure of close-out turn or self-invocation does not strand the session — reconciler recovers it
 
-### Session 3: Cross-provider alignment audit + executable failure-injection (verified by Gemini Pro AND GPT-5.4)
+### Session 3 of 3: Cross-provider alignment audit + executable failure-injection (verified by Gemini Pro AND GPT-5.4)
 
 **Goal:** Produce a written audit confirming the implementation matches the combined design. Run the failure-injection scenarios from Set 2 Session 4. Route both the audit document and the failure-injection traces to **both** providers for independent verification.
 

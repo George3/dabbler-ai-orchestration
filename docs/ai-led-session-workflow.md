@@ -447,7 +447,7 @@ Rules and conventions.
 
 ---
 
-## Session Plan
+## Sessions
 
 ### Session 1 of N: <Title>
 

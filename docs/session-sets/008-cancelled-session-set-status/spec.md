@@ -133,7 +133,7 @@ other files indicate. `RESTORED.md` is purely an audit artifact.
 
 ## Sessions
 
-### Session 1: File-shape helpers + Python parallel + tests
+### Session 1 of 3: File-shape helpers + Python parallel + tests
 
 **Goal:** Land the canonical shape on disk and the read/write helpers,
 in both TypeScript (for the extension) and Python (for
@@ -175,7 +175,7 @@ in both TypeScript (for the extension) and Python (for
   format)
 - All unit tests pass in both languages
 
-### Session 2: Extension UI — tree view, icons, commands, dialogs
+### Session 2 of 3: Extension UI — tree view, icons, commands, dialogs
 
 **Goal:** Wire the new state through the explorer view end-to-end.
 
@@ -227,7 +227,7 @@ in both TypeScript (for the extension) and Python (for
 - The extension's existing functionality is unchanged for sets
   that have neither `CANCELLED.md` nor `RESTORED.md`
 
-### Session 3: Workflow doc + cross-provider alignment + cleanup
+### Session 3 of 3: Workflow doc + cross-provider alignment + cleanup
 
 **Goal:** Document the new lifecycle, run the cross-provider verifier
 check, and tidy any drift.

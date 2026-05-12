@@ -41,7 +41,7 @@ This set also implements the **non-blocking verification** pattern both reviewer
 
 ## Sessions
 
-### Session 1: Verifier-role daemon
+### Session 1 of 4: Verifier-role daemon
 
 **Goal:** A long-running CLI worker that polls a queue, claims verification jobs, runs them via `pick_verifier_model` + `call_model`, and writes results back.
 
@@ -79,7 +79,7 @@ This set also implements the **non-blocking verification** pattern both reviewer
 - Heartbeats prevent the lease from expiring during long jobs
 - Failures (mocked exceptions) transition to `failed` state with reason recorded
 
-### Session 2: Orchestrator-role daemon
+### Session 2 of 4: Orchestrator-role daemon
 
 **Goal:** A long-running CLI worker that operates in the *opposite* direction — it processes its own assignment queue (work the verifier has rejected back to it, or follow-up dialogue requests).
 
@@ -98,7 +98,7 @@ This set also implements the **non-blocking verification** pattern both reviewer
 - Orchestrator daemon and verifier daemon can run simultaneously in separate processes
 - A multi-round dialogue (verifier → follow-up → orchestrator response → verifier completion) works end-to-end
 
-### Session 3: Mode-aware `route()` and `verify()` + restart command
+### Session 3 of 4: Mode-aware `route()` and `verify()` + restart command
 
 **Goal:** Wire the queue path into the AI router's public API. Add stale-session detection and a restart command.
 
@@ -123,7 +123,7 @@ This set also implements the **non-blocking verification** pattern both reviewer
 - `role_status` reports running daemons accurately
 - `restart_role` works on a running daemon
 
-### Session 4: Failure-injection integration tests
+### Session 4 of 4: Failure-injection integration tests
 
 **Goal:** Per GPT-5.4's review note, build executable failure-injection tests that prove recovery works. These tests are also reusable in Set 6 for the alignment audit.
 

@@ -180,8 +180,7 @@ audit specifically looks for:
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 1: Inventory → dual review → synthesis → proposal
 
 **Goal:** Land `audit-inventory.md` + both `provider-responses/*.md` +

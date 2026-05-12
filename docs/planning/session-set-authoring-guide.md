@@ -417,7 +417,7 @@ uatScope: none
 
 ---
 
-## Session Plan
+## Sessions
 
 ### Session 1 of N: <Title>
 

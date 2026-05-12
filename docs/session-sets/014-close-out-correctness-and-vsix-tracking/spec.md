@@ -80,8 +80,7 @@ The README ↔ .gitignore conflict for the VSIX is a separate concern but lands 
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 2: Close-out workflow correctness
 
 **Goal:** Land work blocks (a)–(d) — `register_session_start` emits `work_started`; `close_session`'s main success path flips the snapshot via `_flip_state_to_closed`; tests; docstring touch-ups. End state: future multi-session sets close cleanly via `close_session` alone, with no manual event appends and no `--repair --apply` workaround.

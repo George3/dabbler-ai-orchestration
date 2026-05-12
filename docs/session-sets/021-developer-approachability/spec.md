@@ -180,8 +180,7 @@ tracked here.
 
 ---
 
-## Session plan
-
+## Sessions
 ### Session 1 of 2: Quick-start + workflow doc restructure
 
 **Goal:** A new developer can understand the framework in 20 minutes

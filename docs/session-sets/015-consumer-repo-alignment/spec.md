@@ -186,8 +186,7 @@ set does the migration deliberately and verifiably.
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 3: Audit + per-repo migration plans
 
 **Goal:** Walk both consumer repos in scope (platform, harvester),

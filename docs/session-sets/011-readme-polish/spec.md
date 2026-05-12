@@ -133,8 +133,7 @@ non-Dabbler workspace).
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 2: Generate supporting content (retrofit + sample reports + screenshot specs)
 
 **Goal:** Land everything the README polish will need, so Session 2 is

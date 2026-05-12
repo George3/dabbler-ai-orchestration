@@ -67,7 +67,7 @@ outsourceMode: first
 
 ---
 
-## Session Plan
+## Sessions
 
 ### Session 1 of 1: Implement and close
 

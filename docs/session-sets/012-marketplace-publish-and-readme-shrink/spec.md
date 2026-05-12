@@ -79,8 +79,7 @@ The README shrink is the front-of-house complement to the install simplification
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 3: Workspace-relative config + metrics auto-discovery
 
 **Goal:** Make `ai_router/router-config.yaml` and `ai_router/router-metrics.jsonl` work without operator-set env vars when the file lives in a sensibly-located workspace directory.

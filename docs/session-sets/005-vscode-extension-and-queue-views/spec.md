@@ -40,7 +40,7 @@ Per the cross-provider review of the v1 plan, capacity awareness was reframed as
 
 ## Sessions
 
-### Session 1: Helper Python script (`queue_status`) + activity-bar wiring
+### Session 1 of 3: Helper Python script (`queue_status`) + activity-bar wiring
 
 **Goal:** Build the Python helper the extension shells out to; wire the new view containers in `package.json`.
 
@@ -90,7 +90,7 @@ Per the cross-provider review of the v1 plan, capacity awareness was reframed as
 - `python -m ai_router.heartbeat_status --format json` produces parseable JSON with disclaimer
 - `package.json` updated with new view containers (extension still loads)
 
-### Session 2: `Provider Queues` tree view
+### Session 2 of 3: `Provider Queues` tree view
 
 **Goal:** Render a tree view that lists pending / claimed / completed / failed messages per provider. Right-click actions for inspection and emergency intervention.
 
@@ -125,7 +125,7 @@ Per the cross-provider review of the v1 plan, capacity awareness was reframed as
 - Refresh button updates the view
 - Right-click actions work and confirm before destructive operations
 
-### Session 3: `Provider Heartbeats` view + mode badges + polish
+### Session 3 of 3: `Provider Heartbeats` view + mode badges + polish
 
 **Goal:** Heartbeats view with explicit observational framing. Mode badges on existing session-set tree items. Final polish and tests.
 

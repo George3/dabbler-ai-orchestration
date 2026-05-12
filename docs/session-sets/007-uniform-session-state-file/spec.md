@@ -132,7 +132,7 @@ hand), readers synthesize on the fly. This keeps the contract
 
 ## Sessions
 
-### Session 1: Schema + synthesizer + backfill CLI
+### Session 1 of 3: Schema + synthesizer + backfill CLI
 
 **Goal:** Land the writes. Don't change any readers yet.
 
@@ -189,7 +189,7 @@ hand), readers synthesize on the fly. This keeps the contract
 - All existing tests still pass (no reader changes yet)
 - New tests cover the synthesizer, backfill, and CLI
 
-### Session 2: Reader collapses
+### Session 2 of 3: Reader collapses
 
 **Goal:** Switch every reader from file-presence branching to
 `status` reads, with a lazy-synthesis fallback for folders that
@@ -231,7 +231,7 @@ slipped through backfill.
 - All existing extension and ai-router tests pass
 - New tests cover the lazy-synthesis fallback path
 
-### Session 3: Bootstrap, docs, cross-provider review
+### Session 3 of 3: Bootstrap, docs, cross-provider review
 
 **Goal:** Ensure new session sets are born with the file, document
 the new invariant, and run the cross-provider check.

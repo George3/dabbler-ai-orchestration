@@ -35,7 +35,7 @@ verdict but materially improve the implementation if landed.
 
 ## Sessions
 
-### Session 1: D-3 — Resolve commit / push / notification ownership
+### Session 1 of 5: D-3 — Resolve commit / push / notification ownership
 
 **Goal:** Decide and implement: does `close_session.py` own commit /
 push / notification, or does that responsibility live in the
@@ -77,7 +77,7 @@ original framing over what's shipping.
   `close_session.run` performs commit/push/notify (alternative path)
 - All existing tests still pass
 
-### Session 2: D-1 — `(repo, branch)` parallel-session exclusion
+### Session 2 of 5: D-1 — `(repo, branch)` parallel-session exclusion
 
 **Goal:** Either widen the lock to enforce single-session ownership of
 `(repo, branch)` at session admission, or document the residual race
@@ -113,7 +113,7 @@ document the residual race in `ai-router/docs/close-out.md` Section 6
 - Or: the residual race is documented in close-out.md and the
   proposal's open-question answer is revised
 
-### Session 3: D-2 — `--force` flag resolution
+### Session 3 of 5: D-2 — `--force` flag resolution
 
 **Goal:** Either remove `--force` from `close_session`, or hard-scope
 it to admin/test use only with explicit ledger emission.
@@ -144,7 +144,7 @@ covering anyone external to the repo.
 - `ai-router/docs/close-out.md` reflects the resolution
 - A new test exercises the chosen path
 
-### Session 4 (optional): F-1, F-2, D-4 — Test coverage + alerting
+### Session 4 of 5 (optional): F-1, F-2, D-4 — Test coverage + alerting
 
 **Goal:** Land the three follow-up items together, or any subset that
 is judged worth the implementation cost.
@@ -170,7 +170,7 @@ is judged worth the implementation cost.
 - All three follow-ups land OR a clear note in the change-log
   explains which follow-ups were skipped and why
 
-### Session 5: Re-audit
+### Session 5 of 5: Re-audit
 
 **Goal:** Re-route the same combined-alignment prompt through both
 Gemini Pro and GPT-5.4 against the post-Sessions-1–4 implementation.

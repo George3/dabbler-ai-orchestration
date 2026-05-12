@@ -101,8 +101,7 @@ adoption section becomes one line.
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 3: Rename `ai-router/` → `ai_router/`, add `pyproject.toml`
 
 **Goal:** Make the package directly Python-importable with no shim.

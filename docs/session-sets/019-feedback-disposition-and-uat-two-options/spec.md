@@ -137,8 +137,7 @@ outsourceMode: first
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 2: Disposition gate discoverability
 
 **Goal:** Land the three disposition-gate fixes (Step 8 doc, schema

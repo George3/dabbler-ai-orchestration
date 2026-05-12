@@ -48,7 +48,7 @@ The data structures from the original close-out reliability proposal (`dispositi
 
 ## Sessions
 
-### Session 1: SQLite queue schema + state machine
+### Session 1 of 5: SQLite queue schema + state machine
 
 **Goal:** Define the queue database schema and core state-transition operations.
 
@@ -101,7 +101,7 @@ The data structures from the original close-out reliability proposal (`dispositi
 - Reclaim_expired correctly identifies and recovers crashed workers
 - Schema is documented (one comment block at the top of `queue_db.py` summarizing each table and its invariants)
 
-### Session 2: Message envelope + follow-up rounds
+### Session 2 of 5: Message envelope + follow-up rounds
 
 **Goal:** Define the high-level message API that role-loops will use, including multi-round follow-up dialogue.
 
@@ -119,7 +119,7 @@ The data structures from the original close-out reliability proposal (`dispositi
 - `--export-jsonl` produces a deterministic format suitable for committing to git for audit purposes
 - Max-rounds escalation produces a clear failure reason
 
-### Session 3: Mode config schema additions + nextOrchestrator rubric
+### Session 3 of 5: Mode config schema additions + nextOrchestrator rubric
 
 **Goal:** Extend the session-state.json schema and the spec.md Session Set Configuration block to be mode-aware.
 
@@ -146,7 +146,7 @@ The data structures from the original close-out reliability proposal (`dispositi
 - Mode config defaults to `outsourceMode: first` when not specified
 - `validate_next_orchestrator()` returns `(False, [...])` for missing fields, short specifics, unknown enum values
 
-### Session 4: disposition.json schema + writer
+### Session 4 of 5: disposition.json schema + writer
 
 **Goal:** Define and implement the disposition.json artifact.
 
@@ -173,7 +173,7 @@ The data structures from the original close-out reliability proposal (`dispositi
 - File writes are atomic on Windows (uses `os.replace`)
 - `verification_method: queue` requires `verification_message_ids` to be non-empty
 
-### Session 5: session-events.jsonl ledger + backfill
+### Session 5 of 5: session-events.jsonl ledger + backfill
 
 **Goal:** Append-only lifecycle ledger that mirrors queue state for human audit; backfill existing in-progress sessions.
 

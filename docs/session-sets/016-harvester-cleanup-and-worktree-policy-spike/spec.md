@@ -142,8 +142,7 @@ A clean off-ramp matters.
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 1: Document, consult, synthesize
 
 **Goal:** Produce `findings.md`, `questions.md`, and `proposal.md`

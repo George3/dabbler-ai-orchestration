@@ -151,8 +151,7 @@ Set 013 fills that gap. **One** entry point — `Dabbler: Copy adoption bootstra
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 2: Canonical doc + workflow-doc "Cost-budgeted verification modes" section
 
 **Goal:** Land work block (a) — the canonical instructions doc at `docs/adoption-bootstrap.md` — plus the new "Cost-budgeted verification modes" section in `docs/ai-led-session-workflow.md`. End state: the canonical doc is live at `https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/docs/adoption-bootstrap.md` (fetchable by any AI), the workflow doc explains the three-tier cost-budgeted modes including the operator-authorized $0/skipped Rule 2 exception, and Session 2 can wire up the extension command pointing at the now-live URL.

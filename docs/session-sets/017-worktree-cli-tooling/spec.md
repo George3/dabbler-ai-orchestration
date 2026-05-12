@@ -100,8 +100,7 @@ operators see the cruft instead of having it silently accumulate.
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 1: Design review, synthesis, implementation, close-out
 
 **Goal:** Land the worktree CLI module + tests in a single session, with cross-provider design review gating the implementation. End state: `ai_router/worktree.py` exists, tests pass, layout-doc references the CLI, the regression class that caused Set 016 is structurally prevented going forward.

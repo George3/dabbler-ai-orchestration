@@ -108,8 +108,7 @@ outsourceMode: first
 
 ---
 
-## Session Plan
-
+## Sessions
 ### Session 1 of 1: Audit + execute migration
 
 **Goal:** Audit the repo's current state, run the migration to

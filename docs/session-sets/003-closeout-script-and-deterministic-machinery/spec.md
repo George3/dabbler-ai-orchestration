@@ -45,7 +45,7 @@ This is also where both reviewers' "non-blocking verify, blocking close-out" pat
 
 ## Sessions
 
-### Session 1: `close_session` skeleton + flags + idempotency
+### Session 1 of 4: `close_session` skeleton + flags + idempotency
 
 **Goal:** Ship a runnable `python -m ai_router.close_session` with all flags and structured output. Gate checks are stubs (always pass) — Session 2 fills them in. Verification blocking is stubbed — Session 3 implements it.
 
@@ -74,7 +74,7 @@ This is also where both reviewers' "non-blocking verify, blocking close-out" pat
 - Re-running on already-closed session is a no-op
 - All flags accepted; combinations validated (e.g., `--force --interactive` rejected)
 
-### Session 2: Hardened gate checks + concurrency lock
+### Session 2 of 4: Hardened gate checks + concurrency lock
 
 **Goal:** Implement the deterministic gate checks. This is the architecturally trickiest session.
 
@@ -96,7 +96,7 @@ This is also where both reviewers' "non-blocking verify, blocking close-out" pat
 - Lock prevents two concurrent invocations; stale lock is reclaimed
 - Final-session check correctly distinguishes fresh vs. stale `change-log.md`
 
-### Session 3: Verification-wait (queue mode) + reconciler
+### Session 3 of 4: Verification-wait (queue mode) + reconciler
 
 **Goal:** Implement the close-out's blocking-wait for queued verifications, and the reconciler that recovers stranded sessions.
 
@@ -131,7 +131,7 @@ This is also where both reviewers' "non-blocking verify, blocking close-out" pat
 - Timeout transitions session to `closeout_blocked` with clear reason
 - Reconciler recovers a fixture with a stranded session
 
-### Session 4: `--manual-verify`, `--repair`, full integration
+### Session 4 of 4: `--manual-verify`, `--repair`, full integration
 
 **Goal:** Land the bootstrapping-window flags and run end-to-end integration tests against realistic fixtures.
 
