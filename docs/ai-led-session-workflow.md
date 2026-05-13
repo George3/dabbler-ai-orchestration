@@ -1265,6 +1265,20 @@ about proposals. Do not fire the notification when the gate failed —
 notifying about a half-closed session corrupts the human's mental
 model of what is or isn't done.
 
+**Do not skip `close_session` for "quick" sessions.** Every session
+in a Full-tier set must close through `close_session` so the events
+ledger (`session-events.jsonl`) stays authoritative. Hand-authoring
+`session-state.json` to declare a session complete without running
+the gate produces mixed-mode drift: the snapshot says complete but
+the ledger has no `closeout_succeeded` event for that session, the
+cost dashboard misses the session's spend, and consumers (the Session
+Set Explorer extension v0.13.11+) downgrade the bucket to In Progress
+because the ledger is the authoritative signal. If a set is going to
+be hand-maintained, commit it to Lightweight tier from the start —
+don't mix modes mid-set. Recovery for an already-drifted set: see
+`ai_router/docs/close-out.md` § "Mixed-mode drift" — run
+`close_session --repair --apply` to backfill the missing events.
+
 #### Last session only — worktree and branch cleanup
 
 When the session being closed is the **last** session of the set AND the

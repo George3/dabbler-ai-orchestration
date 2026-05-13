@@ -383,10 +383,47 @@ verifier daemons are not yet reliable. Requires `--interactive` or
 (`session-state.json`, `activity-log.json`, `session-events.jsonl`,
 `disposition.json`, `queue.db` rows) and reports drift between them
 without touching anything. Add `--apply` to actually fix detectable
-drift (e.g., a `session-events.jsonl` missing a `closeout_succeeded`
-event for a session whose `session-state.json` says `complete`).
-`--repair` without `--apply` exits 5 if drift is found, so it's safe
-to script as a pre-flight check.
+drift. `--repair` without `--apply` exits 5 if drift is found, so
+it's safe to script as a pre-flight check.
+
+The drift shapes the walk detects:
+
+1. **State-says-closed-but-no-closeout-event-for-`currentSession`.**
+   `session-state.json` reports `lifecycleState: closed` (or v1
+   `status: complete`) but `session-events.jsonl` has no
+   `closeout_succeeded` event for the session number that state
+   claims is closed. Two real-world variants both reduce to this
+   check:
+     - *Bootstrapping-window drift.* The old Step 8 path committed
+       without emitting terminal lifecycle events at all.
+     - *Mixed-mode drift.* Earlier sessions in the set ran through
+       `close_session` (events ledger has their closeouts) but a
+       later session was hand-authored directly — `session-state.json`
+       was edited to `currentSession: N` / `status: complete`
+       without anyone invoking `close_session` for session `N`, so
+       no `closeout_succeeded` event for `N` exists. Until the
+       extension's tree-view guard shipped in v0.13.11, this
+       displayed as Done; the tracker now downgrades to In Progress,
+       and `--repair --apply` will backfill the missing event.
+   Repair: with `--apply`, append a synthetic `closeout_requested`
+   (if missing) and `closeout_succeeded` for the claimed-closed
+   session so the events ledger becomes internally consistent and
+   the tree view stops downgrading.
+
+2. **Closeout-succeeded-but-state-not-closed.** The reverse drift:
+   events ledger says the session closed but `session-state.json`
+   is still `work_in_progress` / `work_verified`. Repair: with
+   `--apply`, call `_flip_state_to_closed` so the snapshot tracks
+   the ledger.
+
+3. **Disposition references missing queue messages.**
+   `disposition.json` cites `verification_message_ids` the queue
+   databases do not contain. Reported but not auto-fixed — verifier
+   verdicts cannot be synthesized; rebuild the disposition manually.
+
+4. **Stranded mid-closeout** (`closeout_requested` without a
+   terminal companion). Reported only; recovery is the reconciler's
+   job. `--repair` does not re-run the gate from inside itself.
 
 ---
 
@@ -429,6 +466,60 @@ on a schedule. The startup pass catches sessions stranded across a
 restart; the schedule catches sessions that strand mid-run. Both
 re-use the same `_evaluate_one(session_set_dir, ...)` predicate so
 the two paths cannot disagree about what "stranded" means.
+
+**Mixed-mode drift (hand-authored session in a router-driven set).**
+The supported tiers are Full (every session runs through
+`close_session`; events ledger is authoritative) and Lightweight
+(no router writer; the human or orchestrator hand-maintains
+`session-state.json`). Mixing the two within a single set is **not
+supported** but does happen in practice — earlier sessions run
+through `close_session` and a later session (often a "quick bug
+fix" or "wrap up" session) is authored directly:
+`session-state.json` is edited to `currentSession: N` /
+`status: "complete"` / `lifecycleState: "closed"`, possibly with a
+hand-typed `completedAt`, but `session-events.jsonl` never gets a
+`work_started` or `closeout_succeeded` event for session `N`.
+
+Symptoms:
+
+- The tree view shows the set as Done even though session `N`'s
+  work didn't actually run through the gate. The extension's
+  v0.13.11 guard downgrades the bucket to In Progress when it
+  detects this exact shape (snapshot claims `complete` for the
+  final session but the ledger has no closeout event for it).
+- `--repair` walks emit a "state says closed but no closeout event
+  for session N" drift message (drift case 1 in Section 5).
+- The cost dashboard misses session `N`'s spend because the
+  router never recorded the calls.
+
+Telltale signs in the file itself: hand-typed timestamps with
+six trailing zeros (`2026-05-12T15:20:00.000000-04:00`) — the
+router's `_now_iso()` always emits microsecond precision. A real
+router-written timestamp looks like
+`2026-05-12T15:23:47.342195-04:00`.
+
+Recovery:
+
+- **If the work was actually done** and you just want the ledger
+  to reflect it, run `python -m ai_router.close_session --repair
+  --apply --session-set docs/session-sets/<slug>`. Drift case 1
+  fires and appends synthetic `closeout_requested` +
+  `closeout_succeeded` events for `currentSession`. The tree view
+  recovers on next refresh. Optionally add a manual
+  `completedSessions[]` array to `session-state.json` so
+  consumers don't have to derive the count.
+- **If the work was NOT done** (the state file was over-eagerly
+  flipped to complete), roll the snapshot back by hand: set
+  `status: "in-progress"`, `lifecycleState: "work_in_progress"`,
+  clear `completedAt` and `verificationVerdict`. The set returns
+  to In Progress and the work can resume through `close_session`
+  normally.
+
+Prevention: the orchestrator instruction file should either commit
+the set to Lightweight tier (no router writes, no events ledger,
+maintain `completedSessions[]` manually per
+`docs/session-state-schema.md`) or Full tier (every session
+through `close_session`). Don't switch mid-set.
 
 **Queue-state debugging.** When a session looks fine to the
 orchestrator but close-out won't terminate, the queue is the usual

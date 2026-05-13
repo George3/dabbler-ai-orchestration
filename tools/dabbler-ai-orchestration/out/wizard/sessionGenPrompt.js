@@ -60,7 +60,11 @@ For each session set, produce a spec.md file with this exact structure:
 totalSessions: <estimate 1–6>
 requiresUAT: <true|false>
 requiresE2E: <true|false>
-effort: <low|normal|high>
+outsourceMode: first          # first (default, synchronous) | last (queue-mediated daemon)
+# Optional — set only when requiresUAT: true:
+# uatStyle: <ad-hoc|dsl>     # ad-hoc (default, non-web) | dsl (web/Playwright via dabbler-uat-dsl)
+# uatScope: <per-session|per-set>
+# effort: <low|normal|high>  # default normal
 \`\`\`
 
 ## Context
@@ -73,6 +77,7 @@ Guidelines:
 - Keep scope tight: prefer 2–4 sessions per set
 - Set requiresUAT: true only for user-visible features that need manual verification
 - Set requiresE2E: true only if automated browser tests are relevant
+- When requiresUAT: true, set uatStyle: dsl for web/browser UI (compiles to Playwright via dabbler-uat-dsl) or uatStyle: ad-hoc for non-web surfaces (CLI, native, Access, COM apps). Default is ad-hoc.
 - Set effort: low for simple changes, high for complex multi-file refactors
 
 When you scaffold each session-set folder (\`docs/session-sets/<slug>/\`)

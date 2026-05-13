@@ -278,6 +278,74 @@ suite("fileSystem — readSessionSets", () => {
     fs.rmSync(dir, { recursive: true });
   });
 
+  // Regression for unified-master-details-composite drift (2026-05-12):
+  // snapshot claimed `status: complete` with `verificationVerdict:
+  // VERIFIED` at currentSession=5/totalSessions=5, yet
+  // `session-events.jsonl` had `closeout_succeeded` events for sessions
+  // 1-4 only — session 5 never actually closed. The pre-existing
+  // currentSession<totalSessions guard didn't catch this (5 is not <5);
+  // the set rendered as Done with no real evidence the final session
+  // ran. The expanded guard cross-checks the events ledger: if the
+  // ledger exists and has no closeout event for `currentSession`, the
+  // snapshot drifted from the authoritative ledger and we downgrade
+  // bucketing to in-progress.
+  test("status='complete' with no closeout event for final session reads as in-progress", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "ledger-gap");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# ledger-gap\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        status: "complete",
+        currentSession: 5,
+        totalSessions: 5,
+        verificationVerdict: "VERIFIED",
+      })
+    );
+    // Closeouts logged for sessions 1-4 only; session 5 never closed.
+    const events = [
+      { timestamp: "2026-05-12T00:41:53Z", session_number: 1, event_type: "closeout_succeeded" },
+      { timestamp: "2026-05-12T07:04:10Z", session_number: 2, event_type: "closeout_succeeded" },
+      { timestamp: "2026-05-12T08:26:28Z", session_number: 3, event_type: "closeout_succeeded" },
+      { timestamp: "2026-05-12T11:40:49Z", session_number: 4, event_type: "closeout_succeeded" },
+    ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+    fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].state, "in-progress");
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // Sibling to the previous test: when the events ledger DOES record a
+  // closeout for the final session, the bucketing is Done. Locks in
+  // that the guard is reading the ledger for a real signal, not just
+  // any presence of the file.
+  test("status='complete' with closeout event for final session reads as done", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "ledger-complete");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# ledger-complete\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        status: "complete",
+        currentSession: 3,
+        totalSessions: 3,
+      })
+    );
+    const events = [
+      { timestamp: "2026-05-12T01:00:00Z", session_number: 1, event_type: "closeout_succeeded" },
+      { timestamp: "2026-05-12T02:00:00Z", session_number: 2, event_type: "closeout_succeeded" },
+      { timestamp: "2026-05-12T03:00:00Z", session_number: 3, event_type: "closeout_succeeded" },
+    ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+    fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].state, "done");
+    fs.rmSync(dir, { recursive: true });
+  });
+
   // Set 7: the canonical contract is "status beats file presence."
   // These contradictory fixtures lock that in — without them, the old
   // file-presence implementation could still pass the basic in-progress

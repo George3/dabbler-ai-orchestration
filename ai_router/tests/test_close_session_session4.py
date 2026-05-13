@@ -395,6 +395,74 @@ def test_repair_detects_state_says_closed_but_no_event(
     )
 
 
+def test_repair_detects_mixed_mode_drift(closeable_set: Path):
+    """Mixed-mode drift: sessions 1..N-1 went through close_session
+    (events ledger has their closeouts) but session N was hand-authored
+    — session-state.json was edited to currentSession=N / status=complete
+    without anyone running the gate for session N. The pre-Set-020 trigger
+    (``lifecycle != CLOSED``) missed this because the ledger's most-recent
+    lifecycle was already CLOSED for an earlier session. Trigger is now
+    session-number-specific: ``has_closeout_succeeded(state_session_number)``.
+
+    Reproduces the unified-master-details-composite drift (2026-05-12):
+    sessions 1-4 had closeout_succeeded events, session-state.json claimed
+    complete/VERIFIED for currentSession=5, ledger had no session-5 events.
+    """
+    # Session 1 went through close_session — append its closeout trio.
+    append_event(str(closeable_set), "closeout_requested", 1)
+    append_event(str(closeable_set), "closeout_succeeded", 1, verdict="VERIFIED")
+
+    # Hand-author session 2's state without invoking close_session. The
+    # orchestrator wrote currentSession=2 / status=complete / lifecycleState
+    # =closed and called it done. No session-2 events in the ledger.
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["currentSession"] = 2
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-05-12T15:20:00.000000-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    # Diagnostic: drift surfaces for session 2 specifically.
+    args = _ns(session_set_dir=str(closeable_set), repair=True)
+    outcome = close_session.run(args)
+    assert outcome.result == "repair_drift"
+    assert outcome.exit_code == 5
+    assert any(
+        "no closeout_succeeded for the current session (session 2)" in m
+        for m in outcome.messages
+    ), outcome.messages
+
+    # --apply: synthetic closeout trio lands against session 2.
+    args2 = _ns(session_set_dir=str(closeable_set), repair=True, apply=True)
+    outcome2 = close_session.run(args2)
+    assert outcome2.result == "succeeded"
+    events_after = read_events(str(closeable_set))
+    session2_closeouts = [
+        e for e in events_after
+        if e.event_type == "closeout_succeeded" and e.session_number == 2
+    ]
+    assert len(session2_closeouts) == 1
+    assert session2_closeouts[0].fields.get("repaired") is True
+    assert (
+        session2_closeouts[0].fields.get("repair_reason")
+        == "state_says_closed_but_no_closeout_event"
+    )
+    # Session 1's original (non-repaired) closeout is untouched.
+    session1_closeouts = [
+        e for e in events_after
+        if e.event_type == "closeout_succeeded" and e.session_number == 1
+    ]
+    assert len(session1_closeouts) == 1
+    assert session1_closeouts[0].fields.get("repaired") is not True
+
+    # Idempotent.
+    outcome3 = close_session.run(args2)
+    assert outcome3.result == "succeeded"
+    assert any("no drift detected" in m for m in outcome3.messages)
+
+
 def test_repair_detects_event_says_closed_but_state_lagging(
     closeable_set: Path,
 ):

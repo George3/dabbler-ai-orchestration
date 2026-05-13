@@ -49,12 +49,26 @@ export function discoverRoots(): string[] {
   return order;
 }
 
-// Detect the stale "status=complete with currentSession < totalSessions"
-// shape that pre-0.2.1 ai_router (and any manual edit) could leave on
-// disk between sessions. Returns true iff the snapshot makes both
-// session numbers available and the count says more sessions remain.
-// On any read/parse failure, returns false — trust the canonical
-// status field rather than second-guessing on garbled input.
+// Detect a stale `status: "complete"` snapshot that doesn't actually
+// reflect a finished set. Two drift shapes both downgrade to in-progress:
+//
+//   1. **Count mismatch.** `currentSession < totalSessions`. Pre-0.2.1
+//      ai_router flipped to complete after every session, and manual
+//      edits / stale consumer snapshots still produce this shape.
+//
+//   2. **Final-session ledger gap.** `currentSession === totalSessions`
+//      and the snapshot claims complete, but `session-events.jsonl`
+//      has no `closeout_succeeded` event for the final session. The
+//      events ledger is authoritative on Full tier; absent closeout
+//      means the writer drifted from the ledger (observed
+//      2026-05-12 on unified-master-details-composite: snapshot
+//      `status: complete` + `verificationVerdict: VERIFIED` at
+//      currentSession=5/5, yet ledger had closeouts for sessions 1-4
+//      only). Only fires when the ledger file exists — Lightweight
+//      tier has no ledger and we trust the snapshot there.
+//
+// Returns false on any read/parse failure — trust the canonical status
+// rather than second-guessing on garbled input.
 export function isMidSetComplete(statePath: string): boolean {
   if (!fs.existsSync(statePath)) return false;
   try {
@@ -62,14 +76,51 @@ export function isMidSetComplete(statePath: string): boolean {
       currentSession?: number;
       totalSessions?: number;
     };
-    return (
-      typeof sd.currentSession === "number" &&
-      typeof sd.totalSessions === "number" &&
-      sd.currentSession < sd.totalSessions
-    );
+    if (typeof sd.currentSession !== "number") return false;
+    if (typeof sd.totalSessions !== "number") return false;
+
+    if (sd.currentSession < sd.totalSessions) return true;
+
+    const eventsPath = path.join(path.dirname(statePath), "session-events.jsonl");
+    if (fs.existsSync(eventsPath) &&
+        !hasCloseoutEventForSession(eventsPath, sd.currentSession)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
+}
+
+function hasCloseoutEventForSession(
+  eventsPath: string,
+  sessionNumber: number
+): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(eventsPath, "utf8");
+  } catch {
+    return false;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    try {
+      const event = JSON.parse(line) as {
+        session_number?: number;
+        event_type?: string;
+      };
+      if (
+        event.event_type === "closeout_succeeded" &&
+        event.session_number === sessionNumber
+      ) {
+        return true;
+      }
+    } catch {
+      // skip malformed lines — append-only ledger may carry partial writes
+    }
+  }
+  return false;
 }
 
 export function parseSessionSetConfig(specPath: string): SessionSetConfig {

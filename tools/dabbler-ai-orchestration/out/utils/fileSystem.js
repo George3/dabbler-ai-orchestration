@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PLAYWRIGHT_REL_DEFAULT = exports.SESSION_SETS_REL = void 0;
 exports.discoverRoots = discoverRoots;
-exports.hasInProgressEvidence = hasInProgressEvidence;
+exports.isMidSetComplete = isMidSetComplete;
 exports.parseSessionSetConfig = parseSessionSetConfig;
 exports.parseUatChecklist = parseUatChecklist;
 exports.readSessionSets = readSessionSets;
@@ -82,68 +82,79 @@ function discoverRoots() {
     }
     return order;
 }
-// v0.13.2: positive-evidence check for "in-progress" status. The
-// principle is: default Not Started; require positive evidence to
-// escalate. Done is already evidence-gated (change-log.md presence
-// via close_session); Cancelled is evidence-gated (CANCELLED.md);
-// In Progress now joins them.
+// Detect a stale `status: "complete"` snapshot that doesn't actually
+// reflect a finished set. Two drift shapes both downgrade to in-progress:
 //
-// Two evidence signals, either is sufficient:
-//   1. session-events.jsonl exists and contains at least one
-//      `work_started` event. This is the strongest signal —
-//      `register_session_start` writes the event before flipping
-//      session-state.json's status.
-//   2. activity-log.json exists with at least one entry. Real
-//      session work has been logged.
+//   1. **Count mismatch.** `currentSession < totalSessions`. Pre-0.2.1
+//      ai_router flipped to complete after every session, and manual
+//      edits / stale consumer snapshots still produce this shape.
 //
-// A session-state.json claiming `in-progress` without either signal
-// is treated as not-started. This handles two failure modes the
-// user has reported:
-//   (a) stale `status: "in-progress"` from past partial work that
-//       was abandoned without closing the session.
-//   (b) migrations / manual file edits that flipped the status
-//       prematurely.
-function hasInProgressEvidence(sessionSetDir) {
-    // session-events.jsonl is the strongest signal. It's append-only
-    // newline-delimited JSON; one `work_started` event per session.
-    // We don't need to parse — string-search for the event-type marker.
-    const eventsPath = path.join(sessionSetDir, "session-events.jsonl");
-    if (fs.existsSync(eventsPath)) {
-        try {
-            const text = fs.readFileSync(eventsPath, "utf8");
-            if (text.includes('"event_type": "work_started"') ||
-                text.includes('"event_type":"work_started"')) {
-                return true;
-            }
+//   2. **Final-session ledger gap.** `currentSession === totalSessions`
+//      and the snapshot claims complete, but `session-events.jsonl`
+//      has no `closeout_succeeded` event for the final session. The
+//      events ledger is authoritative on Full tier; absent closeout
+//      means the writer drifted from the ledger (observed
+//      2026-05-12 on unified-master-details-composite: snapshot
+//      `status: complete` + `verificationVerdict: VERIFIED` at
+//      currentSession=5/5, yet ledger had closeouts for sessions 1-4
+//      only). Only fires when the ledger file exists — Lightweight
+//      tier has no ledger and we trust the snapshot there.
+//
+// Returns false on any read/parse failure — trust the canonical status
+// rather than second-guessing on garbled input.
+function isMidSetComplete(statePath) {
+    if (!fs.existsSync(statePath))
+        return false;
+    try {
+        const sd = JSON.parse(fs.readFileSync(statePath, "utf8"));
+        if (typeof sd.currentSession !== "number")
+            return false;
+        if (typeof sd.totalSessions !== "number")
+            return false;
+        if (sd.currentSession < sd.totalSessions)
+            return true;
+        const eventsPath = path.join(path.dirname(statePath), "session-events.jsonl");
+        if (fs.existsSync(eventsPath) &&
+            !hasCloseoutEventForSession(eventsPath, sd.currentSession)) {
+            return true;
         }
-        catch {
-            /* fall through to the activity-log check */
-        }
+        return false;
     }
-    // activity-log.json: secondary evidence. Has entries iff actual work
-    // was logged via SessionLog.log_step().
-    const activityPath = path.join(sessionSetDir, "activity-log.json");
-    if (fs.existsSync(activityPath)) {
+    catch {
+        return false;
+    }
+}
+function hasCloseoutEventForSession(eventsPath, sessionNumber) {
+    let text;
+    try {
+        text = fs.readFileSync(eventsPath, "utf8");
+    }
+    catch {
+        return false;
+    }
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line)
+            continue;
         try {
-            const data = JSON.parse(fs.readFileSync(activityPath, "utf8"));
-            if (Array.isArray(data.entries) && data.entries.length > 0) {
+            const event = JSON.parse(line);
+            if (event.event_type === "closeout_succeeded" &&
+                event.session_number === sessionNumber) {
                 return true;
             }
         }
         catch {
-            /* malformed activity log — no evidence */
+            // skip malformed lines — append-only ledger may carry partial writes
         }
     }
     return false;
 }
 function parseSessionSetConfig(specPath) {
-    // outsourceMode defaults to "first" — matches the AI router's documented
-    // backward-compat default when the spec omits the field.
     const config = {
         requiresUAT: false,
         requiresE2E: false,
         uatScope: "none",
-        outsourceMode: "first",
+        outsourceMode: null,
     };
     if (!fs.existsSync(specPath))
         return config;
@@ -155,7 +166,14 @@ function parseSessionSetConfig(specPath) {
         return config;
     }
     const headingMatch = text.match(/##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i);
-    const block = headingMatch ? headingMatch[1] : text.slice(0, 4000);
+    // When the canonical `## Session Set Configuration` heading is absent,
+    // fall back to scanning the entire spec rather than just the first 4000
+    // chars. The line-anchored regexes below (e.g.,
+    // `^\s*requiresUAT:\s*(true|false)\s*$`) are specific enough that false
+    // positives in prose are very unlikely; a 4000-byte cap was needlessly
+    // narrow and missed real declarations in specs that put the config
+    // yaml block under a non-canonical heading like `## UAT scope`.
+    const block = headingMatch ? headingMatch[1] : text;
     const flagRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(true|false)\\s*$`, "im");
     const stringRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*([\\w-]+)\\s*$`, "im");
     const uat = block.match(flagRe("requiresUAT"));
@@ -251,28 +269,17 @@ function readSessionSets(root) {
             state = "cancelled";
         }
         else {
-            // Set 7 invariant: state is read directly from session-state.json's
-            // canonical `status`. v0.13.2 layers an evidence-corroboration
-            // rule on top: an `in-progress` status is trusted only when
-            // there's a positive corroborating signal (an `activity-log.json`
-            // with at least one entry, or a `session-events.jsonl` containing
-            // a `work_started` event). Without corroboration, the state
-            // decays to `not-started` — which is what the user wants when a
-            // session set's `session-state.json` was written eagerly by
-            // `register_session_start` but the session never actually
-            // produced any work, or when a stale partial-migration leaves an
-            // `in-progress` status field with no underlying activity.
-            //
-            // The principle: default Not Started; require positive evidence
-            // to escalate to In Progress / Done / Cancelled. `Done` is
-            // already evidence-gated (close_session writes `change-log.md`
-            // before flipping the snapshot); `Cancelled` is evidence-gated
-            // by the `CANCELLED.md` marker; `In Progress` now joins them.
             const status = (0, sessionState_1.readStatus)(dir);
             if (status === "complete") {
-                state = "done";
+                // Defensive: a status of "complete" with currentSession <
+                // totalSessions is a stale mid-set close-out — written either
+                // by ai_router < 0.2.1 (which flipped to complete after every
+                // session), a manual edit, or a snapshot a consumer repo
+                // hasn't refreshed yet. Treat as in-progress so the set
+                // doesn't briefly show Done in the window between sessions.
+                state = isMidSetComplete(statePath) ? "in-progress" : "done";
             }
-            else if (status === "in-progress" && hasInProgressEvidence(dir)) {
+            else if (status === "in-progress") {
                 state = "in-progress";
             }
             else {
@@ -317,6 +324,37 @@ function readSessionSets(root) {
                     verificationVerdict: sd.verificationVerdict ?? null,
                     forceClosed: sd.forceClosed ?? null,
                 };
+                // sessionsCompleted priority (highest first):
+                //  1. session-state.json `completedSessions` array — authoritative
+                //     under schema v2. Hand-maintained on Lightweight tier;
+                //     written by ai_router on Full tier.
+                //  2. activity-log.json unique sessionNumbers (set above).
+                //  3. Derived from `state` + currentSession when neither exists.
+                //     - state="done" => all sessions done; count = totalSessions.
+                //       Using the already-canonicalized `state` (via readStatus)
+                //       instead of raw `sd.status` ensures the same alias map
+                //       ("completed", "done" -> "complete") applies here as it
+                //       does for Done/Active bucketing. A pre-Set-7 state file
+                //       carrying `status: "completed"` would otherwise fall
+                //       through to the currentSession-1 fallback and display
+                //       N-1/N. Also naturally skips the mid-set-complete case,
+                //       where state is downgraded to "in-progress".
+                //     - currentSession>1 (non-done) => assume the current session
+                //       is in progress, so currentSession-1 are done. This can
+                //       be off by one when the latest session is itself complete
+                //       and the set is still open; only used when no more
+                //       precise signal is available.
+                if (Array.isArray(sd.completedSessions)) {
+                    sessionsCompleted = sd.completedSessions.length;
+                }
+                else if (sessionsCompleted === 0) {
+                    if (state === "done" && typeof totalSessions === "number") {
+                        sessionsCompleted = totalSessions;
+                    }
+                    else if (typeof sd.currentSession === "number" && sd.currentSession > 1) {
+                        sessionsCompleted = sd.currentSession - 1;
+                    }
+                }
             }
             catch { /* ignore */ }
         }
@@ -341,12 +379,9 @@ function readSessionSets(root) {
             root,
         });
     }
-    // v0.13.2 diagnostic: one-line summary so the dev console shows what
-    // the extension thinks the bucketing should be, independently of how
-    // the tree renders. If the user reports "set X showed in In Progress
-    // but session-state.json says not-started", the dev console line
-    // here will show whether the extension classified set X correctly
-    // (a UI/cache bug) or incorrectly (a state-derivation bug).
+    // Diagnostic: one-line summary in the dev console showing how the
+    // extension bucketed each root. Useful for spotting UI/cache bugs vs.
+    // state-derivation bugs without needing a breakpoint.
     if (sets.length > 0) {
         const counts = sets.reduce((acc, s) => {
             acc[s.state] = (acc[s.state] ?? 0) + 1;

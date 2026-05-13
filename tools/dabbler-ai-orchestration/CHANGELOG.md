@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.11] — 2026-05-13
+
+### Fixed
+- **Tree view no longer shows Done for sets whose final session never
+  closed.** The v0.13.8 defensive guard caught the
+  `currentSession < totalSessions` drift shape (pre-0.2.1 ai_router and
+  manual edits). It missed a different shape observed on
+  `unified-master-details-composite` (2026-05-12): snapshot claimed
+  `status: complete` with `verificationVerdict: VERIFIED` at
+  `currentSession=5/totalSessions=5`, but `session-events.jsonl` had
+  `closeout_succeeded` events for sessions 1-4 only — session 5 never
+  closed. The pre-existing guard didn't fire (5 is not <5) and the set
+  appeared in Done. `isMidSetComplete` in
+  `src/utils/fileSystem.ts` now also cross-checks the events ledger: if
+  the ledger file exists and has no `closeout_succeeded` event for
+  `currentSession`, the snapshot has drifted from the authoritative
+  ledger and bucketing downgrades to in-progress. The ledger-existence
+  check is critical so Lightweight-tier consumers (no router writer,
+  no ledger file) are unaffected — there, the snapshot remains
+  authoritative. Two regression tests added in
+  `src/test/suite/fileSystem.test.ts`: ledger-gap (downgrades) and
+  ledger-complete (remains Done). The root-cause writer bug — how the
+  snapshot got written without a corresponding closeout event — is a
+  separate ai_router investigation; the tree-view fix defends against
+  whatever path produced the drift.
+
 ## [0.13.3] — 2026-05-06
 
 ### Fixed

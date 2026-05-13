@@ -746,15 +746,34 @@ def _run_repair(
     ``session-events.jsonl`` ↔ ``session-state.json`` ↔
     ``disposition.json`` ↔ queue messages):
 
-    1. **State-says-closed-but-no-closeout-event.** Bootstrapping-window
-       drift: ``session-state.json`` reports ``lifecycleState: closed``
-       (or v1 ``status: complete``) but ``session-events.jsonl`` has no
-       ``closeout_succeeded`` event for the current session. The old
-       Step 8 path committed without emitting terminal lifecycle
-       events. Repair: with ``--apply``, append a synthetic
+    1. **State-says-closed-but-no-closeout-event-for-``currentSession``.**
+       ``session-state.json`` reports ``lifecycleState: closed`` (or v1
+       ``status: complete``) but ``session-events.jsonl`` has no
+       ``closeout_succeeded`` event for the session number that state
+       claims is closed. Two real-world variants both reduce to this
+       check:
+
+         - *Bootstrapping-window drift.* The old Step 8 path committed
+           without emitting terminal lifecycle events at all.
+         - *Mixed-mode drift.* Earlier sessions in the set ran
+           through ``close_session`` (events ledger has their
+           closeouts) but a later session was hand-authored — the
+           snapshot was edited directly to ``currentSession: N`` /
+           ``status: complete`` without anyone running the gate for
+           session ``N``. Observed 2026-05-12 on
+           ``unified-master-details-composite``: snapshot claimed
+           session 5 complete with VERIFIED verdict, ledger had
+           closeouts for sessions 1-4 only. The older
+           ``lifecycle != CLOSED`` check missed this case because
+           the ledger's most-recent lifecycle was CLOSED (just for
+           session 4, not session 5).
+
+       Repair: with ``--apply``, append a synthetic
        ``closeout_requested`` (if missing) and ``closeout_succeeded``
-       so the events ledger is internally consistent and the
-       reconciler stops considering the set "stranded".
+       for the claimed-closed session so the events ledger is
+       internally consistent, the reconciler stops considering the
+       set "stranded", and the extension's tree-view guard stops
+       downgrading the set to In Progress.
 
     2. **Closeout-succeeded-but-state-not-closed.** The reverse drift:
        events ledger says the session closed, but
@@ -817,12 +836,29 @@ def _run_repair(
             for ev in events
         )
 
-    # Case 1: state says closed, but events don't reflect it.
+    # Case 1: state says closed, but events have no closeout for the
+    # session the state claims is closed. The trigger is session-number-
+    # specific (per Set 020 Session 1, 2026-05-13): the older
+    # ``lifecycle != CLOSED`` check matched the bootstrapping-window
+    # variant but missed mixed-mode drift, where earlier sessions in the
+    # set ran through close_session (so the most-recent lifecycle was
+    # already CLOSED — for an earlier session) and a later session was
+    # hand-authored. Both variants now reduce to "no closeout event for
+    # state_session_number." If state_session_number is None (malformed
+    # state file), fall back to the lifecycle check so the original
+    # bootstrapping detection still fires.
     state_says_closed = (
         state_lifecycle == SessionLifecycleState.CLOSED.value
         or (state or {}).get("status") == "complete"
     )
-    if state_says_closed and lifecycle != SessionLifecycleState.CLOSED:
+    if state_session_number is not None:
+        case1_drift = state_says_closed and not _has_event(
+            "closeout_succeeded", state_session_number,
+        )
+    else:
+        case1_drift = state_says_closed and lifecycle != SessionLifecycleState.CLOSED
+
+    if case1_drift:
         drift_detected = True
         messages.append(
             "repair drift: session-state.json reports closed/complete but "

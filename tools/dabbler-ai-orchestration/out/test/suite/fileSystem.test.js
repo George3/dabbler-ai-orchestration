@@ -65,6 +65,36 @@ suite("fileSystem — parseSessionSetConfig", () => {
         assert.strictEqual(cfg.requiresUAT, true);
         fs.rmSync(dir, { recursive: true });
     });
+    // Regression test for Set 015 Session 3 (2026-05-06): platform specs
+    // that put the config yaml block under a non-canonical heading like
+    // `## UAT scope` AND have enough upstream prose to push the yaml past
+    // 4000 bytes were silently treated as `requiresUAT: false`. The parser
+    // now scans the whole file when the canonical heading is absent.
+    test("detects requiresUAT in yaml block past 4000 bytes when canonical heading absent", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        const padding = "x".repeat(4500); // push the yaml block past the old cutoff
+        const content = `# Some Spec\n\n${padding}\n\n## UAT scope\n\n\`\`\`yaml\nrequiresUAT: true\nrequiresE2E: false\nuatScope: full\n\`\`\`\n`;
+        fs.writeFileSync(specPath, content);
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.requiresUAT, true);
+        assert.strictEqual(cfg.requiresE2E, false);
+        assert.strictEqual(cfg.uatScope, "full");
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Negative case: spec that doesn't declare requiresUAT anywhere remains
+    // false. Guards against an over-broad fix that might match prose
+    // mentions of "requiresUAT" that aren't on their own line.
+    test("returns false when requiresUAT is not declared anywhere", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        const content = `# Some Spec\n\nThis spec does not declare requiresUAT or requiresE2E.\nIt mentions them in prose but never on a standalone line.\n`;
+        fs.writeFileSync(specPath, content);
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.requiresUAT, false);
+        assert.strictEqual(cfg.requiresE2E, false);
+        fs.rmSync(dir, { recursive: true });
+    });
 });
 suite("fileSystem — parseUatChecklist", () => {
     test("returns null when file is missing", () => {
@@ -118,7 +148,6 @@ suite("fileSystem — readSessionSets", () => {
         const setDir = path.join(dir, "docs", "session-sets", "feature-a");
         fs.mkdirSync(setDir, { recursive: true });
         fs.writeFileSync(path.join(setDir, "spec.md"), "# feature-a\n");
-        fs.writeFileSync(path.join(setDir, "activity-log.json"), JSON.stringify({ entries: [] }));
         fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({ schemaVersion: 2, status: "in-progress" }));
         const sets = (0, fileSystem_1.readSessionSets)(dir);
         assert.strictEqual(sets[0].state, "in-progress");
@@ -141,6 +170,161 @@ suite("fileSystem — readSessionSets", () => {
         fs.mkdirSync(setDir, { recursive: true });
         fs.writeFileSync(path.join(setDir, "spec.md"), "# feature-c\n");
         fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({ schemaVersion: 2, status: "completed" }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].state, "done");
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Defensive: pre-0.2.1 ai_router flipped status to "complete" after
+    // every session's close-out, not just the last. Stale snapshots and
+    // consumer repos that haven't upgraded yet still produce that shape,
+    // which would briefly render the set as Done between sessions. The
+    // extension cross-checks currentSession vs totalSessions and treats
+    // a mid-set "complete" as in-progress instead.
+    test("status='complete' with currentSession < totalSessions reads as in-progress", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "mid-set-stale");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# mid-set-stale\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 3,
+            totalSessions: 5,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].state, "in-progress");
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Authoritative source for sessionsCompleted in schema v2:
+    // `completedSessions` array. The earlier `currentSession - 1`
+    // fallback was wrong whenever the latest session was itself
+    // complete (off-by-one low). Lightweight-tier repos that
+    // hand-maintain session-state.json rely on this field.
+    test("sessionsCompleted reads completedSessions.length from state file", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "completed-array");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# completed-array\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "in-progress",
+            currentSession: 3,
+            totalSessions: 4,
+            completedSessions: [1, 2, 3],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].sessionsCompleted, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("status='complete' with no completedSessions array falls back to totalSessions", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "complete-no-array");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# complete-no-array\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 4,
+            totalSessions: 4,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].sessionsCompleted, 4);
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Regression for ctelr-spec drift (2026-05-12): a Lightweight-tier
+    // consumer hand-wrote `status: "completed"` (past participle) instead
+    // of the canonical `"complete"`. readStatus() aliased it for bucketing
+    // (so the set landed in Done), but the count-derivation branch used
+    // raw `sd.status` and missed the alias, falling through to
+    // currentSession-1 and displaying N-1/N. Using `state` (already
+    // canonicalized via readStatus) keeps both reads in lockstep.
+    test("status='completed' alias flips count to totalSessions, not currentSession-1", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "completed-alias");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# completed-alias\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "completed",
+            currentSession: 3,
+            totalSessions: 3,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].state, "done");
+        assert.strictEqual(sets[0].sessionsCompleted, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("status='complete' with currentSession === totalSessions reads as done", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "real-done");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# real-done\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 5,
+            totalSessions: 5,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].state, "done");
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Regression for unified-master-details-composite drift (2026-05-12):
+    // snapshot claimed `status: complete` with `verificationVerdict:
+    // VERIFIED` at currentSession=5/totalSessions=5, yet
+    // `session-events.jsonl` had `closeout_succeeded` events for sessions
+    // 1-4 only — session 5 never actually closed. The pre-existing
+    // currentSession<totalSessions guard didn't catch this (5 is not <5);
+    // the set rendered as Done with no real evidence the final session
+    // ran. The expanded guard cross-checks the events ledger: if the
+    // ledger exists and has no closeout event for `currentSession`, the
+    // snapshot drifted from the authoritative ledger and we downgrade
+    // bucketing to in-progress.
+    test("status='complete' with no closeout event for final session reads as in-progress", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "ledger-gap");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# ledger-gap\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 5,
+            totalSessions: 5,
+            verificationVerdict: "VERIFIED",
+        }));
+        // Closeouts logged for sessions 1-4 only; session 5 never closed.
+        const events = [
+            { timestamp: "2026-05-12T00:41:53Z", session_number: 1, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T07:04:10Z", session_number: 2, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T08:26:28Z", session_number: 3, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T11:40:49Z", session_number: 4, event_type: "closeout_succeeded" },
+        ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+        fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].state, "in-progress");
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Sibling to the previous test: when the events ledger DOES record a
+    // closeout for the final session, the bucketing is Done. Locks in
+    // that the guard is reading the ledger for a real signal, not just
+    // any presence of the file.
+    test("status='complete' with closeout event for final session reads as done", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "ledger-complete");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# ledger-complete\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 3,
+            totalSessions: 3,
+        }));
+        const events = [
+            { timestamp: "2026-05-12T01:00:00Z", session_number: 1, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T02:00:00Z", session_number: 2, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T03:00:00Z", session_number: 3, event_type: "closeout_succeeded" },
+        ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+        fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
         const sets = (0, fileSystem_1.readSessionSets)(dir);
         assert.strictEqual(sets[0].state, "done");
         fs.rmSync(dir, { recursive: true });

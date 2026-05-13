@@ -50,11 +50,10 @@ function iconUriFor(extensionUri, state) {
     return file ? vscode.Uri.joinPath(extensionUri, "media", file) : undefined;
 }
 function progressText(set) {
-    if (set.state === "done") {
-        return set.sessionsCompleted > 0
-            ? `${set.sessionsCompleted}/${set.sessionsCompleted}`
-            : "";
-    }
+    // Always show X/total. The earlier "X/X" shape on done sets assumed
+    // completed === total, which masks bugs like a SET-level flip to
+    // "complete" that fires before all sessions ran. Truthful display
+    // surfaces the discrepancy at a glance.
     if (set.totalSessions && set.totalSessions > 0) {
         return `${set.sessionsCompleted}/${set.totalSessions}`;
     }

@@ -1251,10 +1251,41 @@ function isMidSetComplete(statePath) {
     return false;
   try {
     const sd = JSON.parse(fs3.readFileSync(statePath, "utf8"));
-    return typeof sd.currentSession === "number" && typeof sd.totalSessions === "number" && sd.currentSession < sd.totalSessions;
+    if (typeof sd.currentSession !== "number")
+      return false;
+    if (typeof sd.totalSessions !== "number")
+      return false;
+    if (sd.currentSession < sd.totalSessions)
+      return true;
+    const eventsPath = path4.join(path4.dirname(statePath), "session-events.jsonl");
+    if (fs3.existsSync(eventsPath) && !hasCloseoutEventForSession(eventsPath, sd.currentSession)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
+}
+function hasCloseoutEventForSession(eventsPath, sessionNumber) {
+  let text;
+  try {
+    text = fs3.readFileSync(eventsPath, "utf8");
+  } catch {
+    return false;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line)
+      continue;
+    try {
+      const event = JSON.parse(line);
+      if (event.event_type === "closeout_succeeded" && event.session_number === sessionNumber) {
+        return true;
+      }
+    } catch {
+    }
+  }
+  return false;
 }
 function parseSessionSetConfig(specPath) {
   const config = {
