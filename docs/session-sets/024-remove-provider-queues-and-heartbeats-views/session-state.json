@@ -3,15 +3,18 @@
   "sessionSetName": "024-remove-provider-queues-and-heartbeats-views",
   "currentSession": 1,
   "totalSessions": 1,
-  "status": "in-progress",
-  "lifecycleState": "work_in_progress",
+  "status": "complete",
+  "lifecycleState": "closed",
   "startedAt": "2026-05-15T08:12:06.548963-04:00",
-  "completedAt": null,
+  "completedAt": "2026-05-15T08:28:53.634427-04:00",
   "verificationVerdict": null,
   "orchestrator": {
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "medium"
-  }
+  },
+  "completedSessions": [
+    1
+  ]
 }
