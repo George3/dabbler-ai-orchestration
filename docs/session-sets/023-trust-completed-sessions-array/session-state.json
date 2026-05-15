@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "sessionSetName": "023-trust-completed-sessions-array",
-  "currentSession": 2,
+  "currentSession": 3,
   "totalSessions": 4,
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-15T06:54:42.856919-04:00",
+  "startedAt": "2026-05-15T07:13:01.913724-04:00",
   "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": {

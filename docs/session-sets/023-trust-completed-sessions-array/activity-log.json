@@ -176,6 +176,86 @@
           "costUsd": 0.025067
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/start-session-protocol",
+      "dateTime": "2026-05-15T07:13:01-04:00",
+      "description": "Started Session 3 via `python -m ai_router.start_session --session-set-dir docs/session-sets/023-trust-completed-sessions-array --engine claude-code --provider anthropic --model claude-opus-4-7 --effort low`. State flipped currentSession 2->3, work_started event appended. Session 3 is the codebase-wide audit added at the operator's request after Session 2's design review surfaced the third sharp edge from both providers (Gemini: critical; GPT: major).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/grep-sweep",
+      "dateTime": "2026-05-15T07:15:00-04:00",
+      "description": "Mechanical grep sweep across Python + TypeScript for events-ledger / closeout_succeeded / read_events references, cross-referenced against completedSessions references. Two file lists produced (21 files matched the events-ledger pattern; 14 files matched the completedSessions pattern). Files in the first set but not the second became candidate sharp edges for read-through inspection.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/classify-consumers",
+      "dateTime": "2026-05-15T07:20:00-04:00",
+      "description": "Read-through inspection of each named suspect from the spec (gate_checks.py, reconciler.py, disposition.py, session_state.py, start_session.py, session_events.py, fileSystem.ts, SessionSetsProvider.ts, extension.ts) plus close_session.py's _is_already_closed and __init__.py's print_session_set_status. 18 consumers classified: 11 already-correct (gate predicates + Set 022 helpers + TS reader paths); 7 correct-to-ignore (reconciler stranded-state sweep, lifecycle derivation, events-ledger I/O helpers, backfill, file watcher, _is_already_closed with note, tooltip prose); 1 newly-surfaced sharp edge (print_session_set_status — Python CLI status reporter still uses pre-Set-022 activity-log distinct-sessionNumber count); 1 known sharp edge already in Session 4's scope (isMidSetComplete).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/audit-findings-doc",
+      "dateTime": "2026-05-15T07:30:00-04:00",
+      "description": "Authored docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003-audit-findings.md: full classification table with file:line citations, rationale per consumer, borderline-case discussion of close_session._is_already_closed (defaulted to correct-to-ignore-with-note per the operator's standing 'default to lowest-engagement bucket' preference), and a 'Sharp edge to fix in this session' section that motivates the print_session_set_status fix.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/sharp-edge-fixes",
+      "dateTime": "2026-05-15T07:35:00-04:00",
+      "description": "Fixed ai_router/__init__.py's print_session_set_status: replaced the pre-Set-022 `len({entry.sessionNumber for entry in activity_log['entries']})` derivation with `len(compute_effective_completed_sessions(path))`. The helper applies the correct priority order (array -> events ledger -> currentSession-1 heuristic with warning) and is the single source of truth Set 022 Session 2 established. The activity-log read is retained for non-count signals (totalSessions top-level field + per-step dateTime for last-touched). Mirrors the migration Set 022 Session 2 applied to the TypeScript readSessionSets.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/tests",
+      "dateTime": "2026-05-15T07:40:00-04:00",
+      "description": "Added ai_router/tests/test_print_session_set_status_completed_count.py with four regression tests: (1) test_in_flight_session_does_not_inflate_count — currentSession=2 with session 1 closed and session 2 in flight, activity-log entries for both, completedSessions=[1]; asserts 1/4 rendered, not 2/4; (2) test_legacy_set_without_array_falls_back_via_helper — pre-Set-022 set with no array and no ledger; helper's currentSession-1 fallback fires; renders 2/5; (3) test_events_ledger_fallback_when_array_absent — round-1 verifier finding: snapshot lacks array but events ledger has closeout_succeeded for sessions 1 and 2; renders 2/4 via the helper's events-ledger fallback branch, not 3/4 (activity-log distinct); (4) test_done_set_uses_array_length — done set with completedSessions=[1,2,3,4] and stray rolled-back session 5 in activity-log; renders 4/4, not 5/5. 720 tests pass total (719 after first three; round-1 verifier added the fourth).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/release",
+      "dateTime": "2026-05-15T07:45:00-04:00",
+      "description": "Bumped ai_router to 0.2.5 in pyproject.toml and ai_router/__init__.py. PyPI release ships via tag-driven workflow after push: `git tag v0.2.5 && git push --tags`; approve `pypi` deployment in GitHub Actions UI per docs/planning/release-process.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/verification",
+      "dateTime": "2026-05-15T08:00:00-04:00",
+      "description": "Cross-provider verification of the audit-findings + fix via gpt-5-4 (task_type='session-verification'). Round 1 verdict ISSUES_FOUND with 2 Minor issues: (1) scope/Minor — the audit-findings's 'resolved on disk' claim overstated, since the TypeScript sharp edge is still open for Session 4 and the borderline case is intentionally deferred; (2) test-coverage/Minor — the new test file did not cover the helper's events-ledger fallback branch (no completedSessions[] but present session-events.jsonl with closeout_succeeded events). Both fixed inline: reworded the audit-findings 'Result' section to distinguish 'audit performed' (this session) from 'systemic concern fully eliminated' (which awaits Session 4), and added test_events_ledger_fallback_when_array_absent. No round-2 reroute: both findings are textually verifiable (the recommended_fix exactly matches what was applied) and a round-2 would duplicate $0.15 of cost on a check any reader can confirm — same policy Session 2 used for its textual self-contradiction finding. Verification spend: $0.147.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 10283,
+          "outputTokens": 8100,
+          "costUsd": 0.147208
+        }
+      ]
     }
   ]
 }

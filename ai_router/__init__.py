@@ -61,7 +61,7 @@ the SessionLog class:
     log.log_step(session_number=1, step_number=1, ...)
 """
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 from .config import load_config, resolve_generation_params
 from .models import estimate_complexity, pick_model
@@ -1135,7 +1135,7 @@ def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
     then done, then cancelled), and within each group sorted by most
     recently touched.
     """
-    from .session_state import read_status
+    from .session_state import read_status, compute_effective_completed_sessions
     from .session_lifecycle import is_cancelled
 
     if not os.path.isdir(base_dir):
@@ -1158,16 +1158,31 @@ def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
         activity_path = os.path.join(path, "activity-log.json")
         state_path = os.path.join(path, SESSION_STATE_FILENAME)
 
-        sessions_completed = 0
+        # Set 023 Session 3 audit: authoritative count comes from
+        # ``compute_effective_completed_sessions``, which Set 022 made
+        # the single source of truth (array → events ledger → legacy
+        # ``currentSession - 1`` heuristic with warning). The pre-Set-022
+        # shape that lived here — ``len({entry.sessionNumber for entry
+        # in activity_log.entries})`` — was the same derivation Set 022
+        # Session 2 explicitly removed from the TypeScript reader
+        # (``fileSystem.ts`` near readSessionSets, "Activity log is a
+        # step log, not a count source"). Activity-log entries record
+        # in-flight step events too, so the old shape overcounted by 1
+        # whenever a session was open — a Full-tier set with
+        # currentSession=2 (session 1 closed, session 2 in flight)
+        # reported ``2/N`` here while the extension correctly reported
+        # ``1/N``. The Python CLI status reporter was left out of the
+        # Set 022 migration; this brings it into agreement with the
+        # extension and the canonical invariant.
+        sessions_completed = len(compute_effective_completed_sessions(path))
         total_sessions: Optional[int] = None
         last_touched: Optional[str] = None
 
-        # Activity log carries per-session count + per-step timestamps;
-        # the state file only has start/complete-of-current-session
-        # timestamps and the canonical totalSessions. Reading both gives
-        # us a richer "last touched" (latest activity entry vs.
-        # session-state's start/complete) without changing the state
-        # decision, which is now read from `status` alone.
+        # Activity log still consulted for two non-count signals:
+        # totalSessions (lives at the top level) and the per-step
+        # dateTime for the ``last touched`` display, which is more
+        # granular than the state-file's session-boundary timestamps
+        # while a session is mid-flight.
         if os.path.isfile(activity_path):
             try:
                 with open(activity_path, "r", encoding="utf-8") as f:
@@ -1179,10 +1194,6 @@ def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
                         (e.get("dateTime", "") for e in entries),
                         default=None,
                     )
-                    sessions_completed = len({
-                        e["sessionNumber"] for e in entries
-                        if e.get("sessionNumber") is not None
-                    })
             except Exception:
                 pass
 
