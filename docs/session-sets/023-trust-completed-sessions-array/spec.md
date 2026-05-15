@@ -19,7 +19,7 @@
 ## Session Set Configuration
 
 ```yaml
-totalSessions: 3
+totalSessions: 4
 requiresUAT: false
 requiresE2E: false
 uatStyle: ad-hoc
@@ -34,9 +34,17 @@ outsourceMode: first
 > sure GPT 5.4 and Gemini Pro both concur with the Set 022 migration
 > decisions and the Set 023 fix design before the reader-side change
 > ships — the same design-round pattern that informed Set 022's
-> original spec. No UI flow changes; no UAT. Sessions 1 and 3 each
-> ship one release artifact; Session 2 ships only a written audit
-> outcome.
+> original spec. **Session 3 added 2026-05-15 (during Session 2)** at
+> the operator's request after both providers, independently, raised a
+> system-wide concern that other progress-readers in the pipeline may
+> still consult the events ledger directly without considering
+> `completedSessions[]` (Gemini severity: critical; GPT severity:
+> major; see [audit-summary.md](session-reviews/session-002-audit/audit-summary.md)).
+> Session 3 is a codebase-wide audit + any reader rewrites it
+> surfaces; the original Session 3 (extension reader fix) becomes
+> Session 4. No UI flow changes; no UAT. Sessions 1 and 4 each ship
+> one release artifact; Sessions 2 and 3 may or may not ship artifacts
+> depending on what Session 3's audit finds.
 
 ---
 
@@ -371,7 +379,114 @@ verifier).
 
 ---
 
-### Session 3 of 3: Extension reader fix
+### Session 3 of 4: System-wide audit of events-ledger consumers
+**Goal:** Find every code path that derives "is session N closed?" from
+`session-events.jsonl` or `closeout_succeeded` events directly,
+without considering `completedSessions[]`. For each consumer,
+classify as one of:
+
+- **Already correct (post-Set-022)** — already consults
+  `completedSessions[]` as the primary signal, with the ledger as
+  fallback or parallel check.
+- **Correct to ignore the array** — the consumer's job is to read
+  the events ledger as a historical record (e.g., a debug/log
+  dumper, a `--show-events` tool, the events-ledger reader inside
+  `close_session` itself).
+- **Sharp edge, needs fix** — derives progress state from the
+  ledger alone, would disagree with a migrated snapshot whose
+  `completedSessions[]` carries operator-attested sessions the
+  ledger lacks. Each one of these becomes a fix step within this
+  session.
+
+This session was added after both GPT 5.4 and Gemini Pro raised the
+same systemic concern in the Session 2 design-alignment audit
+(Gemini: critical; GPT: major; see
+[`audit-summary.md`](session-reviews/session-002-audit/audit-summary.md)).
+The operator chose option (B) from the audit's flag-to-operator
+section: pause and expand Set 023's scope to include the audit,
+rather than queue it as a follow-on set.
+
+**Steps:**
+1. Mechanical grep sweep. From the repo root:
+   - `grep -rn "session-events\.jsonl\|closeout_succeeded\|hasCloseoutEventForSession\|hasCloseoutEvent\|read_events\b" --include="*.py" --include="*.ts"`
+   - `grep -rn "completedSessions" --include="*.py" --include="*.ts"`
+   Cross-reference the two lists. Every file in the first list that
+   does not also derive its decision from `completedSessions[]` is
+   a candidate sharp edge.
+2. For each candidate, read the surrounding 30-50 lines and
+   classify it (already-correct / correct-to-ignore / sharp-edge).
+   Specific known suspects to inspect by name (do not assume — read
+   them):
+   - `ai_router/close_session.py` gate checks (`gate_checks.py`):
+     do any of the five close-out predicates read events directly
+     without considering `completedSessions[]`?
+   - `ai_router/reconciler.py`: does the queue-state reconciler
+     derive completion solely from events?
+   - `ai_router/disposition.py` and freshness checks: do they
+     consult the array?
+   - `ai_router/session_state.py:compute_effective_completed_sessions`:
+     already known to prefer the array; double-check.
+   - `ai_router/start_session.py`'s `max(closed)+1` inference: how
+     does it compute the set?
+   - `tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`
+     (all functions, not just `isMidSetComplete`): every reader
+     that derives state from events.
+   - Tree-view bucketing / status-line helpers in the extension.
+3. Author `session-reviews/session-003-audit-findings.md`
+   documenting each consumer's classification with a one-line
+   rationale and a citation (`file:line`).
+4. For each sharp-edge consumer found:
+   - Decide minimum-surgical fix (typically: consult the array
+     first, then fall back to the ledger, mirroring Session 4's
+     reader-fix shape).
+   - Implement and add a regression test.
+   - Document in `audit-findings.md`.
+5. If sharp edges were found in Python (`ai_router`), bump to
+   `ai_router 0.2.5` and ship via the tag-driven release flow. If
+   sharp edges were found in TypeScript (extension), bundle them
+   into Session 4's `v0.13.13` release rather than shipping a
+   separate version (Session 4's reader fix is the natural carrier).
+6. If no sharp edges were found, document the audit result in
+   `audit-findings.md` ("no additional consumers required
+   modification; the two named sharp edges were the complete
+   set") and proceed to Session 4 with the system-wide concern
+   formally closed on disk.
+7. Cross-provider verification.
+
+**Creates:**
+- `docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003-audit-findings.md`
+- Possibly: regression tests for any sharp-edge consumers fixed.
+
+**Touches:**
+- This `spec.md` if the audit findings drive any Session 4 plan
+  changes.
+- Any files identified as sharp-edge consumers (unknown until the
+  grep sweep runs).
+- If `ai_router` fixes ship: `pyproject.toml`, `ai_router/__init__.py`,
+  `ai_router/docs/close-out.md` if the close-out story changes.
+
+**Ends with:** A written audit on disk classifying every
+events-ledger consumer in the codebase. The system-wide concern
+raised by both providers in Session 2 is either resolved (sharp
+edges fixed) or formally closed (no additional sharp edges
+found). Session 4 can proceed to the planned reader fix with
+confidence.
+
+**Progress keys:** `session-003/grep-sweep`,
+`session-003/classify-consumers`, `session-003/audit-findings-doc`,
+`session-003/sharp-edge-fixes` (no-op if none found),
+`session-003/release` (no-op if no Python fixes shipped),
+`session-003/verification`
+
+**Release:** Conditional. PyPI `dabbler-ai-router` 0.2.5 only if
+the audit surfaced Python-side sharp edges that needed fixing.
+TypeScript-side sharp edges are deferred to Session 4's
+`v0.13.13` release. If the audit finds nothing, this session is
+doc-only with no distribution artifact.
+
+---
+
+### Session 4 of 4: Extension reader fix
 **Goal:** Teach `isMidSetComplete` to treat
 `currentSession in completedSessions[]` as authoritative. Update the
 schema doc to reflect that the array is now consulted by the guard.
@@ -386,44 +501,86 @@ Release as extension `v0.13.13`.
    - If `completedSessions` is an array AND
      `completedSessions.includes(currentSession)` → return `false`
      (the array agrees the final session is closed; not mid-set).
+   - **Observability (Session 2 audit / GPT 5.4 caveat on (c)):**
+     when the array-check branch returns `false`, also check whether
+     the events ledger lacks a closeout for `currentSession`. If so,
+     emit a one-line `console.warn` like
+     `"[session-set <slug>] completedSessions[] overrides missing ledger closeout for session N"`.
+     The override is correct; the warn surfaces the drift shape so
+     the operator can run `--repair --apply` if they want the
+     ledger healed too. Mirrors the v0.13.11 guard's existing
+     downgrade log.
    - Else fall through to the existing events-ledger check
      unchanged.
 2. The `JSON.parse` shape needs to be extended to include
-   `completedSessions?: number[]`. Keep the read defensive (other
-   types are treated as absent; the existing `catch { return false }`
-   already covers parse failures).
+   `completedSessions?: number[]`. Keep the read defensive (non-array
+   values are treated as absent via `Array.isArray`; the existing
+   `catch { return false }` already covers parse failures).
 3. Update the docstring above `isMidSetComplete` to reflect the new
    semantics: the guard now downgrades only when both authoritative
    signals (array and ledger) disagree with the snapshot's `status`.
-4. Tests:
-   - In `tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts`,
-     add fixtures for `isMidSetComplete`:
-     - Snapshot has `completedSessions: [1, 2, 3]`, currentSession 3,
-       no events ledger or incomplete ledger → returns `false` (the
-       array satisfies the guard).
-     - Snapshot has `completedSessions: [1, 2]`, currentSession 3,
-       no ledger closeout for session 3 → returns `true` (array
-       disagrees; falls through to ledger check; ledger also
-       disagrees → downgrade).
-     - Snapshot has no `completedSessions` field, currentSession 3,
-       ledger has closeout for session 3 → returns `false` (legacy
-       path unchanged).
-     - Snapshot has no `completedSessions` field, currentSession 3,
-       ledger has no closeout for session 3 → returns `true` (legacy
-       drift case unchanged).
+   Use the Session 2 audit's sharpened phrasing:
+   `completedSessions[]` is authoritative for *whether* a session
+   is closed; `session-events.jsonl` is authoritative for *when*
+   each closeout was recorded.
+4. Tests in `tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts`:
+   - **F1** Snapshot has `completedSessions: [1, 2, 3]`, currentSession 3,
+     no events ledger or incomplete ledger → returns `false` (the
+     array satisfies the guard).
+   - **F2** Snapshot has `completedSessions: [1, 2]`, currentSession 3,
+     no ledger closeout for session 3 → returns `true` (array
+     disagrees; falls through to ledger check; ledger also
+     disagrees → downgrade).
+   - **F3** Snapshot has no `completedSessions` field, currentSession 3,
+     ledger has closeout for session 3 → returns `false` (legacy
+     path unchanged).
+   - **F4** Snapshot has no `completedSessions` field, currentSession 3,
+     ledger has no closeout for session 3 → returns `true` (legacy
+     drift case unchanged).
+   - **F5** *(audit-driven, Gemini on (e))* Snapshot has
+     `completedSessions: null` (or `"not-an-array"`, or
+     `{not: "array"}`), currentSession 3, ledger has closeout for 3
+     → returns `false` (`Array.isArray` fallback works; legacy
+     path takes over).
+   - **F6** *(audit-driven, both on (b) and (e))* Snapshot has
+     `completedSessions: [1, 2, 99]`, totalSessions 4, currentSession 4,
+     no ledger closeout for 4 → returns `false` (4 is not in the
+     array, but 99's presence is irrelevant to the array-check;
+     wait — re-check: `[1,2,99].includes(4)` is `false`, so this
+     falls through to ledger check, which also lacks closeout for 4
+     → returns `true`. Restate as: this fixture documents that a
+     stray out-of-range entry doesn't accidentally satisfy
+     `.includes(currentSession)` for the wrong session number).
+   - **F7** *(audit-driven, GPT on (e))* Snapshot has
+     `completedSessions: [1, 2]`, currentSession 3, ledger has
+     closeout for session 1 but not session 3 → returns `true`
+     (array disagrees on the final session, ledger also disagrees).
+     Documents non-final-session-disagreement isn't relevant to the
+     guard, which only checks `currentSession`.
 5. Update `docs/session-state-schema.md` "Parser cheat-sheet"
    bucketing section to note that the mid-set-complete guard now
    consults `completedSessions[]` as an alternative signal to the
-   events ledger.
-6. Bump extension to v0.13.13 (`package.json` + `package-lock.json` +
+   events ledger. **Audit-driven (both on (e)):** sharpen the
+   "authoritative" language in this doc and in
+   `ai_router/docs/close-out.md` to distinguish *whether-closed*
+   (`completedSessions[]`) from *when-closed* (events ledger), so
+   future maintainers don't misread "both are authoritative" as
+   "must agree."
+6. **Audit-driven (GPT on (a)):** Add a one-line note to
+   `ai_router/docs/close-out.md` Section 5 (drift case 1) that
+   `completedSessions[]` is operator-attested for migrated sets
+   and tool-maintained for sets that ran the close-out gate. The
+   tool preserves the operator's stated truth and uses the ledger
+   only to add what the operator missed.
+7. Bump extension to v0.13.13 (`package.json` + `package-lock.json` +
    `CHANGELOG.md` + `CLAUDE.md`).
-7. Compile + smoke-test against a real session set. Set 006 on this
+8. Compile + smoke-test against a real session set. Set 006 on this
    repo is the natural test: after the fix, removing the synthetic
    session-3 closeout event from `006-docs-fresh-turn-and-alignment-audit/session-events.jsonl`
    should leave Set 006 still bucketed as Done in the tree view
    (smoke test only; do not actually remove the event — the test is
    "what would happen if the operator had not run --repair --apply").
-8. Cross-provider verification.
+9. Cross-provider verification.
 
 **Creates:** none
 
@@ -439,16 +596,19 @@ Release as extension `v0.13.13`.
 needing to also synthesize ledger closeout events for the final
 session.
 
-**Progress keys:** `session-003/guard-consults-array`,
-`session-003/tests`, `session-003/schema-doc`,
-`session-003/version-bump`, `session-003/smoke-test`,
-`session-003/verification`
+**Progress keys:** `session-004/guard-consults-array`,
+`session-004/observability-warn`, `session-004/tests`,
+`session-004/schema-doc`, `session-004/closeout-doc-attestation-note`,
+`session-004/version-bump`, `session-004/smoke-test`,
+`session-004/verification`
 
 **Release:** VS Code Marketplace `DarndestDabbler.dabbler-ai-orchestration`
 v0.13.13 via the existing tag-driven workflow
 (`git tag vsix-v0.13.13 && git push --tags`; approve the
 `marketplace` deployment in the GitHub Actions UI per
-`docs/planning/marketplace-release-process.md`).
+`docs/planning/marketplace-release-process.md`). If Session 3's
+audit surfaced any TypeScript-side sharp edges, they ship together
+with the reader fix in this same `v0.13.13` release.
 
 ---
 
@@ -471,13 +631,39 @@ v0.13.13 via the existing tag-driven workflow
   snapshot's mtime touched on a second repair. The test fixture
   enumerated above asserts this.
 
-- **No release-order coupling.** Sessions 1 and 3 are independent.
-  Sessions 1 ships ai_router 0.2.4 and Session 3 ships extension
+- **No release-order coupling.** Sessions 1 and 4 are independent.
+  Session 1 ships ai_router 0.2.4 and Session 4 ships extension
   v0.13.13; consumers can adopt either independently. A consumer on
   the new extension + old ai_router still benefits from the reader
   fix; a consumer on the new ai_router + old extension benefits from
   the writer fix. There is no compatibility flag to coordinate.
-  Session 2 (design audit) is doc-only and ships no artifact.
+  Session 2 (design audit) and Session 3 (system audit) are
+  doc-only by default; Session 3 may also ship `ai_router 0.2.5`
+  if its grep sweep finds Python-side sharp edges.
+
+- **Writer union is unguarded against out-of-range session
+  numbers.** *(Audit-driven, Session 2 — GPT major / Gemini minor
+  on (b).)* The Session 1 union does not clamp session numbers to
+  `[1..totalSessions]`. A snapshot `[1, 2, 99]` with `totalSessions:
+  4`, or a stray `closeout_succeeded(session_number=99)` in the
+  ledger, gets ratcheted into the merged value. The Session 1 fix
+  is not *wrong* on its own — it preserves what the operator
+  typed — but a typo could cement under repeated repair.
+  Mitigation: queue a follow-on `ai_router 0.2.5` patch (post-Set
+  023) that clamps the union to `[1..totalSessions]` and warns on
+  out-of-range entries. Session 4 fixture **F6** documents that
+  the reader is robust to this writer-side gap.
+
+- **System-wide audit deferred-to-this-set.** *(Audit-driven,
+  Session 2 — both providers on (d).)* Both providers raised that
+  other progress-readers in the pipeline may still consult the
+  events ledger directly. Operator chose option (B) from the audit
+  flag: pause Session 4 and expand Set 023's scope to include
+  Session 3, a codebase-wide audit + any reader rewrites it
+  surfaces. The audit's findings are written to
+  `session-reviews/session-003-audit-findings.md`; if it finds
+  no additional sharp edges, the concern is formally closed on
+  disk.
 
 ---
 
@@ -492,8 +678,13 @@ v0.13.13 via the existing tag-driven workflow
 - **Session 2** (design audit): Claude orchestrates the routing to
   GPT-5.4 + Gemini Pro; the audit itself has no orchestrator-author
   role.
-- **Session 3** (extension TypeScript): Claude or GPT-5.4 — the
-  `fileSystem.ts` change is a five-line addition.
+- **Session 3** (system audit): Claude — the grep sweep is
+  mechanical and the per-consumer classification is contextual
+  (each consumer needs to be read in its surrounding code, which
+  Claude's context window handles well).
+- **Session 4** (extension TypeScript): Claude or GPT-5.4 — the
+  `fileSystem.ts` change is a five-line addition plus the audit-
+  driven fixtures and the observability warn.
 
 ---
 

@@ -1,24 +1,21 @@
 {
   "status": "completed",
-  "summary": "Set 023 Session 1: ai_router 0.2.4 — close_session --repair --apply Case 1 now preserves a hand-authored completedSessions[] via monotone-up union, fixing the regression Set 022's migration of Set 004 hit on 2026-05-15. Four apply outcomes distinguished in the messages line: backfilled (no array before), merged (clean array unioned), normalized (malformed array cleaned + unioned), preserved (no rewrite — array already correct). The 'normalized' branch and its associated rewrite trigger came from the round-1 verifier finding (a Major correctness regression in the original implementation where a sanitized comparison let malformed entries like [1, -1] survive a 'preserved' outcome). Three new regression tests + the existing mixed-mode-drift test all pass; full suite 702/702. close-out.md Section 5 updated to enumerate all four outcomes and note the union math operates on a sanitized snapshot view. Spec updated mid-session at the operator's request: a new Session 2 (cross-provider design-alignment audit) inserted between this session and the reader-fix session, totalSessions bumped 2 -> 3. Session 2 will route a design-review prompt to both GPT 5.4 and Gemini Pro before the reader fix lands.",
+  "summary": "Set 023 Session 2: Cross-provider design-alignment audit on the Set 022 migration approach and the Set 023 fix designs (writer union from Session 1, reader fix planned for the originally-numbered Session 3). Routed a structured five-question prompt to GPT 5.4 ($0.10) and Gemini Pro ($0.01). Both providers concurred on the writer + reader design correctness, with non-blocking refinements: observability warn when array overrides missing ledger closeout, sharpened 'authoritative' doc language (whether-closed vs when-closed), extra reader fixtures (non-array completedSessions, stray out-of-range entry, non-final-session disagreement), and a follow-on ai_router 0.2.5 plan to clamp the writer union to [1..totalSessions]. Both providers independently raised the same third sharp edge on question (d): other progress-readers in the pipeline may still consult the events ledger without considering completedSessions[] (Gemini severity: critical; GPT severity: major). The strict spec gate ('Critical that invalidates the writer fix') did not trip — the writer fix is correct in isolation — but the operator was flagged for a scope decision and chose option (B): pause the planned reader fix and expand Set 023's scope to include a system-wide audit session. Spec restructured: totalSessions 3->4; new Session 3 'System-wide audit of events-ledger consumers' inserted; original reader fix renumbered to Session 4. Cross-provider verification of the audit-summary via gpt-5-4-mini ($0.025) found 1 Major: an internally contradictory sentence in the (b) spec-refinement (the summary claimed '[1,2,99].includes(4) is true' which is false). Fixed inline; no round-2 routed since the defect is a textual self-contradiction. Session 2 routed spend: $0.138 (GPT 5.4 $0.101 + Gemini Pro $0.012 + gpt-5-4-mini verification $0.025).",
   "files_changed": [
-    "ai_router/close_session.py",
-    "ai_router/tests/test_close_session_session4.py",
-    "ai_router/docs/close-out.md",
-    "pyproject.toml",
-    "ai_router/__init__.py",
     "docs/session-sets/023-trust-completed-sessions-array/spec.md",
     "docs/session-sets/023-trust-completed-sessions-array/session-state.json",
     "docs/session-sets/023-trust-completed-sessions-array/session-events.jsonl",
     "docs/session-sets/023-trust-completed-sessions-array/activity-log.json",
     "docs/session-sets/023-trust-completed-sessions-array/disposition.json",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/prompt.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/prompt.rendered.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/result.json",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/session-001-review.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/round-2/prompt.rendered.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/round-2/result.json",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-001/round-2/session-001-review.md"
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/prompt.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/route_audit.py",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/gpt-5-4.json",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/gemini-pro.json",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/audit-summary.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/verify-prompt.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/verify-prompt.rendered.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/route_verify.py",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/verify-result.json"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -29,7 +26,7 @@
     "effort": "low",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 is a cross-provider design-alignment audit — Claude orchestrates the routing to GPT 5.4 and Gemini Pro and then summarizes their verdicts. The orchestrator role here is administrative (compose the design-review prompt, route, summarize), not creative; same Claude that just shipped Session 1 has the freshest context on Set 022's migration lessons and Set 023's design rationale, which keeps the audit prompt accurate without re-priming."
+      "specifics": "Session 3 is a codebase-wide audit of events-ledger consumers added to Set 023 at the operator's request after Session 2's design-alignment audit. The work is a mechanical grep sweep across Python (ai_router) + TypeScript (extension) plus a per-consumer classification — already-correct, correct-to-ignore, or sharp-edge. Same Claude that just authored the Session 2 audit and the renumbered spec has the freshest context on what counts as a sharp edge under the Set 022 invariant and what would be a false positive (debug/history tools whose job IS to read the ledger directly). Effort-low stands: classification is contextual but each call is local. If Session 3's audit finds sharp edges, Claude can implement the fixes in-line; if it finds none, the session ships a doc-only audit-findings.md. Either way, Session 4's reader fix can then proceed with the system-wide concern formally resolved on disk."
     }
   },
   "blockers": []
