@@ -35,7 +35,7 @@
       "stepNumber": 4,
       "stepKey": "session-001/delete-workflow-doc",
       "dateTime": "2026-05-15T09:52:00-04:00",
-      "description": "Deleted ai_router/docs/two-cli-workflow.md — operating guide for outsource-last mode is no longer applicable.",
+      "description": "Deleted ai_router/docs/two-cli-workflow.md \u00e2\u20ac\u201d operating guide for outsource-last mode is no longer applicable.",
       "status": "complete",
       "routedApiCalls": []
     },
@@ -98,7 +98,52 @@
       "stepNumber": 11,
       "stepKey": "session-001/partial-stop",
       "dateTime": "2026-05-15T11:20:00-04:00",
-      "description": "PARTIAL STOP — Session 1 not closed. Deferred to a follow-up session (operator decision required): (a) doc scrubs in docs/ai-led-session-workflow.md, docs/adoption-bootstrap.md, docs/planning/session-set-authoring-guide.md, ai_router/docs/close-out.md, and docs/spec-md-schema.md (still mention outsourceMode / verifier daemon / subscription CLI as live concepts); (b) scrub literal 'outsourceMode: <value>' YAML config line from 26 historical docs/session-sets/*/spec.md files; (c) end-of-session cross-provider verification (manual via IDE-agent paste path per the $10 budget tier). Acceptance criterion 'git grep -i outsourcemode|queue_db|verifier daemon|subscription cli returns zero hits' is NOT satisfied yet — narrative references remain in docs and historical specs. The CODE surface, however, is clean of the removed symbols (Python imports, exports, types; TS types and parser). Session is left in-progress; close_session has NOT been invoked. Operator to decide whether to (1) commit this partial state and continue Session 1b in a fresh conversation; (2) push through the docs+scrubs in this same conversation if budget allows; (3) split Session 1 retroactively into 1a + 1b in the spec and treat this as Session 1a complete.",
+      "description": "PARTIAL STOP \u00e2\u20ac\u201d Session 1 not closed. Deferred to a follow-up session (operator decision required): (a) doc scrubs in docs/ai-led-session-workflow.md, docs/adoption-bootstrap.md, docs/planning/session-set-authoring-guide.md, ai_router/docs/close-out.md, and docs/spec-md-schema.md (still mention outsourceMode / verifier daemon / subscription CLI as live concepts); (b) scrub literal 'outsourceMode: <value>' YAML config line from 26 historical docs/session-sets/*/spec.md files; (c) end-of-session cross-provider verification (manual via IDE-agent paste path per the $10 budget tier). Acceptance criterion 'git grep -i outsourcemode|queue_db|verifier daemon|subscription cli returns zero hits' is NOT satisfied yet \u00e2\u20ac\u201d narrative references remain in docs and historical specs. The CODE surface, however, is clean of the removed symbols (Python imports, exports, types; TS types and parser). Session is left in-progress; close_session has NOT been invoked. Operator to decide whether to (1) commit this partial state and continue Session 1b in a fresh conversation; (2) push through the docs+scrubs in this same conversation if budget allows; (3) split Session 1 retroactively into 1a + 1b in the spec and treat this as Session 1a complete.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/delete-python-modules",
+      "dateTime": "2026-05-15T11:48:25.453381-04:00",
+      "description": "[1a] Deleted ~10 Python modules, mode-aware branches, test files; bumped versions to ai_router 0.3.0 + extension 0.13.15. (Completed in commit dda0a5f.)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/delete-workflow-doc",
+      "dateTime": "2026-05-15T11:48:25.456394-04:00",
+      "description": "[1a] Deleted ai_router/docs/two-cli-workflow.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/strip-mode-aware-branches",
+      "dateTime": "2026-05-15T11:48:25.456394-04:00",
+      "description": "[1b] Removed all outsourceMode references from 7 active docs (ai-led-session-workflow, adoption-bootstrap, close-out.md, spec-md-schema, disposition-schema, quick-start, CLAUDE/AGENTS/GEMINI.md) and 2 Python source files. Rebuilt dist/extension.js, deleted orphaned modeBadge test artifacts.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/scrub-existing-specs",
+      "dateTime": "2026-05-15T11:48:25.456394-04:00",
+      "description": "[1b] Removed outsourceMode: config line from all 25 historical docs/session-sets/*/spec.md files.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/compile-and-test",
+      "dateTime": "2026-05-15T11:48:25.456394-04:00",
+      "description": "pytest 385/385 green; tsc clean. Committed and pushed (3a0defa).",
       "status": "complete",
       "routedApiCalls": []
     }
