@@ -1,31 +1,28 @@
 {
   "status": "completed",
-  "summary": "Set 023 Session 3: Codebase-wide audit of events-ledger / progress-state consumers, added to Set 023 after Session 2's design review surfaced the third sharp edge from both providers (Gemini: critical; GPT: major). Mechanical grep sweep across Python (ai_router/) and TypeScript (tools/dabbler-ai-orchestration/src/) for events-ledger / closeout_succeeded / read_events references, cross-referenced against completedSessions references. 18 consumers classified: 11 already-correct (5 gate predicates + Set 022 helpers + TS reader paths); 7 correct-to-ignore (reconciler stranded-state sweep, lifecycle derivation, events-ledger I/O helpers, backfill, file watcher, close_session._is_already_closed with note, tooltip prose); 1 newly-surfaced Python sharp edge fixed in-session (ai_router.print_session_set_status's pre-Set-022 activity-log distinct-sessionNumber count, the same shape Set 022 Session 2 removed from the TypeScript reader); 1 known sharp edge already in Session 4's scope (TypeScript isMidSetComplete, listed for completeness). Fix: replaced the activity-log derivation with len(compute_effective_completed_sessions(path)), the Set 022 single-source-of-truth helper. Tests: 4 regression fixtures (in-flight count, legacy fallback, events-ledger fallback per round-1 verifier finding, done-set array length); 720 tests pass total. Borderline classification of close_session._is_already_closed defaulted to correct-to-ignore-with-note per the operator's 'lowest-engagement bucket' preference and the function's docstring rationale; documented for re-evaluation if a real incident surfaces it. Released as ai_router 0.2.5 via tag-driven workflow. TypeScript sharp edges deferred to Session 4's v0.13.13 bundle. Cross-provider verification (gpt-5-4, session-verification) round 1 ISSUES_FOUND: 2 Minor — overstated 'resolved on disk' claim (fixed: reworded to distinguish 'audit performed' from 'systemic concern fully eliminated which awaits Session 4'); missing events-ledger fallback test (fixed: added test_events_ledger_fallback_when_array_absent). No round-2 reroute: both findings textually verifiable; recommended_fix exactly matches what was applied. Session 3 routed spend: $0.147. Cumulative Set 023 routed spend through Session 3: $0.544.",
+  "summary": "Set 023 Session 4 (final): Extension reader fix. Modified isMidSetComplete in tools/dabbler-ai-orchestration/src/utils/fileSystem.ts to consult completedSessions[] as an alternative authoritative whether-closed signal before falling through to the events-ledger check. When the array satisfies the guard but the ledger lacks the corresponding closeout, a one-line console.warn surfaces the drift shape (audit-driven from Session 2 — GPT 5.4 caveat on Q(c)). Closes Sharp Edge 1 from the Set 023 spec: a migrated pre-Set-022 set whose operator hand-adds completedSessions: [1..N] now displays as N/N Done in the Session Set Explorer without needing close_session --repair --apply to synthesize a final-session ledger event. Tests: new fileSystem.test.ts suite with fixtures F1-F7 plus a migration-shape bonus (warn assertion) and three round-1 verifier-driven coverage additions (early-return path, warn-not-fired on non-override paths, ambiguous array-misses-currentSession + no-ledger shape). Docs: docs/session-state-schema.md Parser cheat-sheet now documents the array-before-ledger ordering and the sharpened invariant phrasing (whether-closed vs when-closed); ai_router/docs/close-out.md § 5 drift case 1 gains an attestation note (operator-attested for migrated sets, tool-maintained for sets that ran the close-out gate, audit-driven from Session 2 — GPT on Q(a)). Version bumped to extension v0.13.13 (package.json, package-lock.json, CHANGELOG.md, CLAUDE.md). Smoke-test against Set 006 confirms: completedSessions: [1, 2, 3] satisfies the guard at currentSession=3, so removing the synthetic ledger event would still leave the set bucketed as Done. Cross-provider verification (gpt-5-4, session-verification) round 1 ISSUES_FOUND: 0 Critical, 0 Major; 3 Minor coverage gaps in the test suite (early-return path fixture, console.warn spy assertion, ambiguous array-misses + no-ledger shape) — all three fixed in-session. No round-2 reroute: all fixes are pure test additions; the reader behavior is unchanged. Three deferred items documented in session-004-review.md for re-evaluation post-Set-023: tri-state helper for hasCloseoutEventForSession (Q1/Q6 #1), warn dedupe/rate-limiting (Q2), upstream range validation of currentSession/totalSessions (Q6 #4). Session 4 routed spend: $0.235.",
   "files_changed": [
-    "ai_router/__init__.py",
-    "ai_router/tests/test_print_session_set_status_completed_count.py",
-    "pyproject.toml",
-    "docs/session-sets/023-trust-completed-sessions-array/activity-log.json",
+    "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/package-lock.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "CLAUDE.md",
+    "docs/session-state-schema.md",
+    "ai_router/docs/close-out.md",
+    "docs/session-sets/023-trust-completed-sessions-array/ai-assignment.md",
     "docs/session-sets/023-trust-completed-sessions-array/disposition.json",
     "docs/session-sets/023-trust-completed-sessions-array/session-state.json",
     "docs/session-sets/023-trust-completed-sessions-array/session-events.jsonl",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003-audit-findings.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003/prompt.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003/prompt.rendered.md",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003/route_verify.py",
-    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-003/verify-result.json"
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-004/prompt.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-004/prompt.rendered.md",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-004/route_verify.py",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-004/verify-result.json",
+    "docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-004/session-004-review.md",
+    "docs/session-sets/023-trust-completed-sessions-array/change-log.md"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
-  "next_orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "low",
-    "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "Session 4 is the originally-planned reader-side fix for the TypeScript extension's isMidSetComplete guard, plus the audit-driven refinements both providers surfaced in Session 2 (observability warn when array overrides missing ledger closeout, sharpened authoritative-doc language, fixtures F5/F6/F7 for non-array completedSessions / stray out-of-range entries / non-final-session disagreements). The Session 3 audit-findings document confirmed no additional TypeScript sharp edges need to bundle into v0.13.13 — only the reader fix and the audit refinements. Same Claude that just authored Session 3's audit has the freshest context on what classifies as a TypeScript sharp edge under the Set 022 invariant and what the audit deliberately left correct-to-ignore. The change surface is small (a five-line addition to fileSystem.ts plus the audit-driven fixtures and the observability warn) and the test suite is well-scoped. Effort-low stands."
-    }
-  },
+  "next_orchestrator": null,
   "blockers": []
 }

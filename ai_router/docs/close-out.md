@@ -536,6 +536,22 @@ The drift shapes the walk detects:
    only recorded a later session's closeout (Set 004 on this repo
    hit this on 2026-05-15).
 
+   **Attestation model (Set 023 Session 4 / Session 2 audit — GPT on
+   (a)).** `completedSessions[]` is **operator-attested** for migrated
+   sets (the operator hand-adds the array to encode their stated
+   ground truth) and **tool-maintained** for sets that ran the
+   close-out gate end-to-end (every `--apply` close-out writes the
+   union). The repair preserves the operator's stated truth and uses
+   the events ledger only to add what the operator missed; it never
+   removes a session number the operator authored. Mirrors the
+   sharpened invariant phrasing in `docs/session-state-schema.md`:
+   `completedSessions[]` is authoritative for *whether* a session is
+   closed; the events ledger is authoritative for *when* each
+   closeout was recorded. The extension's `isMidSetComplete` guard
+   (v0.13.13, Set 023 Session 4) consults the array as an
+   alternative whether-closed signal to the ledger, so a migrated
+   set displays correctly without needing both signals to agree.
+
 2. **Closeout-succeeded-but-state-not-closed.** The reverse drift:
    events ledger says the session closed but `session-state.json`
    is still `work_in_progress` / `work_verified`. Repair: with

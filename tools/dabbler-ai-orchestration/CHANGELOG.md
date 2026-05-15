@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.13] — 2026-05-15
+
+### Changed
+- **`isMidSetComplete` now consults `completedSessions[]` as an
+  alternative authoritative whether-closed signal to the events
+  ledger (Set 023 Session 4).** When the snapshot's
+  `completedSessions[]` includes `currentSession`, the guard accepts
+  the snapshot as Done even if `session-events.jsonl` lacks a
+  corresponding `closeout_succeeded` event. This is the migration
+  shape Set 022 promised: a pre-Set-022 set whose operator hand-adds
+  `completedSessions: [1..N]` to its snapshot now displays as N/N
+  Done in the Session Set Explorer without also needing to synthesize
+  a final-session ledger event via `--repair --apply`. The legacy
+  ledger-only path is preserved for sets that don't carry the array.
+
+### Added
+- **Observability warn when the array overrides a missing ledger
+  closeout.** When `completedSessions[]` says the final session is
+  closed but the events ledger does not, `isMidSetComplete` emits a
+  one-line `console.warn` of the form
+  `[session-set <slug>] completedSessions[] overrides missing ledger
+  closeout for session N`. The override is correct; the warn surfaces
+  the drift shape so an operator who wants the ledger healed too can
+  run `--repair --apply` (which, as of `ai_router 0.2.4`, preserves
+  the operator-attested array while synthesizing the missing event).
+
+### Docs
+- `docs/session-state-schema.md` "Parser cheat-sheet" now documents the
+  new array-before-ledger ordering in the bucketing guard, plus the
+  sharpened invariant phrasing: `completedSessions[]` is authoritative
+  for *whether* a session is closed; the events ledger is authoritative
+  for *when* each closeout was recorded. Future maintainers should not
+  read "both are authoritative" as "must agree" — they are alternative
+  whether-closed signals.
+- `ai_router/docs/close-out.md` § 5 drift case 1 gains an attestation
+  note: `completedSessions[]` is operator-attested for migrated sets
+  and tool-maintained for sets that ran the close-out gate.
+
 ## [0.13.12] — 2026-05-15
 
 ### Changed

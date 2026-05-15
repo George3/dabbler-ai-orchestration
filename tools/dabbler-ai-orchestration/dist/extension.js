@@ -1257,6 +1257,16 @@ function isMidSetComplete(statePath) {
       return false;
     if (sd.currentSession < sd.totalSessions)
       return true;
+    if (Array.isArray(sd.completedSessions) && sd.completedSessions.includes(sd.currentSession)) {
+      const eventsPath2 = path4.join(path4.dirname(statePath), "session-events.jsonl");
+      if (fs3.existsSync(eventsPath2) && !hasCloseoutEventForSession(eventsPath2, sd.currentSession)) {
+        const slug = path4.basename(path4.dirname(statePath));
+        console.warn(
+          `[session-set ${slug}] completedSessions[] overrides missing ledger closeout for session ${sd.currentSession}`
+        );
+      }
+      return false;
+    }
     const eventsPath = path4.join(path4.dirname(statePath), "session-events.jsonl");
     if (fs3.existsSync(eventsPath) && !hasCloseoutEventForSession(eventsPath, sd.currentSession)) {
       return true;

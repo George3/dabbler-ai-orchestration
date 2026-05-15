@@ -50,22 +50,26 @@ export function discoverRoots(): string[] {
 }
 
 // Detect a stale `status: "complete"` snapshot that doesn't actually
-// reflect a finished set. Two drift shapes both downgrade to in-progress:
+// reflect a finished set. Two authoritative signals govern the guard,
+// per the Set 022 + Set 023 sharpened invariant:
+// `completedSessions[]` is authoritative for *whether* a session is
+// closed; `session-events.jsonl` is authoritative for *when* each
+// closeout was recorded. The guard downgrades to in-progress only when
+// neither whether-closed signal agrees with the snapshot's
+// `status: "complete"`. Two drift shapes still downgrade:
 //
 //   1. **Count mismatch.** `currentSession < totalSessions`. Pre-0.2.1
 //      ai_router flipped to complete after every session, and manual
 //      edits / stale consumer snapshots still produce this shape.
 //
-//   2. **Final-session ledger gap.** `currentSession === totalSessions`
-//      and the snapshot claims complete, but `session-events.jsonl`
-//      has no `closeout_succeeded` event for the final session. The
-//      events ledger is authoritative on Full tier; absent closeout
-//      means the writer drifted from the ledger (observed
-//      2026-05-12 on unified-master-details-composite: snapshot
-//      `status: complete` + `verificationVerdict: VERIFIED` at
-//      currentSession=5/5, yet ledger had closeouts for sessions 1-4
-//      only). Only fires when the ledger file exists — Lightweight
-//      tier has no ledger and we trust the snapshot there.
+//   2. **Final-session signal gap.** `currentSession === totalSessions`
+//      and the snapshot claims complete, but neither
+//      `completedSessions[]` nor the events ledger records the final
+//      session as closed. Set 023: `completedSessions[]` is consulted
+//      *before* the ledger so a migrated pre-Set-022 set whose
+//      operator hand-added the array displays as Done without also
+//      needing a synthesized `closeout_succeeded` event. The legacy
+//      ledger-only path remains for sets without the array.
 //
 // Returns false on any read/parse failure — trust the canonical status
 // rather than second-guessing on garbled input.
@@ -75,11 +79,35 @@ export function isMidSetComplete(statePath: string): boolean {
     const sd = JSON.parse(fs.readFileSync(statePath, "utf8")) as {
       currentSession?: number;
       totalSessions?: number;
+      completedSessions?: unknown;
     };
     if (typeof sd.currentSession !== "number") return false;
     if (typeof sd.totalSessions !== "number") return false;
 
     if (sd.currentSession < sd.totalSessions) return true;
+
+    // Set 023 Session 4: `completedSessions[]` is an alternative
+    // authoritative signal to the events ledger. The array check fires
+    // first so a migrated pre-Set-022 set whose snapshot carries
+    // `completedSessions: [1..N]` is recognized as Done even when its
+    // ledger lacks the corresponding `closeout_succeeded` event. When
+    // the array satisfies the guard but the ledger does not, surface
+    // the drift via console.warn so the operator can choose to heal
+    // the ledger with `--repair --apply` — the override is correct,
+    // the warn is observability only.
+    if (Array.isArray(sd.completedSessions) &&
+        sd.completedSessions.includes(sd.currentSession)) {
+      const eventsPath = path.join(path.dirname(statePath), "session-events.jsonl");
+      if (fs.existsSync(eventsPath) &&
+          !hasCloseoutEventForSession(eventsPath, sd.currentSession)) {
+        const slug = path.basename(path.dirname(statePath));
+        console.warn(
+          `[session-set ${slug}] completedSessions[] overrides missing ledger ` +
+          `closeout for session ${sd.currentSession}`
+        );
+      }
+      return false;
+    }
 
     const eventsPath = path.join(path.dirname(statePath), "session-events.jsonl");
     if (fs.existsSync(eventsPath) &&

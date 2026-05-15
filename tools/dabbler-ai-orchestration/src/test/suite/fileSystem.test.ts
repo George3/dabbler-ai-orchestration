@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import {
   countDistinctCloseoutSessions,
+  isMidSetComplete,
   parseSessionSetConfig,
   parseUatChecklist,
   readSessionSets,
@@ -607,6 +608,270 @@ suite("fileSystem — readSessionSets", () => {
     const sets = readSessionSets(dir);
     assert.deepStrictEqual(sets[0].liveSession?.completedSessions, [1]);
     assert.strictEqual(sets[0].liveSession?.currentSession, 2);
+    fs.rmSync(dir, { recursive: true });
+  });
+});
+
+// Set 023 Session 4: `isMidSetComplete` now consults
+// `completedSessions[]` before falling through to the events-ledger
+// check. The array is authoritative for *whether* a session is closed;
+// the events ledger remains authoritative for *when* each closeout was
+// recorded. Fixtures F1-F7 lock in the new ordering and the legacy
+// fall-through paths.
+suite("fileSystem — isMidSetComplete (Set 023 Session 4)", () => {
+  function writeState(setDir: string, state: object): string {
+    fs.mkdirSync(setDir, { recursive: true });
+    const statePath = path.join(setDir, "session-state.json");
+    fs.writeFileSync(statePath, JSON.stringify(state));
+    return statePath;
+  }
+
+  function writeEvents(setDir: string, sessionsClosed: number[]): void {
+    const events =
+      sessionsClosed
+        .map((n) =>
+          JSON.stringify({
+            timestamp: `2026-05-15T0${n}:00:00Z`,
+            session_number: n,
+            event_type: "closeout_succeeded",
+          })
+        )
+        .join("\n") + "\n";
+    fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
+  }
+
+  // F1: array satisfies the guard with no ledger present at all.
+  test("F1: completedSessions includes currentSession + no events ledger → not mid-set", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f1");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: [1, 2, 3],
+    });
+    assert.strictEqual(isMidSetComplete(statePath), false);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F2: array disagrees on the final session AND ledger disagrees → downgrade.
+  test("F2: array missing currentSession + ledger missing closeout → mid-set", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f2");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: [1, 2],
+    });
+    writeEvents(setDir, [1, 2]);
+    assert.strictEqual(isMidSetComplete(statePath), true);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F3: legacy path unchanged — no array, ledger closes the final session.
+  test("F3: no completedSessions field + ledger has closeout → not mid-set", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f3");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+    });
+    writeEvents(setDir, [1, 2, 3]);
+    assert.strictEqual(isMidSetComplete(statePath), false);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F4: legacy drift case unchanged — no array, ledger lacks final closeout.
+  test("F4: no completedSessions field + ledger missing closeout → mid-set", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f4");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+    });
+    writeEvents(setDir, [1, 2]);
+    assert.strictEqual(isMidSetComplete(statePath), true);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F5 (audit-driven, Gemini on (e)): non-array completedSessions values
+  // are tolerated via Array.isArray; legacy ledger path takes over.
+  test("F5: non-array completedSessions falls through to ledger check", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f5");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: null,
+    });
+    writeEvents(setDir, [1, 2, 3]);
+    assert.strictEqual(isMidSetComplete(statePath), false);
+
+    // Also exercise a non-array object shape — same fall-through behavior.
+    const setDir2 = path.join(dir, "f5b");
+    const statePath2 = writeState(setDir2, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: { not: "array" },
+    });
+    writeEvents(setDir2, [1, 2, 3]);
+    assert.strictEqual(isMidSetComplete(statePath2), false);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F6 (audit-driven, both on (b) and (e)): a stray out-of-range entry
+  // (e.g., [1, 2, 99] with totalSessions 4 and currentSession 4) does not
+  // accidentally satisfy `.includes(currentSession)`. The array check
+  // returns false for `4`, so the guard falls through to the ledger,
+  // which also lacks closeout for 4 → mid-set.
+  test("F6: stray out-of-range array entry does not satisfy includes(currentSession)", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f6");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 4,
+      totalSessions: 4,
+      completedSessions: [1, 2, 99],
+    });
+    writeEvents(setDir, [1, 2]);
+    assert.strictEqual(isMidSetComplete(statePath), true);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // F7 (audit-driven, GPT on (e)): the guard checks `currentSession`
+  // specifically; disagreement on non-final sessions is irrelevant. An
+  // array [1, 2] with currentSession 3 and a ledger that has a closeout
+  // for session 1 only still downgrades to mid-set — neither signal
+  // closes session 3.
+  test("F7: non-final-session disagreement is irrelevant; only currentSession matters", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "f7");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: [1, 2],
+    });
+    writeEvents(setDir, [1]);
+    assert.strictEqual(isMidSetComplete(statePath), true);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // Bonus 1: array satisfies the guard while the ledger lacks the
+  // corresponding closeout — the migration shape Set 023 was authored
+  // to fix. Locks in that the override path returns false (Done) and
+  // emits the observability warn exactly once.
+  test("array overrides missing ledger closeout (migration shape) → not mid-set + warns", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "migration");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 4,
+      totalSessions: 4,
+      completedSessions: [1, 2, 3, 4],
+    });
+    writeEvents(setDir, [3]);  // synthetic-only ledger, missing session 4
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg?: unknown) => { warnings.push(String(msg)); };
+    try {
+      assert.strictEqual(isMidSetComplete(statePath), false);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.strictEqual(warnings.length, 1, "expected exactly one observability warn");
+    assert.match(warnings[0], /completedSessions\[\] overrides missing ledger closeout for session 4/);
+    assert.match(warnings[0], /\[session-set migration\]/);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // Bonus 2 (Session 4 verifier round-1 finding, Q3): the warn must NOT
+  // fire when (a) the ledger file is absent entirely (F1 shape), (b) the
+  // legacy no-array path produces a clean closeout (F3), or (c) the
+  // legacy no-array path falls through to the ledger-missing-closeout
+  // drift case (F4). Locks in the observability contract: warn fires
+  // ONLY on the array-overrides-disagreeing-ledger shape.
+  test("observability warn does not fire on non-override paths", () => {
+    const dir = makeTmpDir();
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg?: unknown) => { warnings.push(String(msg)); };
+    try {
+      // (a) F1 shape: array satisfies guard, no ledger file.
+      const a = path.join(dir, "no-ledger");
+      const aPath = writeState(a, {
+        status: "complete", currentSession: 3, totalSessions: 3,
+        completedSessions: [1, 2, 3],
+      });
+      assert.strictEqual(isMidSetComplete(aPath), false);
+
+      // (b) F3 shape: legacy no-array path, ledger has closeout.
+      const b = path.join(dir, "legacy-ok");
+      const bPath = writeState(b, {
+        status: "complete", currentSession: 3, totalSessions: 3,
+      });
+      writeEvents(b, [1, 2, 3]);
+      assert.strictEqual(isMidSetComplete(bPath), false);
+
+      // (c) F4 shape: legacy no-array drift, ledger lacks closeout.
+      const c = path.join(dir, "legacy-drift");
+      const cPath = writeState(c, {
+        status: "complete", currentSession: 3, totalSessions: 3,
+      });
+      writeEvents(c, [1, 2]);
+      assert.strictEqual(isMidSetComplete(cPath), true);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.deepStrictEqual(warnings, [], "no warns expected on non-override paths");
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // Coverage gap (Session 4 verifier round-1, Q3): the
+  // `currentSession < totalSessions` early-return path is not exercised
+  // by F1-F7. Locks in that a mid-set snapshot returns true regardless
+  // of either authoritative whether-closed signal.
+  test("currentSession < totalSessions early-return → mid-set (regardless of array/ledger)", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "mid-set");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 2,
+      totalSessions: 3,
+      completedSessions: [1, 2, 3],  // array even claims all closed
+    });
+    writeEvents(setDir, [1, 2, 3]);  // ledger even agrees
+    // Mid-set: currentSession (2) < totalSessions (3) — the count
+    // mismatch wins over both whether-closed signals.
+    assert.strictEqual(isMidSetComplete(statePath), true);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  // Coverage gap (Session 4 verifier round-1, Q3 + Q6): array is present
+  // but does not include currentSession, AND no ledger file exists. The
+  // ledger-fallback branch is gated on `fs.existsSync(eventsPath)`, so
+  // a missing ledger is treated as "no negative evidence" and the
+  // snapshot's `status: complete` is respected. Documents the
+  // intentional semantics: in the absence of any whether-closed signal
+  // saying otherwise, we trust the canonical `status` field.
+  test("array missing currentSession + no ledger file → not mid-set (trust status)", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "ambiguous");
+    const statePath = writeState(setDir, {
+      status: "complete",
+      currentSession: 3,
+      totalSessions: 3,
+      completedSessions: [1, 2],  // array says session 3 not closed
+    });
+    // No session-events.jsonl written — the ledger fallback is skipped.
+    assert.strictEqual(isMidSetComplete(statePath), false);
     fs.rmSync(dir, { recursive: true });
   });
 });

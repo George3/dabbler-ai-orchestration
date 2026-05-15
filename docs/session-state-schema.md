@@ -308,6 +308,30 @@ Bucketing in the Session Sets Explorer:
 - Else canonical `status === "in-progress"` → Active.
 - Else → Not Started.
 
+The "not mid-set" guard (`isMidSetComplete` in
+`tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`) consults two
+authoritative whether-closed signals as of extension v0.13.13:
+
+1. `completedSessions[]` — if it includes `currentSession`, the
+   snapshot agrees the final session is closed. The guard accepts this
+   even when the events ledger lacks the corresponding
+   `closeout_succeeded` event (the migration shape from a
+   pre-Set-022 set whose operator hand-added the array). When the
+   array overrides a missing ledger entry, a one-line `console.warn`
+   surfaces the drift; the override is correct, the warn is
+   observability only.
+2. `session-events.jsonl` — if `closeout_succeeded` is present for
+   `currentSession`, the ledger agrees. The legacy path for sets
+   without `completedSessions[]`.
+
+The guard downgrades to Active only when both signals lack a
+whether-closed answer for `currentSession`. **The phrasing matters:**
+`completedSessions[]` is authoritative for *whether* a session is
+closed; the events ledger is authoritative for *when* each closeout
+was recorded. Future maintainers should not read "both are
+authoritative" as "must agree" — they are alternative
+whether-closed signals.
+
 ## Migration
 
 For consumer repos carrying pre-Set-7 drift:
