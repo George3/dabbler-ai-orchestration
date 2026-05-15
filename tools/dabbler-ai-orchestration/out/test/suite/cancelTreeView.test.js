@@ -144,7 +144,7 @@ suite("SessionSetsProvider — cancelled group", () => {
             sessionsCompleted: 0,
             lastTouched: null,
             liveSession: null,
-            config: { requiresUAT: false, requiresE2E: false, uatScope: "none", outsourceMode: "first" },
+            config: { requiresUAT: false, requiresE2E: false, uatScope: "none" },
             uatSummary: null,
             root: "/tmp",
         }));

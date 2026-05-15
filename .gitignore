@@ -11,3 +11,4 @@ router-metrics.jsonl
 build/
 dist/*.tar.gz
 dist/*.whl
+ai_router/local-overrides.yaml

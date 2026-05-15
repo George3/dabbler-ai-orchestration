@@ -1225,30 +1225,16 @@ def validate_next_orchestrator(
 
 
 # ---------------------------------------------------------------------------
-# Mode config (parsed from spec.md "Session Set Configuration" block)
+# Session Set Configuration parser
 # ---------------------------------------------------------------------------
-
-OUTSOURCE_MODES = {"first", "last"}
-ROLE_VALUES = {"claude", "openai", "gemini"}
-DEFAULT_OUTSOURCE_MODE = "first"
-
-
-@dataclass
-class ModeConfig:
-    """Mode-aware configuration declared in spec.md's Session Set Configuration block.
-
-    - ``outsource_mode``: ``"first"`` (default; orchestrator is a frontier
-      model, verification routes to a cheaper outsourced model) or
-      ``"last"`` (orchestrator and verifier roles swap; the cheap model
-      drives, the frontier model verifies).
-    - ``orchestrator_role`` / ``verifier_role``: only meaningful when
-      ``outsource_mode == "last"``. Identifies which provider drives and
-      which verifies. ``None`` when not declared.
-    """
-
-    outsource_mode: str = DEFAULT_OUTSOURCE_MODE
-    orchestrator_role: Optional[str] = None
-    verifier_role: Optional[str] = None
+#
+# Set 026 Session 1 removed the queue-mediated daemon (``outsourceMode: last``)
+# infrastructure. The mode-config dataclass, the OUTSOURCE_MODES /
+# ROLE_VALUES / DEFAULT_OUTSOURCE_MODE constants, parse_mode_config,
+# read_mode_config, and validate_mode_config are gone. The
+# block-extractor below survives because :func:`_read_total_sessions_from_spec`
+# uses it to pull ``totalSessions`` from the same YAML block; it is the
+# only field still consumed at the Python layer.
 
 
 def _extract_session_set_configuration_block(spec_text: str) -> Optional[dict]:
@@ -1332,113 +1318,8 @@ def _extract_session_set_configuration_block(spec_text: str) -> Optional[dict]:
     return parsed
 
 
-def parse_mode_config(spec_text: str) -> ModeConfig:
-    """Parse a :class:`ModeConfig` from raw spec.md text.
-
-    Missing fields fall back to defaults: ``outsource_mode`` defaults to
-    ``"first"``, role fields default to ``None``. Values present in the
-    spec are preserved as-is (no coercion to default), so invalid
-    configurations surface as validation errors via
-    :func:`validate_mode_config` rather than being silently masked.
-
-    A spec without a ``Session Set Configuration`` block parses to
-    ``ModeConfig()`` — this is the legacy / pre-block path and is valid
-    by definition.
-    """
-    block = _extract_session_set_configuration_block(spec_text) or {}
-
-    outsource_mode = block.get("outsourceMode", DEFAULT_OUTSOURCE_MODE)
-
-    def _role(key: str) -> Optional[str]:
-        value = block.get(key)
-        if value is None:
-            return None
-        if isinstance(value, str):
-            return value
-        # Non-string values (numbers, lists, etc.) are not valid roles.
-        # Coerce to a marker string that ``validate_mode_config`` will
-        # reject explicitly, rather than dropping it to None silently.
-        return str(value)
-
-    return ModeConfig(
-        outsource_mode=outsource_mode,
-        orchestrator_role=_role("orchestratorRole"),
-        verifier_role=_role("verifierRole"),
-    )
-
-
-def read_mode_config(session_set_dir: str) -> ModeConfig:
-    """Read and parse the mode config from ``<session_set_dir>/spec.md``.
-
-    A missing spec.md or a missing Session Set Configuration block
-    yields the default ``ModeConfig`` rather than an error — older sets
-    that pre-date the block are valid by definition (treated as
-    ``outsourceMode: first``, no roles).
-    """
-    spec_path = os.path.join(session_set_dir, "spec.md")
-    if not os.path.isfile(spec_path):
-        return ModeConfig()
-    try:
-        with open(spec_path, "r", encoding="utf-8") as f:
-            text = f.read()
-    except OSError:
-        return ModeConfig()
-    return parse_mode_config(text)
-
-
-def validate_mode_config(
-    config: ModeConfig,
-) -> Tuple[bool, List[str]]:
-    """Validate cross-field rules for a :class:`ModeConfig`.
-
-    - ``outsource_mode`` must be one of the known values.
-    - When ``outsource_mode == "last"``, both ``orchestrator_role`` and
-      ``verifier_role`` are required and must differ (otherwise the
-      generator and verifier are the same provider, defeating
-      cross-provider verification).
-    - When ``outsource_mode == "first"``, role fields are ignored — they
-      may be present without raising, but they have no effect.
-    """
-    errors: List[str] = []
-
-    if config.outsource_mode not in OUTSOURCE_MODES:
-        allowed = ", ".join(sorted(OUTSOURCE_MODES))
-        errors.append(
-            f"outsource_mode must be one of: {allowed} "
-            f"(got {config.outsource_mode!r})"
-        )
-
-    if config.outsource_mode == "last":
-        if config.orchestrator_role is None:
-            errors.append(
-                "orchestrator_role is required when outsource_mode == 'last'"
-            )
-        elif config.orchestrator_role not in ROLE_VALUES:
-            allowed = ", ".join(sorted(ROLE_VALUES))
-            errors.append(
-                f"orchestrator_role must be one of: {allowed} "
-                f"(got {config.orchestrator_role!r})"
-            )
-
-        if config.verifier_role is None:
-            errors.append(
-                "verifier_role is required when outsource_mode == 'last'"
-            )
-        elif config.verifier_role not in ROLE_VALUES:
-            allowed = ", ".join(sorted(ROLE_VALUES))
-            errors.append(
-                f"verifier_role must be one of: {allowed} "
-                f"(got {config.verifier_role!r})"
-            )
-
-        if (
-            config.orchestrator_role is not None
-            and config.verifier_role is not None
-            and config.orchestrator_role == config.verifier_role
-        ):
-            errors.append(
-                "orchestrator_role and verifier_role must differ "
-                "(cross-provider verification would collapse otherwise)"
-            )
-
-    return (len(errors) == 0), errors
+# parse_mode_config / read_mode_config / validate_mode_config were
+# removed by Set 026 Session 1 along with the rest of the
+# ``outsourceMode: last`` infrastructure. The remaining consumer of
+# the block extractor above is ``_read_total_sessions_from_spec``,
+# which reads only the numeric ``totalSessions`` field.

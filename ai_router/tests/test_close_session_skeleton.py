@@ -125,7 +125,6 @@ def test_parser_accepts_every_documented_flag():
         "--allow-empty-commit",
         "--reason-file", "reason.md",
         "--manual-verify",
-        "--timeout", "30",
     ])
     assert args.session_set_dir == "x"
     assert args.json is True
@@ -133,7 +132,6 @@ def test_parser_accepts_every_documented_flag():
     assert args.allow_empty_commit is True
     assert args.reason_file == "reason.md"
     assert args.manual_verify is True
-    assert args.timeout == 30
 
 
 def test_parser_force_flag_independent():
@@ -148,12 +146,6 @@ def test_parser_repair_apply_combination():
     args = parser.parse_args(["--repair", "--apply"])
     assert args.repair is True
     assert args.apply is True
-
-
-def test_parser_default_timeout():
-    parser = _build_parser()
-    args = parser.parse_args([])
-    assert args.timeout == 60
 
 
 # ---------------------------------------------------------------------------
@@ -190,13 +182,6 @@ def test_validate_apply_without_repair_rejected():
     err = _validate_args(_ns(apply=True, repair=False))
     assert err is not None
     assert "repair" in err
-
-
-def test_validate_negative_timeout_rejected():
-    err = _validate_args(_ns(timeout=0))
-    assert err is not None
-    err = _validate_args(_ns(timeout=-1))
-    assert err is not None
 
 
 def test_validate_manual_verify_without_attestation_source_rejected():
@@ -790,7 +775,6 @@ def test_result_to_exit_code_table_complete():
         "gate_failed": 1,
         "invalid_invocation": 2,
         "lock_contention": 3,
-        "verification_timeout": 4,
         "repair_drift": 5,
     }
     assert RESULT_TO_EXIT_CODE == expected

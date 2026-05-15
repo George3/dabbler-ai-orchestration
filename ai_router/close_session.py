@@ -2,8 +2,7 @@
 
 **Who uses this:** All Full-tier consumers (dabbler-platform, dabbler-access-harvester).
 **Not used by:** Lightweight-tier projects (no ai_router at all).
-**See also:** ``queue_verification.py`` (outsource-last queue polling, platform-only);
-``gate_checks.py`` (the five deterministic predicates this script runs).
+**See also:** ``gate_checks.py`` (the deterministic predicates this script runs).
 
 ---
 
@@ -22,49 +21,27 @@ Usage::
     AI_ROUTER_ALLOW_FORCE_CLOSE_OUT=1 \
         python -m ai_router.close_session --force --reason-file reason.md
 
-What this script is (and is not)
---------------------------------
-This is the **Set 3 Session 1 skeleton**. It ships the runnable CLI, the
-flag-parsing surface, the disposition-presence check, the idempotency
-short-circuit, the structured JSON output shape, and the
-``closeout_requested`` / ``closeout_succeeded`` / ``closeout_failed``
-ledger events.
-
-Sessions 2 and 3 fill in the deterministic gate checks and the
-queue-mediated verification-wait, respectively. Until then:
-
-* :func:`_run_gate_checks` returns "all stubs passed" — the
-  architectural shape (``(passed: bool, remediation: str)`` per check)
-  is in place so Session 2 plugs in real predicates without restructuring
-  the call site.
-* :func:`_wait_for_verifications` is a no-op that returns "wait skipped"
-  — Session 3 implements queue polling against ``queue_db`` and the
-  ``--timeout`` budget.
+Set 026 Session 1 removed the queue-mediated verification-wait path
+(``outsourceMode: last``) along with the rest of the verifier-daemon
+infrastructure. Verification is now resolved synchronously from the
+disposition's ``verification_method`` field and the ``--manual-verify``
+flag; there is no queue to poll.
 
 Snapshot-flip on success lives in :func:`session_state._flip_state_to_closed`,
 called from this script's success path after ``closeout_succeeded`` is
-appended to the events ledger. The choice of the gate-bypass internal
-flip helper (rather than the public :func:`mark_session_complete`)
-mirrors the ``--repair --apply`` case-2 path: by the time we flip, the
-events ledger already records the close-out as succeeded, so re-running
-the gate via ``mark_session_complete`` would either redundantly validate
-or fail on transient drift the gate would surface. ``--force`` was
-originally listed as a transitional flag scheduled for removal; Set 9
-Session 3 (D-2) instead hard-scoped it to incident-recovery use only —
-see :func:`_validate_args` and ``ai_router/docs/close-out.md`` Section 5
-for the full contract.
+appended to the events ledger. ``--force`` is hard-scoped to incident-
+recovery use only — see :func:`_validate_args` and
+``ai_router/docs/close-out.md`` Section 5 for the full contract.
 
 Exit codes
 ----------
-* ``0`` — close-out succeeded (gates passed; verifications terminal). Or
-  the session was already closed (idempotent no-op).
+* ``0`` — close-out succeeded (gates passed). Or the session was already
+  closed (idempotent no-op).
 * ``1`` — gate failure (one or more deterministic gates rejected).
 * ``2`` — invalid invocation (incompatible flags, missing
   ``disposition.json`` outside ``--force`` / ``--repair``, etc.).
 * ``3`` — lock contention (another close-out is running on the same
-  session set; reserved for Session 2 lock implementation).
-* ``4`` — timeout waiting on queued verification (reserved for Session 3
-  queue-wait implementation).
+  session set).
 * ``5`` — repair drift detected and not applied (``--repair`` without
   ``--apply``).
 
@@ -72,13 +49,13 @@ JSON output shape
 -----------------
 When ``--json`` is set, the script writes a single JSON object to stdout
 on exit. The shape is stable across exit codes so that the orchestrator
-(and the VS Code Session Set Explorer in Set 5) can parse it without
-branching on success::
+(and the VS Code Session Set Explorer) can parse it without branching
+on success::
 
     {
       "result": "succeeded" | "noop_already_closed" | "gate_failed"
                 | "invalid_invocation" | "lock_contention"
-                | "verification_timeout" | "repair_drift",
+                | "repair_drift",
       "exit_code": <int>,
       "session_set_dir": "<absolute path>",
       "session_number": <int> | null,
@@ -87,16 +64,10 @@ branching on success::
         {"check": "<name>", "passed": <bool>, "remediation": "<str>"}
       ],
       "verification": {
-        "method": "api" | "queue" | "manual" | "skipped",
-        "message_ids": ["<id>", ...],
-        "wait_outcome": "<string>"
+        "method": "api" | "manual" | "skipped"
       },
       "events_emitted": ["closeout_requested", "closeout_succeeded", ...]
     }
-
-Future sessions extend the ``gate_results`` list and populate
-``verification.wait_outcome`` with concrete values (``completed``,
-``failed``, ``timed_out``); the surrounding shape stays stable.
 """
 
 from __future__ import annotations
@@ -152,12 +123,6 @@ try:
         acquire_lock,
         release_lock,
     )
-    from queue_db import (  # type: ignore[import-not-found]
-        DEFAULT_BASE_DIR as QUEUE_DEFAULT_BASE_DIR,
-        TERMINAL_STATES,
-        QueueDB,
-        QueueMessage,
-    )
 except ImportError:
     from .disposition import (  # type: ignore[no-redef]
         Disposition,
@@ -176,32 +141,6 @@ except ImportError:
         acquire_lock,
         release_lock,
     )
-    from .queue_db import (  # type: ignore[no-redef]
-        DEFAULT_BASE_DIR as QUEUE_DEFAULT_BASE_DIR,
-        TERMINAL_STATES,
-        QueueDB,
-        QueueMessage,
-    )
-
-
-# Queue-mediated verification wait lives in queue_verification.py (extracted
-# for readability — it only applies to outsourceMode:last / dabbler-platform).
-try:
-    from queue_verification import (  # type: ignore[import-not-found]
-        DEFAULT_POLL_INTERVAL_SECONDS,
-        _MessageOutcome,
-        _discover_queue_providers,
-        _lookup_message,
-        _wait_for_verifications,
-    )
-except ImportError:
-    from .queue_verification import (  # type: ignore[no-redef]
-        DEFAULT_POLL_INTERVAL_SECONDS,
-        _MessageOutcome,
-        _discover_queue_providers,
-        _lookup_message,
-        _wait_for_verifications,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +157,6 @@ RESULT_TO_EXIT_CODE = {
     "gate_failed": 1,
     "invalid_invocation": 2,
     "lock_contention": 3,
-    "verification_timeout": 4,
     "repair_drift": 5,
 }
 
@@ -255,8 +193,6 @@ class CloseoutOutcome:
     messages: List[str] = field(default_factory=list)
     gate_results: List[GateResult] = field(default_factory=list)
     verification_method: str = "skipped"
-    verification_message_ids: List[str] = field(default_factory=list)
-    verification_wait_outcome: str = "not_run"
     events_emitted: List[str] = field(default_factory=list)
 
     @property
@@ -280,8 +216,6 @@ class CloseoutOutcome:
             ],
             "verification": {
                 "method": self.verification_method,
-                "message_ids": list(self.verification_message_ids),
-                "wait_outcome": self.verification_wait_outcome,
             },
             "events_emitted": list(self.events_emitted),
         }
@@ -402,8 +336,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--manual-verify",
         action="store_true",
         help=(
-            "Skip queue verification blocking and treat verifications as "
-            "completed by human attestation (bootstrapping window only)."
+            "Treat verification as completed by human attestation. Used "
+            "for the zero-budget tier and for any session whose "
+            "verification ran out-of-band (e.g., manual cross-provider "
+            "review via the IDE-agent paste path)."
         ),
     )
     p.add_argument(
@@ -420,15 +356,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "When combined with --repair, apply corrections to detected "
             "drift. Without --repair, has no effect."
-        ),
-    )
-    p.add_argument(
-        "--timeout",
-        type=int,
-        default=60,
-        help=(
-            "Maximum minutes to wait for queued verifications to reach a "
-            "terminal state. Defaults to 60. Reserved for Session 3."
         ),
     )
     return p
@@ -554,8 +481,6 @@ def _validate_args(args: argparse.Namespace) -> Optional[str]:
             "--manual-verify requires either --interactive (prompt for "
             "attestation) or --reason-file (file containing attestation)"
         )
-    if args.timeout is not None and args.timeout <= 0:
-        return f"--timeout must be a positive integer (got {args.timeout})"
     return None
 
 
@@ -720,20 +645,12 @@ def run_gate_checks(
 
 # ---------------------------------------------------------------------------
 # Repair stub
-# (Queue-mode polling moved to queue_verification.py — outsource-last only)
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
-# Repair stub
 # ---------------------------------------------------------------------------
 
 def _run_repair(
     session_set_dir: str,
     *,
     apply_changes: bool,
-    queue_base_dir: str = QUEUE_DEFAULT_BASE_DIR,
 ) -> tuple[bool, List[str]]:
     """Walk the session set's state and report (or fix) detectable drift.
 
@@ -781,20 +698,13 @@ def _run_repair(
        ``work_verified``. Repair: with ``--apply``, call
        ``mark_session_complete`` so the snapshot tracks the ledger.
 
-    3. **Disposition references missing queue messages.**
-       ``disposition.json`` cites ``verification_message_ids`` that the
-       queue databases do not contain. Reported but not auto-fixed —
-       we cannot synthesize a verifier verdict, and the orchestrator
-       must rebuild the disposition manually.
-
-    4. **Stranded mid-closeout** (``closeout_requested`` without a
+    3. **Stranded mid-closeout** (``closeout_requested`` without a
        terminal companion). Reported only. Recovery is the
        reconciler's job (re-run the gate); ``--repair --apply`` does
        not re-run the gate from inside itself.
 
-    Never modifies git state. Never reaches into the queue databases
-    (read-only inspection). Idempotent under repeat invocation: a set
-    with no drift returns ``(False, ["repair: no drift detected"])``;
+    Never modifies git state. Idempotent under repeat invocation: a
+    set with no drift returns ``(False, ["repair: no drift detected"])``;
     a set whose drift is corrected by ``--apply`` reports
     ``(False, ["repair: ..."])`` on the next pass.
     """
@@ -1119,32 +1029,10 @@ def _run_repair(
             "--repair does not re-run the gate."
         )
 
-    # Case 3: disposition cites message ids the queue does not contain.
-    # Skip when case 1 already covered the set — a closed-but-
-    # missing-events set is the bootstrapping case, and the queue
-    # checks don't add information there.
-    if (
-        disposition is not None
-        and disposition.verification_method == "queue"
-        and disposition.verification_message_ids
-        and not state_says_closed
-    ):
-        providers = _discover_queue_providers(queue_base_dir)
-        unresolved: List[str] = []
-        for mid in disposition.verification_message_ids:
-            msg, _provider = _lookup_message(mid, queue_base_dir, providers)
-            if msg is None:
-                unresolved.append(mid)
-        if unresolved:
-            drift_detected = True
-            joined = ", ".join(unresolved)
-            messages.append(
-                f"repair drift: disposition.json references queue "
-                f"message ids that do not resolve under "
-                f"{queue_base_dir!r}: {joined}. "
-                "Auto-repair declined — verifier verdicts cannot be "
-                "synthesized; rebuild the disposition manually."
-            )
+    # Case 3 (queue-message reference drift) was removed in Set 026
+    # Session 1 along with the rest of the queue-mediated daemon path —
+    # ``disposition.verification_method == "queue"`` is no longer a
+    # valid value, so the previous repair branch is unreachable.
 
     if not drift_detected:
         messages.append("repair: no drift detected")
@@ -1232,10 +1120,6 @@ def _emit_output(outcome: CloseoutOutcome, *, json_mode: bool) -> None:
 def run(
     args: argparse.Namespace,
     *,
-    queue_base_dir: str = QUEUE_DEFAULT_BASE_DIR,
-    poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
-    sleep: Optional[Callable[[float], None]] = None,
-    monotonic: Optional[Callable[[], float]] = None,
     prompt_fn: Callable[[str], str] = input,
 ) -> CloseoutOutcome:
     """Execute the close-out flow for the given parsed args.
@@ -1244,11 +1128,6 @@ def run(
     an ``argparse.Namespace`` directly and skip the CLI parsing layer.
     Returns the :class:`CloseoutOutcome` rather than calling
     ``sys.exit`` so callers can inspect / re-emit it.
-
-    The keyword-only knobs ``queue_base_dir``, ``poll_interval_seconds``,
-    ``sleep``, and ``monotonic`` are injection points for the
-    integration tests — production callers (the CLI ``main`` and the
-    reconciler) leave them at their defaults.
     """
     session_set_dir = _resolve_session_set_dir(args.session_set_dir)
     outcome = CloseoutOutcome(
@@ -1293,7 +1172,6 @@ def run(
             drift, messages = _run_repair(
                 session_set_dir,
                 apply_changes=args.apply,
-                queue_base_dir=queue_base_dir,
             )
             outcome.messages.extend(messages)
             if drift and not args.apply:
@@ -1447,83 +1325,26 @@ def run(
                 reason=reason_text,
             )
 
-        # Verification wait. ``--force`` short-circuits this entirely —
-        # bypassing the gate is the point of ``--force``, and waiting on
-        # queued verifications when the operator has already chosen to
-        # skip the gate would just wedge the close-out unnecessarily.
+        # Resolve the verification method from disposition + flags.
+        # Set 026 Session 1 removed the queue path; this is now a
+        # synchronous resolution. ``--force`` bypasses everything;
+        # ``--manual-verify`` is the operator-attestation path; otherwise
+        # we honor ``disposition.verification_method`` (``api`` /
+        # ``manual`` / ``skipped``).
         if args.force:
             method = "skipped"
-            wait_outcome = "not_run"
-            message_ids: List[str] = []
-            wait_outcomes: List[_MessageOutcome] = []
+        elif args.manual_verify:
+            method = "manual"
+        elif disposition is not None and disposition.verification_method:
+            method = disposition.verification_method
         else:
-            method, wait_outcome, message_ids, wait_outcomes = (
-                _wait_for_verifications(
-                    session_set_dir,
-                    disposition,
-                    manual_verify=args.manual_verify,
-                    timeout_minutes=args.timeout,
-                    queue_base_dir=queue_base_dir,
-                    poll_interval_seconds=poll_interval_seconds,
-                    sleep=sleep,
-                    monotonic=monotonic,
-                )
-            )
+            method = "skipped"
         outcome.verification_method = method
-        outcome.verification_wait_outcome = wait_outcome
-        outcome.verification_message_ids = message_ids
 
-        # Emit per-message ledger events for the queue path. One event
-        # per message keeps the audit trail at message granularity so
-        # observers (the reconciler, the VS Code extension) can answer
-        # "which verification round terminated when" by walking the
-        # ledger alone.
-        for mo in wait_outcomes:
-            if mo.state == "completed":
-                _emit_event(
-                    session_set_dir,
-                    "verification_completed",
-                    outcome.session_number,
-                    outcome,
-                    message_id=mo.message_id,
-                    queue_provider=mo.provider,
-                    queue_state=mo.state,
-                )
-            elif mo.state == "timed_out" or not mo.terminal:
-                _emit_event(
-                    session_set_dir,
-                    "verification_timed_out",
-                    outcome.session_number,
-                    outcome,
-                    message_id=mo.message_id,
-                    queue_provider=mo.provider,
-                    queue_state=mo.state,
-                    failure_reason=mo.failure_reason,
-                )
-            else:
-                # ``failed`` and the synthetic ``missing`` state both
-                # fall here — both are verifier-side rejections that
-                # the close-out gate must surface as failures.
-                _emit_event(
-                    session_set_dir,
-                    "verification_completed",
-                    outcome.session_number,
-                    outcome,
-                    message_id=mo.message_id,
-                    queue_provider=mo.provider,
-                    queue_state=mo.state,
-                    failure_reason=mo.failure_reason,
-                )
-
-        # Manual-verify path: emit a single ``verification_completed``
-        # event carrying the operator attestation. EVENT_TYPES is a
-        # frozen Set 1 enum (per session 3 review), so the manual case
-        # rides on the same event type as queue-mediated completions
-        # — the ``method`` and ``attestation`` fields disambiguate.
-        # Without this, the events ledger would jump from
-        # ``closeout_requested`` straight to ``closeout_succeeded`` on
-        # ``--manual-verify``, leaving a hole where the verification
-        # decision should be.
+        # Manual-verify path: emit a ``verification_completed`` event
+        # carrying the operator attestation so the audit trail records
+        # the verification decision rather than jumping straight from
+        # ``closeout_requested`` to ``closeout_succeeded``.
         if method == "manual" and manual_attestation is not None:
             _emit_event(
                 session_set_dir,
@@ -1534,68 +1355,6 @@ def run(
                 attestation=manual_attestation,
                 verdict="manual_attestation",
             )
-
-        # If the wait timed out (deadline exceeded with non-terminal
-        # messages OR any message ended in timed_out), surface a
-        # verification_timeout result and stop. The session does not
-        # transition to closed; the reconciler / a re-run picks it up
-        # once the verifier finishes.
-        if wait_outcome == "timed_out":
-            outcome.result = "verification_timeout"
-            reasons = [
-                mo.failure_reason or mo.state
-                for mo in wait_outcomes
-                if mo.state == "timed_out" or not mo.terminal
-            ]
-            joined = "; ".join(reasons) if reasons else "wait deadline exceeded"
-            outcome.messages.append(
-                f"verification timed out after {args.timeout} minute(s): "
-                f"{joined}"
-            )
-            _emit_event(
-                session_set_dir,
-                "closeout_failed",
-                outcome.session_number,
-                outcome,
-                reason="verification_timeout",
-                wait_outcome=wait_outcome,
-            )
-            return outcome
-
-        # Verifier-side rejection (any message failed or went missing).
-        # This is a gate failure — the work did not pass independent
-        # review — so we surface it through the gate_failed exit code
-        # rather than verification_timeout. ``failed`` is a verifier
-        # decision; ``timed_out`` is an infrastructure outcome; they
-        # deserve distinct exit codes so consumers can react
-        # appropriately.
-        if wait_outcome == "failed":
-            outcome.result = "gate_failed"
-            reasons = [
-                mo.failure_reason or mo.state
-                for mo in wait_outcomes
-                if mo.state in ("failed", "missing")
-            ]
-            joined = "; ".join(r for r in reasons if r) or "verifier rejected"
-            outcome.messages.append(
-                f"verification failed: {joined}"
-            )
-            outcome.gate_results = [
-                GateResult(
-                    check="verification_passed",
-                    passed=False,
-                    remediation=joined,
-                )
-            ]
-            _emit_event(
-                session_set_dir,
-                "closeout_failed",
-                outcome.session_number,
-                outcome,
-                reason="verification_failed",
-                failed_checks=["verification_passed"],
-            )
-            return outcome
 
         # Gate checks. ``--force`` skips the gate run entirely; we still
         # record an empty gate_results list so the JSON shape is

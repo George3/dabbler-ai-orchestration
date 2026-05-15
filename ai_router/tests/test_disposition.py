@@ -76,13 +76,13 @@ def _valid_disposition_completed_api(**overrides) -> Disposition:
     return Disposition(**base)
 
 
-def _valid_disposition_completed_queue(**overrides) -> Disposition:
+def _valid_disposition_completed_manual(**overrides) -> Disposition:
     base = dict(
         status="completed",
-        summary="Outsource-last verification round handed back via queue.",
-        verification_method="queue",
-        files_changed=["ai_router/queue_db.py"],
-        verification_message_ids=["msg-1", "msg-2"],
+        summary="Manual cross-provider verification handed back via IDE paste path.",
+        verification_method="manual",
+        files_changed=["ai_router/session_state.py"],
+        verification_message_ids=[],
         next_orchestrator=_valid_next_orc(),
         blockers=[],
     )
@@ -123,7 +123,7 @@ class TestRoundTrip:
         assert as_dict["next_orchestrator"] is None
 
     def test_write_then_read_round_trip(self, session_set_dir):
-        d = _valid_disposition_completed_queue()
+        d = _valid_disposition_completed_manual()
         path = write_disposition(session_set_dir, d)
         assert os.path.basename(path) == DISPOSITION_FILENAME
         restored = read_disposition(session_set_dir)
@@ -260,8 +260,8 @@ class TestValidateDisposition:
         assert passed, errors
         assert errors == []
 
-    def test_valid_completed_queue(self):
-        passed, errors = validate_disposition(_valid_disposition_completed_queue())
+    def test_valid_completed_manual(self):
+        passed, errors = validate_disposition(_valid_disposition_completed_manual())
         assert passed, errors
         assert errors == []
 
@@ -319,13 +319,6 @@ class TestValidateDisposition:
         assert not passed
         assert any("verification_method must be one of" in e for e in errors)
 
-    def test_queue_method_requires_message_ids(self):
-        d = _valid_disposition_completed_queue(verification_message_ids=[])
-        passed, errors = validate_disposition(d)
-        assert not passed
-        assert any(
-            "verification_message_ids must be non-empty" in e for e in errors
-        )
 
     def test_api_method_must_have_empty_message_ids(self):
         d = _valid_disposition_completed_api(verification_message_ids=["leak-1"])
@@ -398,7 +391,7 @@ class TestValidateDisposition:
         assert any("blockers must be a list of strings" in e for e in errors)
 
     def test_rejects_non_string_message_ids(self):
-        d = disposition_to_dict(_valid_disposition_completed_queue())
+        d = disposition_to_dict(_valid_disposition_completed_manual())
         d["verification_message_ids"] = ["ok", 1]
         passed, errors = validate_disposition(d)
         assert not passed
@@ -440,8 +433,8 @@ class TestSchemaParity:
         payload = disposition_to_dict(_valid_disposition_completed_api())
         validator.validate(payload)
 
-    def test_valid_completed_queue_passes_schema(self, validator):
-        payload = disposition_to_dict(_valid_disposition_completed_queue())
+    def test_valid_completed_manual_passes_schema(self, validator):
+        payload = disposition_to_dict(_valid_disposition_completed_manual())
         validator.validate(payload)
 
     def test_valid_failed_passes_schema(self, validator):
@@ -458,11 +451,6 @@ class TestSchemaParity:
         with pytest.raises(jsonschema.ValidationError):
             validator.validate(payload)
 
-    def test_schema_rejects_queue_without_message_ids(self, validator):
-        payload = disposition_to_dict(_valid_disposition_completed_queue())
-        payload["verification_message_ids"] = []
-        with pytest.raises(jsonschema.ValidationError):
-            validator.validate(payload)
 
     def test_schema_rejects_api_with_message_ids(self, validator):
         payload = disposition_to_dict(_valid_disposition_completed_api())
@@ -518,7 +506,7 @@ class TestPublicSurface:
         }
 
     def test_verification_methods_match_spec(self):
-        assert set(VERIFICATION_METHODS) == {"api", "queue"}
+        assert set(VERIFICATION_METHODS) == {"api", "manual", "skipped"}
 
     def test_filename_constant(self):
         assert DISPOSITION_FILENAME == "disposition.json"

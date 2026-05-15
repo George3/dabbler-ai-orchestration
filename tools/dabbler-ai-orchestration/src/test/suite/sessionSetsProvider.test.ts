@@ -38,7 +38,6 @@ function fakeSet(over: Partial<SessionSet> = {}): SessionSet {
       requiresUAT: false,
       requiresE2E: false,
       uatScope: "none",
-      outsourceMode: "first",
     },
     uatSummary: null,
     root: "/x",

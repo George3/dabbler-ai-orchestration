@@ -208,7 +208,6 @@ def test_old_stranded_set_triggers_rerun_and_records_result(tmp_path: Path):
     [
         ("noop_already_closed", "rerun_succeeded"),
         ("gate_failed", "rerun_gate_failed"),
-        ("verification_timeout", "rerun_verification_timeout"),
         ("lock_contention", "rerun_lock_contention"),
         ("repair_drift", "rerun_other"),
     ],

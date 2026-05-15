@@ -1,0 +1,106 @@
+{
+  "sessionSetName": "026-router-config-editor-implementation",
+  "createdDate": "2026-05-15T09:30:00-04:00",
+  "totalSessions": 6,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/start-session-protocol",
+      "dateTime": "2026-05-15T09:30:00-04:00",
+      "description": "Started Session 1. session-state.json flipped currentSession null -> 1, status not-started -> in-progress, lifecycleState null -> work_in_progress. work_started event appended to session-events.jsonl. Budget for Set 026 declared at $10.00; verification path for this set will be manual-via-other-engine (Session 1 itself deletes the daemon path that supports outsource-last verification).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/delete-python-modules",
+      "dateTime": "2026-05-15T09:45:00-04:00",
+      "description": "Deleted 10 Python source modules covering the outsource-last / verifier-daemon path: ai_router/queue_status.py, ai_router/heartbeat_status.py, ai_router/queue_db.py, ai_router/queue_verification.py, ai_router/daemon_pid.py, ai_router/orchestrator_role.py, ai_router/restart_role.py, ai_router/role_status.py, ai_router/capacity.py, ai_router/verifier_role.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/delete-python-tests",
+      "dateTime": "2026-05-15T09:50:00-04:00",
+      "description": "Deleted 17 Python test files for the removed modules: test_capacity.py, test_capacity_signal_wiring.py, test_close_session_session4.py, test_close_session_verification_wait.py, test_cost_report_outsource_last.py, test_daemon_pid.py, test_failure_injection.py, test_heartbeat_status.py, test_mode_aware_route.py, test_orchestrator_role.py, test_queue_db.py, test_queue_followups.py, test_queue_status.py, test_restart_role.py, test_role_status.py, test_verifier_role.py, test_verifier_run_verification.py. Also deleted test_close_out.py (entirely mode-aware) and test_close_out_e2e.py (entirely mode-aware end-to-end). modeBadge.test.ts in the extension test suite also deleted.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/delete-workflow-doc",
+      "dateTime": "2026-05-15T09:52:00-04:00",
+      "description": "Deleted ai_router/docs/two-cli-workflow.md — operating guide for outsource-last mode is no longer applicable.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/strip-mode-aware-branches",
+      "dateTime": "2026-05-15T10:30:00-04:00",
+      "description": "Heavy Python source edits: ai_router/__init__.py (removed all queue_db/daemon_pid/verifier_role/orchestrator_role imports + exports, ModeConfig/OUTSOURCE_MODES/DEFAULT_OUTSOURCE_MODE/parse_mode_config/read_mode_config/validate_mode_config/ROLE_VALUES exports, _resolve_outsource_mode + _enqueue_route_message, route()'s outsource-last branch, verify()'s pending short-circuit, _FORCE_SYNC_TASK_TYPES, pending/message_id/queue_provider fields from RouteResult and VerificationResult); ai_router/close_session.py (removed queue_db/queue_verification imports, --timeout flag and validation, _wait_for_verifications call + per-message ledger events + timeout/failed branches, verification_timeout exit code, queue-citation repair case, queue_base_dir/poll_interval/sleep/monotonic params); ai_router/close_out.py (rewrote single-path implementation, removed mode-aware branching and close_session_runner injection); ai_router/session_state.py (removed ModeConfig, OUTSOURCE_MODES, ROLE_VALUES, DEFAULT_OUTSOURCE_MODE, parse_mode_config, read_mode_config, validate_mode_config; kept _extract_session_set_configuration_block for _read_total_sessions_from_spec); ai_router/disposition.py (VERIFICATION_METHODS changed from ('api','queue') to ('api','manual','skipped'); removed queue-specific validation rules); ai_router/cost_report.py (removed capacity import, _build_subscription_utilization, _print_outsource_last_report, outsource_mode/subscription_utilization keys, mode-aware branch); ai_router/reconciler.py (removed rerun_verification_timeout action and verification-timeout result mapping; removed timeout=1 namespace field); ai_router/router-config.yaml (narrative comments about outsource-last under session-close-out task type and task_type_params updated); ai_router/schemas/disposition.schema.json (verification_method enum updated from ['api','queue'] to ['api','manual','skipped']; queue conditional clause removed); ai_router/__init__.py __version__ bumped 0.2.5 -> 0.3.0.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/test-cleanup",
+      "dateTime": "2026-05-15T10:45:00-04:00",
+      "description": "Cleaned up tests that depended on removed surface: deleted TestParseModeConfig/TestReadModeConfig/TestValidateModeConfig/TestConstants(outsource bits) from test_session_state_v2.py via Python script; renamed _valid_disposition_completed_queue to _valid_disposition_completed_manual + removed test_queue_method_requires_message_ids + test_schema_rejects_queue_without_message_ids in test_disposition.py; updated test_verification_methods_match_spec to expect {'api','manual','skipped'}; removed --timeout argparse cases from test_close_session_skeleton.py + verification_timeout from RESULT_TO_EXIT_CODE table; removed verification_timeout/rerun_verification_timeout parameter from test_reconciler.py. Final pytest: 385 passed, 0 failed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/ts-extension-edits",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "TypeScript extension edits: tools/dabbler-ai-orchestration/src/types.ts (removed OutsourceMode type + outsourceMode field on SessionSetConfig); tools/dabbler-ai-orchestration/src/utils/fileSystem.ts (parseSessionSetConfig no longer reads outsourceMode); tools/dabbler-ai-orchestration/src/providers/SessionSetsProvider.ts (removed Mode tooltip line and rewrote modeBadge as a no-op stub); tools/dabbler-ai-orchestration/src/wizard/sessionGenPrompt.ts (removed outsourceMode line from the generated spec config block); stripped outsourceMode literals from cancelTreeView.test.ts, forceClosedBadge.test.ts, sessionSetsProvider.test.ts via Python script. npx tsc --outDir out compiles clean (exit 0).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/version-bumps",
+      "dateTime": "2026-05-15T11:05:00-04:00",
+      "description": "Bumped tools/dabbler-ai-orchestration/package.json + package-lock.json from 0.13.14 to 0.13.15. ai_router/__init__.py __version__ bumped to 0.3.0 (already noted under strip-mode-aware-branches).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-001/changelog",
+      "dateTime": "2026-05-15T11:10:00-04:00",
+      "description": "Created ai_router/CHANGELOG.md with [0.3.0] entry documenting the breaking changes (deleted modules, removed public symbols, removed route() parameters, simplified close_session/close_out/cost_report). Updated tools/dabbler-ai-orchestration/CHANGELOG.md with [0.13.15] entry citing v0.13.14's 'CLIs stay' promise and the reversal, justified by Marketplace download count of 3 (all operator's own). Both CHANGELOG entries note that Session 1 is PARTIAL: docs scrubs and 26 historical spec.md scrubs are deferred to a follow-up session. Added 'ai_router/local-overrides.yaml' to .gitignore preemptively for Session 2's file creation.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-001/compile-and-test",
+      "dateTime": "2026-05-15T11:15:00-04:00",
+      "description": "Final pytest + npx tsc gates run: pytest 385 passed (0 failed) across the surviving test suite; npx tsc --outDir out exits 0 (clean compile). No new build/test regressions introduced.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 11,
+      "stepKey": "session-001/partial-stop",
+      "dateTime": "2026-05-15T11:20:00-04:00",
+      "description": "PARTIAL STOP — Session 1 not closed. Deferred to a follow-up session (operator decision required): (a) doc scrubs in docs/ai-led-session-workflow.md, docs/adoption-bootstrap.md, docs/planning/session-set-authoring-guide.md, ai_router/docs/close-out.md, and docs/spec-md-schema.md (still mention outsourceMode / verifier daemon / subscription CLI as live concepts); (b) scrub literal 'outsourceMode: <value>' YAML config line from 26 historical docs/session-sets/*/spec.md files; (c) end-of-session cross-provider verification (manual via IDE-agent paste path per the $10 budget tier). Acceptance criterion 'git grep -i outsourcemode|queue_db|verifier daemon|subscription cli returns zero hits' is NOT satisfied yet — narrative references remain in docs and historical specs. The CODE surface, however, is clean of the removed symbols (Python imports, exports, types; TS types and parser). Session is left in-progress; close_session has NOT been invoked. Operator to decide whether to (1) commit this partial state and continue Session 1b in a fresh conversation; (2) push through the docs+scrubs in this same conversation if budget allows; (3) split Session 1 retroactively into 1a + 1b in the spec and treat this as Session 1a complete.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}

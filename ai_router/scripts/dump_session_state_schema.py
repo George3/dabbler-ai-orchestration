@@ -47,7 +47,7 @@ if __name__ == "__main__" and __package__ in (None, ""):
     # ``python ai_router/dump_session_state_schema.py``. The parent
     # directory ``ai_router/`` holds the sibling modules; adding it to
     # sys.path lets the module import them by filename, matching the
-    # pattern used by close_session.py / reconciler.py / restart_role.py.
+    # pattern used by close_session.py / reconciler.py.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 try:

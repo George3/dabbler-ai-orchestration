@@ -3,22 +3,21 @@
 A ``disposition.json`` file lives at the root of a session-set folder
 once a session has produced a verifiable outcome (post-verification,
 pre-closeout). It is the structured handoff between the verifier and
-the close-out machinery (Set 3) and between consecutive sessions: it
-records what happened, which files were touched, how the work was
-verified (direct API call or via the queue), what the next
-orchestrator should be, and any blockers that prevented a clean
-``completed`` outcome.
+the close-out machinery and between consecutive sessions: it records
+what happened, which files were touched, how the work was verified,
+what the next orchestrator should be, and any blockers that prevented
+a clean ``completed`` outcome.
 
-The schema is mode-aware: ``verification_method`` distinguishes the
-``outsourceMode: first`` path (synchronous API verification) from the
-``outsourceMode: last`` path (asynchronous queue-mediated
-verification). When the queue path is used, ``verification_message_ids``
-references the SQLite queue rows that drove the verification round so
-the audit trail is complete.
+Set 026 Session 1 removed the queue-mediated daemon path
+(``verification_method: "queue"``). The surviving methods are
+``"api"`` (synchronous per-call providers), ``"manual"`` (manual
+cross-provider review via the IDE-agent paste path), and ``"skipped"``
+(explicit zero-budget opt-out recorded in ``budget.yaml``).
+``verification_message_ids`` is preserved as a list field but is
+expected to be empty in every surviving path.
 
 This module is data + atomic I/O only. It does not enforce close-out
-gates, does not write to the queue, and does not mutate
-``session-state.json`` — those are deferred to Sets 2/3.
+gates and does not mutate ``session-state.json``.
 
 Atomic writes
 -------------
@@ -58,7 +57,7 @@ except ImportError:
 DISPOSITION_FILENAME = "disposition.json"
 
 DISPOSITION_STATUSES = ("completed", "failed", "requires_review")
-VERIFICATION_METHODS = ("api", "queue")
+VERIFICATION_METHODS = ("api", "manual", "skipped")
 
 SWITCH_DUE_TO_BLOCKER = "switch-due-to-blocker"
 
@@ -77,12 +76,13 @@ class Disposition:
     - ``summary``: short narrative describing what landed.
     - ``files_changed``: list of file paths created or modified during
       the session.
-    - ``verification_method``: ``api`` for the synchronous
-      ``outsourceMode: first`` path; ``queue`` for the asynchronous
-      ``outsourceMode: last`` path.
-    - ``verification_message_ids``: queue message IDs referenced when
-      ``verification_method == "queue"``. Required to be non-empty in
-      that case (validated by :func:`validate_disposition`).
+    - ``verification_method``: one of :data:`VERIFICATION_METHODS`.
+      ``api`` is the synchronous per-call provider path; ``manual`` is
+      cross-provider review via the IDE-agent paste path; ``skipped``
+      is the explicit zero-budget opt-out recorded in ``budget.yaml``.
+    - ``verification_message_ids``: kept as a list field for schema
+      stability; expected to be empty for every surviving method
+      (validated by :func:`validate_disposition`).
     - ``next_orchestrator``: which orchestrator should run the next
       session. Required when ``status == "completed"`` and the closing
       session is not the final one in the set. Validated via
@@ -276,10 +276,9 @@ def validate_disposition(
     3. ``files_changed`` must be a list of strings.
     4. ``verification_method`` must be one of :data:`VERIFICATION_METHODS`.
     5. ``verification_message_ids`` must be a list of strings, and
-       must be **non-empty** when ``verification_method == "queue"``.
-       When ``verification_method == "api"``, the list must be empty
-       (a queue-message reference makes no sense for the synchronous
-       path and would mislead auditors).
+       must be **empty** for every surviving ``verification_method``.
+       The list field is kept for schema stability; populating it has
+       no consumer since Set 026 Session 1 removed the queue path.
     6. ``next_orchestrator``, when present, must satisfy
        :func:`validate_next_orchestrator`. It is **required** when
        ``status == "completed"`` and ``is_final_session`` is False.

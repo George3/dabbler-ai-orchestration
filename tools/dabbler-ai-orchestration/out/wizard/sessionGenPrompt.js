@@ -60,7 +60,6 @@ For each session set, produce a spec.md file with this exact structure:
 totalSessions: <estimate 1–6>
 requiresUAT: <true|false>
 requiresE2E: <true|false>
-outsourceMode: first          # first (default, synchronous) | last (queue-mediated daemon)
 # Optional — set only when requiresUAT: true:
 # uatStyle: <ad-hoc|dsl>     # ad-hoc (default, non-web) | dsl (web/Playwright via dabbler-uat-dsl)
 # uatScope: <per-session|per-set>

@@ -5,6 +5,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.15] — 2026-05-15
+
+### Removed
+- **`outsourceMode` config field and the entire queue-mediated verifier
+  daemon path (Set 026 Session 1).** The `OutsourceMode` TypeScript
+  type, the `outsourceMode` field on `SessionSetConfig`, the `Mode:
+  outsource-<x>` tooltip line, and the `modeBadge` text are gone.
+  Specs that previously declared `outsourceMode: first` or `last` will
+  have the field ignored on read; no behavior change for first-mode
+  consumers since first was the default.
+- **Reversal of v0.13.14's "the CLIs stay" promise.** v0.13.14's
+  CHANGELOG noted the Provider Queues / Heartbeats *views* were
+  removed but said the underlying Python CLIs would stay. v0.13.15
+  removes those CLIs (`python -m ai_router.queue_status`,
+  `python -m ai_router.heartbeat_status`,
+  `python -m ai_router.queue_db`, `python -m ai_router.daemon_pid`,
+  `python -m ai_router.orchestrator_role`,
+  `python -m ai_router.verifier_role`,
+  `python -m ai_router.restart_role`,
+  `python -m ai_router.role_status`,
+  `python -m ai_router.capacity`) along with the underlying modules.
+  Justification: Marketplace download count remains at 3 (all
+  operator's own); the cost of carrying unused infrastructure
+  exceeded the cost of a fast reversal. Restoration is git-revert-able
+  from Set 026 Session 1.
+
+### Changed
+- **Extension shipped against `ai_router` 0.3.0** (was 0.2.5). The
+  router package's breaking change is the public removal of
+  `ModeConfig`, `OUTSOURCE_MODES`, `ROLE_VALUES`,
+  `DEFAULT_OUTSOURCE_MODE`, `parse_mode_config`, `read_mode_config`,
+  `validate_mode_config`, `QueueDB`, `VerifierDaemon`,
+  `OrchestratorDaemon`, and the `mode=` / `queue_base_dir=` parameters
+  on `route()`.
+
+### Notes
+- **Partial release — Session 1 of Set 026 only.** The extension
+  bumps to v0.13.15 to reflect the breaking change in the TypeScript
+  surface, but docs scrubs (workflow doc, adoption-bootstrap,
+  authoring-guide, close-out.md, spec-md-schema) and the 26 historical
+  `spec.md` `outsourceMode:` config-line scrubs are deferred to a
+  follow-up session. The acceptance criterion "zero hits for
+  outsourceMode / queue_db / verifier daemon / subscription cli via
+  `git grep`" is NOT yet satisfied — narrative references remain in
+  docs and historical specs. Sessions 2–6 of Set 026 (YAML schema,
+  resolver, config-editor webview, sections, significance flagging,
+  release) are the rest of the work.
+
 ## [0.13.14] — 2026-05-15
 
 ### Removed

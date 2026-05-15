@@ -2,9 +2,8 @@
 
 The close-out gate (``close_session.py``) is the sole synchronization
 barrier between session work and session-state ``closed``. When the
-gate trips on a transient signal — a verifier still in flight at the
-``--timeout`` boundary, an `outsource-last` queue that has not yet
-drained, a lock contention from a peer process — the session lands in
+gate trips on a transient signal — a lock contention from a peer
+process, a momentarily unreachable git remote — the session lands in
 ``closeout_pending`` or ``closeout_blocked`` rather than ``closed``.
 Without an external nudge those sessions stay there indefinitely,
 because no part of the orchestrator's normal flow re-invokes
@@ -129,9 +128,6 @@ class ReconcileEntry:
     - ``"rerun_gate_failed"`` — close_session ran and returned a
       ``gate_failed`` result. The session stays in
       ``closeout_blocked``; the next sweep will retry.
-    - ``"rerun_verification_timeout"`` — close_session ran and timed
-      out waiting on queued verifications. The session stays
-      ``closeout_blocked``; next sweep retries.
     - ``"rerun_lock_contention"`` — close_session lost the lock to a
       peer (probably an in-flight orchestrator Step 8). Next sweep
       retries.
@@ -290,8 +286,6 @@ def _evaluate_one(
         entry.action = "rerun_succeeded"
     elif result_str == "gate_failed":
         entry.action = "rerun_gate_failed"
-    elif result_str == "verification_timeout":
-        entry.action = "rerun_verification_timeout"
     elif result_str == "lock_contention":
         entry.action = "rerun_lock_contention"
     elif result_str is None:
@@ -325,11 +319,6 @@ def _default_runner(session_set_dir: str):
         manual_verify=False,
         repair=False,
         apply=False,
-        # The reconciler's job is to nudge — it should not block on a
-        # long verification wait. Use a short timeout (1 minute) so
-        # the sweep stays responsive; a real outage will surface as
-        # ``rerun_verification_timeout`` and the next sweep retries.
-        timeout=1,
     )
     return close_session.run(args)
 

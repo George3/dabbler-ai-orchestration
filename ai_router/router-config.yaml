@@ -236,23 +236,19 @@ routing:
     # Tier-3 model (opus for Codex/Gemini, gpt-5-4 stays correct for
     # Claude). See docs/planning/lessons-learned.md.
     session-verification: gpt-5-4
-    # Mode-aware fresh close-out turn (Set 006 Session 2). The
-    # orchestrator routes a new turn with task_type=session-close-out
-    # after disposition.json reports status=completed AND verification
-    # has terminated. The work is mechanical: read close-out.md, run
-    # `python -m ai_router.close_session`, summarize the outcome.
-    # Sonnet at low effort is the cheapest model that reliably reads a
-    # doc and runs a script — Tier-1 (Flash) lacks tool-use discipline
-    # for the close-out gate's structured output, and Tier-3 is
-    # massive overkill for what is essentially a CLI invocation. Per
-    # the spec: "outsource-first routes to sonnet/haiku tier at low
-    # effort". Outsource-last skips this entirely; the orchestrator
-    # self-invokes close_session in its own primary CLI session
-    # without going through route() at all (see ai_router.close_out
-    # module). Auto-verification is intentionally NOT enabled for
-    # this task type — close-out either succeeds (the gate passed) or
-    # the gate's own structured failure is the verdict; a separate
-    # verifier round adds cost without improving reliability.
+    # Fresh close-out turn. The orchestrator routes a new turn with
+    # task_type=session-close-out after disposition.json reports
+    # status=completed AND verification has terminated. The work is
+    # mechanical: read close-out.md, run `python -m
+    # ai_router.close_session`, summarize the outcome. Sonnet at low
+    # effort is the cheapest model that reliably reads a doc and runs
+    # a script — Tier-1 (Flash) lacks tool-use discipline for the
+    # close-out gate's structured output, and Tier-3 is overkill for
+    # what is essentially a CLI invocation. Auto-verification is
+    # intentionally NOT enabled for this task type — close-out either
+    # succeeds (the gate passed) or the gate's own structured failure
+    # is the verdict; a separate verifier round adds cost without
+    # improving reliability.
     session-close-out: sonnet
 
 # --- Delegation ---
@@ -297,10 +293,8 @@ task_type_params:
     sonnet:     { effort: low, thinking: { enabled: false } }
     gemini-pro: { thinking_budget: -1 }
     gpt-5-4-mini: { reasoning_effort: low }
-  # Mode-aware close-out turn (Set 006 Session 2). The work is reading
-  # a doc and running a CLI; thinking is unhelpful and just burns
-  # tokens. Outsource-last skips route() entirely so only outsource-
-  # first models need overrides here.
+  # Close-out turn. The work is reading a doc and running a CLI;
+  # thinking is unhelpful and just burns tokens.
   session-close-out:
     sonnet:     { effort: low, thinking: { enabled: false } }
     gemini-pro: { thinking_budget: 0 }

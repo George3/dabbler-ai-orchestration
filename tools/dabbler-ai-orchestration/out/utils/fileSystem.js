@@ -216,7 +216,6 @@ function parseSessionSetConfig(specPath) {
         requiresUAT: false,
         requiresE2E: false,
         uatScope: "none",
-        outsourceMode: null,
     };
     if (!fs.existsSync(specPath))
         return config;
@@ -228,13 +227,6 @@ function parseSessionSetConfig(specPath) {
         return config;
     }
     const headingMatch = text.match(/##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i);
-    // When the canonical `## Session Set Configuration` heading is absent,
-    // fall back to scanning the entire spec rather than just the first 4000
-    // chars. The line-anchored regexes below (e.g.,
-    // `^\s*requiresUAT:\s*(true|false)\s*$`) are specific enough that false
-    // positives in prose are very unlikely; a 4000-byte cap was needlessly
-    // narrow and missed real declarations in specs that put the config
-    // yaml block under a non-canonical heading like `## UAT scope`.
     const block = headingMatch ? headingMatch[1] : text;
     const flagRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(true|false)\\s*$`, "im");
     const stringRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*([\\w-]+)\\s*$`, "im");
@@ -247,12 +239,6 @@ function parseSessionSetConfig(specPath) {
     const scope = block.match(stringRe("uatScope"));
     if (scope)
         config.uatScope = scope[1];
-    const mode = block.match(stringRe("outsourceMode"));
-    if (mode) {
-        const v = mode[1].toLowerCase();
-        if (v === "first" || v === "last")
-            config.outsourceMode = v;
-    }
     return config;
 }
 function parseUatChecklist(checklistPath) {

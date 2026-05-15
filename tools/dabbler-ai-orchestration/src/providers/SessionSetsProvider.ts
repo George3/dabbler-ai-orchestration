@@ -91,15 +91,9 @@ export function forceClosedBadge(set: SessionSet): string {
   return set.liveSession?.forceClosed === true ? "[FORCED]" : "";
 }
 
-// Outsource-first vs. outsource-last is a routing choice that lives in
-// each spec.md's `Session Set Configuration` block. v0.13.1 removed the
-// always-visible badge text — when 99% of sets use the default
-// `outsourceMode: first`, the badge becomes visual noise that doesn't
-// differentiate anything. The mode still surfaces in the row tooltip
-// (`configTooltipLines` adds `Mode: outsource-<x>` on hover) for
-// diagnostic purposes, and the AI router still consumes the field —
-// only the badge text was removed. Function kept (returning empty) so
-// existing imports / tests don't need to change shape.
+// modeBadge kept as a no-op stub for existing imports / tests. Set 026
+// Session 1 removed the outsource-last path; there is no longer any
+// mode distinction to badge.
 export function modeBadge(_set: SessionSet): string {
   return "";
 }
@@ -138,9 +132,6 @@ function configTooltipLines(set: SessionSet): string[] {
   if (set.config.requiresE2E) flags.push("E2E");
   const lines: string[] = [];
   lines.push(`Gates: ${flags.length ? flags.join(" + ") : "none"}`);
-  if (set.config.outsourceMode) {
-    lines.push(`Mode: outsource-${set.config.outsourceMode}`);
-  }
   if (set.config.requiresUAT && set.uatSummary) {
     const u = set.uatSummary;
     if (u.totalItems > 0) {
