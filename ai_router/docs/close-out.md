@@ -499,13 +499,42 @@ The drift shapes the walk detects:
    session so the events ledger becomes internally consistent and
    the tree view stops downgrading. **Set 022 extension:** the
    apply path also backfills `completedSessions[]` in
-   `session-state.json` using
-   `compute_effective_completed_sessions` (which now sees the
-   synthesized closeout events). A drifted set with events for
-   sessions 1–4 but a snapshot that claims session 5 done gets
-   `completedSessions: [1, 2, 3, 4]` plus synthetic session-5
-   events (or whatever the helper resolves to), bringing both
-   files into agreement on the same boundary write.
+   `session-state.json` using the events ledger directly (post-
+   synthesis). **Set 023 refinement (`ai_router 0.2.4`):** the
+   backfill is now the **union** of (a) the snapshot's existing
+   `completedSessions[]` (sanitized — non-positive-int entries,
+   booleans, and duplicates are dropped from the union math) and
+   (b) the distinct `closeout_succeeded` session numbers in the
+   now-repaired ledger. The union is **monotone-up only** —
+   repair appends session numbers to bring the snapshot up to
+   ledger reality but never removes a session number the operator
+   hand-authored. Four apply outcomes are distinguished in the
+   `messages` line:
+     - *Backfilled* (snapshot's array was empty, absent, or
+       null): the repair writes the events-ledger reconstruction
+       in full — `repair applied: backfilled completedSessions=[...]`.
+     - *Merged* (snapshot's array is a clean sorted-int list that
+       differs from the union view): the repair writes the union
+       and reports both sources — `repair applied: merged
+       completedSessions=[...] (union of snapshot [...] and
+       events [...])`.
+     - *Normalized* (snapshot's array exists but has malformed,
+       duplicate, or unsorted entries): the repair cleans the
+       array while applying the union — `repair applied:
+       normalized completedSessions=[...] (raw snapshot [...]
+       cleaned + unioned with events [...])`. This branch ensures
+       a typo like `[1, -1, 2]` does not survive a repair pass.
+     - *Preserved* (snapshot's raw on-disk array already equals
+       the canonical merged form): no snapshot rewrite happens;
+       the message line reports `repair preserved
+       completedSessions=[...] (snapshot already a superset of the
+       events-ledger reconstruction)` so the operator sees the
+       no-op explicitly.
+   This eliminates the pre-Set-023 regression where a hand-migrated
+   snapshot with `completedSessions: [1, 2, 3, 4]` would be
+   overwritten back to a partial subset whenever the events ledger
+   only recorded a later session's closeout (Set 004 on this repo
+   hit this on 2026-05-15).
 
 2. **Closeout-succeeded-but-state-not-closed.** The reverse drift:
    events ledger says the session closed but `session-state.json`

@@ -1,0 +1,94 @@
+{
+  "sessionSetName": "023-trust-completed-sessions-array",
+  "createdDate": "2026-05-15T06:30:19-04:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/start-session-protocol",
+      "dateTime": "2026-05-15T06:30:19-04:00",
+      "description": "Started Session 1 via `python -m ai_router.start_session --session-set-dir docs/session-sets/023-trust-completed-sessions-array --engine claude-code --provider anthropic --model claude-opus-4-7 --effort low` per the state-first protocol Set 022 shipped. State file flipped currentSession null -> 1, status not-started -> in-progress, lifecycleState null -> work_in_progress; work_started event appended to session-events.jsonl.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/preserve-snapshot-array",
+      "dateTime": "2026-05-15T07:00:00-04:00",
+      "description": "ai_router/close_session.py: replaced the events-ledger overwrite in _run_repair Case 1's completedSessions[] backfill with a monotone-up union of (a) the snapshot's existing array (sanitized — drops non-int, booleans, negatives) and (b) the now-repaired events ledger's closeout_succeeded session numbers. Repair never drops a session number the operator hand-authored. Removed the stale 'unified-master-details-composite incident' comment block whose rationale was a bug (the cited shape would have produced the *correct* answer under union, not the wrong answer the comment claimed). The new comment block explains the union framing and points at Set 023's motivation (Set 004 migration regression on 2026-05-15).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/messages-distinguish-outcomes",
+      "dateTime": "2026-05-15T07:00:00-04:00",
+      "description": "Distinguished four apply outcomes in the repair's `messages` line so the operator can tell at a glance what happened to the snapshot's completedSessions[]: 'backfilled' (no array before), 'merged' (clean array unioned with events), 'normalized' (malformed/unsorted array cleaned + unioned), 'preserved' (no rewrite — array already correct). Round-1 verifier review added the 'normalized' branch (was originally 3 outcomes; verifier caught that malformed inputs needed their own message and rewrite path).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/tests",
+      "dateTime": "2026-05-15T07:00:00-04:00",
+      "description": "Added 3 regression tests to ai_router/tests/test_close_session_session4.py: test_repair_preserves_snapshot_completed_sessions_superset (snapshot [1,2,3,4] + ledger {3} -> preserved branch, message reports 'preserved completedSessions=[1, 2, 3, 4]'); test_repair_merges_snapshot_completed_sessions_with_events (snapshot [2] + ledger {1} -> [1, 2] via union, message reports 'merged completedSessions=[1, 2] (union of snapshot [2] and events [1, 2])', plus idempotent second-apply assertion); test_repair_normalizes_malformed_snapshot_completed_sessions (round-1 verifier-finding fix: snapshot [1, -1, 2] + ledger {1} -> [1, 2] with 'normalized' message). 702 tests pass (701 after first two adds, 702 after round-1 fix). Existing test_repair_detects_mixed_mode_drift continues passing — its [1, 2] assertion is preserved under the new union code via the 'backfilled' branch.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/spec-add-design-audit-session",
+      "dateTime": "2026-05-15T07:30:00-04:00",
+      "description": "Updated docs/session-sets/023-trust-completed-sessions-array/spec.md at the operator's request: added a new Session 2 'Cross-provider design-alignment audit' between the current Session 1 (writer fix) and Session 2 -> 3 (reader fix). The new audit session routes a single design-review prompt to both GPT 5.4 and Gemini Pro with five specific questions (hand-migration safety, union monotonicity, reader ordering, sharp-edge coverage, open). Same design-round pattern that informed Set 022's spec. totalSessions bumped 2 -> 3 in the spec config block and session-state.json. The reader-fix session's progress keys renumbered session-002/* -> session-003/*.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/version-bump",
+      "dateTime": "2026-05-15T07:30:00-04:00",
+      "description": "Bumped ai_router to 0.2.4 in pyproject.toml and ai_router/__init__.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/close-out-doc-update",
+      "dateTime": "2026-05-15T07:30:00-04:00",
+      "description": "Updated ai_router/docs/close-out.md Section 5 drift-case-1 to enumerate the four apply outcomes (backfilled / merged / normalized / preserved) and note that the union math operates on a sanitized view of the snapshot. Round-1 verifier finding about 'Two apply outcomes' / three-listed discrepancy is resolved here.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/verification",
+      "dateTime": "2026-05-15T08:00:00-04:00",
+      "description": "Cross-provider verification (gpt-5-4) across two rounds. Round 1 ($0.140): ISSUES_FOUND — 1 Major (preserved branch operated on sanitized comparison and could leave malformed snapshot in place; e.g., snapshot [1, -1] with ledger {1} would take 'preserved' and not rewrite); 1 Minor (close-out.md said 'Two apply outcomes' while listing three). Both fixed: split existing_raw_list from existing_clean to drive the rewrite-needed check; added 'normalized' message branch + regression test; updated close-out.md to enumerate four outcomes. Round 2 ($0.118): VERIFIED, issues: []. Total Session 1 verification spend: $0.258.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 7981,
+          "outputTokens": 5929,
+          "costUsd": 0.140135
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 8316,
+          "outputTokens": 5066,
+          "costUsd": 0.117993
+        }
+      ]
+    }
+  ]
+}

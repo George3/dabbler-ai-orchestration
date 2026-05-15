@@ -19,7 +19,7 @@
 ## Session Set Configuration
 
 ```yaml
-totalSessions: 2
+totalSessions: 3
 requiresUAT: false
 requiresE2E: false
 uatStyle: ad-hoc
@@ -28,9 +28,15 @@ effort: low
 outsourceMode: first
 ```
 
-> Rationale: two narrowly-scoped fixes (one Python, one TypeScript) with
-> well-defined unit-test surfaces. No UI flow changes; no UAT. Each
-> session ships one release artifact.
+> Rationale: two narrowly-scoped fixes (one Python, one TypeScript) plus
+> a cross-provider design-alignment audit between them. The audit was
+> added 2026-05-15 (during Session 1) at the operator's request to make
+> sure GPT 5.4 and Gemini Pro both concur with the Set 022 migration
+> decisions and the Set 023 fix design before the reader-side change
+> ships — the same design-round pattern that informed Set 022's
+> original spec. No UI flow changes; no UAT. Sessions 1 and 3 each
+> ship one release artifact; Session 2 ships only a written audit
+> outcome.
 
 ---
 
@@ -261,7 +267,111 @@ the `pypi` deployment in the GitHub Actions UI per
 
 ---
 
-### Session 2 of 2: Extension reader fix
+### Session 2 of 3: Cross-provider design-alignment audit
+**Goal:** Before the reader-side fix ships, confirm that both **GPT
+5.4** and **Gemini Pro** concur with two design decisions whose
+costs landed during the Set 022 close-out and Set 023 Session 1:
+
+1. **The Set 022 hand-migration approach** for pre-Set-022 sets that
+   need their snapshot brought into compliance with the new
+   `completedSessions[]` invariant — specifically the path applied to
+   Sets 004 and 006 on this repo (hand-add `completedSessions: [1..N]`
+   plus a `--repair --apply` to synthesize the missing final-session
+   ledger event).
+2. **The Set 023 fixes:** writer-side union-not-overwrite (shipped in
+   Session 1 as `ai_router 0.2.4`) and reader-side
+   `isMidSetComplete` consulting `completedSessions[]` before falling
+   through to the events ledger (planned for Session 3).
+
+This is the same design-round pattern that informed Set 022's
+original spec (Codex + Gemini Pro on 2026-05-15, both engines given
+the same prompt). Where the two engines disagree, the spec records
+both positions; where one raises an objection we hadn't considered,
+Session 3's plan is updated before implementation lands.
+
+**Steps:**
+1. Author a structured design-review prompt covering:
+   - The Set 022 invariant (the three-line state interpretation
+     rule + `completedSessions[]` "always written/maintained" stance)
+     in summary form.
+   - The Set 022 migration cost surfaced on Sets 004 + 006 (what the
+     drift looked like, what the operator did to clear it, where
+     the sharp edges were).
+   - The Set 023 Session 1 change (writer union-not-overwrite — the
+     actual `_run_repair` diff + the test fixtures justifying it).
+   - The Set 023 Session 3 plan (reader-side `isMidSetComplete`
+     change — pseudo-code + the array-check-before-ledger-check
+     ordering rationale).
+   - Five specific questions for the reviewer to answer in JSON:
+     (a) does the hand-migration approach generalize to other
+     pre-Set-022 sets safely, or are there shapes it would silently
+     mis-handle?
+     (b) is the writer union monotone-up only (no scenario where
+     it incorrectly *adds* a session that should not be marked
+     closed)?
+     (c) is the reader's array-check-before-ledger-check ordering
+     correct, or should the two signals require mutual agreement?
+     (d) does the combined design close the two sharp edges Set
+     022 surfaced, or is there a third sharp edge we missed?
+     (e) any other concerns (open-ended).
+2. Route the prompt to GPT 5.4 with `task_type="analysis"`. Save
+   the raw response under `session-reviews/session-003-audit/gpt-5-4.json`
+   (note: filenames use session-003 even though this is the
+   audit-session-numbered-2; matches the original Set 023 Session 3
+   reader fix's review folder naming since the audit reviews work
+   originally specced as Sessions 1-2). [_Edit during Session 2:
+   rename folder to `session-002-audit` if cleaner._]
+3. Route the same prompt to Gemini Pro with `task_type="analysis"`.
+   Save under the same folder as `gemini-pro.json`.
+4. Compare the two verdicts. Author
+   `session-reviews/session-002-audit/audit-summary.md` documenting:
+   - Each question's verdict from each provider.
+   - Areas of agreement (the strong-signal subset).
+   - Areas of disagreement, with the spec author's resolution
+     (whichever framing is more conservative / matches the v0.13.11
+     guard's contract / better fits the schema doc tone wins; same
+     tie-breaker policy as the Set 022 design round).
+   - Concrete updates the audit drives into the Session 3 plan
+     (text edits, ordering changes, test-fixture additions).
+5. If either provider raises a Critical-severity objection that
+   would invalidate the writer fix already shipped in Session 1,
+   stop and flag to the human before authoring Session 3's
+   implementation. The fix may need a follow-on `ai_router 0.2.5`
+   patch.
+6. If both providers concur with the design, update this spec's
+   Session 3 plan with any non-Critical refinements the audit
+   surfaced (the spec is a living document up until close-out).
+
+**Creates:**
+- `docs/session-sets/023-trust-completed-sessions-array/session-reviews/session-002-audit/` directory
+- The two routed-result JSON files (one per provider)
+- `audit-summary.md` (the spec author's read of the combined
+  verdict)
+
+**Touches:** This `spec.md` if Session 3's plan needs refinement
+based on audit findings.
+
+**Ends with:** A written audit on disk recording both providers'
+positions on the five design questions. Session 3's plan refined
+(or left as-is) based on the verdict. Session 1's already-shipped
+0.2.4 either confirmed sound or queued for a follow-on patch.
+
+**Progress keys:** `session-002/design-prompt-author`,
+`session-002/gpt-5-4-route`, `session-002/gemini-pro-route`,
+`session-002/audit-summary`, `session-002/spec-refinement`,
+`session-002/verification`
+
+**Release:** none. This is a doc-only session; no code or
+distribution artifact ships. Verification at end of session uses
+the standard `task_type="session-verification"` route against a
+third-provider configuration to confirm the audit-summary
+accurately captures both providers' positions (the two providers
+routed in steps 2-3 are the *subject* of the audit, not its
+verifier).
+
+---
+
+### Session 3 of 3: Extension reader fix
 **Goal:** Teach `isMidSetComplete` to treat
 `currentSession in completedSessions[]` as authoritative. Update the
 schema doc to reflect that the array is now consulted by the guard.
@@ -329,10 +439,10 @@ Release as extension `v0.13.13`.
 needing to also synthesize ledger closeout events for the final
 session.
 
-**Progress keys:** `session-002/guard-consults-array`,
-`session-002/tests`, `session-002/schema-doc`,
-`session-002/version-bump`, `session-002/smoke-test`,
-`session-002/verification`
+**Progress keys:** `session-003/guard-consults-array`,
+`session-003/tests`, `session-003/schema-doc`,
+`session-003/version-bump`, `session-003/smoke-test`,
+`session-003/verification`
 
 **Release:** VS Code Marketplace `DarndestDabbler.dabbler-ai-orchestration`
 v0.13.13 via the existing tag-driven workflow
@@ -361,12 +471,13 @@ v0.13.13 via the existing tag-driven workflow
   snapshot's mtime touched on a second repair. The test fixture
   enumerated above asserts this.
 
-- **No release-order coupling.** Sessions 1 and 2 are independent.
-  Sessions 1 ships ai_router 0.2.4 and Session 2 ships extension
+- **No release-order coupling.** Sessions 1 and 3 are independent.
+  Sessions 1 ships ai_router 0.2.4 and Session 3 ships extension
   v0.13.13; consumers can adopt either independently. A consumer on
   the new extension + old ai_router still benefits from the reader
   fix; a consumer on the new ai_router + old extension benefits from
   the writer fix. There is no compatibility flag to coordinate.
+  Session 2 (design audit) is doc-only and ships no artifact.
 
 ---
 
@@ -378,7 +489,10 @@ v0.13.13 via the existing tag-driven workflow
   each session catches edge cases.
 - **Session 1** (ai_router Python): Claude or GPT-5.4 — both have
   the context for the repair code path.
-- **Session 2** (extension TypeScript): Claude or GPT-5.4 — the
+- **Session 2** (design audit): Claude orchestrates the routing to
+  GPT-5.4 + Gemini Pro; the audit itself has no orchestrator-author
+  role.
+- **Session 3** (extension TypeScript): Claude or GPT-5.4 — the
   `fileSystem.ts` change is a five-line addition.
 
 ---

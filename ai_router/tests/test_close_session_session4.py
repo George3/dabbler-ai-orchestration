@@ -612,6 +612,197 @@ def test_repair_detects_mixed_mode_drift(closeable_set: Path):
     assert any("no drift detected" in m for m in outcome3.messages)
 
 
+def test_repair_preserves_snapshot_completed_sessions_superset(
+    closeable_set: Path,
+):
+    """Set 023: ``--repair --apply`` Case 1 must preserve a snapshot's
+    hand-authored ``completedSessions[]`` when it is a superset of what
+    the events ledger can reconstruct.
+
+    Reproduces the Set 022 migration shape on Set 004 (2026-05-15): a
+    pre-Set-022 set's snapshot was hand-migrated to declare
+    ``status: complete`` with ``completedSessions: [1, 2, 3, 4]`` even
+    though the events ledger only ever recorded one closeout (session
+    3, forced). Under the pre-Set-023 overwrite-from-events behavior,
+    ``--repair --apply`` regressed the array to ``[3, 4]`` (events
+    [3] + synthetic [4]), losing the operator's intent for sessions
+    1 and 2. Under Set 023 the repair takes the union and preserves
+    the snapshot's claim.
+    """
+    # Events ledger: only a single forced session-3 closeout (the
+    # legacy shape).
+    append_event(
+        str(closeable_set),
+        "closeout_succeeded",
+        3,
+        forced=True,
+        method="snapshot_flip",
+        verdict="VERIFIED",
+    )
+
+    # Snapshot: operator hand-migrated to declare the full 4-of-4
+    # completion with completedSessions[] but events ledger never
+    # caught up.
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["currentSession"] = 4
+    state["totalSessions"] = 4
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-04-30T15:03:35-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state["completedSessions"] = [1, 2, 3, 4]
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    # --apply: synthetic closeout trio lands against session 4; the
+    # snapshot's completedSessions=[1, 2, 3, 4] is preserved verbatim
+    # (the union of [1, 2, 3, 4] and ledger view {3, 4} is still
+    # [1, 2, 3, 4]).
+    args = _ns(session_set_dir=str(closeable_set), repair=True, apply=True)
+    outcome = close_session.run(args)
+    assert outcome.result == "succeeded"
+
+    state_after = read_session_state(str(closeable_set)) or {}
+    assert state_after.get("completedSessions") == [1, 2, 3, 4], (
+        f"expected completedSessions=[1, 2, 3, 4] preserved across "
+        f"--apply; got {state_after.get('completedSessions')!r}"
+    )
+
+    # Message distinguishes the "preserved" outcome so the operator
+    # can tell at a glance.
+    assert any(
+        "preserved completedSessions=[1, 2, 3, 4]" in m
+        for m in outcome.messages
+    ), outcome.messages
+
+    # Events ledger now has both the original forced session-3
+    # closeout and the synthetic session-4 closeout.
+    events_after = read_events(str(closeable_set))
+    session4_closeouts = [
+        e for e in events_after
+        if e.event_type == "closeout_succeeded" and e.session_number == 4
+    ]
+    assert len(session4_closeouts) == 1
+    assert session4_closeouts[0].fields.get("repaired") is True
+
+
+def test_repair_merges_snapshot_completed_sessions_with_events(
+    closeable_set: Path,
+):
+    """Set 023: ``--repair --apply`` Case 1 takes the union when the
+    snapshot's ``completedSessions[]`` and the events-ledger
+    reconstruction disagree on different sessions. The union is
+    monotone-up: every session number from either source survives.
+    """
+    # Events ledger: closeout for an earlier session that the
+    # snapshot's hand-authored array does not mention.
+    append_event(
+        str(closeable_set),
+        "closeout_requested",
+        1,
+    )
+    append_event(
+        str(closeable_set),
+        "closeout_succeeded",
+        1,
+        verdict="VERIFIED",
+    )
+
+    # Snapshot: declares session 2 complete with a partial
+    # completedSessions array (only session 2, not session 1) — the
+    # operator hand-edited mid-migration.
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["currentSession"] = 2
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-05-12T15:20:00.000000-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state["completedSessions"] = [2]  # partial; missing session 1
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    # --apply: synthetic session-2 closeout lands; completedSessions[]
+    # becomes the union of snapshot [2], events {1}, and the
+    # synthetic {2} → [1, 2].
+    args = _ns(session_set_dir=str(closeable_set), repair=True, apply=True)
+    outcome = close_session.run(args)
+    assert outcome.result == "succeeded"
+
+    state_after = read_session_state(str(closeable_set)) or {}
+    assert state_after.get("completedSessions") == [1, 2], (
+        f"expected completedSessions=[1, 2] (union of snapshot [2] and "
+        f"events {{1}} ∪ synthetic {{2}}); got "
+        f"{state_after.get('completedSessions')!r}"
+    )
+
+    # Message line explicitly reports the union framing so the
+    # operator sees both sources.
+    assert any(
+        "merged completedSessions=[1, 2]" in m
+        and "union of snapshot [2]" in m
+        and "events [1, 2]" in m
+        for m in outcome.messages
+    ), outcome.messages
+
+    # Idempotent: a second --apply run produces no further snapshot
+    # rewrite (the array is already correct under the new union).
+    outcome2 = close_session.run(args)
+    assert outcome2.result == "succeeded"
+    assert any("no drift detected" in m for m in outcome2.messages), (
+        outcome2.messages
+    )
+
+
+def test_repair_normalizes_malformed_snapshot_completed_sessions(
+    closeable_set: Path,
+):
+    """Set 023 round-1 verifier finding: when the snapshot's
+    ``completedSessions`` contains malformed entries (booleans,
+    negatives, non-ints), ``--repair --apply`` Case 1 must rewrite
+    the snapshot with the canonical merged form rather than taking
+    the no-rewrite "preserved" branch and leaving the malformed
+    array in place.
+    """
+    # Events ledger: a clean session-1 closeout from a prior close.
+    append_event(str(closeable_set), "closeout_requested", 1)
+    append_event(str(closeable_set), "closeout_succeeded", 1, verdict="VERIFIED")
+
+    # Snapshot: hand-migrated by an operator with a typo or two —
+    # the array contains -1 (negative, nonsensical) alongside the
+    # legitimate sessions 1 and 2.
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["currentSession"] = 2
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-05-15T12:00:00.000000-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state["completedSessions"] = [1, -1, 2]
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    # --apply: must normalize the malformed entry away while writing
+    # the union with the events-ledger reconstruction (+ synthetic
+    # session-2 closeout).
+    args = _ns(session_set_dir=str(closeable_set), repair=True, apply=True)
+    outcome = close_session.run(args)
+    assert outcome.result == "succeeded"
+
+    state_after = read_session_state(str(closeable_set)) or {}
+    assert state_after.get("completedSessions") == [1, 2], (
+        f"expected malformed [-1] to be normalized away, leaving "
+        f"completedSessions=[1, 2]; got "
+        f"{state_after.get('completedSessions')!r}"
+    )
+
+    # Message line specifically reports the "normalized" outcome so
+    # an operator can see the malformed entries were dropped.
+    assert any(
+        "normalized completedSessions=[1, 2]" in m
+        and "raw snapshot [1, -1, 2]" in m
+        for m in outcome.messages
+    ), outcome.messages
+
+
 def test_repair_detects_event_says_closed_but_state_lagging(
     closeable_set: Path,
 ):

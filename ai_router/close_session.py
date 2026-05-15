@@ -887,24 +887,32 @@ def _run_repair(
                     f"for session {target_session}"
                 )
 
-            # Set 022: also backfill completedSessions[] from the
-            # (now-repaired) events ledger. This intentionally reads
-            # ``closeout_succeeded`` events DIRECTLY rather than via
-            # ``compute_effective_completed_sessions()``, because the
-            # helper prefers a non-empty snapshot ``completedSessions[]``
-            # over the events ledger — and a mixed-mode drift snapshot
-            # can carry a stale, partial array. The
-            # unified-master-details-composite incident (2026-05-12)
-            # is the cautionary example: a hand-edited snapshot might
-            # claim ``completedSessions=[1,2,3,4]`` while
-            # ``currentSession=5`` was the session whose closeout
-            # was actually missing; routing through the helper here
-            # would re-write ``[1,2,3,4]`` even though the synthetic
-            # closeout we just appended for session 5 means [1..5]
-            # is the truth. Direct events read avoids that trap and
-            # stays idempotent on the second pass.
+            # Set 022 + 023: backfill completedSessions[] as the UNION
+            # of (a) the snapshot's existing array and (b) the
+            # ``closeout_succeeded`` session numbers in the (now-
+            # repaired) events ledger. The union is monotone-up:
+            # repair adds session numbers to bring the snapshot up to
+            # ledger reality, but never removes a session number the
+            # operator hand-authored.
+            #
+            # We read ``closeout_succeeded`` events directly rather
+            # than going through ``compute_effective_completed_sessions``
+            # because the helper short-circuits on a non-empty snapshot
+            # array and would miss the session we just synthesized.
+            # Direct events read picks up the synthetic closeout; the
+            # union then adds it to whatever the snapshot already had.
+            #
+            # Set 023 motivation: an operator hand-migrating a pre-
+            # Set-022 set adds ``completedSessions=[1..N]`` to a
+            # snapshot whose events ledger only ever recorded the
+            # final session's closeout (or, as on Set 004 of this
+            # repo, only an early session's closeout). The previous
+            # overwrite-with-ledger-view regressed the operator's
+            # count from ``[1..N]`` to a partial subset; the union
+            # preserves the hand-authored intent while still healing
+            # the ledger.
             events_now = read_events(session_set_dir)
-            backfilled = sorted({
+            from_events = sorted({
                 ev.session_number for ev in events_now
                 if ev.event_type == "closeout_succeeded"
                 and isinstance(ev.session_number, int)
@@ -912,12 +920,40 @@ def _run_repair(
                 and ev.session_number > 0
             })
             existing_completed = (state or {}).get("completedSessions")
-            existing_list = (
-                sorted(existing_completed)
+            # ``existing_clean`` is the sanitized view used for the
+            # union math (drops non-int, booleans, non-positive).
+            # ``existing_raw_list`` is the snapshot's literal value,
+            # used to decide whether the *file on disk* needs a
+            # rewrite — a malformed entry in the raw array (e.g.,
+            # ``[1, -1]``) means the file is not already correct
+            # even when ``existing_clean`` happens to equal
+            # ``merged``, so the preserved/no-rewrite branch must
+            # not fire. This is the round-1 verifier finding fix.
+            existing_raw_list = (
+                existing_completed
+                if isinstance(existing_completed, list)
+                else None
+            )
+            existing_clean = (
+                sorted({
+                    c for c in existing_completed
+                    if isinstance(c, int)
+                    and not isinstance(c, bool)
+                    and c > 0
+                })
                 if isinstance(existing_completed, list)
                 else []
             )
-            if backfilled and backfilled != existing_list:
+            merged = sorted(set(existing_clean) | set(from_events))
+            # Rewrite the snapshot whenever the raw on-disk value
+            # does not already equal the canonical merged form.
+            # That covers three apply outcomes: backfilled (no array
+            # before), merged (array existed but differed cleanly),
+            # and normalized (array existed but had malformed /
+            # duplicate / unsorted entries that need cleaning up).
+            # Only the truly-equal case takes the no-rewrite branch.
+            needs_rewrite = bool(merged) and existing_raw_list != merged
+            if needs_rewrite:
                 try:
                     state_path = os.path.join(
                         session_set_dir, "session-state.json"
@@ -931,22 +967,67 @@ def _run_repair(
                     # concurrent writer or external mutation could
                     # break it between then and now — fall back to an
                     # empty dict and write a snapshot that records the
-                    # backfilled completedSessions.
+                    # merged completedSessions.
                     snapshot = read_session_state(session_set_dir) or {}
-                    snapshot["completedSessions"] = backfilled
+                    snapshot["completedSessions"] = merged
                     with open(state_path, "w", encoding="utf-8") as f:
                         json.dump(snapshot, f, indent=2)
                         f.write("\n")
-                    messages.append(
-                        "repair applied: backfilled "
-                        f"completedSessions={backfilled} into "
-                        "session-state.json"
-                    )
+                    # Distinguish three apply outcomes:
+                    #   - "backfilled" — snapshot had no array at all
+                    #   - "merged"     — snapshot had a clean array
+                    #                    that differed cleanly from
+                    #                    the union view
+                    #   - "normalized" — snapshot's array had
+                    #                    malformed / duplicate /
+                    #                    unsorted entries that we
+                    #                    cleaned up while also
+                    #                    applying the union
+                    if existing_raw_list is None or existing_raw_list == []:
+                        messages.append(
+                            "repair applied: backfilled "
+                            f"completedSessions={merged} into "
+                            "session-state.json"
+                        )
+                    elif existing_raw_list == existing_clean:
+                        # Clean input, just augmented by the events
+                        # reconstruction.
+                        messages.append(
+                            "repair applied: merged "
+                            f"completedSessions={merged} into "
+                            "session-state.json (union of snapshot "
+                            f"{existing_clean} and events "
+                            f"{from_events})"
+                        )
+                    else:
+                        # Malformed or unsorted input. Report both
+                        # the raw existing and the cleaned merged so
+                        # the operator sees what was normalized away.
+                        messages.append(
+                            "repair applied: normalized "
+                            f"completedSessions={merged} into "
+                            "session-state.json (raw snapshot "
+                            f"{existing_raw_list} cleaned + unioned "
+                            f"with events {from_events})"
+                        )
                 except Exception as exc:  # pragma: no cover — defensive
                     messages.append(
                         f"repair could not backfill completedSessions[]: "
                         f"{type(exc).__name__}: {exc}"
                     )
+            elif merged and existing_raw_list == merged and from_events:
+                # Snapshot's array already covers everything the
+                # ledger reconstruction would add AND its raw on-disk
+                # form is exactly the canonical merged value — no
+                # rewrite needed. Surface this as a distinct outcome
+                # so an operator who hand-migrated a set sees that
+                # their array was preserved verbatim.
+                messages.append(
+                    "repair preserved completedSessions="
+                    f"{merged} in session-state.json "
+                    "(snapshot already a superset of the events-"
+                    "ledger reconstruction)"
+                )
 
     # Case 2: events say closed, state has not caught up.
     #
