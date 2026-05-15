@@ -1,8 +1,20 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { readYamlFile, writeYamlFile, Document, YamlParseError } from "./yamlReadWrite";
+import { readYamlFile, parseDocumentFromText, Document, YamlParseError } from "./yamlReadWrite";
 import { validateBatch, ValidationResult } from "./schemaValidator";
+import { SectionState } from "./sections/types";
+import { render as renderRoutingAndVerification } from "./sections/routingAndVerificationSection";
+import { render as renderBudget } from "./sections/budgetSection";
+import { render as renderProvidersTable } from "./sections/providersTableSection";
+import { render as renderSignificanceFlagging } from "./sections/significanceFlaggingSection";
+import { render as renderNotifications } from "./sections/notificationsSection";
+import { render as renderLocalOverridesSummary } from "./sections/localOverridesSummarySection";
+import {
+  SavePayload,
+  applyPatch,
+  emptyLocalOverridesDoc,
+} from "./patch";
 
 type LoadedFile = "router-config.yaml" | "budget.yaml" | "local-overrides.yaml";
 
@@ -21,15 +33,45 @@ function getNonce(): string {
 interface LoadedFiles {
   routerConfigPath: string;
   budgetPath: string;
-  localOverridesPath: string | null;
+  localOverridesPath: string;
+  localOverridesFileExists: boolean;
   routerConfigDoc: Document | null;
   budgetDoc: Document | null;
   localOverridesDoc: Document | null;
+  /** Raw text at read time, for half-batch drift detection. */
+  routerConfigText: string | null;
+  budgetText: string | null;
+  localOverridesText: string | null;
 }
 
-interface SaveState {
-  lastSavedAt: number | null;
-  lastSavedHash: string | null;
+/**
+ * Snapshot of the exact file contents the panel just successfully saved.
+ * Storing the raw text (instead of a hash) lets `_reapplyLastSave` write
+ * back the actual bytes, and lets drift detection compare on raw text so
+ * an empty-file truncation register as drift instead of "no content".
+ */
+interface SaveSnapshot {
+  routerConfigText: string;
+  budgetText: string;
+  /** null = file did not exist after this save (e.g. no local overrides yet). */
+  localOverridesText: string | null;
+  at: number;
+}
+
+interface HalfBatchRecovery {
+  /** Files whose write was attempted and succeeded. */
+  succeeded: LoadedFile[];
+  /** Files whose write failed. */
+  failed: { file: LoadedFile; reason: string }[];
+  /** Files whose on-disk content drifted from the last saved snapshot. */
+  drifted: LoadedFile[];
+  /**
+   * Serialized content per file that this save tried to persist. Used by
+   * `_retryFailedWrite` so retry writes the exact bytes we originally
+   * computed — not whatever's in `_loaded.*Doc` after `_refresh()`
+   * re-reads from disk.
+   */
+  pendingContents: Partial<Record<LoadedFile, string>>;
 }
 
 export class ConfigEditorPanel {
@@ -40,7 +82,8 @@ export class ConfigEditorPanel {
   private _loaded: LoadedFiles | null = null;
   private _validation: ValidationResult | null = null;
   private _parseIssues: ParseIssue[] = [];
-  private _saveState: SaveState = { lastSavedAt: null, lastSavedHash: null };
+  private _lastSaveSnapshot: SaveSnapshot | null = null;
+  private _recovery: HalfBatchRecovery | null = null;
 
   static createOrShow(context: vscode.ExtensionContext): void {
     if (ConfigEditorPanel.currentPanel) {
@@ -71,12 +114,29 @@ export class ConfigEditorPanel {
       ConfigEditorPanel.currentPanel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((msg: { command: string }) => {
-      if (msg.command === "save") {
-        this._handleSave();
-      }
-      if (msg.command === "refresh") {
-        this._refresh();
+    this._panel.webview.onDidReceiveMessage((msg: { command: string; payload?: unknown }) => {
+      switch (msg.command) {
+        case "save":
+          this._handleSave(msg.payload as SavePayload);
+          break;
+        case "refresh":
+          this._refresh();
+          break;
+        case "runFlagCommand":
+          this._runFlagDecisionCommand();
+          break;
+        case "openLocalOverrides":
+          this._openLocalOverridesFile();
+          break;
+        case "retryFailedWrite":
+          this._retryFailedWrite();
+          break;
+        case "acceptHalfBatch":
+          this._acceptHalfBatchAsBaseline();
+          break;
+        case "reapplyLastSave":
+          this._reapplyLastSave();
+          break;
       }
     });
   }
@@ -110,10 +170,14 @@ export class ConfigEditorPanel {
     this._loaded = {
       routerConfigPath,
       budgetPath,
-      localOverridesPath: localResult ? localOverridesPath : null,
+      localOverridesPath,
+      localOverridesFileExists: localResult !== null,
       routerConfigDoc: routerResult?.doc ?? null,
       budgetDoc: budgetResult?.doc ?? null,
       localOverridesDoc: localResult?.doc ?? null,
+      routerConfigText: routerResult?.text ?? null,
+      budgetText: budgetResult?.text ?? null,
+      localOverridesText: localResult?.text ?? null,
     };
 
     this._parseIssues = [];
@@ -133,8 +197,7 @@ export class ConfigEditorPanel {
       }
     }
 
-    // Skip schema validation on files with parse errors — toJSON() can be
-    // partial/misleading. Schema validation runs only on cleanly-parsed files.
+    // Schema validation only on cleanly-parsed files.
     const routerHasParse = this._parseIssues.some((p) => p.file === "router-config.yaml");
     const budgetHasParse = this._parseIssues.some((p) => p.file === "budget.yaml");
     const localHasParse = this._parseIssues.some((p) => p.file === "local-overrides.yaml");
@@ -154,9 +217,101 @@ export class ConfigEditorPanel {
       budget: budgetObj,
       localOverrides: localObj,
     });
+
+    // Half-batch / external-drift detection. Preserve any active
+    // failed-write recovery — _handleSave sets that state right before
+    // calling _refresh, and overwriting it here would lose the
+    // actionable Retry/Accept buttons.
+    if (!this._recovery || this._recovery.failed.length === 0) {
+      this._recovery = this._detectDrift();
+    }
   }
 
-  private _handleSave(): void {
+  private _detectDrift(): HalfBatchRecovery | null {
+    if (!this._lastSaveSnapshot || !this._loaded) return null;
+    const drifted: LoadedFile[] = [];
+
+    // Strict !== null checks (not truthiness) so a truncation-to-empty
+    // on disk registers as drift rather than disappearing.
+    const currentRouter = this._loaded.routerConfigText;
+    const currentBudget = this._loaded.budgetText;
+    const currentLocal = this._loaded.localOverridesText;
+
+    if (currentRouter !== null && currentRouter !== this._lastSaveSnapshot.routerConfigText) {
+      drifted.push("router-config.yaml");
+    } else if (currentRouter === null && this._lastSaveSnapshot.routerConfigText !== "") {
+      // file disappeared since last save
+      drifted.push("router-config.yaml");
+    }
+    if (currentBudget !== null && currentBudget !== this._lastSaveSnapshot.budgetText) {
+      drifted.push("budget.yaml");
+    } else if (currentBudget === null && this._lastSaveSnapshot.budgetText !== "") {
+      drifted.push("budget.yaml");
+    }
+    if (currentLocal !== this._lastSaveSnapshot.localOverridesText) {
+      drifted.push("local-overrides.yaml");
+    }
+
+    if (drifted.length === 0) return null;
+    return { succeeded: [], failed: [], drifted, pendingContents: {} };
+  }
+
+  private _deriveState(): SectionState {
+    if (!this._loaded) {
+      return {
+        routerConfig: null,
+        budget: null,
+        localOverrides: null,
+        envVarPresence: {},
+        localOverridesFileExists: false,
+      };
+    }
+    const routerObj = this._loaded.routerConfigDoc?.toJSON() as Record<string, unknown> | null ?? null;
+    const budgetObj = this._loaded.budgetDoc?.toJSON() as Record<string, unknown> | null ?? null;
+    const localObj = this._loaded.localOverridesDoc?.toJSON() as Record<string, unknown> | null ?? null;
+
+    // Collect every env var name referenced in providers + notifications
+    const envVars = new Set<string>();
+    const sharedProviders = (routerObj && typeof routerObj === "object" ? routerObj["providers"] : null) as
+      | Record<string, unknown> | null;
+    if (sharedProviders) {
+      for (const v of Object.values(sharedProviders)) {
+        const ent = v as Record<string, unknown>;
+        if (typeof ent?.api_key_env === "string") envVars.add(ent.api_key_env);
+      }
+    }
+    const localProviders = (localObj && typeof localObj === "object" ? localObj["providers"] : null) as
+      | Record<string, unknown> | null;
+    if (localProviders) {
+      for (const v of Object.values(localProviders)) {
+        const ent = v as Record<string, unknown>;
+        if (typeof ent?.api_key_env === "string") envVars.add(ent.api_key_env);
+      }
+    }
+    const pushover = localObj && typeof localObj === "object"
+      ? ((localObj["notifications"] as Record<string, unknown> | undefined)?.["pushover"] as Record<string, unknown> | undefined)
+      : undefined;
+    if (pushover) {
+      if (typeof pushover.api_key_env === "string") envVars.add(pushover.api_key_env);
+      if (typeof pushover.user_key_env === "string") envVars.add(pushover.user_key_env);
+    }
+
+    const envVarPresence: Record<string, boolean> = {};
+    for (const name of envVars) {
+      const v = process.env[name];
+      envVarPresence[name] = typeof v === "string" && v.length > 0;
+    }
+
+    return {
+      routerConfig: routerObj,
+      budget: budgetObj,
+      localOverrides: localObj,
+      envVarPresence,
+      localOverridesFileExists: this._loaded.localOverridesFileExists,
+    };
+  }
+
+  private _handleSave(payload: SavePayload | undefined): void {
     if (!this._loaded) {
       vscode.window.showErrorMessage("No config files loaded.");
       return;
@@ -167,41 +322,356 @@ export class ConfigEditorPanel {
       );
       return;
     }
-    // Session 4: no section UIs yet — validate + write the unchanged docs back
-    // (round-trip save; sections ship in Session 5)
-    const routerConfigObj = this._loaded.routerConfigDoc?.toJSON() as Record<string, unknown> | null ?? null;
-    const budgetObj = this._loaded.budgetDoc?.toJSON() as Record<string, unknown> | null ?? null;
-    const localObj = this._loaded.localOverridesDoc?.toJSON() as Record<string, unknown> | null ?? null;
+    if (!payload) {
+      vscode.window.showErrorMessage("Save aborted — no payload from webview.");
+      return;
+    }
 
-    const result = validateBatch({ routerConfig: routerConfigObj, budget: budgetObj, localOverrides: localObj });
-    if (!result.valid) {
+    // 1) Required-files gate.
+    if (!this._loaded.routerConfigDoc || !this._loaded.budgetDoc) {
+      vscode.window.showErrorMessage("Save aborted — required config files are missing.");
+      return;
+    }
+
+    // 2) Clone the loaded docs before patching. If applyPatch throws OR
+    //    validation rejects the result, the clones are discarded and
+    //    `_loaded.*Doc` remains in the exact state the operator can see.
+    //    The yaml library has no Document.clone(), so we parse-then-stringify.
+    const routerClone = parseDocumentFromText(this._loaded.routerConfigDoc.toString());
+    const budgetClone = parseDocumentFromText(this._loaded.budgetDoc.toString());
+    const localClone = this._loaded.localOverridesDoc
+      ? parseDocumentFromText(this._loaded.localOverridesDoc.toString())
+      : emptyLocalOverridesDoc();
+
+    let applyResult;
+    try {
+      applyResult = applyPatch(routerClone, budgetClone, localClone, payload);
+    } catch (err) {
       vscode.window.showErrorMessage(
-        `Save aborted — ${result.errors.length} validation error(s). Fix drift detected in the editor before saving.`
+        `Save aborted — patch application failed: ${err instanceof Error ? err.message : String(err)}`
       );
       return;
     }
 
-    try {
-      if (this._loaded.routerConfigDoc) {
-        writeYamlFile(this._loaded.routerConfigPath, this._loaded.routerConfigDoc);
-      }
-      if (this._loaded.budgetDoc) {
-        writeYamlFile(this._loaded.budgetPath, this._loaded.budgetDoc);
-      }
-      if (this._loaded.localOverridesDoc && this._loaded.localOverridesPath) {
-        writeYamlFile(this._loaded.localOverridesPath, this._loaded.localOverridesDoc);
-      }
-      this._saveState = {
-        lastSavedAt: Date.now(),
-        lastSavedHash: null, // content-hash drift detection ships in Session 5
-      };
-      this._refresh();
-      vscode.window.showInformationMessage("Dabbler config saved.");
-    } catch (err) {
+    // 3) Pre-validate the patched clones.
+    const routerObj = routerClone.toJSON() as Record<string, unknown> | null ?? null;
+    const budgetObj = budgetClone.toJSON() as Record<string, unknown> | null ?? null;
+    const localObj = localClone.toJSON() as Record<string, unknown> | null ?? null;
+    const validation = validateBatch({ routerConfig: routerObj, budget: budgetObj, localOverrides: localObj });
+    if (!validation.valid) {
+      const msgs = validation.errors.map((e) => `${e.file}${e.path}: ${e.message}`).join("\n");
       vscode.window.showErrorMessage(
-        `Save failed: ${err instanceof Error ? err.message : String(err)}`
+        `Save aborted — ${validation.errors.length} validation error(s):\n${msgs}`,
+        { modal: false }
+      );
+      return;
+    }
+
+    // 4) Commit the validated clones into _loaded so they're visible to
+    //    subsequent renders and (importantly) to _captureSnapshot.
+    this._loaded.routerConfigDoc = routerClone;
+    this._loaded.budgetDoc = budgetClone;
+    this._loaded.localOverridesDoc = localClone;
+
+    // 5) Pre-compute the exact bytes we intend to write per file. Caching
+    //    these into _recovery.pendingContents lets _retryFailedWrite
+    //    persist the same bytes it originally tried, instead of writing
+    //    whatever _loaded looks like after `_refresh()` reloads from disk.
+    const localJson = localClone.toJSON() as Record<string, unknown> | null;
+    const localHasContent = localJson && Object.keys(localJson).length > 0;
+    const shouldWriteLocal =
+      applyResult.localOverridesChanged && (localHasContent || this._loaded.localOverridesFileExists);
+
+    const pending: Partial<Record<LoadedFile, string>> = {};
+    if (applyResult.routerConfigChanged) pending["router-config.yaml"] = routerClone.toString();
+    if (applyResult.budgetChanged) pending["budget.yaml"] = budgetClone.toString();
+    if (shouldWriteLocal) pending["local-overrides.yaml"] = localClone.toString();
+
+    // 6) Write each file. Track per-file success/failure.
+    const succeeded: LoadedFile[] = [];
+    const failed: { file: LoadedFile; reason: string }[] = [];
+
+    const writeAtomic = (file: LoadedFile, target: string, content: string): void => {
+      const tmp = target + ".tmp";
+      try {
+        fs.writeFileSync(tmp, content, "utf8");
+        fs.renameSync(tmp, target);
+        succeeded.push(file);
+      } catch (err) {
+        try {
+          if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        } catch { /* swallow cleanup error */ }
+        failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
+      }
+    };
+
+    if (pending["router-config.yaml"] !== undefined) {
+      writeAtomic("router-config.yaml", this._loaded.routerConfigPath, pending["router-config.yaml"]);
+    }
+    if (pending["budget.yaml"] !== undefined) {
+      writeAtomic("budget.yaml", this._loaded.budgetPath, pending["budget.yaml"]);
+    }
+    if (pending["local-overrides.yaml"] !== undefined) {
+      writeAtomic("local-overrides.yaml", this._loaded.localOverridesPath, pending["local-overrides.yaml"]);
+    }
+
+    if (failed.length > 0 && succeeded.length > 0) {
+      // Half-batch failure. Cache the bytes for each failed file so
+      // retry persists exactly what we just tried to write.
+      const pendingContents: Partial<Record<LoadedFile, string>> = {};
+      for (const f of failed) {
+        const content = pending[f.file];
+        if (content !== undefined) pendingContents[f.file] = content;
+      }
+      this._recovery = { succeeded, failed, drifted: [], pendingContents };
+      this._refresh();
+      vscode.window.showErrorMessage(
+        `Partial save — ${succeeded.length} file(s) saved, ${failed.length} failed. See the recovery banner in the editor.`
+      );
+      return;
+    }
+    if (failed.length > 0) {
+      this._refresh();
+      vscode.window.showErrorMessage(
+        `Save failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`
+      );
+      return;
+    }
+
+    // 7) Update last-save snapshot for drift detection.
+    this._lastSaveSnapshot = this._captureSnapshot(applyResult.routerConfigChanged, applyResult.budgetChanged, shouldWriteLocal);
+
+    if (applyResult.warnings.length > 0) {
+      vscode.window.showWarningMessage(applyResult.warnings.join(" "));
+    }
+    if (applyResult.routerConfigChanged || applyResult.budgetChanged || applyResult.localOverridesChanged) {
+      vscode.window.showInformationMessage("Dabbler config saved.");
+    } else {
+      vscode.window.showInformationMessage("No changes to save.");
+    }
+    this._refresh();
+  }
+
+  /**
+   * Snapshot the exact file contents the panel just persisted. For files
+   * NOT touched this save, we use the raw text already on disk (loaded
+   * earlier). For files written, we use doc.toString() which matches
+   * what writeYamlFile serialized. If local-overrides was not written
+   * AND the file exists on disk, we still snapshot it so drift detection
+   * uses the loaded text as the baseline rather than null.
+   */
+  private _captureSnapshot(routerWritten: boolean, budgetWritten: boolean, localWritten: boolean): SaveSnapshot {
+    const routerText = routerWritten && this._loaded?.routerConfigDoc
+      ? this._loaded.routerConfigDoc.toString()
+      : (this._loaded?.routerConfigText ?? "");
+    const budgetText = budgetWritten && this._loaded?.budgetDoc
+      ? this._loaded.budgetDoc.toString()
+      : (this._loaded?.budgetText ?? "");
+    let localText: string | null;
+    if (localWritten && this._loaded?.localOverridesDoc) {
+      localText = this._loaded.localOverridesDoc.toString();
+    } else if (this._loaded?.localOverridesFileExists) {
+      // Existed but not written this save — baseline against the on-disk text.
+      localText = this._loaded.localOverridesText;
+    } else {
+      localText = null;
+    }
+    return {
+      routerConfigText: routerText,
+      budgetText: budgetText,
+      localOverridesText: localText,
+      at: Date.now(),
+    };
+  }
+
+  private _retryFailedWrite(): void {
+    if (!this._recovery || this._recovery.failed.length === 0 || !this._loaded) return;
+    const stillFailed: { file: LoadedFile; reason: string }[] = [];
+    const newSucceeded: LoadedFile[] = [...this._recovery.succeeded];
+    const remainingPending: Partial<Record<LoadedFile, string>> = {};
+
+    for (const f of this._recovery.failed) {
+      const cachedContent = this._recovery.pendingContents?.[f.file];
+      if (cachedContent === undefined) {
+        stillFailed.push({ file: f.file, reason: "internal: no cached content to retry" });
+        continue;
+      }
+      let target: string | null = null;
+      if (f.file === "router-config.yaml") target = this._loaded.routerConfigPath;
+      else if (f.file === "budget.yaml") target = this._loaded.budgetPath;
+      else if (f.file === "local-overrides.yaml") target = this._loaded.localOverridesPath;
+      if (!target) {
+        stillFailed.push({ file: f.file, reason: "internal: no target path" });
+        continue;
+      }
+      const tmp = target + ".tmp";
+      try {
+        fs.writeFileSync(tmp, cachedContent, "utf8");
+        fs.renameSync(tmp, target);
+        newSucceeded.push(f.file);
+      } catch (err) {
+        try {
+          if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        } catch { /* swallow */ }
+        stillFailed.push({ file: f.file, reason: err instanceof Error ? err.message : String(err) });
+        remainingPending[f.file] = cachedContent;
+      }
+    }
+
+    if (stillFailed.length === 0) {
+      // After full retry success, recompute the baseline so subsequent
+      // loads compare against what's now on disk. _captureSnapshot
+      // reads from the in-memory docs (which `_refresh()` will refill
+      // from disk at the next loadFiles call, but we capture BEFORE
+      // refresh so we use the values that match what we just wrote).
+      this._lastSaveSnapshot = this._captureSnapshot(
+        newSucceeded.includes("router-config.yaml"),
+        newSucceeded.includes("budget.yaml"),
+        newSucceeded.includes("local-overrides.yaml")
+      );
+      // Override snapshot with the exact cached bytes for fidelity.
+      if (this._lastSaveSnapshot && this._recovery.pendingContents) {
+        const pc = this._recovery.pendingContents;
+        if (pc["router-config.yaml"] !== undefined) {
+          this._lastSaveSnapshot.routerConfigText = pc["router-config.yaml"];
+        }
+        if (pc["budget.yaml"] !== undefined) {
+          this._lastSaveSnapshot.budgetText = pc["budget.yaml"];
+        }
+        if (pc["local-overrides.yaml"] !== undefined) {
+          this._lastSaveSnapshot.localOverridesText = pc["local-overrides.yaml"];
+        }
+      }
+      this._recovery = null;
+      vscode.window.showInformationMessage("Retry succeeded — all files saved.");
+    } else {
+      this._recovery = {
+        succeeded: newSucceeded,
+        failed: stillFailed,
+        drifted: [],
+        pendingContents: remainingPending,
+      };
+      vscode.window.showErrorMessage(
+        `Retry partial — ${stillFailed.length} file(s) still failing.`
       );
     }
+    this._refresh();
+  }
+
+  private _acceptHalfBatchAsBaseline(): void {
+    // Operator chose to accept the current on-disk state as the new baseline.
+    // Clear recovery state and re-snapshot to current raw on-disk contents.
+    this._recovery = null;
+    if (this._loaded) {
+      this._lastSaveSnapshot = {
+        routerConfigText: this._loaded.routerConfigText ?? "",
+        budgetText: this._loaded.budgetText ?? "",
+        localOverridesText: this._loaded.localOverridesText,
+        at: Date.now(),
+      };
+    }
+    this._refresh();
+    vscode.window.showInformationMessage("On-disk state accepted as new baseline.");
+  }
+
+  private _reapplyLastSave(): void {
+    // Genuine re-apply: write the bytes from _lastSaveSnapshot back to
+    // disk. Use the same per-file half-batch recovery pattern as the
+    // main save flow so a mid-reapply filesystem failure doesn't leave
+    // disk in an undetected partial state.
+    if (!this._lastSaveSnapshot || !this._loaded) {
+      vscode.window.showErrorMessage(
+        "Re-apply unavailable — no last-saved snapshot exists in this session."
+      );
+      return;
+    }
+
+    const succeeded: LoadedFile[] = [];
+    const failed: { file: LoadedFile; reason: string }[] = [];
+    const pendingContents: Partial<Record<LoadedFile, string>> = {};
+
+    const reapply = (file: LoadedFile, target: string, content: string): void => {
+      pendingContents[file] = content;
+      const tmp = target + ".tmp";
+      try {
+        fs.writeFileSync(tmp, content, "utf8");
+        fs.renameSync(tmp, target);
+        succeeded.push(file);
+      } catch (err) {
+        try {
+          if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        } catch { /* swallow */ }
+        failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
+      }
+    };
+
+    reapply("router-config.yaml", this._loaded.routerConfigPath, this._lastSaveSnapshot.routerConfigText);
+    reapply("budget.yaml", this._loaded.budgetPath, this._lastSaveSnapshot.budgetText);
+    if (this._lastSaveSnapshot.localOverridesText !== null) {
+      reapply("local-overrides.yaml", this._loaded.localOverridesPath, this._lastSaveSnapshot.localOverridesText);
+    } else if (fs.existsSync(this._loaded.localOverridesPath)) {
+      // Snapshot said the file didn't exist; remove on-disk copy.
+      try {
+        fs.unlinkSync(this._loaded.localOverridesPath);
+        succeeded.push("local-overrides.yaml");
+      } catch (err) {
+        failed.push({
+          file: "local-overrides.yaml",
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (failed.length > 0 && succeeded.length > 0) {
+      // Reapply itself half-batched. Surface the same recovery banner.
+      const failedPending: Partial<Record<LoadedFile, string>> = {};
+      for (const f of failed) {
+        if (pendingContents[f.file] !== undefined) failedPending[f.file] = pendingContents[f.file];
+      }
+      this._recovery = { succeeded, failed, drifted: [], pendingContents: failedPending };
+      this._refresh();
+      vscode.window.showErrorMessage(
+        `Re-apply partial — ${succeeded.length} file(s) restored, ${failed.length} failed. See the recovery banner.`
+      );
+      return;
+    }
+    if (failed.length > 0) {
+      this._refresh();
+      vscode.window.showErrorMessage(
+        `Re-apply failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`
+      );
+      return;
+    }
+
+    this._recovery = null;
+    this._lastSaveSnapshot = { ...this._lastSaveSnapshot, at: Date.now() };
+    vscode.window.showInformationMessage("Last-saved state re-applied to disk.");
+    this._refresh();
+  }
+
+  private async _runFlagDecisionCommand(): Promise<void> {
+    const all = await vscode.commands.getCommands();
+    if (all.includes("dabbler.flagDecisionForReview")) {
+      await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
+      return;
+    }
+    vscode.window.showInformationMessage(
+      "dabbler.flagDecisionForReview is not registered yet — it ships in Set 026 Session 6. " +
+        "Until then, hand-edit the active session-set's decision-review-queue.jsonl directly."
+    );
+  }
+
+  private async _openLocalOverridesFile(): Promise<void> {
+    if (!this._loaded) return;
+    const target = this._loaded.localOverridesPath;
+    if (!fs.existsSync(target)) {
+      vscode.window.showInformationMessage(
+        "local-overrides.yaml does not exist yet. Save any per-operator override and the file is created automatically."
+      );
+      return;
+    }
+    const doc = await vscode.workspace.openTextDocument(target);
+    await vscode.window.showTextDocument(doc);
   }
 
   private _refresh(): void {
@@ -232,21 +702,21 @@ export class ConfigEditorPanel {
     const parseIssues = this._parseIssues;
     const hasParseIssues = parseIssues.length > 0;
 
-    const savedStatus = this._saveState.lastSavedAt
-      ? `All changes saved (${new Date(this._saveState.lastSavedAt).toLocaleTimeString()}).`
+    const savedStatus = this._lastSaveSnapshot
+      ? `All changes saved (${new Date(this._lastSaveSnapshot.at).toLocaleTimeString()}).`
       : "No unsaved changes.";
 
     const fileList = [
       "ai_router/router-config.yaml",
       hasBudget ? "ai_router/budget.yaml" : null,
-      this._loaded.localOverridesPath ? "ai_router/local-overrides.yaml" : null,
+      this._loaded.localOverridesFileExists ? "ai_router/local-overrides.yaml" : null,
     ]
       .filter(Boolean)
       .join(" + ");
 
     const parseBanner = hasParseIssues
-      ? `<div class="drift-banner">
-          <strong>⚠ YAML parse error</strong> — ${parseIssues.length} parse issue(s). Save is blocked until resolved.
+      ? `<div class="banner banner-error">
+          <strong>&#9888; YAML parse error</strong> — ${parseIssues.length} parse issue(s). Save is blocked until resolved.
           <ul>${parseIssues
             .map(
               (p) =>
@@ -259,19 +729,29 @@ export class ConfigEditorPanel {
       : "";
 
     const driftBanner = !validationPassed && !hasParseIssues
-      ? `<div class="drift-banner">
-          <strong>⚠ Drift detected</strong> — ${errors.length} validation error(s). Sections are read-only until resolved.
+      ? `<div class="banner banner-error">
+          <strong>&#9888; Drift detected</strong> — ${errors.length} validation error(s). Sections remain editable but Save will reject until fixed.
           <ul>${errors.map((e) => `<li><code>${escapeHtml(e.file + e.path)}</code>: ${escapeHtml(e.message)}</li>`).join("")}</ul>
         </div>`
       : "";
 
+    const recoveryBanner = this._recovery ? this._renderRecoveryBanner(this._recovery) : "";
+
+    const state = this._deriveState();
+    const s1 = renderRoutingAndVerification(state);
+    const s2 = renderBudget(state);
+    const s3 = renderProvidersTable(state);
+    const s4 = renderSignificanceFlagging(state);
+    const s5 = renderNotifications(state);
+    const s6 = renderLocalOverridesSummary(state);
+
     const sections = [
-      { num: 1, label: "Routing &amp; Verification" },
-      { num: 2, label: "Budget" },
-      { num: 3, label: "Providers" },
-      { num: 4, label: "Significance flagging" },
-      { num: 5, label: "Notifications" },
-      { num: 6, label: "Local overrides summary" },
+      { num: 1, label: "Routing &amp; Verification", body: s1.html },
+      { num: 2, label: "Budget", body: s2.html },
+      { num: 3, label: "Providers", body: s3.html },
+      { num: 4, label: "Significance flagging", body: s4.html },
+      { num: 5, label: "Notifications", body: s5.html },
+      { num: 6, label: "Local overrides summary", body: s6.html },
     ];
 
     const sectionNav = sections
@@ -282,7 +762,7 @@ export class ConfigEditorPanel {
       .map(
         (s) => `<div class="section-panel" id="section-${s.num}" style="display:${s.num === 1 ? "block" : "none"}">
           <h2>${s.label}</h2>
-          <p class="placeholder">Section ${s.num} UI coming in Session 5.</p>
+          ${s.body}
         </div>`
       )
       .join("\n");
@@ -300,20 +780,54 @@ export class ConfigEditorPanel {
     .header h1 { font-size: 1em; margin: 0; }
     .header-actions { display: flex; gap: 8px; }
     .meta { padding: 6px 16px; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
-    .drift-banner { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); padding: 8px 16px; margin: 8px 16px; border-radius: 3px; font-size: 0.85em; }
-    .drift-banner ul { margin: 4px 0 0 16px; padding: 0; }
-    .layout { display: flex; height: calc(100vh - 80px); }
-    .nav { width: 200px; min-width: 160px; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; display: flex; flex-direction: column; }
+    .banner { padding: 8px 16px; margin: 8px 16px; border-radius: 3px; font-size: 0.85em; }
+    .banner ul { margin: 4px 0 0 16px; padding: 0; }
+    .banner-error { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
+    .banner-warning { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); }
+    .layout { display: flex; min-height: calc(100vh - 80px); }
+    .nav { width: 220px; min-width: 180px; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; display: flex; flex-direction: column; }
     .section-btn { background: none; border: none; color: var(--vscode-foreground); padding: 6px 16px; text-align: left; cursor: pointer; font-size: 0.9em; width: 100%; }
     .section-btn:hover, .section-btn.active { background: var(--vscode-list-hoverBackground); }
     .section-btn.active { color: var(--vscode-list-activeSelectionForeground); background: var(--vscode-list-activeSelectionBackground); }
     .content { flex: 1; padding: 16px; overflow-y: auto; }
-    .section-panel h2 { font-size: 1em; margin-top: 0; }
+    .section-panel h2 { font-size: 1.1em; margin-top: 0; margin-bottom: 16px; }
+    .section-block { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .section-block h3 { font-size: 1em; margin-bottom: 6px; }
+    .section-help { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin: 0 0 10px 0; }
+    .section-info { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin: 6px 0; font-style: italic; }
+    .field-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+    .field-row label { min-width: 140px; }
+    .field-row input[type="number"], .field-row input[type="text"], .field-row select { padding: 2px 6px; }
+    .src-indicator { font-size: 0.78em; padding: 1px 4px; border-radius: 2px; cursor: pointer; }
+    .src-shared { color: var(--vscode-descriptionForeground); background: rgba(127,127,127,0.1); }
+    .src-local { color: var(--vscode-charts-orange); background: rgba(255,150,0,0.1); }
+    .src-default { color: var(--vscode-descriptionForeground); background: rgba(127,127,127,0.05); cursor: default; }
+    .env-badge { font-size: 0.85em; padding: 1px 4px; border-radius: 2px; }
+    .env-set { color: var(--vscode-charts-green); }
+    .env-unset { color: var(--vscode-descriptionForeground); font-style: italic; }
     .placeholder { color: var(--vscode-descriptionForeground); font-style: italic; }
+    .preview-block { background: rgba(127,127,127,0.06); padding: 8px 12px; border-radius: 3px; }
+    .preview-block p { margin: 6px 0; }
+    .preview-detail { color: var(--vscode-descriptionForeground); }
+    .slider-value { min-width: 40px; font-variant-numeric: tabular-nums; }
+    .provider-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .provider-table th, .provider-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--vscode-panel-border); vertical-align: middle; }
+    .provider-table th { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+    .provider-row input[type="text"] { width: 100%; }
+    .legend { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin-top: 8px; }
+    .command-box { background: var(--vscode-textCodeBlock-background, rgba(127,127,127,0.1)); padding: 6px 10px; border-radius: 3px; margin: 4px 0; }
+    .code-sample { background: var(--vscode-textCodeBlock-background, rgba(127,127,127,0.1)); padding: 8px 10px; border-radius: 3px; margin: 6px 0; }
+    .numbered-list { padding-left: 18px; }
+    .numbered-list li { margin-bottom: 12px; }
+    .override-list { list-style: none; padding-left: 0; }
+    .override-row { background: rgba(127,127,127,0.06); padding: 8px 12px; margin: 6px 0; border-radius: 3px; }
+    .override-path { font-weight: bold; margin-bottom: 4px; }
+    .override-side { font-size: 0.9em; margin: 2px 0; }
     button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; cursor: pointer; border-radius: 2px; font-size: 0.9em; }
     button.primary:hover { background: var(--vscode-button-hoverBackground); }
     button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 4px 12px; cursor: pointer; border-radius: 2px; font-size: 0.9em; }
     button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -328,6 +842,7 @@ export class ConfigEditorPanel {
   </div>
   ${parseBanner}
   ${driftBanner}
+  ${recoveryBanner}
   <div class="layout">
     <div class="nav">
       ${sectionNav}
@@ -337,26 +852,204 @@ export class ConfigEditorPanel {
     </div>
   </div>
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    document.getElementById('btn-save').addEventListener('click', () => {
-      vscode.postMessage({ command: 'save' });
-    });
-    const buttons = document.querySelectorAll('.section-btn');
-    const panels = document.querySelectorAll('.section-panel');
-    buttons.forEach((btn, i) => {
-      if (i === 0) btn.classList.add('active');
-      btn.addEventListener('click', () => {
-        buttons.forEach(b => b.classList.remove('active'));
-        panels.forEach(p => { p.style.display = 'none'; });
-        btn.classList.add('active');
-        const sectionNum = btn.getAttribute('data-section');
-        const panel = document.getElementById('section-' + sectionNum);
-        if (panel) panel.style.display = 'block';
+    (function() {
+      const vscode = acquireVsCodeApi();
+
+      // --- Section nav ---
+      const buttons = document.querySelectorAll('.section-btn');
+      const panels = document.querySelectorAll('.section-panel');
+      buttons.forEach((btn, i) => {
+        if (i === 0) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          panels.forEach(p => { p.style.display = 'none'; });
+          btn.classList.add('active');
+          const sectionNum = btn.getAttribute('data-section');
+          const panel = document.getElementById('section-' + sectionNum);
+          if (panel) panel.style.display = 'block';
+        });
       });
-    });
+
+      // --- §1 dropdown constraint: outsourcing-mode -> verification options ---
+      const outsourcingSel = document.getElementById('s1-outsourcing-mode');
+      const verificationSel = document.getElementById('s1-verification-method');
+      const apiConstraintInfo = document.getElementById('s1-api-constraint');
+      const manualTemplate = document.getElementById('s1-manual-template');
+      function applyOutsourcingConstraint() {
+        if (!outsourcingSel || !verificationSel) return;
+        const disabled = outsourcingSel.value === 'disabled';
+        const apiOpt = verificationSel.querySelector('option[value="api"]');
+        if (apiOpt) apiOpt.disabled = disabled;
+        if (apiConstraintInfo) apiConstraintInfo.style.display = disabled ? '' : 'none';
+        if (disabled && verificationSel.value === 'api') {
+          verificationSel.value = 'manual-via-other-engine';
+        }
+      }
+      function applyManualTemplateVisibility() {
+        if (!verificationSel || !manualTemplate) return;
+        manualTemplate.style.display = verificationSel.value === 'manual-via-other-engine' ? '' : 'none';
+      }
+      if (outsourcingSel) outsourcingSel.addEventListener('change', () => { applyOutsourcingConstraint(); applyManualTemplateVisibility(); });
+      if (verificationSel) verificationSel.addEventListener('change', applyManualTemplateVisibility);
+      applyOutsourcingConstraint();
+      applyManualTemplateVisibility();
+
+      // --- §2 slider live update + preview re-render ---
+      const warnSlider = document.getElementById('s2-warn-at-percent');
+      const warnValueEl = document.getElementById('s2-warn-at-percent-value');
+      const thresholdInput = document.getElementById('s2-threshold-usd');
+      const previewBlock = document.getElementById('s2-preview');
+      function fmtUsd(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+      function rerenderPreview() {
+        if (!warnSlider || !thresholdInput || !previewBlock) return;
+        const pct = Number(warnSlider.value);
+        const thr = Number(thresholdInput.value);
+        const warn = (pct * thr) / 100;
+        if (warnValueEl) warnValueEl.textContent = pct + '%';
+        previewBlock.innerHTML =
+          '<p><strong>Below ' + pct + '% of ' + fmtUsd(thr) + ' (' + fmtUsd(warn) + '):</strong> ' +
+          '<span class="preview-detail">Silent &mdash; no prompt, just log to cost dashboard.</span></p>' +
+          '<p><strong>Between ' + pct + '% and 100% (' + fmtUsd(warn) + '&ndash;' + fmtUsd(thr) + '):</strong> ' +
+          '<span class="preview-detail">Heads-up &mdash; non-blocking notification, one per band.</span></p>' +
+          '<p><strong>At or above ' + fmtUsd(thr) + ':</strong> ' +
+          '<span class="preview-detail">Confirm-or-abort &mdash; modal dialog before the call proceeds.</span></p>';
+      }
+      if (warnSlider) warnSlider.addEventListener('input', rerenderPreview);
+      if (thresholdInput) thresholdInput.addEventListener('input', rerenderPreview);
+
+      // --- §3 provider popover toggle ---
+      document.querySelectorAll('.popover-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-target');
+          if (!target) return;
+          const row = document.getElementById(target);
+          if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+        });
+      });
+
+      // --- §4 run-flag-command button ---
+      const flagBtn = document.getElementById('s4-run-flag-command');
+      if (flagBtn) flagBtn.addEventListener('click', () => { vscode.postMessage({ command: 'runFlagCommand' }); });
+
+      // --- §6 open-local-overrides button ---
+      const openLocalBtn = document.getElementById('s6-open-local-overrides');
+      if (openLocalBtn) openLocalBtn.addEventListener('click', () => { vscode.postMessage({ command: 'openLocalOverrides' }); });
+
+      // --- recovery banner buttons ---
+      const retryBtn = document.getElementById('recovery-retry');
+      const acceptBtn = document.getElementById('recovery-accept');
+      const reapplyBtn = document.getElementById('recovery-reapply');
+      if (retryBtn) retryBtn.addEventListener('click', () => { vscode.postMessage({ command: 'retryFailedWrite' }); });
+      if (acceptBtn) acceptBtn.addEventListener('click', () => { vscode.postMessage({ command: 'acceptHalfBatch' }); });
+      if (reapplyBtn) reapplyBtn.addEventListener('click', () => { vscode.postMessage({ command: 'reapplyLastSave' }); });
+
+      // --- (shared)/(local override) toggle ---
+      document.querySelectorAll('.src-indicator').forEach(ind => {
+        const source = ind.getAttribute('data-source');
+        if (source === 'not-overridable' || source === 'default') return;
+        ind.addEventListener('click', () => {
+          const cur = ind.getAttribute('data-source');
+          const next = cur === 'local' ? 'shared' : 'local';
+          ind.setAttribute('data-source', next);
+          ind.className = 'src-indicator src-' + next;
+          ind.textContent = next === 'local' ? '(local override)' : '(shared)';
+        });
+      });
+
+      // --- Save gather ---
+      function gatherPayload() {
+        const payload = {};
+        // §1
+        if (outsourcingSel) {
+          const ind = outsourcingSel.parentElement && outsourcingSel.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.outsourcingMode = { value: outsourcingSel.value, source: src };
+        }
+        if (verificationSel) payload.verificationMethod = verificationSel.value;
+        // §2
+        if (thresholdInput) {
+          const ind = thresholdInput.parentElement && thresholdInput.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.thresholdUsd = { value: Number(thresholdInput.value), source: src };
+        }
+        const scopeSel = document.getElementById('s2-scope');
+        if (scopeSel) payload.scope = scopeSel.value;
+        if (warnSlider) {
+          const ind = warnSlider.parentElement && warnSlider.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.warnAtPercent = { value: Number(warnSlider.value), source: src };
+        }
+        // §3 providers
+        const providerRows = document.querySelectorAll('tr.provider-row');
+        payload.providers = [];
+        providerRows.forEach(row => {
+          const id = row.getAttribute('data-provider-id');
+          if (!id) return;
+          const enabledInput = row.querySelector('input[data-field="enabled"]');
+          const labelInput = row.querySelector('input[data-field="displayLabel"]');
+          const keyInput = row.querySelector('input[data-field="apiKeyEnv"]');
+          const urlInput = row.querySelector('input[data-field="baseUrl"]');
+          const enabledInd = enabledInput && enabledInput.parentElement && enabledInput.parentElement.querySelector('.src-indicator');
+          const enabledSrc = (enabledInd && enabledInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const keyInd = keyInput && keyInput.parentElement && keyInput.parentElement.querySelector('.src-indicator');
+          const keySrc = (keyInd && keyInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const urlInd = urlInput && urlInput.parentElement && urlInput.parentElement.querySelector('.src-indicator');
+          const urlSrc = (urlInd && urlInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const pp = { id: id };
+          if (enabledInput) pp.enabled = { value: !!enabledInput.checked, source: enabledSrc };
+          if (labelInput) pp.displayLabel = labelInput.value;
+          if (keyInput) pp.apiKeyEnv = { value: keyInput.value, source: keySrc };
+          if (urlInput) pp.baseUrl = { value: urlInput.value, source: urlSrc };
+          payload.providers.push(pp);
+        });
+        // §4
+        const honorChk = document.getElementById('s4-honor-annotations');
+        if (honorChk) payload.honorAnnotations = !!honorChk.checked;
+        // §5
+        const puEnabled = document.getElementById('s5-pushover-enabled');
+        const puApiKey = document.getElementById('s5-pushover-api-key-env');
+        const puUserKey = document.getElementById('s5-pushover-user-key-env');
+        if (puEnabled) payload.pushoverEnabled = !!puEnabled.checked;
+        if (puApiKey) payload.pushoverApiKeyEnv = puApiKey.value;
+        if (puUserKey) payload.pushoverUserKeyEnv = puUserKey.value;
+        return payload;
+      }
+      document.getElementById('btn-save').addEventListener('click', () => {
+        const payload = gatherPayload();
+        vscode.postMessage({ command: 'save', payload: payload });
+      });
+    })();
   </script>
 </body>
 </html>`;
+  }
+
+  private _renderRecoveryBanner(r: HalfBatchRecovery): string {
+    if (r.failed.length > 0 && r.succeeded.length > 0) {
+      const succeededList = r.succeeded.map((f) => `<code>${f}</code>`).join(", ");
+      const failedList = r.failed
+        .map((f) => `<li><code>${f.file}</code>: ${escapeHtml(f.reason)}</li>`)
+        .join("");
+      return `<div class="banner banner-warning">
+          <strong>&#9888; Half-batch save</strong> — ${r.succeeded.length} file(s) saved (${succeededList}); ${r.failed.length} failed.
+          <ul>${failedList}</ul>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button id="recovery-retry" class="primary">Retry failed write</button>
+            <button id="recovery-accept" class="secondary">Accept current state as new baseline</button>
+          </div>
+        </div>`;
+    }
+    if (r.drifted.length > 0) {
+      const driftedList = r.drifted.map((f) => `<code>${f}</code>`).join(", ");
+      return `<div class="banner banner-warning">
+          <strong>&#9888; External modification detected</strong> — ${r.drifted.length} file(s) changed on disk since your last save: ${driftedList}.
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button id="recovery-reapply" class="secondary">Re-apply my last save (overwrites on-disk)</button>
+            <button id="recovery-accept" class="secondary">Accept on-disk as new baseline</button>
+          </div>
+        </div>`;
+    }
+    return "";
   }
 
   private _noWorkspaceHtml(nonce: string, cspSource: string): string {

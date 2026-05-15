@@ -1,17 +1,31 @@
 {
   "status": "completed",
-  "summary": "Session 4 completed the webview foundation for the new router-config editor. New module tree at tools/dabbler-ai-orchestration/src/configEditor/: yamlReadWrite.ts (AST-mode read/write via yaml@2.7, atomic tmp+rename writes, parseErrors surfacing for malformed YAML), schemaValidator.ts (three Ajv-compiled schemas + cross-file invariants: env-var pattern with minLength 1, model-provider ref resolution, local-overrides allowlist closing additionalProperties: false on every known nested object, friendly-message dedup against Ajv additionalProperties errors via _ajvErrorPath helper), ConfigEditorPanel.ts (singleton webview panel, 6-section nav shell with 'Coming in Session 5' placeholders, drift-detected + YAML-parse-error banners on load, HTML-escaped error paths, round-trip atomic save flow, missing-file fallback for both router-config.yaml and budget.yaml). Command dabbler.openConfigEditor registered in package.json + wired in extension.ts. Five rounds of cross-provider verification (gpt-5-4) raised 8 Major + 4 Minor across rounds 1-4; round 5 cleared with only one trivial cleanup nit which was fixed. All Blocker/Major findings either resolved or documented in code as deliberate scope decisions (router-config and budget schemas remain open because the real files carry many non-Appendix-B fields). One pre-verification fix: a TypeScript `as HTMLElement` cast inside the inline webview <script> template literal was a runtime SyntaxError; replaced with plain JS. Test count: 29 -> 38 unit tests passing; tsc clean. Total Session 4 verification spend: $1.31 of $10.00 NTE (cumulative Set 026 to date: ~$1.85).",
+  "summary": "Session 5 implemented the six webview sections inside the Session 4 shell, the half-batch recovery + (shared)/(local override) indicator system, and the supporting test suite. New files: src/configEditor/sections/{types,helpers,routingAndVerificationSection,budgetSection,providersTableSection,significanceFlaggingSection,notificationsSection,localOverridesSummarySection}.ts (8 files; ~720 LOC) + src/configEditor/patch.ts (~304 LOC, SavePayload + applyPatch + setIfChanged + content-hash helpers). ConfigEditorPanel.ts was rewritten to splice section HTML into the shell, route a structured SavePayload through applyPatch into yaml AST mutations (preserving comments via the yaml@2.7 library), surface a half-batch-recovery banner with Retry / Accept-as-baseline / Re-apply actions, and detect cross-load drift via raw-text comparison. The save flow clones the loaded Documents via parseDocumentFromText(doc.toString()) before patching so a failed validation leaves in-memory + on-disk state untouched. Retry writes the bytes cached in _recovery.pendingContents at the time of the original save (not from _loaded.*Doc which gets re-read from disk by _refresh). Test count: 38 -> 109 unit tests passing; tsc clean. Cross-provider verification: 4 successful gpt-5-4 rounds (Part A sections, Part B1 patch.ts, B2 round 1, B2 round 2) raised 1 Minor + 2 Major + 5 issues (1 Blocker + 2 Major + 2 Major) respectively — all 8 findings addressed in code per verifier guidance. B2 round 3 confirmation hit OpenAI 429 Too Many Requests after retries (TPM bucket not refreshing within a 15-minute wait window); operator can re-run scripts/verify_session_026_5_b2.py to confirm fixes once the rate-limit window clears. Total Session 5 verification spend: $1.218 (cumulative Set 026 NTE: $3.07 of $10.00).",
   "files_changed": [
-    "tools/dabbler-ai-orchestration/package.json",
-    "tools/dabbler-ai-orchestration/package-lock.json",
-    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/types.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/helpers.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/routingAndVerificationSection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/budgetSection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/providersTableSection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/significanceFlaggingSection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/notificationsSection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/localOverridesSummarySection.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/patch.ts",
     "tools/dabbler-ai-orchestration/src/configEditor/ConfigEditorPanel.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/yamlReadWrite.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/schemaValidator.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/yamlReadWrite.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/schemaValidator.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/configEditor-foundation.test.ts",
-    "scripts/verify_session_026_4.py"
+    "tools/dabbler-ai-orchestration/src/test/suite/routingAndVerificationSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/budgetSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/providersTableSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/significanceFlaggingSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/notificationsSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/localOverridesSummarySection.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/patch.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/configEditor-e2e.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/halfBatchRecovery.test.ts",
+    "scripts/verify_session_026_5.py",
+    "scripts/verify_session_026_5_a.py",
+    "scripts/verify_session_026_5_b.py",
+    "scripts/verify_session_026_5_b1.py",
+    "scripts/verify_session_026_5_b2.py"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -19,11 +33,14 @@
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
-    "effort": "high",
+    "effort": "medium",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 5 implements the six webview sections inside the Session 4 shell — largest single-session surface in the set (~6 section files + ~6 test files, plus half-batch recovery + shared/local indicator). Spec routing notes call for Opus at high effort. Implementing orchestrator may split into 5a + 5b if the conversation budget gets tight."
+      "specifics": "Session 6 ships the significance-flagging command (dabbler.flagDecisionForReview) + annotation parser + scanner + ai_router/decision_review_queue.py + workflow-doc update + 6 test files. Bounded surface (one command + one parser + one scanner). Spec routing notes call for Opus at effort=medium."
     }
   },
-  "blockers": []
+  "blockers": [],
+  "deferred_followups": [
+    "B2 round 3 cross-provider verification confirmation — operator can re-run `python scripts/verify_session_026_5_b2.py` once the OpenAI gpt-5-4 TPM rate-limit window clears (15+ minutes wasn't enough this session). All 3 findings from B2 round 2 are addressed in code per verifier guidance; unit tests cover the new behaviors, but a fresh independent verifier read would close the loop."
+  ]
 }

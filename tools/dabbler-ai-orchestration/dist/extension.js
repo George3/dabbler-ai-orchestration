@@ -4266,7 +4266,7 @@ var require_Document = __commonJS({
     var applyReviver = require_applyReviver();
     var createNode = require_createNode();
     var directives = require_directives();
-    var Document3 = class _Document {
+    var Document4 = class _Document {
       constructor(value, replacer, options) {
         this.commentBefore = null;
         this.comment = null;
@@ -4556,7 +4556,7 @@ var require_Document = __commonJS({
         return true;
       throw new Error("Expected a YAML collection as document contents");
     }
-    exports2.Document = Document3;
+    exports2.Document = Document4;
   }
 });
 
@@ -5916,13 +5916,13 @@ var require_compose_node = __commonJS({
 var require_compose_doc = __commonJS({
   "node_modules/yaml/dist/compose/compose-doc.js"(exports2) {
     "use strict";
-    var Document3 = require_Document();
+    var Document4 = require_Document();
     var composeNode = require_compose_node();
     var resolveEnd = require_resolve_end();
     var resolveProps = require_resolve_props();
     function composeDoc(options, directives, { offset, start, value, end }, onError2) {
       const opts = Object.assign({ _directives: directives }, options);
-      const doc = new Document3.Document(void 0, opts);
+      const doc = new Document4.Document(void 0, opts);
       const ctx = {
         atKey: false,
         atRoot: true,
@@ -5961,7 +5961,7 @@ var require_composer = __commonJS({
     "use strict";
     var node_process = require("process");
     var directives = require_directives();
-    var Document3 = require_Document();
+    var Document4 = require_Document();
     var errors = require_errors();
     var identity = require_identity();
     var composeDoc = require_compose_doc();
@@ -6150,7 +6150,7 @@ ${end.comment}` : end.comment;
           this.doc = null;
         } else if (forceDoc) {
           const opts = Object.assign({ _directives: this.directives }, this.options);
-          const doc = new Document3.Document(void 0, opts);
+          const doc = new Document4.Document(void 0, opts);
           if (this.atDirectives)
             this.onError(endOffset, "MISSING_CHAR", "Missing directives-end indicator line");
           doc.range = [0, endOffset, endOffset];
@@ -8066,7 +8066,7 @@ var require_public_api = __commonJS({
   "node_modules/yaml/dist/public-api.js"(exports2) {
     "use strict";
     var composer = require_composer();
-    var Document3 = require_Document();
+    var Document4 = require_Document();
     var errors = require_errors();
     var log = require_log();
     var identity = require_identity();
@@ -8091,7 +8091,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument(source, options = {}) {
+    function parseDocument2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser4.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -8117,7 +8117,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument(src, options);
+      const doc = parseDocument2(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -8149,11 +8149,11 @@ var require_public_api = __commonJS({
       }
       if (identity.isDocument(value) && !_replacer)
         return value.toString(options);
-      return new Document3.Document(value, _replacer, options).toString(options);
+      return new Document4.Document(value, _replacer, options).toString(options);
     }
     exports2.parse = parse;
     exports2.parseAllDocuments = parseAllDocuments;
-    exports2.parseDocument = parseDocument;
+    exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
   }
 });
@@ -8163,7 +8163,7 @@ var require_dist3 = __commonJS({
   "node_modules/yaml/dist/index.js"(exports2) {
     "use strict";
     var composer = require_composer();
-    var Document3 = require_Document();
+    var Document4 = require_Document();
     var Schema = require_Schema();
     var errors = require_errors();
     var Alias = require_Alias();
@@ -8179,7 +8179,7 @@ var require_dist3 = __commonJS({
     var publicApi = require_public_api();
     var visit = require_visit();
     exports2.Composer = composer.Composer;
-    exports2.Document = Document3.Document;
+    exports2.Document = Document4.Document;
     exports2.Schema = Schema.Schema;
     exports2.YAMLError = errors.YAMLError;
     exports2.YAMLParseError = errors.YAMLParseError;
@@ -15541,7 +15541,7 @@ function findPlaywrightTests(set) {
   const slugTokens = set.name.split("-").filter((s) => s.length >= 3);
   const testRefs = set.uatSummary?.e2eRefs ?? [];
   const candidates = /* @__PURE__ */ new Set();
-  const walk = (dir, depth) => {
+  const walk2 = (dir, depth) => {
     if (depth > 4)
       return;
     let entries;
@@ -15555,7 +15555,7 @@ function findPlaywrightTests(set) {
       if (e.isDirectory()) {
         if (e.name === "bin" || e.name === "obj" || e.name === "node_modules")
           continue;
-        walk(p2, depth + 1);
+        walk2(p2, depth + 1);
         continue;
       }
       if (!/\.(cs|ts|js)$/.test(e.name))
@@ -15580,7 +15580,7 @@ function findPlaywrightTests(set) {
       }
     }
   };
-  walk(playwrightDir, 0);
+  walk2(playwrightDir, 0);
   return Array.from(candidates).sort();
 }
 function registerOpenFileCommands(context) {
@@ -22042,21 +22042,6 @@ function readYamlFile(filePath) {
   const doc = parseDocumentFromText(text);
   return { doc, text, parseErrors: collectParseErrors(doc) };
 }
-function writeYamlFile(filePath, doc) {
-  const content = doc.toString();
-  const tmpPath = filePath + ".tmp";
-  try {
-    fs13.writeFileSync(tmpPath, content, "utf8");
-    fs13.renameSync(tmpPath, filePath);
-  } catch (err) {
-    try {
-      if (fs13.existsSync(tmpPath))
-        fs13.unlinkSync(tmpPath);
-    } catch {
-    }
-    throw err;
-  }
-}
 function parseDocumentFromText(text) {
   return (0, import_yaml.parseDocument)(text);
 }
@@ -22312,6 +22297,694 @@ function _checkLocalOverridesAllowlist(localOverrides, routerConfig, errors) {
   }
 }
 
+// src/configEditor/sections/helpers.ts
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function getByPath(obj, path17) {
+  if (!obj)
+    return void 0;
+  const parts = path17.split(".");
+  let cur = obj;
+  for (const p2 of parts) {
+    if (cur === null || cur === void 0 || typeof cur !== "object")
+      return void 0;
+    cur = cur[p2];
+  }
+  return cur;
+}
+function fieldSource(state, sharedObject, sharedPath, localPath, allowed) {
+  if (!allowed)
+    return "not-overridable";
+  if (sharedObject === "localOnly") {
+    const localVal2 = getByPath(state.localOverrides, localPath);
+    return localVal2 !== void 0 ? "local" : "default";
+  }
+  const localVal = getByPath(state.localOverrides, localPath);
+  if (localVal !== void 0)
+    return "local";
+  const sharedVal = sharedObject === "routerConfig" ? getByPath(state.routerConfig, sharedPath) : getByPath(state.budget, sharedPath);
+  return sharedVal !== void 0 ? "shared" : "default";
+}
+function indicatorHtml(source, fieldKey) {
+  switch (source) {
+    case "shared":
+      return `<span class="src-indicator src-shared" data-source="shared" data-field="${escapeHtml(fieldKey)}" title="Value comes from the shared (committed) config. Click to move to local overrides.">(shared)</span>`;
+    case "local":
+      return `<span class="src-indicator src-local" data-source="local" data-field="${escapeHtml(fieldKey)}" title="Value comes from local-overrides.yaml. Click to promote to shared.">(local override)</span>`;
+    case "default":
+      return `<span class="src-indicator src-default" data-source="default" data-field="${escapeHtml(fieldKey)}" title="Field is using the schema default \u2014 no value in either file.">(default)</span>`;
+    case "not-overridable":
+      return ``;
+  }
+}
+function envVarBadge(state, name) {
+  if (!name)
+    return `<span class="env-badge env-unset">(unset)</span>`;
+  return state.envVarPresence[name] ? `<span class="env-badge env-set" title="${escapeHtml(name)} is set in your shell.">&#10003;</span>` : `<span class="env-badge env-unset" title="${escapeHtml(name)} is not set in your shell.">(unset)</span>`;
+}
+function asString(v, fallback = "") {
+  if (v === void 0 || v === null)
+    return fallback;
+  return String(v);
+}
+function asNumber2(v) {
+  if (typeof v === "number")
+    return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+}
+
+// src/configEditor/sections/routingAndVerificationSection.ts
+function render(state) {
+  const localRouting = getByPath(state.localOverrides, "routing.outsourcing_mode");
+  const sharedRouting = getByPath(state.routerConfig, "routing.outsourcing_mode");
+  const effectiveRouting = (typeof localRouting === "string" ? localRouting : null) ?? (typeof sharedRouting === "string" ? sharedRouting : null) ?? "whenever-helpful";
+  const routingSource = fieldSource(
+    state,
+    "routerConfig",
+    "routing.outsourcing_mode",
+    "routing.outsourcing_mode",
+    true
+  );
+  const verification = getByPath(state.budget, "verification_method");
+  const effectiveVerification = typeof verification === "string" ? verification : "api";
+  const verificationSource = fieldSource(state, "budget", "verification_method", "", false);
+  const outsourcingDisabled = effectiveRouting === "disabled";
+  const html = `
+<div class="section-block">
+  <h3>Mid-session outsourcing</h3>
+  <p class="section-help">When should the orchestrator route reasoning tasks to external AI providers during the session itself (not at session end)?</p>
+  <div class="field-row">
+    <label for="s1-outsourcing-mode">Mode</label>
+    <select id="s1-outsourcing-mode" data-field="outsourcingMode">
+      <option value="whenever-helpful"${effectiveRouting === "whenever-helpful" ? " selected" : ""}>Whenever helpful (let AI decide)</option>
+      <option value="verification-only"${effectiveRouting === "verification-only" ? " selected" : ""}>Verification only</option>
+      <option value="disabled"${effectiveRouting === "disabled" ? " selected" : ""}>Disabled</option>
+    </select>
+    ${indicatorHtml(routingSource, "outsourcingMode")}
+  </div>
+</div>
+
+<div class="section-block">
+  <h3>Cross-provider verification</h3>
+  <p class="section-help">How should end-of-session cross-provider verification run? (Rule 2 of the workflow doc: every session ends with verification unless this is explicitly set to None.)</p>
+  <div class="field-row">
+    <label for="s1-verification-method">Method</label>
+    <select id="s1-verification-method" data-field="verificationMethod" data-disable-api="${outsourcingDisabled ? "1" : "0"}">
+      <option value="api"${effectiveVerification === "api" ? " selected" : ""}${outsourcingDisabled ? " disabled" : ""}>Automatic via API (recommended)</option>
+      <option value="manual-via-other-engine"${effectiveVerification === "manual-via-other-engine" ? " selected" : ""}>Manual via portable markdown</option>
+      <option value="skipped"${effectiveVerification === "skipped" ? " selected" : ""}>None</option>
+    </select>
+    ${indicatorHtml(verificationSource, "verificationMethod")}
+  </div>
+  <p class="section-info" id="s1-api-constraint" style="${outsourcingDisabled ? "" : "display:none;"}">
+    &#9432; "Automatic via API" requires outsourcing to be enabled. When outsourcing is Disabled, only "Manual" and "None" are available here.
+  </p>
+  <div id="s1-manual-template" style="${effectiveVerification === "manual-via-other-engine" ? "" : "display:none;"}">
+    <p class="section-info">
+      Manual verification template URL:
+      <a href="https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/ai_router/prompt-templates/verification.md" target="_blank" rel="noopener">
+        ai_router/prompt-templates/verification.md
+      </a>
+    </p>
+  </div>
+</div>
+`;
+  return { html };
+}
+
+// src/configEditor/sections/budgetSection.ts
+function render2(state) {
+  const sharedThreshold = asNumber2(getByPath(state.budget, "threshold_usd"));
+  const localThreshold = asNumber2(getByPath(state.localOverrides, "threshold_usd"));
+  const effectiveThreshold = Number.isFinite(localThreshold) ? localThreshold : Number.isFinite(sharedThreshold) ? sharedThreshold : 10;
+  const sharedScope = getByPath(state.budget, "scope");
+  const effectiveScope = typeof sharedScope === "string" ? sharedScope : "per-session-set";
+  const sharedWarn = asNumber2(getByPath(state.budget, "warn_at_percent"));
+  const localWarn = asNumber2(getByPath(state.localOverrides, "warn_at_percent"));
+  const effectiveWarn = Number.isFinite(localWarn) ? localWarn : Number.isFinite(sharedWarn) ? sharedWarn : 80;
+  const thresholdSource = fieldSource(state, "budget", "threshold_usd", "threshold_usd", true);
+  const scopeSource = fieldSource(state, "budget", "scope", "", false);
+  const warnSource = fieldSource(state, "budget", "warn_at_percent", "warn_at_percent", true);
+  const warnAmount = effectiveThreshold * effectiveWarn / 100;
+  const fmt = (n) => `$${n.toFixed(2)}`;
+  const html = `
+<div class="section-block">
+  <h3>Budget threshold</h3>
+  <p class="section-help">
+    Operating cost is governed by an open-source AI orchestration framework \u2014 actual provider costs vary
+    <strong>$0\u2013~$50/week</strong>, which works out to <strong>~$0\u2013$200/month</strong> or
+    <strong>~$5\u2013$50 for a typical 2\u20133 week session set</strong>, depending on routing mode and session frequency.
+    See the cost dashboard (Dabbler: Show Cost Dashboard) for live cumulative spend.
+    The framework is open-source; you are not billed by Dabbler \u2014 you are billed by
+    Anthropic, Google, and/or OpenAI directly per their pricing.
+  </p>
+  <div class="field-row">
+    <label for="s2-threshold-usd">Threshold (USD)</label>
+    <input type="number" id="s2-threshold-usd" data-field="thresholdUsd" min="0" step="0.01" value="${escapeHtml(effectiveThreshold.toFixed(2))}" />
+    ${indicatorHtml(thresholdSource, "thresholdUsd")}
+  </div>
+  <div class="field-row">
+    <label for="s2-scope">Scope</label>
+    <select id="s2-scope" data-field="scope">
+      <option value="per-session-set"${effectiveScope === "per-session-set" ? " selected" : ""}>Per session-set (recommended)</option>
+      <option value="per-project"${effectiveScope === "per-project" ? " selected" : ""}>Per project</option>
+      ${effectiveScope === "per-session" ? `<option value="per-session" selected>Per session (hand-edit only)</option>` : ""}
+    </select>
+    ${indicatorHtml(scopeSource, "scope")}
+  </div>
+  <div class="field-row">
+    <label for="s2-warn-at-percent">Warn at</label>
+    <input type="range" id="s2-warn-at-percent" data-field="warnAtPercent" min="0" max="100" step="5" value="${effectiveWarn}" />
+    <span id="s2-warn-at-percent-value" class="slider-value">${effectiveWarn}%</span>
+    ${indicatorHtml(warnSource, "warnAtPercent")}
+  </div>
+</div>
+
+<div class="section-block">
+  <h3>Prompt UX preview</h3>
+  <p class="section-help">How the orchestrator will react at each cumulative-spend band, based on the threshold and warn percentage above.</p>
+  <div class="preview-block" id="s2-preview">
+    <p><strong>Below ${effectiveWarn}% of ${fmt(effectiveThreshold)} (${fmt(warnAmount)}):</strong>
+       <span class="preview-detail">Silent \u2014 no prompt, just log to cost dashboard.</span></p>
+    <p><strong>Between ${effectiveWarn}% and 100% (${fmt(warnAmount)}\u2013${fmt(effectiveThreshold)}):</strong>
+       <span class="preview-detail">Heads-up \u2014 non-blocking notification, one per band.</span></p>
+    <p><strong>At or above ${fmt(effectiveThreshold)}:</strong>
+       <span class="preview-detail">Confirm-or-abort \u2014 modal dialog before the call proceeds.</span></p>
+  </div>
+</div>
+`;
+  return { html };
+}
+
+// src/configEditor/sections/providersTableSection.ts
+function render3(state) {
+  const sharedProviders = state.routerConfig && typeof state.routerConfig === "object" ? state.routerConfig["providers"] : void 0;
+  const rows = [];
+  if (sharedProviders && typeof sharedProviders === "object") {
+    for (const id of Object.keys(sharedProviders)) {
+      rows.push(resolveRow(state, id));
+    }
+  }
+  const tableRows = rows.map((row) => renderRow(state, row)).join("\n");
+  const html = `
+<div class="section-block">
+  <h3>AI providers configured for this project</h3>
+  <p class="section-help">One row per <code>providers</code> entry in <code>router-config.yaml</code>. Local overrides for <em>enabled</em>, <em>api_key_env</em>, and <em>base_url</em> live in <code>local-overrides.yaml</code> per Appendix B.</p>
+
+  <table class="provider-table" id="s3-providers">
+    <thead>
+      <tr>
+        <th>On?</th>
+        <th>Display label</th>
+        <th>ID</th>
+        <th>API key env var</th>
+        <th>API URL</th>
+        <th>Edit</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows || `<tr><td colspan="6" class="placeholder">No providers configured. Hand-edit ai_router/router-config.yaml to add providers.</td></tr>`}
+    </tbody>
+  </table>
+
+  <p class="legend">
+    <span class="env-badge env-set">&#10003;</span> env var is set in the current environment &nbsp;|&nbsp;
+    <span class="env-badge env-unset">(unset)</span> env var name is configured but not present.
+    <br/>
+    <em>Tip: The webview never shows env-var <strong>values</strong> \u2014 only names + presence.</em>
+  </p>
+</div>
+`;
+  return { html };
+}
+function resolveRow(state, id) {
+  const sharedPath = (k2) => `providers.${id}.${k2}`;
+  const sharedEnabled = getByPath(state.routerConfig, sharedPath("enabled"));
+  const localEnabled = getByPath(state.localOverrides, sharedPath("enabled"));
+  const enabled = typeof localEnabled === "boolean" ? localEnabled : typeof sharedEnabled === "boolean" ? sharedEnabled : true;
+  const enabledSource = fieldSource(state, "routerConfig", sharedPath("enabled"), sharedPath("enabled"), true);
+  const displayLabel = asString(getByPath(state.routerConfig, sharedPath("display_label")) ?? toTitle(id));
+  const sharedKey = getByPath(state.routerConfig, sharedPath("api_key_env"));
+  const localKey = getByPath(state.localOverrides, sharedPath("api_key_env"));
+  const apiKeyEnv = asString(
+    typeof localKey === "string" && localKey.length > 0 ? localKey : typeof sharedKey === "string" ? sharedKey : ""
+  );
+  const apiKeyEnvSource = fieldSource(state, "routerConfig", sharedPath("api_key_env"), sharedPath("api_key_env"), true);
+  const sharedUrl = getByPath(state.routerConfig, sharedPath("base_url"));
+  const localUrl = getByPath(state.localOverrides, sharedPath("base_url"));
+  const baseUrl = asString(typeof localUrl === "string" ? localUrl : typeof sharedUrl === "string" ? sharedUrl : "");
+  const baseUrlSource = fieldSource(state, "routerConfig", sharedPath("base_url"), sharedPath("base_url"), true);
+  return { id, displayLabel, enabled, enabledSource, apiKeyEnv, apiKeyEnvSource, baseUrl, baseUrlSource };
+}
+function renderRow(state, row) {
+  return `
+<tr class="provider-row" data-provider-id="${escapeHtml(row.id)}">
+  <td>
+    <input type="checkbox" data-field="enabled"${row.enabled ? " checked" : ""} aria-label="Enabled" />
+    ${indicatorHtml(row.enabledSource, `providers.${row.id}.enabled`)}
+  </td>
+  <td>
+    <input type="text" data-field="displayLabel" value="${escapeHtml(row.displayLabel)}" />
+  </td>
+  <td>
+    <code>${escapeHtml(row.id)}</code>
+  </td>
+  <td>
+    <input type="text" data-field="apiKeyEnv" value="${escapeHtml(row.apiKeyEnv)}" pattern="^[A-Z_][A-Z0-9_]*$" />
+    ${envVarBadge(state, row.apiKeyEnv)}
+    ${indicatorHtml(row.apiKeyEnvSource, `providers.${row.id}.api_key_env`)}
+  </td>
+  <td>
+    <input type="text" data-field="baseUrl" value="${escapeHtml(row.baseUrl)}" />
+    ${indicatorHtml(row.baseUrlSource, `providers.${row.id}.base_url`)}
+  </td>
+  <td>
+    <button type="button" class="secondary popover-toggle" data-target="popover-${escapeHtml(row.id)}">&hellip;</button>
+  </td>
+</tr>
+<tr class="provider-popover" id="popover-${escapeHtml(row.id)}" style="display:none;">
+  <td colspan="6">
+    <p class="section-info">
+      Advanced provider fields (<code>rate_limit</code>, <code>timeout_seconds</code>, <code>retry</code>)
+      are not editable from the webview in v1 \u2014 they remain hand-edit-only in
+      <code>router-config.yaml</code>. The webview's job is the operator-friendly surface; the
+      expert surface is the YAML itself.
+    </p>
+  </td>
+</tr>
+`;
+}
+function toTitle(id) {
+  return id.split(/[-_]/).map((p2) => p2.length === 0 ? p2 : p2[0].toUpperCase() + p2.slice(1)).join(" ");
+}
+
+// src/configEditor/sections/significanceFlaggingSection.ts
+function render4(state) {
+  const honor = getByPath(state.localOverrides, "decision_review.honor_annotations");
+  const honorOn = typeof honor === "boolean" ? honor : true;
+  const honorSource = fieldSource(state, "localOnly", "", "decision_review.honor_annotations", true);
+  const html = `
+<div class="section-block">
+  <h3>Two ways to flag a decision for cross-provider review</h3>
+
+  <ol class="numbered-list">
+    <li>
+      <strong>Run the command</strong>
+      <div class="command-box">
+        <code>Dabbler: Flag Decision for Cross-Provider Review</code>
+      </div>
+      <p class="section-help">You'll be prompted for a one-line reason. The flag is queued in the active session-set's decision-review queue.</p>
+      <button type="button" id="s4-run-flag-command" class="secondary">Run command now&hellip;</button>
+    </li>
+    <li>
+      <strong>Add an annotation in source code</strong>
+      <pre class="code-sample"># @dabbler:outsource-review("reason text here")</pre>
+      <p class="section-help">The orchestrator scans open files at session start; any new annotations are queued automatically.</p>
+    </li>
+  </ol>
+</div>
+
+<div class="section-block">
+  <h3>Honor annotations</h3>
+  <div class="field-row">
+    <label><input type="checkbox" id="s4-honor-annotations" data-field="honorAnnotations"${honorOn ? " checked" : ""} /> Honor <code>@dabbler:outsource-review</code> annotations in this project</label>
+    ${indicatorHtml(honorSource, "honorAnnotations")}
+  </div>
+  <p class="section-info">Defaults to ON; this setting lives in <code>local-overrides.yaml</code> at <code>decision_review.honor_annotations</code>.</p>
+</div>
+
+<div class="section-block">
+  <h3>Queue file</h3>
+  <p class="section-info">
+    Flagged decisions are appended to:
+    <br/>
+    <code>docs/session-sets/&lt;active-slug&gt;/decision-review-queue.jsonl</code>
+    <br/>
+    They surface in the orchestrator's initial planning checklist at the next session start.
+  </p>
+</div>
+`;
+  return { html };
+}
+
+// src/configEditor/sections/notificationsSection.ts
+function render5(state) {
+  const enabledRaw = getByPath(state.localOverrides, "notifications.pushover.enabled");
+  const apiKeyRaw = getByPath(state.localOverrides, "notifications.pushover.api_key_env");
+  const userKeyRaw = getByPath(state.localOverrides, "notifications.pushover.user_key_env");
+  const enabled = typeof enabledRaw === "boolean" ? enabledRaw : false;
+  const apiKeyEnv = asString(apiKeyRaw, "PUSHOVER_API_KEY");
+  const userKeyEnv = asString(userKeyRaw, "PUSHOVER_USER_KEY");
+  const enabledSource = fieldSource(state, "localOnly", "", "notifications.pushover.enabled", true);
+  const apiKeySource = fieldSource(state, "localOnly", "", "notifications.pushover.api_key_env", true);
+  const userKeySource = fieldSource(state, "localOnly", "", "notifications.pushover.user_key_env", true);
+  const html = `
+<div class="section-block">
+  <h3>Pushover notifications at end-of-session</h3>
+
+  <div class="field-row">
+    <label><input type="checkbox" id="s5-pushover-enabled" data-field="pushoverEnabled"${enabled ? " checked" : ""} /> Enable Pushover</label>
+    ${indicatorHtml(enabledSource, "pushoverEnabled")}
+  </div>
+
+  <div class="field-row">
+    <label for="s5-pushover-api-key-env">API key env var</label>
+    <input type="text" id="s5-pushover-api-key-env" data-field="pushoverApiKeyEnv" value="${escapeHtml(apiKeyEnv)}" pattern="^[A-Z_][A-Z0-9_]*$" />
+    ${envVarBadge(state, apiKeyEnv)}
+    ${indicatorHtml(apiKeySource, "pushoverApiKeyEnv")}
+  </div>
+
+  <div class="field-row">
+    <label for="s5-pushover-user-key-env">User key env var</label>
+    <input type="text" id="s5-pushover-user-key-env" data-field="pushoverUserKeyEnv" value="${escapeHtml(userKeyEnv)}" pattern="^[A-Z_][A-Z0-9_]*$" />
+    ${envVarBadge(state, userKeyEnv)}
+    ${indicatorHtml(userKeySource, "pushoverUserKeyEnv")}
+  </div>
+
+  <p class="section-info">
+    &#9432; These values live in <code>local-overrides.yaml</code> \u2014 they are
+    NOT shared with collaborators when you push the repo. The env vars themselves
+    resolve from your operating-system shell environment, not from any file in the repo.
+  </p>
+
+  <div class="field-row">
+    <button type="button" id="s5-test-notification" class="secondary" disabled>Send a test notification now</button>
+    <span class="section-info">(wired in Set 026 Session 7)</span>
+  </div>
+</div>
+`;
+  return { html };
+}
+
+// src/configEditor/sections/localOverridesSummarySection.ts
+function render6(state) {
+  const { localOverrides, localOverridesFileExists } = state;
+  if (!localOverridesFileExists) {
+    return {
+      html: `
+<div class="section-block">
+  <h3>No local overrides on this machine</h3>
+  <p class="section-info">
+    <code>ai_router/local-overrides.yaml</code> does not exist yet. The file is in
+    <code>.gitignore</code> by design \u2014 when you set a per-operator override in
+    Routing / Budget / Providers / Notifications, the webview creates it on Save.
+  </p>
+</div>
+`
+    };
+  }
+  const rows = collectOverrideRows(localOverrides, state);
+  if (rows.length === 0) {
+    return {
+      html: `
+<div class="section-block">
+  <h3>Local overrides summary</h3>
+  <p class="section-info">
+    <code>local-overrides.yaml</code> exists but contains no override entries.
+    All effective config comes from the shared YAML files.
+  </p>
+  <button type="button" id="s6-open-local-overrides" class="secondary">Open local-overrides.yaml</button>
+</div>
+`
+    };
+  }
+  const rowsHtml = rows.map((r2) => `
+<li class="override-row">
+  <div class="override-path"><code>${escapeHtml(r2.path)}</code></div>
+  <div class="override-side">
+    <strong>Shared:</strong>
+    <code>${escapeHtml(r2.sharedDisplay)}</code>
+  </div>
+  <div class="override-side">
+    <strong>Local:</strong>
+    <code>${escapeHtml(r2.localDisplay)}</code>
+  </div>
+</li>
+`).join("\n");
+  const html = `
+<div class="section-block">
+  <h3>These settings differ from the shared (committed) configuration</h3>
+  <ul class="override-list">
+    ${rowsHtml}
+  </ul>
+  <p class="section-info">
+    &#9432; <code>local-overrides.yaml</code> is in your <code>.gitignore</code> \u2014 values here are
+    personal to your machine and never get pushed to the repo.
+  </p>
+  <button type="button" id="s6-open-local-overrides" class="secondary">Open local-overrides.yaml directly</button>
+</div>
+`;
+  return { html };
+}
+function collectOverrideRows(localOverrides, state) {
+  if (!localOverrides)
+    return [];
+  const rows = [];
+  walk(localOverrides, [], (path17, value) => {
+    const dotted = path17.join(".");
+    const sharedSource = pickSharedSource(path17[0]);
+    const sharedVal = sharedSource === "routerConfig" ? getByPath(state.routerConfig, dotted) : sharedSource === "budget" ? getByPath(state.budget, dotted) : void 0;
+    rows.push({
+      path: dotted,
+      sharedDisplay: sharedSource === "none" ? "(local-only section)" : formatValue(sharedVal),
+      localDisplay: formatValue(value)
+    });
+  });
+  return rows;
+}
+function pickSharedSource(topKey) {
+  if (topKey === "routing" || topKey === "providers" || topKey === "models")
+    return "routerConfig";
+  if (topKey === "threshold_usd" || topKey === "warn_at_percent" || topKey === "scope")
+    return "budget";
+  return "none";
+}
+function formatValue(v) {
+  if (v === void 0)
+    return "(not set, defaults apply)";
+  if (v === null)
+    return "null";
+  if (typeof v === "string")
+    return v;
+  if (typeof v === "boolean")
+    return v ? "true" : "false";
+  if (typeof v === "number")
+    return String(v);
+  return JSON.stringify(v);
+}
+function walk(obj, prefix, emit) {
+  for (const [k2, v] of Object.entries(obj)) {
+    const path17 = [...prefix, k2];
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      walk(v, path17, emit);
+    } else {
+      emit(path17, v);
+    }
+  }
+}
+
+// src/configEditor/patch.ts
+var import_yaml2 = __toESM(require_dist3());
+function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
+  const result = {
+    routerConfigChanged: false,
+    budgetChanged: false,
+    localOverridesChanged: false,
+    warnings: []
+  };
+  if (payload.outsourcingMode !== void 0) {
+    const { value, source } = payload.outsourcingMode;
+    if (source === "local") {
+      if (setIfChanged(localOverridesDoc, ["routing", "outsourcing_mode"], value)) {
+        result.localOverridesChanged = true;
+      }
+      deleteIfPresent(routerConfigDoc, ["routing", "outsourcing_mode"], result, "routerConfigChanged");
+    } else {
+      if (setIfChanged(routerConfigDoc, ["routing", "outsourcing_mode"], value)) {
+        result.routerConfigChanged = true;
+      }
+      deleteIfPresent(localOverridesDoc, ["routing", "outsourcing_mode"], result, "localOverridesChanged");
+      pruneEmptyContainer(localOverridesDoc, ["routing"], result, "localOverridesChanged");
+    }
+  }
+  if (payload.verificationMethod !== void 0) {
+    if (setIfChanged(budgetDoc, ["verification_method"], payload.verificationMethod)) {
+      result.budgetChanged = true;
+    }
+  }
+  if (payload.thresholdUsd !== void 0) {
+    const { value, source } = payload.thresholdUsd;
+    if (source === "local") {
+      if (setIfChanged(localOverridesDoc, ["threshold_usd"], value)) {
+        result.localOverridesChanged = true;
+      }
+      result.warnings.push("threshold_usd is project-canonical per Appendix B and may be rejected by the local-overrides allowlist.");
+    } else {
+      if (setIfChanged(budgetDoc, ["threshold_usd"], value)) {
+        result.budgetChanged = true;
+      }
+      deleteIfPresent(localOverridesDoc, ["threshold_usd"], result, "localOverridesChanged");
+    }
+  }
+  if (payload.scope !== void 0) {
+    if (setIfChanged(budgetDoc, ["scope"], payload.scope)) {
+      result.budgetChanged = true;
+    }
+  }
+  if (payload.warnAtPercent !== void 0) {
+    const { value, source } = payload.warnAtPercent;
+    if (source === "local") {
+      if (setIfChanged(localOverridesDoc, ["warn_at_percent"], value)) {
+        result.localOverridesChanged = true;
+      }
+      result.warnings.push("warn_at_percent is project-canonical per Appendix B and may be rejected by the local-overrides allowlist.");
+    } else {
+      if (setIfChanged(budgetDoc, ["warn_at_percent"], value)) {
+        result.budgetChanged = true;
+      }
+      deleteIfPresent(localOverridesDoc, ["warn_at_percent"], result, "localOverridesChanged");
+    }
+  }
+  if (payload.providers !== void 0) {
+    for (const p2 of payload.providers) {
+      if (p2.removed) {
+        deleteIfPresent(routerConfigDoc, ["providers", p2.id], result, "routerConfigChanged");
+        deleteIfPresent(localOverridesDoc, ["providers", p2.id], result, "localOverridesChanged");
+        pruneEmptyContainer(localOverridesDoc, ["providers"], result, "localOverridesChanged");
+        continue;
+      }
+      if (p2.displayLabel !== void 0) {
+        if (setIfChanged(routerConfigDoc, ["providers", p2.id, "display_label"], p2.displayLabel)) {
+          result.routerConfigChanged = true;
+        }
+      }
+      if (p2.enabled !== void 0) {
+        applyOverridableField(
+          routerConfigDoc,
+          localOverridesDoc,
+          ["providers", p2.id, "enabled"],
+          p2.enabled.value,
+          p2.enabled.source,
+          result
+        );
+      }
+      if (p2.apiKeyEnv !== void 0) {
+        applyOverridableField(
+          routerConfigDoc,
+          localOverridesDoc,
+          ["providers", p2.id, "api_key_env"],
+          p2.apiKeyEnv.value,
+          p2.apiKeyEnv.source,
+          result
+        );
+      }
+      if (p2.baseUrl !== void 0) {
+        applyOverridableField(
+          routerConfigDoc,
+          localOverridesDoc,
+          ["providers", p2.id, "base_url"],
+          p2.baseUrl.value,
+          p2.baseUrl.source,
+          result
+        );
+      }
+    }
+    pruneEmptyProvidersBlock(localOverridesDoc, result);
+  }
+  if (payload.honorAnnotations !== void 0) {
+    if (setIfChanged(localOverridesDoc, ["decision_review", "honor_annotations"], payload.honorAnnotations)) {
+      result.localOverridesChanged = true;
+    }
+  }
+  if (payload.pushoverEnabled !== void 0) {
+    if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "enabled"], payload.pushoverEnabled)) {
+      result.localOverridesChanged = true;
+    }
+  }
+  if (payload.pushoverApiKeyEnv !== void 0) {
+    if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "api_key_env"], payload.pushoverApiKeyEnv)) {
+      result.localOverridesChanged = true;
+    }
+  }
+  if (payload.pushoverUserKeyEnv !== void 0) {
+    if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "user_key_env"], payload.pushoverUserKeyEnv)) {
+      result.localOverridesChanged = true;
+    }
+  }
+  return result;
+}
+function applyOverridableField(routerConfigDoc, localOverridesDoc, path17, value, source, result) {
+  if (source === "local") {
+    if (setIfChanged(localOverridesDoc, path17, value)) {
+      result.localOverridesChanged = true;
+    }
+    deleteIfPresent(routerConfigDoc, path17, result, "routerConfigChanged");
+  } else {
+    if (setIfChanged(routerConfigDoc, path17, value)) {
+      result.routerConfigChanged = true;
+    }
+    deleteIfPresent(localOverridesDoc, path17, result, "localOverridesChanged");
+  }
+}
+function setIfChanged(doc, path17, value) {
+  const current = doc.getIn(path17);
+  if (current === value)
+    return false;
+  doc.setIn(path17, value);
+  return true;
+}
+function deleteIfPresent(doc, path17, result, flag) {
+  if (doc.hasIn(path17)) {
+    doc.deleteIn(path17);
+    result[flag] = true;
+  }
+}
+function pruneEmptyContainer(doc, path17, result, flag) {
+  if (!doc.hasIn(path17))
+    return;
+  const node = doc.getIn(path17);
+  if (node && typeof node === "object" && "items" in node) {
+    const items = node.items;
+    if (Array.isArray(items) && items.length === 0) {
+      doc.deleteIn(path17);
+      result[flag] = true;
+    }
+  }
+}
+function pruneEmptyProvidersBlock(doc, result) {
+  const providersNode = doc.getIn(["providers"]);
+  if (!providersNode || typeof providersNode !== "object" || !("items" in providersNode))
+    return;
+  const items = providersNode.items ?? [];
+  for (let i2 = items.length - 1; i2 >= 0; i2--) {
+    const key = items[i2]?.key?.value;
+    if (typeof key !== "string")
+      continue;
+    const providerEntry = doc.getIn(["providers", key]);
+    if (providerEntry && typeof providerEntry === "object" && "items" in providerEntry) {
+      const innerItems = providerEntry.items;
+      if (Array.isArray(innerItems) && innerItems.length === 0) {
+        doc.deleteIn(["providers", key]);
+        result.localOverridesChanged = true;
+      }
+    }
+  }
+  pruneEmptyContainer(doc, ["providers"], result, "localOverridesChanged");
+}
+function emptyLocalOverridesDoc() {
+  const text = `# ai_router/local-overrides.yaml
+# Machine-local overrides; this file is .gitignored.
+# Appendix B (Set 025 spec) defines which paths are locally overridable.
+{}
+`;
+  return (0, import_yaml2.parseDocument)(text);
+}
+
 // src/configEditor/ConfigEditorPanel.ts
 function getNonce3() {
   let text = "";
@@ -22325,7 +22998,8 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     this._loaded = null;
     this._validation = null;
     this._parseIssues = [];
-    this._saveState = { lastSavedAt: null, lastSavedHash: null };
+    this._lastSaveSnapshot = null;
+    this._recovery = null;
     this._panel = panel;
     this._extensionUri = extensionUri;
     this._loadFiles();
@@ -22334,11 +23008,28 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
       _ConfigEditorPanel.currentPanel = void 0;
     });
     this._panel.webview.onDidReceiveMessage((msg) => {
-      if (msg.command === "save") {
-        this._handleSave();
-      }
-      if (msg.command === "refresh") {
-        this._refresh();
+      switch (msg.command) {
+        case "save":
+          this._handleSave(msg.payload);
+          break;
+        case "refresh":
+          this._refresh();
+          break;
+        case "runFlagCommand":
+          this._runFlagDecisionCommand();
+          break;
+        case "openLocalOverrides":
+          this._openLocalOverridesFile();
+          break;
+        case "retryFailedWrite":
+          this._retryFailedWrite();
+          break;
+        case "acceptHalfBatch":
+          this._acceptHalfBatchAsBaseline();
+          break;
+        case "reapplyLastSave":
+          this._reapplyLastSave();
+          break;
       }
     });
   }
@@ -22386,10 +23077,14 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     this._loaded = {
       routerConfigPath,
       budgetPath,
-      localOverridesPath: localResult ? localOverridesPath : null,
+      localOverridesPath,
+      localOverridesFileExists: localResult !== null,
       routerConfigDoc: routerResult?.doc ?? null,
       budgetDoc: budgetResult?.doc ?? null,
-      localOverridesDoc: localResult?.doc ?? null
+      localOverridesDoc: localResult?.doc ?? null,
+      routerConfigText: routerResult?.text ?? null,
+      budgetText: budgetResult?.text ?? null,
+      localOverridesText: localResult?.text ?? null
     };
     this._parseIssues = [];
     if (routerResult) {
@@ -22418,8 +23113,85 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
       budget: budgetObj,
       localOverrides: localObj
     });
+    if (!this._recovery || this._recovery.failed.length === 0) {
+      this._recovery = this._detectDrift();
+    }
   }
-  _handleSave() {
+  _detectDrift() {
+    if (!this._lastSaveSnapshot || !this._loaded)
+      return null;
+    const drifted = [];
+    const currentRouter = this._loaded.routerConfigText;
+    const currentBudget = this._loaded.budgetText;
+    const currentLocal = this._loaded.localOverridesText;
+    if (currentRouter !== null && currentRouter !== this._lastSaveSnapshot.routerConfigText) {
+      drifted.push("router-config.yaml");
+    } else if (currentRouter === null && this._lastSaveSnapshot.routerConfigText !== "") {
+      drifted.push("router-config.yaml");
+    }
+    if (currentBudget !== null && currentBudget !== this._lastSaveSnapshot.budgetText) {
+      drifted.push("budget.yaml");
+    } else if (currentBudget === null && this._lastSaveSnapshot.budgetText !== "") {
+      drifted.push("budget.yaml");
+    }
+    if (currentLocal !== this._lastSaveSnapshot.localOverridesText) {
+      drifted.push("local-overrides.yaml");
+    }
+    if (drifted.length === 0)
+      return null;
+    return { succeeded: [], failed: [], drifted, pendingContents: {} };
+  }
+  _deriveState() {
+    if (!this._loaded) {
+      return {
+        routerConfig: null,
+        budget: null,
+        localOverrides: null,
+        envVarPresence: {},
+        localOverridesFileExists: false
+      };
+    }
+    const routerObj = this._loaded.routerConfigDoc?.toJSON() ?? null;
+    const budgetObj = this._loaded.budgetDoc?.toJSON() ?? null;
+    const localObj = this._loaded.localOverridesDoc?.toJSON() ?? null;
+    const envVars = /* @__PURE__ */ new Set();
+    const sharedProviders = routerObj && typeof routerObj === "object" ? routerObj["providers"] : null;
+    if (sharedProviders) {
+      for (const v of Object.values(sharedProviders)) {
+        const ent = v;
+        if (typeof ent?.api_key_env === "string")
+          envVars.add(ent.api_key_env);
+      }
+    }
+    const localProviders = localObj && typeof localObj === "object" ? localObj["providers"] : null;
+    if (localProviders) {
+      for (const v of Object.values(localProviders)) {
+        const ent = v;
+        if (typeof ent?.api_key_env === "string")
+          envVars.add(ent.api_key_env);
+      }
+    }
+    const pushover = localObj && typeof localObj === "object" ? localObj["notifications"]?.["pushover"] : void 0;
+    if (pushover) {
+      if (typeof pushover.api_key_env === "string")
+        envVars.add(pushover.api_key_env);
+      if (typeof pushover.user_key_env === "string")
+        envVars.add(pushover.user_key_env);
+    }
+    const envVarPresence = {};
+    for (const name of envVars) {
+      const v = process.env[name];
+      envVarPresence[name] = typeof v === "string" && v.length > 0;
+    }
+    return {
+      routerConfig: routerObj,
+      budget: budgetObj,
+      localOverrides: localObj,
+      envVarPresence,
+      localOverridesFileExists: this._loaded.localOverridesFileExists
+    };
+  }
+  _handleSave(payload) {
     if (!this._loaded) {
       vscode14.window.showErrorMessage("No config files loaded.");
       return;
@@ -22430,38 +23202,308 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
       );
       return;
     }
-    const routerConfigObj = this._loaded.routerConfigDoc?.toJSON() ?? null;
-    const budgetObj = this._loaded.budgetDoc?.toJSON() ?? null;
-    const localObj = this._loaded.localOverridesDoc?.toJSON() ?? null;
-    const result = validateBatch({ routerConfig: routerConfigObj, budget: budgetObj, localOverrides: localObj });
-    if (!result.valid) {
+    if (!payload) {
+      vscode14.window.showErrorMessage("Save aborted \u2014 no payload from webview.");
+      return;
+    }
+    if (!this._loaded.routerConfigDoc || !this._loaded.budgetDoc) {
+      vscode14.window.showErrorMessage("Save aborted \u2014 required config files are missing.");
+      return;
+    }
+    const routerClone = parseDocumentFromText(this._loaded.routerConfigDoc.toString());
+    const budgetClone = parseDocumentFromText(this._loaded.budgetDoc.toString());
+    const localClone = this._loaded.localOverridesDoc ? parseDocumentFromText(this._loaded.localOverridesDoc.toString()) : emptyLocalOverridesDoc();
+    let applyResult;
+    try {
+      applyResult = applyPatch(routerClone, budgetClone, localClone, payload);
+    } catch (err) {
       vscode14.window.showErrorMessage(
-        `Save aborted \u2014 ${result.errors.length} validation error(s). Fix drift detected in the editor before saving.`
+        `Save aborted \u2014 patch application failed: ${err instanceof Error ? err.message : String(err)}`
       );
       return;
     }
-    try {
-      if (this._loaded.routerConfigDoc) {
-        writeYamlFile(this._loaded.routerConfigPath, this._loaded.routerConfigDoc);
-      }
-      if (this._loaded.budgetDoc) {
-        writeYamlFile(this._loaded.budgetPath, this._loaded.budgetDoc);
-      }
-      if (this._loaded.localOverridesDoc && this._loaded.localOverridesPath) {
-        writeYamlFile(this._loaded.localOverridesPath, this._loaded.localOverridesDoc);
-      }
-      this._saveState = {
-        lastSavedAt: Date.now(),
-        lastSavedHash: null
-        // content-hash drift detection ships in Session 5
-      };
-      this._refresh();
-      vscode14.window.showInformationMessage("Dabbler config saved.");
-    } catch (err) {
+    const routerObj = routerClone.toJSON() ?? null;
+    const budgetObj = budgetClone.toJSON() ?? null;
+    const localObj = localClone.toJSON() ?? null;
+    const validation = validateBatch({ routerConfig: routerObj, budget: budgetObj, localOverrides: localObj });
+    if (!validation.valid) {
+      const msgs = validation.errors.map((e) => `${e.file}${e.path}: ${e.message}`).join("\n");
       vscode14.window.showErrorMessage(
-        `Save failed: ${err instanceof Error ? err.message : String(err)}`
+        `Save aborted \u2014 ${validation.errors.length} validation error(s):
+${msgs}`,
+        { modal: false }
+      );
+      return;
+    }
+    this._loaded.routerConfigDoc = routerClone;
+    this._loaded.budgetDoc = budgetClone;
+    this._loaded.localOverridesDoc = localClone;
+    const localJson = localClone.toJSON();
+    const localHasContent = localJson && Object.keys(localJson).length > 0;
+    const shouldWriteLocal = applyResult.localOverridesChanged && (localHasContent || this._loaded.localOverridesFileExists);
+    const pending = {};
+    if (applyResult.routerConfigChanged)
+      pending["router-config.yaml"] = routerClone.toString();
+    if (applyResult.budgetChanged)
+      pending["budget.yaml"] = budgetClone.toString();
+    if (shouldWriteLocal)
+      pending["local-overrides.yaml"] = localClone.toString();
+    const succeeded = [];
+    const failed = [];
+    const writeAtomic = (file, target, content) => {
+      const tmp = target + ".tmp";
+      try {
+        fs14.writeFileSync(tmp, content, "utf8");
+        fs14.renameSync(tmp, target);
+        succeeded.push(file);
+      } catch (err) {
+        try {
+          if (fs14.existsSync(tmp))
+            fs14.unlinkSync(tmp);
+        } catch {
+        }
+        failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
+      }
+    };
+    if (pending["router-config.yaml"] !== void 0) {
+      writeAtomic("router-config.yaml", this._loaded.routerConfigPath, pending["router-config.yaml"]);
+    }
+    if (pending["budget.yaml"] !== void 0) {
+      writeAtomic("budget.yaml", this._loaded.budgetPath, pending["budget.yaml"]);
+    }
+    if (pending["local-overrides.yaml"] !== void 0) {
+      writeAtomic("local-overrides.yaml", this._loaded.localOverridesPath, pending["local-overrides.yaml"]);
+    }
+    if (failed.length > 0 && succeeded.length > 0) {
+      const pendingContents = {};
+      for (const f of failed) {
+        const content = pending[f.file];
+        if (content !== void 0)
+          pendingContents[f.file] = content;
+      }
+      this._recovery = { succeeded, failed, drifted: [], pendingContents };
+      this._refresh();
+      vscode14.window.showErrorMessage(
+        `Partial save \u2014 ${succeeded.length} file(s) saved, ${failed.length} failed. See the recovery banner in the editor.`
+      );
+      return;
+    }
+    if (failed.length > 0) {
+      this._refresh();
+      vscode14.window.showErrorMessage(
+        `Save failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`
+      );
+      return;
+    }
+    this._lastSaveSnapshot = this._captureSnapshot(applyResult.routerConfigChanged, applyResult.budgetChanged, shouldWriteLocal);
+    if (applyResult.warnings.length > 0) {
+      vscode14.window.showWarningMessage(applyResult.warnings.join(" "));
+    }
+    if (applyResult.routerConfigChanged || applyResult.budgetChanged || applyResult.localOverridesChanged) {
+      vscode14.window.showInformationMessage("Dabbler config saved.");
+    } else {
+      vscode14.window.showInformationMessage("No changes to save.");
+    }
+    this._refresh();
+  }
+  /**
+   * Snapshot the exact file contents the panel just persisted. For files
+   * NOT touched this save, we use the raw text already on disk (loaded
+   * earlier). For files written, we use doc.toString() which matches
+   * what writeYamlFile serialized. If local-overrides was not written
+   * AND the file exists on disk, we still snapshot it so drift detection
+   * uses the loaded text as the baseline rather than null.
+   */
+  _captureSnapshot(routerWritten, budgetWritten, localWritten) {
+    const routerText = routerWritten && this._loaded?.routerConfigDoc ? this._loaded.routerConfigDoc.toString() : this._loaded?.routerConfigText ?? "";
+    const budgetText = budgetWritten && this._loaded?.budgetDoc ? this._loaded.budgetDoc.toString() : this._loaded?.budgetText ?? "";
+    let localText;
+    if (localWritten && this._loaded?.localOverridesDoc) {
+      localText = this._loaded.localOverridesDoc.toString();
+    } else if (this._loaded?.localOverridesFileExists) {
+      localText = this._loaded.localOverridesText;
+    } else {
+      localText = null;
+    }
+    return {
+      routerConfigText: routerText,
+      budgetText,
+      localOverridesText: localText,
+      at: Date.now()
+    };
+  }
+  _retryFailedWrite() {
+    if (!this._recovery || this._recovery.failed.length === 0 || !this._loaded)
+      return;
+    const stillFailed = [];
+    const newSucceeded = [...this._recovery.succeeded];
+    const remainingPending = {};
+    for (const f of this._recovery.failed) {
+      const cachedContent = this._recovery.pendingContents?.[f.file];
+      if (cachedContent === void 0) {
+        stillFailed.push({ file: f.file, reason: "internal: no cached content to retry" });
+        continue;
+      }
+      let target = null;
+      if (f.file === "router-config.yaml")
+        target = this._loaded.routerConfigPath;
+      else if (f.file === "budget.yaml")
+        target = this._loaded.budgetPath;
+      else if (f.file === "local-overrides.yaml")
+        target = this._loaded.localOverridesPath;
+      if (!target) {
+        stillFailed.push({ file: f.file, reason: "internal: no target path" });
+        continue;
+      }
+      const tmp = target + ".tmp";
+      try {
+        fs14.writeFileSync(tmp, cachedContent, "utf8");
+        fs14.renameSync(tmp, target);
+        newSucceeded.push(f.file);
+      } catch (err) {
+        try {
+          if (fs14.existsSync(tmp))
+            fs14.unlinkSync(tmp);
+        } catch {
+        }
+        stillFailed.push({ file: f.file, reason: err instanceof Error ? err.message : String(err) });
+        remainingPending[f.file] = cachedContent;
+      }
+    }
+    if (stillFailed.length === 0) {
+      this._lastSaveSnapshot = this._captureSnapshot(
+        newSucceeded.includes("router-config.yaml"),
+        newSucceeded.includes("budget.yaml"),
+        newSucceeded.includes("local-overrides.yaml")
+      );
+      if (this._lastSaveSnapshot && this._recovery.pendingContents) {
+        const pc = this._recovery.pendingContents;
+        if (pc["router-config.yaml"] !== void 0) {
+          this._lastSaveSnapshot.routerConfigText = pc["router-config.yaml"];
+        }
+        if (pc["budget.yaml"] !== void 0) {
+          this._lastSaveSnapshot.budgetText = pc["budget.yaml"];
+        }
+        if (pc["local-overrides.yaml"] !== void 0) {
+          this._lastSaveSnapshot.localOverridesText = pc["local-overrides.yaml"];
+        }
+      }
+      this._recovery = null;
+      vscode14.window.showInformationMessage("Retry succeeded \u2014 all files saved.");
+    } else {
+      this._recovery = {
+        succeeded: newSucceeded,
+        failed: stillFailed,
+        drifted: [],
+        pendingContents: remainingPending
+      };
+      vscode14.window.showErrorMessage(
+        `Retry partial \u2014 ${stillFailed.length} file(s) still failing.`
       );
     }
+    this._refresh();
+  }
+  _acceptHalfBatchAsBaseline() {
+    this._recovery = null;
+    if (this._loaded) {
+      this._lastSaveSnapshot = {
+        routerConfigText: this._loaded.routerConfigText ?? "",
+        budgetText: this._loaded.budgetText ?? "",
+        localOverridesText: this._loaded.localOverridesText,
+        at: Date.now()
+      };
+    }
+    this._refresh();
+    vscode14.window.showInformationMessage("On-disk state accepted as new baseline.");
+  }
+  _reapplyLastSave() {
+    if (!this._lastSaveSnapshot || !this._loaded) {
+      vscode14.window.showErrorMessage(
+        "Re-apply unavailable \u2014 no last-saved snapshot exists in this session."
+      );
+      return;
+    }
+    const succeeded = [];
+    const failed = [];
+    const pendingContents = {};
+    const reapply = (file, target, content) => {
+      pendingContents[file] = content;
+      const tmp = target + ".tmp";
+      try {
+        fs14.writeFileSync(tmp, content, "utf8");
+        fs14.renameSync(tmp, target);
+        succeeded.push(file);
+      } catch (err) {
+        try {
+          if (fs14.existsSync(tmp))
+            fs14.unlinkSync(tmp);
+        } catch {
+        }
+        failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
+      }
+    };
+    reapply("router-config.yaml", this._loaded.routerConfigPath, this._lastSaveSnapshot.routerConfigText);
+    reapply("budget.yaml", this._loaded.budgetPath, this._lastSaveSnapshot.budgetText);
+    if (this._lastSaveSnapshot.localOverridesText !== null) {
+      reapply("local-overrides.yaml", this._loaded.localOverridesPath, this._lastSaveSnapshot.localOverridesText);
+    } else if (fs14.existsSync(this._loaded.localOverridesPath)) {
+      try {
+        fs14.unlinkSync(this._loaded.localOverridesPath);
+        succeeded.push("local-overrides.yaml");
+      } catch (err) {
+        failed.push({
+          file: "local-overrides.yaml",
+          reason: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
+    if (failed.length > 0 && succeeded.length > 0) {
+      const failedPending = {};
+      for (const f of failed) {
+        if (pendingContents[f.file] !== void 0)
+          failedPending[f.file] = pendingContents[f.file];
+      }
+      this._recovery = { succeeded, failed, drifted: [], pendingContents: failedPending };
+      this._refresh();
+      vscode14.window.showErrorMessage(
+        `Re-apply partial \u2014 ${succeeded.length} file(s) restored, ${failed.length} failed. See the recovery banner.`
+      );
+      return;
+    }
+    if (failed.length > 0) {
+      this._refresh();
+      vscode14.window.showErrorMessage(
+        `Re-apply failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`
+      );
+      return;
+    }
+    this._recovery = null;
+    this._lastSaveSnapshot = { ...this._lastSaveSnapshot, at: Date.now() };
+    vscode14.window.showInformationMessage("Last-saved state re-applied to disk.");
+    this._refresh();
+  }
+  async _runFlagDecisionCommand() {
+    const all = await vscode14.commands.getCommands();
+    if (all.includes("dabbler.flagDecisionForReview")) {
+      await vscode14.commands.executeCommand("dabbler.flagDecisionForReview");
+      return;
+    }
+    vscode14.window.showInformationMessage(
+      "dabbler.flagDecisionForReview is not registered yet \u2014 it ships in Set 026 Session 6. Until then, hand-edit the active session-set's decision-review-queue.jsonl directly."
+    );
+  }
+  async _openLocalOverridesFile() {
+    if (!this._loaded)
+      return;
+    const target = this._loaded.localOverridesPath;
+    if (!fs14.existsSync(target)) {
+      vscode14.window.showInformationMessage(
+        "local-overrides.yaml does not exist yet. Save any per-operator override and the file is created automatically."
+      );
+      return;
+    }
+    const doc = await vscode14.workspace.openTextDocument(target);
+    await vscode14.window.showTextDocument(doc);
   }
   _refresh() {
     this._loadFiles();
@@ -22485,35 +23527,43 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     const errors = this._validation?.errors ?? [];
     const parseIssues = this._parseIssues;
     const hasParseIssues = parseIssues.length > 0;
-    const savedStatus = this._saveState.lastSavedAt ? `All changes saved (${new Date(this._saveState.lastSavedAt).toLocaleTimeString()}).` : "No unsaved changes.";
+    const savedStatus = this._lastSaveSnapshot ? `All changes saved (${new Date(this._lastSaveSnapshot.at).toLocaleTimeString()}).` : "No unsaved changes.";
     const fileList = [
       "ai_router/router-config.yaml",
       hasBudget ? "ai_router/budget.yaml" : null,
-      this._loaded.localOverridesPath ? "ai_router/local-overrides.yaml" : null
+      this._loaded.localOverridesFileExists ? "ai_router/local-overrides.yaml" : null
     ].filter(Boolean).join(" + ");
-    const parseBanner = hasParseIssues ? `<div class="drift-banner">
-          <strong>\u26A0 YAML parse error</strong> \u2014 ${parseIssues.length} parse issue(s). Save is blocked until resolved.
+    const parseBanner = hasParseIssues ? `<div class="banner banner-error">
+          <strong>&#9888; YAML parse error</strong> \u2014 ${parseIssues.length} parse issue(s). Save is blocked until resolved.
           <ul>${parseIssues.map(
-      (p2) => `<li><code>${p2.file}</code>${p2.err.line != null ? ` (line ${p2.err.line})` : ""}: ${escapeHtml(p2.err.message)}</li>`
+      (p2) => `<li><code>${p2.file}</code>${p2.err.line != null ? ` (line ${p2.err.line})` : ""}: ${escapeHtml3(p2.err.message)}</li>`
     ).join("")}</ul>
         </div>` : "";
-    const driftBanner = !validationPassed && !hasParseIssues ? `<div class="drift-banner">
-          <strong>\u26A0 Drift detected</strong> \u2014 ${errors.length} validation error(s). Sections are read-only until resolved.
-          <ul>${errors.map((e) => `<li><code>${escapeHtml(e.file + e.path)}</code>: ${escapeHtml(e.message)}</li>`).join("")}</ul>
+    const driftBanner = !validationPassed && !hasParseIssues ? `<div class="banner banner-error">
+          <strong>&#9888; Drift detected</strong> \u2014 ${errors.length} validation error(s). Sections remain editable but Save will reject until fixed.
+          <ul>${errors.map((e) => `<li><code>${escapeHtml3(e.file + e.path)}</code>: ${escapeHtml3(e.message)}</li>`).join("")}</ul>
         </div>` : "";
+    const recoveryBanner = this._recovery ? this._renderRecoveryBanner(this._recovery) : "";
+    const state = this._deriveState();
+    const s1 = render(state);
+    const s2 = render2(state);
+    const s3 = render3(state);
+    const s4 = render4(state);
+    const s5 = render5(state);
+    const s6 = render6(state);
     const sections = [
-      { num: 1, label: "Routing &amp; Verification" },
-      { num: 2, label: "Budget" },
-      { num: 3, label: "Providers" },
-      { num: 4, label: "Significance flagging" },
-      { num: 5, label: "Notifications" },
-      { num: 6, label: "Local overrides summary" }
+      { num: 1, label: "Routing &amp; Verification", body: s1.html },
+      { num: 2, label: "Budget", body: s2.html },
+      { num: 3, label: "Providers", body: s3.html },
+      { num: 4, label: "Significance flagging", body: s4.html },
+      { num: 5, label: "Notifications", body: s5.html },
+      { num: 6, label: "Local overrides summary", body: s6.html }
     ];
     const sectionNav = sections.map((s) => `<button class="section-btn" data-section="${s.num}">&rsaquo; ${s.label}</button>`).join("\n");
     const sectionContent = sections.map(
       (s) => `<div class="section-panel" id="section-${s.num}" style="display:${s.num === 1 ? "block" : "none"}">
           <h2>${s.label}</h2>
-          <p class="placeholder">Section ${s.num} UI coming in Session 5.</p>
+          ${s.body}
         </div>`
     ).join("\n");
     return `<!DOCTYPE html>
@@ -22529,20 +23579,54 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     .header h1 { font-size: 1em; margin: 0; }
     .header-actions { display: flex; gap: 8px; }
     .meta { padding: 6px 16px; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
-    .drift-banner { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); padding: 8px 16px; margin: 8px 16px; border-radius: 3px; font-size: 0.85em; }
-    .drift-banner ul { margin: 4px 0 0 16px; padding: 0; }
-    .layout { display: flex; height: calc(100vh - 80px); }
-    .nav { width: 200px; min-width: 160px; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; display: flex; flex-direction: column; }
+    .banner { padding: 8px 16px; margin: 8px 16px; border-radius: 3px; font-size: 0.85em; }
+    .banner ul { margin: 4px 0 0 16px; padding: 0; }
+    .banner-error { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
+    .banner-warning { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); }
+    .layout { display: flex; min-height: calc(100vh - 80px); }
+    .nav { width: 220px; min-width: 180px; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; display: flex; flex-direction: column; }
     .section-btn { background: none; border: none; color: var(--vscode-foreground); padding: 6px 16px; text-align: left; cursor: pointer; font-size: 0.9em; width: 100%; }
     .section-btn:hover, .section-btn.active { background: var(--vscode-list-hoverBackground); }
     .section-btn.active { color: var(--vscode-list-activeSelectionForeground); background: var(--vscode-list-activeSelectionBackground); }
     .content { flex: 1; padding: 16px; overflow-y: auto; }
-    .section-panel h2 { font-size: 1em; margin-top: 0; }
+    .section-panel h2 { font-size: 1.1em; margin-top: 0; margin-bottom: 16px; }
+    .section-block { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .section-block h3 { font-size: 1em; margin-bottom: 6px; }
+    .section-help { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin: 0 0 10px 0; }
+    .section-info { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin: 6px 0; font-style: italic; }
+    .field-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+    .field-row label { min-width: 140px; }
+    .field-row input[type="number"], .field-row input[type="text"], .field-row select { padding: 2px 6px; }
+    .src-indicator { font-size: 0.78em; padding: 1px 4px; border-radius: 2px; cursor: pointer; }
+    .src-shared { color: var(--vscode-descriptionForeground); background: rgba(127,127,127,0.1); }
+    .src-local { color: var(--vscode-charts-orange); background: rgba(255,150,0,0.1); }
+    .src-default { color: var(--vscode-descriptionForeground); background: rgba(127,127,127,0.05); cursor: default; }
+    .env-badge { font-size: 0.85em; padding: 1px 4px; border-radius: 2px; }
+    .env-set { color: var(--vscode-charts-green); }
+    .env-unset { color: var(--vscode-descriptionForeground); font-style: italic; }
     .placeholder { color: var(--vscode-descriptionForeground); font-style: italic; }
+    .preview-block { background: rgba(127,127,127,0.06); padding: 8px 12px; border-radius: 3px; }
+    .preview-block p { margin: 6px 0; }
+    .preview-detail { color: var(--vscode-descriptionForeground); }
+    .slider-value { min-width: 40px; font-variant-numeric: tabular-nums; }
+    .provider-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .provider-table th, .provider-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--vscode-panel-border); vertical-align: middle; }
+    .provider-table th { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+    .provider-row input[type="text"] { width: 100%; }
+    .legend { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin-top: 8px; }
+    .command-box { background: var(--vscode-textCodeBlock-background, rgba(127,127,127,0.1)); padding: 6px 10px; border-radius: 3px; margin: 4px 0; }
+    .code-sample { background: var(--vscode-textCodeBlock-background, rgba(127,127,127,0.1)); padding: 8px 10px; border-radius: 3px; margin: 6px 0; }
+    .numbered-list { padding-left: 18px; }
+    .numbered-list li { margin-bottom: 12px; }
+    .override-list { list-style: none; padding-left: 0; }
+    .override-row { background: rgba(127,127,127,0.06); padding: 8px 12px; margin: 6px 0; border-radius: 3px; }
+    .override-path { font-weight: bold; margin-bottom: 4px; }
+    .override-side { font-size: 0.9em; margin: 2px 0; }
     button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; cursor: pointer; border-radius: 2px; font-size: 0.9em; }
     button.primary:hover { background: var(--vscode-button-hoverBackground); }
     button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 4px 12px; cursor: pointer; border-radius: 2px; font-size: 0.9em; }
     button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -22553,10 +23637,11 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     </div>
   </div>
   <div class="meta">
-    Editing: <strong>${escapeHtml(fileList)}</strong> &nbsp;|&nbsp; ${escapeHtml(savedStatus)}
+    Editing: <strong>${escapeHtml3(fileList)}</strong> &nbsp;|&nbsp; ${escapeHtml3(savedStatus)}
   </div>
   ${parseBanner}
   ${driftBanner}
+  ${recoveryBanner}
   <div class="layout">
     <div class="nav">
       ${sectionNav}
@@ -22566,26 +23651,201 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
     </div>
   </div>
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    document.getElementById('btn-save').addEventListener('click', () => {
-      vscode.postMessage({ command: 'save' });
-    });
-    const buttons = document.querySelectorAll('.section-btn');
-    const panels = document.querySelectorAll('.section-panel');
-    buttons.forEach((btn, i) => {
-      if (i === 0) btn.classList.add('active');
-      btn.addEventListener('click', () => {
-        buttons.forEach(b => b.classList.remove('active'));
-        panels.forEach(p => { p.style.display = 'none'; });
-        btn.classList.add('active');
-        const sectionNum = btn.getAttribute('data-section');
-        const panel = document.getElementById('section-' + sectionNum);
-        if (panel) panel.style.display = 'block';
+    (function() {
+      const vscode = acquireVsCodeApi();
+
+      // --- Section nav ---
+      const buttons = document.querySelectorAll('.section-btn');
+      const panels = document.querySelectorAll('.section-panel');
+      buttons.forEach((btn, i) => {
+        if (i === 0) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          panels.forEach(p => { p.style.display = 'none'; });
+          btn.classList.add('active');
+          const sectionNum = btn.getAttribute('data-section');
+          const panel = document.getElementById('section-' + sectionNum);
+          if (panel) panel.style.display = 'block';
+        });
       });
-    });
+
+      // --- \xA71 dropdown constraint: outsourcing-mode -> verification options ---
+      const outsourcingSel = document.getElementById('s1-outsourcing-mode');
+      const verificationSel = document.getElementById('s1-verification-method');
+      const apiConstraintInfo = document.getElementById('s1-api-constraint');
+      const manualTemplate = document.getElementById('s1-manual-template');
+      function applyOutsourcingConstraint() {
+        if (!outsourcingSel || !verificationSel) return;
+        const disabled = outsourcingSel.value === 'disabled';
+        const apiOpt = verificationSel.querySelector('option[value="api"]');
+        if (apiOpt) apiOpt.disabled = disabled;
+        if (apiConstraintInfo) apiConstraintInfo.style.display = disabled ? '' : 'none';
+        if (disabled && verificationSel.value === 'api') {
+          verificationSel.value = 'manual-via-other-engine';
+        }
+      }
+      function applyManualTemplateVisibility() {
+        if (!verificationSel || !manualTemplate) return;
+        manualTemplate.style.display = verificationSel.value === 'manual-via-other-engine' ? '' : 'none';
+      }
+      if (outsourcingSel) outsourcingSel.addEventListener('change', () => { applyOutsourcingConstraint(); applyManualTemplateVisibility(); });
+      if (verificationSel) verificationSel.addEventListener('change', applyManualTemplateVisibility);
+      applyOutsourcingConstraint();
+      applyManualTemplateVisibility();
+
+      // --- \xA72 slider live update + preview re-render ---
+      const warnSlider = document.getElementById('s2-warn-at-percent');
+      const warnValueEl = document.getElementById('s2-warn-at-percent-value');
+      const thresholdInput = document.getElementById('s2-threshold-usd');
+      const previewBlock = document.getElementById('s2-preview');
+      function fmtUsd(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+      function rerenderPreview() {
+        if (!warnSlider || !thresholdInput || !previewBlock) return;
+        const pct = Number(warnSlider.value);
+        const thr = Number(thresholdInput.value);
+        const warn = (pct * thr) / 100;
+        if (warnValueEl) warnValueEl.textContent = pct + '%';
+        previewBlock.innerHTML =
+          '<p><strong>Below ' + pct + '% of ' + fmtUsd(thr) + ' (' + fmtUsd(warn) + '):</strong> ' +
+          '<span class="preview-detail">Silent &mdash; no prompt, just log to cost dashboard.</span></p>' +
+          '<p><strong>Between ' + pct + '% and 100% (' + fmtUsd(warn) + '&ndash;' + fmtUsd(thr) + '):</strong> ' +
+          '<span class="preview-detail">Heads-up &mdash; non-blocking notification, one per band.</span></p>' +
+          '<p><strong>At or above ' + fmtUsd(thr) + ':</strong> ' +
+          '<span class="preview-detail">Confirm-or-abort &mdash; modal dialog before the call proceeds.</span></p>';
+      }
+      if (warnSlider) warnSlider.addEventListener('input', rerenderPreview);
+      if (thresholdInput) thresholdInput.addEventListener('input', rerenderPreview);
+
+      // --- \xA73 provider popover toggle ---
+      document.querySelectorAll('.popover-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-target');
+          if (!target) return;
+          const row = document.getElementById(target);
+          if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+        });
+      });
+
+      // --- \xA74 run-flag-command button ---
+      const flagBtn = document.getElementById('s4-run-flag-command');
+      if (flagBtn) flagBtn.addEventListener('click', () => { vscode.postMessage({ command: 'runFlagCommand' }); });
+
+      // --- \xA76 open-local-overrides button ---
+      const openLocalBtn = document.getElementById('s6-open-local-overrides');
+      if (openLocalBtn) openLocalBtn.addEventListener('click', () => { vscode.postMessage({ command: 'openLocalOverrides' }); });
+
+      // --- recovery banner buttons ---
+      const retryBtn = document.getElementById('recovery-retry');
+      const acceptBtn = document.getElementById('recovery-accept');
+      const reapplyBtn = document.getElementById('recovery-reapply');
+      if (retryBtn) retryBtn.addEventListener('click', () => { vscode.postMessage({ command: 'retryFailedWrite' }); });
+      if (acceptBtn) acceptBtn.addEventListener('click', () => { vscode.postMessage({ command: 'acceptHalfBatch' }); });
+      if (reapplyBtn) reapplyBtn.addEventListener('click', () => { vscode.postMessage({ command: 'reapplyLastSave' }); });
+
+      // --- (shared)/(local override) toggle ---
+      document.querySelectorAll('.src-indicator').forEach(ind => {
+        const source = ind.getAttribute('data-source');
+        if (source === 'not-overridable' || source === 'default') return;
+        ind.addEventListener('click', () => {
+          const cur = ind.getAttribute('data-source');
+          const next = cur === 'local' ? 'shared' : 'local';
+          ind.setAttribute('data-source', next);
+          ind.className = 'src-indicator src-' + next;
+          ind.textContent = next === 'local' ? '(local override)' : '(shared)';
+        });
+      });
+
+      // --- Save gather ---
+      function gatherPayload() {
+        const payload = {};
+        // \xA71
+        if (outsourcingSel) {
+          const ind = outsourcingSel.parentElement && outsourcingSel.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.outsourcingMode = { value: outsourcingSel.value, source: src };
+        }
+        if (verificationSel) payload.verificationMethod = verificationSel.value;
+        // \xA72
+        if (thresholdInput) {
+          const ind = thresholdInput.parentElement && thresholdInput.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.thresholdUsd = { value: Number(thresholdInput.value), source: src };
+        }
+        const scopeSel = document.getElementById('s2-scope');
+        if (scopeSel) payload.scope = scopeSel.value;
+        if (warnSlider) {
+          const ind = warnSlider.parentElement && warnSlider.parentElement.querySelector('.src-indicator');
+          const src = (ind && ind.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          payload.warnAtPercent = { value: Number(warnSlider.value), source: src };
+        }
+        // \xA73 providers
+        const providerRows = document.querySelectorAll('tr.provider-row');
+        payload.providers = [];
+        providerRows.forEach(row => {
+          const id = row.getAttribute('data-provider-id');
+          if (!id) return;
+          const enabledInput = row.querySelector('input[data-field="enabled"]');
+          const labelInput = row.querySelector('input[data-field="displayLabel"]');
+          const keyInput = row.querySelector('input[data-field="apiKeyEnv"]');
+          const urlInput = row.querySelector('input[data-field="baseUrl"]');
+          const enabledInd = enabledInput && enabledInput.parentElement && enabledInput.parentElement.querySelector('.src-indicator');
+          const enabledSrc = (enabledInd && enabledInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const keyInd = keyInput && keyInput.parentElement && keyInput.parentElement.querySelector('.src-indicator');
+          const keySrc = (keyInd && keyInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const urlInd = urlInput && urlInput.parentElement && urlInput.parentElement.querySelector('.src-indicator');
+          const urlSrc = (urlInd && urlInd.getAttribute('data-source') === 'local') ? 'local' : 'shared';
+          const pp = { id: id };
+          if (enabledInput) pp.enabled = { value: !!enabledInput.checked, source: enabledSrc };
+          if (labelInput) pp.displayLabel = labelInput.value;
+          if (keyInput) pp.apiKeyEnv = { value: keyInput.value, source: keySrc };
+          if (urlInput) pp.baseUrl = { value: urlInput.value, source: urlSrc };
+          payload.providers.push(pp);
+        });
+        // \xA74
+        const honorChk = document.getElementById('s4-honor-annotations');
+        if (honorChk) payload.honorAnnotations = !!honorChk.checked;
+        // \xA75
+        const puEnabled = document.getElementById('s5-pushover-enabled');
+        const puApiKey = document.getElementById('s5-pushover-api-key-env');
+        const puUserKey = document.getElementById('s5-pushover-user-key-env');
+        if (puEnabled) payload.pushoverEnabled = !!puEnabled.checked;
+        if (puApiKey) payload.pushoverApiKeyEnv = puApiKey.value;
+        if (puUserKey) payload.pushoverUserKeyEnv = puUserKey.value;
+        return payload;
+      }
+      document.getElementById('btn-save').addEventListener('click', () => {
+        const payload = gatherPayload();
+        vscode.postMessage({ command: 'save', payload: payload });
+      });
+    })();
   </script>
 </body>
 </html>`;
+  }
+  _renderRecoveryBanner(r2) {
+    if (r2.failed.length > 0 && r2.succeeded.length > 0) {
+      const succeededList = r2.succeeded.map((f) => `<code>${f}</code>`).join(", ");
+      const failedList = r2.failed.map((f) => `<li><code>${f.file}</code>: ${escapeHtml3(f.reason)}</li>`).join("");
+      return `<div class="banner banner-warning">
+          <strong>&#9888; Half-batch save</strong> \u2014 ${r2.succeeded.length} file(s) saved (${succeededList}); ${r2.failed.length} failed.
+          <ul>${failedList}</ul>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button id="recovery-retry" class="primary">Retry failed write</button>
+            <button id="recovery-accept" class="secondary">Accept current state as new baseline</button>
+          </div>
+        </div>`;
+    }
+    if (r2.drifted.length > 0) {
+      const driftedList = r2.drifted.map((f) => `<code>${f}</code>`).join(", ");
+      return `<div class="banner banner-warning">
+          <strong>&#9888; External modification detected</strong> \u2014 ${r2.drifted.length} file(s) changed on disk since your last save: ${driftedList}.
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button id="recovery-reapply" class="secondary">Re-apply my last save (overwrites on-disk)</button>
+            <button id="recovery-accept" class="secondary">Accept on-disk as new baseline</button>
+          </div>
+        </div>`;
+    }
+    return "";
   }
   _noWorkspaceHtml(nonce, cspSource) {
     return `<!DOCTYPE html><html lang="en"><head>
@@ -22607,7 +23867,7 @@ var ConfigEditorPanel = class _ConfigEditorPanel {
       <style>body{font-family:var(--vscode-font-family);padding:16px;color:var(--vscode-foreground);background:var(--vscode-editor-background);}</style>
     </head><body>
       <h1>Dabbler Config Editor</h1>
-      <p>Could not find <code>${escapeHtml(fileName)}</code> at:<br><code>${escapeHtml(missingFilePath)}</code></p>
+      <p>Could not find <code>${escapeHtml3(fileName)}</code> at:<br><code>${escapeHtml3(missingFilePath)}</code></p>
       <p>Run the Dabbler project setup wizard to create the config files, or create them manually.</p>
     </body></html>`;
   }
@@ -22619,7 +23879,7 @@ function registerConfigEditorCommand(context) {
     })
   );
 }
-function escapeHtml(str) {
+function escapeHtml3(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 

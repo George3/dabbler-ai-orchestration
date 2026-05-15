@@ -1,0 +1,81 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const assert = __importStar(require("assert"));
+const significanceFlaggingSection_1 = require("../../configEditor/sections/significanceFlaggingSection");
+function baseState(over = {}) {
+    return {
+        routerConfig: null,
+        budget: null,
+        localOverrides: null,
+        envVarPresence: {},
+        localOverridesFileExists: false,
+        ...over,
+    };
+}
+suite("significanceFlaggingSection — rendering", () => {
+    test("renders the command name + annotation syntax + queue file path", () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState());
+        assert.ok(html.includes("Dabbler: Flag Decision for Cross-Provider Review"));
+        assert.ok(html.includes("@dabbler:outsource-review"));
+        assert.ok(html.includes("decision-review-queue.jsonl"));
+    });
+    test('includes "Run command now..." button bound to s4-run-flag-command', () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState());
+        assert.ok(html.includes('id="s4-run-flag-command"'));
+        assert.ok(html.includes("Run command now"));
+    });
+    test("honor-annotations checkbox defaults to checked when absent from local-overrides", () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState());
+        assert.ok(/id="s4-honor-annotations"[^>]*checked/.test(html));
+    });
+    test("honor-annotations checkbox unchecked when local-overrides explicitly sets false", () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState({
+            localOverrides: { decision_review: { honor_annotations: false } },
+        }));
+        assert.ok(!/id="s4-honor-annotations"[^>]*checked/.test(html));
+    });
+    test("(local override) indicator surfaces when honor_annotations is set locally", () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState({
+            localOverrides: { decision_review: { honor_annotations: false } },
+        }));
+        assert.ok(html.includes("(local override)"));
+    });
+    test("(default) indicator when honor_annotations is absent", () => {
+        const { html } = (0, significanceFlaggingSection_1.render)(baseState());
+        assert.ok(html.includes("(default)"));
+    });
+});
+//# sourceMappingURL=significanceFlaggingSection.test.js.map
