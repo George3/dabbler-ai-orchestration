@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "sessionSetName": "024-remove-provider-queues-and-heartbeats-views",
+  "currentSession": null,
+  "totalSessions": 1,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "completedSessions": []
+}
