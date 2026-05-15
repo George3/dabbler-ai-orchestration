@@ -34,6 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SessionSetsProvider = void 0;
+exports.isCurrentSessionInFlight = isCurrentSessionInFlight;
+exports.progressText = progressText;
 exports.forceClosedBadge = forceClosedBadge;
 exports.modeBadge = modeBadge;
 const vscode = __importStar(require("vscode"));
@@ -49,15 +51,55 @@ function iconUriFor(extensionUri, state) {
     const file = ICON_FILES[state];
     return file ? vscode.Uri.joinPath(extensionUri, "media", file) : undefined;
 }
+// Set 022 Session 2: the "currentSession is in flight" predicate from
+// the lifecycle spec's state invariant. Returns true when the snapshot
+// declares a current session and that session is not yet in
+// `completedSessions[]` — i.e., session N has started but not closed.
+// Requires the array to be present; legacy snapshots without it return
+// false so a fresh-set Not Started row doesn't gain a stray
+// annotation. Exported for unit-test reuse.
+function isCurrentSessionInFlight(set) {
+    const ls = set.liveSession;
+    if (!ls)
+        return false;
+    if (typeof ls.currentSession !== "number")
+        return false;
+    if (!Array.isArray(ls.completedSessions))
+        return false;
+    return !ls.completedSessions.includes(ls.currentSession);
+}
 function progressText(set) {
     // Always show X/total. The earlier "X/X" shape on done sets assumed
     // completed === total, which masks bugs like a SET-level flip to
     // "complete" that fires before all sessions ran. Truthful display
     // surfaces the discrepancy at a glance.
-    if (set.totalSessions && set.totalSessions > 0) {
-        return `${set.sessionsCompleted}/${set.totalSessions}`;
+    //
+    // Set 022 Session 2 added two annotations to disambiguate the row:
+    //   * `N/N Done` on done rows — operator-facing "yes this really
+    //     reached terminal state" cue. Distinguishes a healthy final
+    //     close from a stale `N/N` snapshot that's about to be
+    //     downgraded by isMidSetComplete.
+    //   * `0/N · session 1 in flight` on rows where session N has
+    //     started but not yet closed. Removes the operator confusion
+    //     of "I started session 1 — why does it still say 0/4?"
+    //     Both lifecycle endpoints (0/N at start of session 1; N/N
+    //     between session N's start and its close on the final
+    //     session) used to be indistinguishable from their "no work
+    //     started yet" / "set is done" siblings.
+    const base = set.totalSessions && set.totalSessions > 0
+        ? `${set.sessionsCompleted}/${set.totalSessions}`
+        : set.sessionsCompleted > 0
+            ? `${set.sessionsCompleted} done`
+            : "";
+    if (set.state === "done" && base) {
+        return `${base} Done`;
     }
-    return set.sessionsCompleted > 0 ? `${set.sessionsCompleted} done` : "";
+    if (set.state === "in-progress" && isCurrentSessionInFlight(set)) {
+        const n = set.liveSession?.currentSession;
+        const annotation = `session ${n} in flight`;
+        return base ? `${base} · ${annotation}` : annotation;
+    }
+    return base;
 }
 function touchedDate(set) {
     if (!set.lastTouched)

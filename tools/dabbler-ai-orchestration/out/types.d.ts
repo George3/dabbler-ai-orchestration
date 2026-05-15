@@ -24,6 +24,7 @@ export interface LiveSession {
     completedAt: string | null;
     verificationVerdict: string | null;
     forceClosed: boolean | null;
+    completedSessions: number[] | null;
 }
 export interface SessionSet {
     name: string;

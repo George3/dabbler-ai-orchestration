@@ -50,6 +50,7 @@ function fakeLive(over = {}) {
         completedAt: null,
         verificationVerdict: "VERIFIED",
         forceClosed: null,
+        completedSessions: null,
         ...over,
     };
 }

@@ -406,5 +406,163 @@ suite("fileSystem — readSessionSets", () => {
         assert.strictEqual(sets.length, 0);
         fs.rmSync(dir, { recursive: true });
     });
+    // Set 022 Session 2: the events ledger is the Full-tier fallback
+    // for `sessionsCompleted` when `completedSessions[]` is absent. A
+    // pre-Set-022 set whose snapshot hasn't been healed by a boundary
+    // write yet should still render the correct fraction from the
+    // ledger's closeout_succeeded events. Distinct session_numbers are
+    // counted so a session with multiple closeout_succeeded events
+    // (the dedupe path under register_session_start) doesn't inflate
+    // the count.
+    test("sessionsCompleted falls back to distinct closeout_succeeded events when completedSessions[] absent", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "ledger-fallback");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# ledger-fallback\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "in-progress",
+            currentSession: 4,
+            totalSessions: 5,
+            // Note: no completedSessions array.
+        }));
+        const events = [
+            { timestamp: "2026-05-12T01:00:00Z", session_number: 1, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T02:00:00Z", session_number: 2, event_type: "closeout_succeeded" },
+            { timestamp: "2026-05-12T03:00:00Z", session_number: 3, event_type: "closeout_succeeded" },
+            // Duplicate event for session 3 — must not inflate the count.
+            { timestamp: "2026-05-12T03:01:00Z", session_number: 3, event_type: "closeout_succeeded" },
+        ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+        fs.writeFileSync(path.join(setDir, "session-events.jsonl"), events);
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].sessionsCompleted, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Set 022 Session 2: the `currentSession - 1` fallback was removed
+    // because it produced off-by-one displays at both endpoints of the
+    // session lifecycle. With it gone, an in-flight set that has neither
+    // `completedSessions[]` nor a Full-tier events ledger renders as
+    // `0/N` (truthful — we have no evidence any session closed). This
+    // is the path Lightweight-tier sets that pre-date the Set 022
+    // protocol fall through, and the schema doc now requires those sets
+    // to hand-maintain `completedSessions[]`. Locking the new behavior
+    // in: a fresh-shape set with currentSession=2 but no array and no
+    // ledger no longer inflates to 1/4.
+    test("sessionsCompleted is 0 (not currentSession-1) when no completedSessions[] and no ledger", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "no-array-no-ledger");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# no-array-no-ledger\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "in-progress",
+            currentSession: 3,
+            totalSessions: 4,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].sessionsCompleted, 0);
+        assert.strictEqual(sets[0].totalSessions, 4);
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Set 022 Session 2: confirm activity-log is no longer a count
+    // source. A set whose activity-log records steps for sessions 1-3
+    // (3 distinct sessionNumbers) but whose state file has empty
+    // `completedSessions: []` should render `0/4`, not the old `3/4`
+    // the activity-log path would have produced. The Lightweight-tier
+    // contract is now: maintain `completedSessions[]` or accept a
+    // truthful `0/N` display.
+    test("sessionsCompleted is 0 when activity-log has entries but completedSessions[] is empty", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "activity-log-ignored");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# activity-log-ignored\n");
+        fs.writeFileSync(path.join(setDir, "activity-log.json"), JSON.stringify({
+            totalSessions: 4,
+            entries: [
+                { sessionNumber: 1, dateTime: "2026-05-12T01:00:00-04:00" },
+                { sessionNumber: 2, dateTime: "2026-05-12T02:00:00-04:00" },
+                { sessionNumber: 3, dateTime: "2026-05-12T03:00:00-04:00" },
+            ],
+        }));
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "in-progress",
+            currentSession: 4,
+            totalSessions: 4,
+            completedSessions: [],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].sessionsCompleted, 0);
+        assert.strictEqual(sets[0].totalSessions, 4);
+        fs.rmSync(dir, { recursive: true });
+    });
+    // Set 022 Session 2: surface `completedSessions[]` through the
+    // LiveSession model so the tree-view's in-flight predicate can
+    // compute without re-reading the state file.
+    test("liveSession.completedSessions is surfaced from the state snapshot", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "in-flight");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# in-flight\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "in-progress",
+            currentSession: 2,
+            totalSessions: 3,
+            completedSessions: [1],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.deepStrictEqual(sets[0].liveSession?.completedSessions, [1]);
+        assert.strictEqual(sets[0].liveSession?.currentSession, 2);
+        fs.rmSync(dir, { recursive: true });
+    });
+});
+suite("fileSystem — countDistinctCloseoutSessions", () => {
+    // Set 022 Session 2: generalization of hasCloseoutEventForSession.
+    // Treated as 0 for any read failure (missing file, malformed JSON,
+    // permission error) so callers fall through to the next derivation
+    // step rather than asserting "no sessions done" on garbled input.
+    test("returns 0 when the events file is missing", () => {
+        assert.strictEqual((0, fileSystem_1.countDistinctCloseoutSessions)("/nonexistent/session-events.jsonl"), 0);
+    });
+    test("counts distinct closeout_succeeded session numbers", () => {
+        const dir = makeTmpDir();
+        const eventsPath = path.join(dir, "session-events.jsonl");
+        const events = [
+            { session_number: 1, event_type: "work_started" },
+            { session_number: 1, event_type: "closeout_succeeded" },
+            { session_number: 2, event_type: "work_started" },
+            { session_number: 2, event_type: "closeout_succeeded" },
+            // Non-closeout events with the same session_number must not count.
+            { session_number: 3, event_type: "work_started" },
+        ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+        fs.writeFileSync(eventsPath, events);
+        assert.strictEqual((0, fileSystem_1.countDistinctCloseoutSessions)(eventsPath), 2);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("dedupes duplicate closeout_succeeded events for the same session", () => {
+        const dir = makeTmpDir();
+        const eventsPath = path.join(dir, "session-events.jsonl");
+        const events = [
+            { session_number: 1, event_type: "closeout_succeeded" },
+            { session_number: 1, event_type: "closeout_succeeded" },
+            { session_number: 2, event_type: "closeout_succeeded" },
+        ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+        fs.writeFileSync(eventsPath, events);
+        assert.strictEqual((0, fileSystem_1.countDistinctCloseoutSessions)(eventsPath), 2);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("tolerates malformed lines in the append-only ledger", () => {
+        const dir = makeTmpDir();
+        const eventsPath = path.join(dir, "session-events.jsonl");
+        const lines = [
+            JSON.stringify({ session_number: 1, event_type: "closeout_succeeded" }),
+            "not json",
+            JSON.stringify({ session_number: 2, event_type: "closeout_succeeded" }),
+        ].join("\n") + "\n";
+        fs.writeFileSync(eventsPath, lines);
+        assert.strictEqual((0, fileSystem_1.countDistinctCloseoutSessions)(eventsPath), 2);
+        fs.rmSync(dir, { recursive: true });
+    });
 });
 //# sourceMappingURL=fileSystem.test.js.map

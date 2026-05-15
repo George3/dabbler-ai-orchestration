@@ -1287,6 +1287,30 @@ function hasCloseoutEventForSession(eventsPath, sessionNumber) {
   }
   return false;
 }
+function countDistinctCloseoutSessions(eventsPath) {
+  if (!fs3.existsSync(eventsPath))
+    return 0;
+  let text;
+  try {
+    text = fs3.readFileSync(eventsPath, "utf8");
+  } catch {
+    return 0;
+  }
+  const seen = /* @__PURE__ */ new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line)
+      continue;
+    try {
+      const event = JSON.parse(line);
+      if (event.event_type === "closeout_succeeded" && typeof event.session_number === "number") {
+        seen.add(event.session_number);
+      }
+    } catch {
+    }
+  }
+  return seen.size;
+}
 function parseSessionSetConfig(specPath) {
   const config = {
     requiresUAT: false,
@@ -1398,19 +1422,16 @@ function readSessionSets(root) {
     let sessionsCompleted = 0;
     let lastTouched = null;
     let liveSession = null;
+    const eventsPath = path4.join(dir, "session-events.jsonl");
     if (fs3.existsSync(activityPath)) {
       try {
         const data = JSON.parse(fs3.readFileSync(activityPath, "utf8"));
         if (typeof data.totalSessions === "number")
           totalSessions = data.totalSessions;
-        const completedSet = /* @__PURE__ */ new Set();
         for (const e of data.entries ?? []) {
-          if (typeof e.sessionNumber === "number")
-            completedSet.add(e.sessionNumber);
           if (e.dateTime && (!lastTouched || e.dateTime > lastTouched))
             lastTouched = e.dateTime;
         }
-        sessionsCompleted = completedSet.size;
       } catch {
       }
     }
@@ -1430,15 +1451,17 @@ function readSessionSets(root) {
           startedAt: sd.startedAt ?? null,
           completedAt: sd.completedAt ?? null,
           verificationVerdict: sd.verificationVerdict ?? null,
-          forceClosed: sd.forceClosed ?? null
+          forceClosed: sd.forceClosed ?? null,
+          completedSessions: Array.isArray(sd.completedSessions) ? sd.completedSessions : null
         };
         if (Array.isArray(sd.completedSessions)) {
           sessionsCompleted = sd.completedSessions.length;
-        } else if (sessionsCompleted === 0) {
-          if (state === "done" && typeof totalSessions === "number") {
+        } else {
+          const ledgerCount = countDistinctCloseoutSessions(eventsPath);
+          if (ledgerCount > 0) {
+            sessionsCompleted = ledgerCount;
+          } else if (state === "done" && typeof totalSessions === "number") {
             sessionsCompleted = totalSessions;
-          } else if (typeof sd.currentSession === "number" && sd.currentSession > 1) {
-            sessionsCompleted = sd.currentSession - 1;
           }
         }
       } catch {
@@ -1512,11 +1535,27 @@ function iconUriFor(extensionUri, state) {
   const file = ICON_FILES[state];
   return file ? vscode2.Uri.joinPath(extensionUri, "media", file) : void 0;
 }
+function isCurrentSessionInFlight(set) {
+  const ls = set.liveSession;
+  if (!ls)
+    return false;
+  if (typeof ls.currentSession !== "number")
+    return false;
+  if (!Array.isArray(ls.completedSessions))
+    return false;
+  return !ls.completedSessions.includes(ls.currentSession);
+}
 function progressText(set) {
-  if (set.totalSessions && set.totalSessions > 0) {
-    return `${set.sessionsCompleted}/${set.totalSessions}`;
+  const base = set.totalSessions && set.totalSessions > 0 ? `${set.sessionsCompleted}/${set.totalSessions}` : set.sessionsCompleted > 0 ? `${set.sessionsCompleted} done` : "";
+  if (set.state === "done" && base) {
+    return `${base} Done`;
   }
-  return set.sessionsCompleted > 0 ? `${set.sessionsCompleted} done` : "";
+  if (set.state === "in-progress" && isCurrentSessionInFlight(set)) {
+    const n = set.liveSession?.currentSession;
+    const annotation = `session ${n} in flight`;
+    return base ? `${base} \xB7 ${annotation}` : annotation;
+  }
+  return base;
 }
 function touchedDate(set) {
   if (!set.lastTouched)
@@ -9093,7 +9132,7 @@ function activate(context) {
       const sessionSetsAbs = path16.join(root, SESSION_SETS_REL2);
       const pattern = new vscode18.RelativePattern(
         sessionSetsAbs,
-        "**/{spec.md,session-state.json,activity-log.json,change-log.md,*-uat-checklist.json}"
+        "**/{spec.md,session-state.json,session-events.jsonl,activity-log.json,change-log.md,CANCELLED.md,*-uat-checklist.json}"
       );
       const watcher = vscode18.workspace.createFileSystemWatcher(pattern);
       const onEvent = () => provider.refresh();

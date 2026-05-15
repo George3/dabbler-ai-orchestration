@@ -5,6 +5,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.12] — 2026-05-15
+
+### Changed
+- **Tree-view bucketing and progress display follow the new state-first
+  lifecycle protocol shipped in `ai_router 0.2.3` (Set 022 Session 1).**
+  The Session Set Explorer reflects four behavior changes:
+
+  1. **`completedSessions[]` is the primary count source.** Reader
+     priority is now `completedSessions.length` → distinct
+     `closeout_succeeded` session numbers in `session-events.jsonl`
+     (new Full-tier fallback) → `totalSessions` when `state === "done"`.
+     The pre-existing `currentSession - 1` fallback was removed; the
+     writer protocol from Session 1 guarantees the array is present
+     after the first boundary write, and the events-ledger fallback
+     covers legacy sets that haven't been healed by their next
+     boundary write yet. Removing the heuristic eliminates the
+     off-by-one classes at both lifecycle endpoints (stuck `0/N`
+     at start of session 1; stuck `N-1/N` while the final session is
+     wrapping up).
+
+  2. **`activity-log.json` is no longer a count source.** Schema-wise,
+     it's a step log, not a progress ledger — and the activity log
+     was producing inflated counts on Lightweight-tier sets that
+     hand-maintained step entries but no `completedSessions[]`. The
+     activity-log read is retained for the `totalSessions` field
+     (which the schema places at the file's top level) and per-entry
+     `dateTime` (which still informs the `lastTouched` display
+     because step-level timestamps are more granular than the
+     state-file's session-boundary timestamps while a session is
+     mid-flight).
+
+  3. **In-flight row annotation: `0/4 · session 1 in flight`.** A new
+     `isCurrentSessionInFlight` predicate in
+     `src/providers/SessionSetsProvider.ts` implements the spec
+     invariant — `currentSession not in completedSessions[]` means
+     session N has started but not closed. When that predicate fires,
+     `progressText` appends the annotation so the row visibly
+     distinguishes "session 1 in flight" from "no work started yet."
+     The predicate requires `completedSessions[]` to be present;
+     legacy snapshots without the array stay annotation-free.
+
+  4. **Done row annotation: `4/4 Done`.** The trailing " Done" label
+     on done rows distinguishes a healthy final close from a stale
+     `N/N` snapshot that's about to be downgraded by
+     `isMidSetComplete`. Done is now visibly Done.
+
+- **File watcher coverage extended to `session-events.jsonl` and
+  `CANCELLED.md`.** The new Full-tier sessionsCompleted fallback
+  reads the events ledger directly, and the boundary writes from
+  `start_session` / `close_session` only touch the ledger and the
+  state file (not `activity-log.json`) — without the ledger in the
+  watcher pattern, a Not Started → In Progress bucket-flip on
+  session 1 of a fresh set would wait for the 30-second poll loop.
+  `CANCELLED.md` is the canonical signal for the cancelled
+  tree-state under Set 8's spec; the watcher now refreshes
+  immediately when a cancel/restore command writes it.
+
+- **`LiveSession.completedSessions` exposed through the type
+  system.** The tree-view's in-flight predicate computes from
+  `liveSession.currentSession` and `liveSession.completedSessions`
+  without re-reading the state file. Surfaced as `number[] | null`:
+  null for legacy snapshots that pre-date the array; empty array
+  when the protocol has been applied but no session has closed yet.
+
+  Set 022 Session 2 / consumer-facing spec:
+  `docs/session-sets/022-active-lifecycle-management/spec.md`.
+
 ## [0.13.11] — 2026-05-13
 
 ### Fixed

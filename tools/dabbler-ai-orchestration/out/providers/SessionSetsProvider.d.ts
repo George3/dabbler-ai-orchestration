@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import { SessionSet } from "../types";
+export declare function isCurrentSessionInFlight(set: SessionSet): boolean;
+export declare function progressText(set: SessionSet): string;
 export declare function forceClosedBadge(set: SessionSet): string;
 export declare function modeBadge(_set: SessionSet): string;
 export declare class SessionSetsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {

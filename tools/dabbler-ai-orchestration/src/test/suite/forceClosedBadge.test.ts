@@ -18,6 +18,7 @@ function fakeLive(over: Partial<LiveSession> = {}): LiveSession {
     completedAt: null,
     verificationVerdict: "VERIFIED",
     forceClosed: null,
+    completedSessions: null,
     ...over,
   };
 }

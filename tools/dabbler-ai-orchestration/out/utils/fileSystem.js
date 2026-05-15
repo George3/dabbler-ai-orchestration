@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PLAYWRIGHT_REL_DEFAULT = exports.SESSION_SETS_REL = void 0;
 exports.discoverRoots = discoverRoots;
 exports.isMidSetComplete = isMidSetComplete;
+exports.countDistinctCloseoutSessions = countDistinctCloseoutSessions;
 exports.parseSessionSetConfig = parseSessionSetConfig;
 exports.parseUatChecklist = parseUatChecklist;
 exports.readSessionSets = readSessionSets;
@@ -148,6 +149,43 @@ function hasCloseoutEventForSession(eventsPath, sessionNumber) {
         }
     }
     return false;
+}
+// Set 022 Session 2: generalization of `hasCloseoutEventForSession` to
+// "how many distinct sessions does the ledger record as closed." Used
+// as the Full-tier fallback for `sessionsCompleted` when
+// `completedSessions[]` is missing from the snapshot (e.g., a set
+// that pre-dates Set 022's writer changes and hasn't had its next
+// boundary-write heal it yet). Returns 0 on any read/parse failure
+// or when the file is absent — the caller treats 0 as "no
+// authoritative signal" and falls through to the next derivation
+// step rather than asserting "0 sessions done."
+function countDistinctCloseoutSessions(eventsPath) {
+    if (!fs.existsSync(eventsPath))
+        return 0;
+    let text;
+    try {
+        text = fs.readFileSync(eventsPath, "utf8");
+    }
+    catch {
+        return 0;
+    }
+    const seen = new Set();
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line)
+            continue;
+        try {
+            const event = JSON.parse(line);
+            if (event.event_type === "closeout_succeeded" &&
+                typeof event.session_number === "number") {
+                seen.add(event.session_number);
+            }
+        }
+        catch {
+            // skip malformed lines — append-only ledger may carry partial writes
+        }
+    }
+    return seen.size;
 }
 function parseSessionSetConfig(specPath) {
     const config = {
@@ -290,19 +328,27 @@ function readSessionSets(root) {
         let sessionsCompleted = 0;
         let lastTouched = null;
         let liveSession = null;
+        const eventsPath = path.join(dir, "session-events.jsonl");
+        // Activity log is a step log, not a count source. Set 022 Session 2
+        // removed the unique-`sessionNumber` count derivation that used to
+        // live here — under the state-first lifecycle protocol,
+        // `completedSessions[]` (writer-maintained on Full tier;
+        // hand-maintained on Lightweight) is authoritative, with the
+        // events ledger as the Full-tier fallback. The activity-log read
+        // is retained for two non-count signals: `totalSessions` (which
+        // the schema places at the top level of the file) and the
+        // per-entry `dateTime` for the `lastTouched` display, which is
+        // more granular than the state-file's session-boundary timestamps
+        // while a session is mid-flight.
         if (fs.existsSync(activityPath)) {
             try {
                 const data = JSON.parse(fs.readFileSync(activityPath, "utf8"));
                 if (typeof data.totalSessions === "number")
                     totalSessions = data.totalSessions;
-                const completedSet = new Set();
                 for (const e of data.entries ?? []) {
-                    if (typeof e.sessionNumber === "number")
-                        completedSet.add(e.sessionNumber);
                     if (e.dateTime && (!lastTouched || e.dateTime > lastTouched))
                         lastTouched = e.dateTime;
                 }
-                sessionsCompleted = completedSet.size;
             }
             catch { /* ignore */ }
         }
@@ -323,36 +369,45 @@ function readSessionSets(root) {
                     completedAt: sd.completedAt ?? null,
                     verificationVerdict: sd.verificationVerdict ?? null,
                     forceClosed: sd.forceClosed ?? null,
+                    completedSessions: Array.isArray(sd.completedSessions) ? sd.completedSessions : null,
                 };
-                // sessionsCompleted priority (highest first):
-                //  1. session-state.json `completedSessions` array — authoritative
-                //     under schema v2. Hand-maintained on Lightweight tier;
-                //     written by ai_router on Full tier.
-                //  2. activity-log.json unique sessionNumbers (set above).
-                //  3. Derived from `state` + currentSession when neither exists.
-                //     - state="done" => all sessions done; count = totalSessions.
-                //       Using the already-canonicalized `state` (via readStatus)
-                //       instead of raw `sd.status` ensures the same alias map
-                //       ("completed", "done" -> "complete") applies here as it
-                //       does for Done/Active bucketing. A pre-Set-7 state file
-                //       carrying `status: "completed"` would otherwise fall
-                //       through to the currentSession-1 fallback and display
-                //       N-1/N. Also naturally skips the mid-set-complete case,
-                //       where state is downgraded to "in-progress".
-                //     - currentSession>1 (non-done) => assume the current session
-                //       is in progress, so currentSession-1 are done. This can
-                //       be off by one when the latest session is itself complete
-                //       and the set is still open; only used when no more
-                //       precise signal is available.
+                // sessionsCompleted priority (highest first) — see Set 022
+                // spec § "Readers" for the rationale:
+                //  1. session-state.json `completedSessions` array —
+                //     authoritative under schema v2 + Set 022 protocol.
+                //     Hand-maintained on Lightweight tier; written by
+                //     ai_router on Full tier on every close.
+                //  2. Distinct `closeout_succeeded` session numbers in
+                //     `session-events.jsonl` — Full-tier fallback for sets
+                //     that pre-date the writer changes and haven't been
+                //     healed by their next boundary write yet.
+                //  3. `state === "done"` plus `totalSessions` — terminal
+                //     state with no granular count signal (e.g., a
+                //     Lightweight-tier set marked complete without writing
+                //     the array). Using the canonicalized `state` instead
+                //     of raw `sd.status` keeps this in lockstep with the
+                //     bucketing alias map; also naturally skips the
+                //     mid-set-complete drift case where `state` is
+                //     downgraded to in-progress.
+                //
+                // No `currentSession - 1` fallback. Set 022 Session 1's
+                // writer protocol guarantees `completedSessions[]` is
+                // present after the first boundary write; legacy sets are
+                // covered by the events-ledger fallback. The pre-Set-022
+                // off-by-one shape ("0/4" stuck displayed while session 1
+                // is in flight; "N-1/N" stuck while final session is
+                // wrapping up) is eliminated by removing the heuristic
+                // rather than refining it.
                 if (Array.isArray(sd.completedSessions)) {
                     sessionsCompleted = sd.completedSessions.length;
                 }
-                else if (sessionsCompleted === 0) {
-                    if (state === "done" && typeof totalSessions === "number") {
-                        sessionsCompleted = totalSessions;
+                else {
+                    const ledgerCount = countDistinctCloseoutSessions(eventsPath);
+                    if (ledgerCount > 0) {
+                        sessionsCompleted = ledgerCount;
                     }
-                    else if (typeof sd.currentSession === "number" && sd.currentSession > 1) {
-                        sessionsCompleted = sd.currentSession - 1;
+                    else if (state === "done" && typeof totalSessions === "number") {
+                        sessionsCompleted = totalSessions;
                     }
                 }
             }

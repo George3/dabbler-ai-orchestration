@@ -34,6 +34,14 @@ export interface LiveSession {
   // reviewers can spot emergency-bypass close-outs at a glance. Absent
   // or false on every snapshot written by a normal close-out.
   forceClosed: boolean | null;
+  // Set 022 Session 2: completedSessions[] is the authoritative
+  // progress ledger under the state-first lifecycle protocol. Surfaced
+  // here so the tree-view can compute the "currentSession is in flight"
+  // predicate (currentSession not in completedSessions[]) without
+  // re-reading the state file. Null when the snapshot pre-dates the
+  // array (legacy sets); empty array when the protocol has been
+  // applied but no session has closed yet.
+  completedSessions: number[] | null;
 }
 
 export interface SessionSet {

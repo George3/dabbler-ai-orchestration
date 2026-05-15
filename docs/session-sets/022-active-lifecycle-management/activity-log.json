@@ -89,6 +89,69 @@
           "costUsd": 0.015394
         }
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/session-1-closeout-backfill",
+      "dateTime": "2026-05-15T04:50:27-04:00",
+      "description": "Pre-Session-2 cleanup: Session 1 had committed in 1a973be but was never formally closed via close_session — the events ledger had only the work_started event, no closeout_succeeded. Authored disposition.json + activity-log.json (reconstructed from commit message + router-metrics.jsonl, see session-001/reconstruction-note), committed as 66ad890, then ran `python -m ai_router.close_session --session-set-dir docs/session-sets/022-active-lifecycle-management --json`. All 5 gates passed; closeout_requested + closeout_succeeded events emitted; completedSessions[] became [1] via the new writer Session 1 just shipped. Then ran `python -m ai_router.start_session ...` which flipped currentSession to 2 and emitted work_started. The state-first lifecycle protocol Set 022 delivered is now running on its own session set.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/drop-activitylog-count",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "src/utils/fileSystem.ts: removed activity-log unique-sessionNumber count derivation and the currentSession-1 fallback. New count order: completedSessions.length (primary) → countDistinctCloseoutSessions(eventsPath) (Full-tier fallback; new helper generalizes hasCloseoutEventForSession to a count) → totalSessions when state==='done'. Activity-log read retained for totalSessions metadata and per-entry dateTime (lastTouched signal); count branch dropped. Also added `eventsPath` resolution + surfaced `completedSessions: number[] | null` through LiveSession so the tree-view can compute the in-flight predicate without re-reading the snapshot.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/file-watcher-verify",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "src/extension.ts: extended the bindWatchers RelativePattern to include `session-events.jsonl` and `CANCELLED.md`. Required so a fresh-set Not Started → In Progress flip on session 1 doesn't wait for the 30s poll loop (start_session writes ledger + state file; the prior pattern only watched the state file), and so a cancel/restore command's CANCELLED.md write fires an immediate refresh.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/progress-text",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "src/providers/SessionSetsProvider.ts: added isCurrentSessionInFlight(set) implementing the spec invariant (currentSession not in completedSessions[]); guards against legacy snapshots by requiring completedSessions to be a non-null array. progressText now appends ` Done` on done rows and ` · session N in flight` when the predicate fires. Both functions exported for unit-test reuse.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/tests",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "src/test/suite/fileSystem.test.ts: added 5 regression tests — events-ledger fallback with dedupe, no-array-no-ledger renders 0/N (not currentSession-1), activity-log no longer inflates count, liveSession.completedSessions surfaced, and a new countDistinctCloseoutSessions suite (missing file, distinct counting, dedupe, malformed-line tolerance). src/test/suite/sessionSetsProvider.test.ts: new file with 13 tests covering isCurrentSessionInFlight (legacy snapshot, fresh set, between-sessions, mid-set in-flight) and progressText (Done annotation, in-flight annotations at both endpoints, base fraction for legacy / not-started). forceClosedBadge.test.ts fakeLive helper updated to include the new completedSessions field. TypeScript compiles cleanly (tsc --noEmit exit 0). The .vscode-test electron harness is currently broken on this machine (1.119+ Code.exe rejects --no-sandbox); ran a standalone smoke harness with a vscode stub instead: 14/14 pure-logic assertions pass, plus a live readSessionSets call against set 022 renders `1/3 · session 2 in flight` as expected.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/version-bump",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "Bumped extension to v0.13.12 across package.json, package-lock.json, CHANGELOG.md (added a v0.13.12 section detailing all four behavior changes), and CLAUDE.md (current version line).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/smoke-test",
+      "dateTime": "2026-05-15T05:30:00-04:00",
+      "description": "`npx vsce package` → DONE Packaged: dabbler-ai-orchestration-0.13.12.vsix (19 files, 398.91 KB). Build is shippable. Live readSessionSets call against the real session-set tree confirmed 22 sets bucket correctly (done=18, in-progress=3, not-started=0, cancelled=1) and set 022 renders the expected `1/3 · session 2 in flight` annotation.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

@@ -100,9 +100,22 @@ export function activate(context: vscode.ExtensionContext): void {
     boundRoots = want;
     for (const root of roots) {
       const sessionSetsAbs = path.join(root, SESSION_SETS_REL);
+      // Set 022 Session 2 added `session-events.jsonl` and
+      // `CANCELLED.md` to the watch list. The events ledger drives
+      // the new Full-tier sessionsCompleted fallback when
+      // `completedSessions[]` is absent, and the boundary writes from
+      // `start_session` / `close_session` only touch the ledger and
+      // the state file (not the activity-log) — without the ledger in
+      // the watch list, a Not Started → In Progress bucket-flip on
+      // session 1 of a fresh set would wait for the 30s poll loop
+      // instead of triggering the immediate watcher debounce.
+      // `CANCELLED.md` is the canonical signal for the cancelled
+      // tree-state (Set 8 spec § Detection rules); the cancelled
+      // commands write it directly, so the watcher must see it to
+      // refresh the bucket the moment a set is cancelled / restored.
       const pattern = new vscode.RelativePattern(
         sessionSetsAbs,
-        "**/{spec.md,session-state.json,activity-log.json,change-log.md,*-uat-checklist.json}"
+        "**/{spec.md,session-state.json,session-events.jsonl,activity-log.json,change-log.md,CANCELLED.md,*-uat-checklist.json}"
       );
       const watcher = vscode.workspace.createFileSystemWatcher(pattern);
       const onEvent = () => provider.refresh();
