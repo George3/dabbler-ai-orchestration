@@ -187,6 +187,73 @@
         {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 7355, "costUsd": 0.1254},
         {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 5500, "costUsd": 0.1076}
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/yaml-schema-fields",
+      "dateTime": "2026-05-15T14:00:00-04:00",
+      "description": "Added display_label and enabled fields to all three providers (anthropic/google/openai) in ai_router/router-config.yaml. Added routing.outsourcing_mode: whenever-helpful to the routing block. These fields are Set 025 Appendix B schema additions for the webview editor.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/resolver-abstraction",
+      "dateTime": "2026-05-15T14:10:00-04:00",
+      "description": "Created ai_router/secret_resolver.py exporting resolve_secret(name, source='env') -> str | None and register_backend(). Env-var backend registered as 'env' (only backend in Set 026). Empty-string normalized to None. Registry pattern allows future backends (secretStorage, keyring) without touching callers. Exported from ai_router package public surface alongside register_backend. Added try/except import pattern in config.py and providers.py for package vs. test context compatibility.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/config-py-readers",
+      "dateTime": "2026-05-15T14:20:00-04:00",
+      "description": "Edited ai_router/config.py: (1) apply Set-026 field defaults on load (display_label, enabled, routing.outsourcing_mode) so old configs without these fields still load cleanly; (2) validate models.*.provider against the providers: block, raising clear error on dangling references; (3) read ai_router/local-overrides.yaml if present and merge per Appendix B precedence (local > shared > default). Allowlist enforced: routing.outsourcing_mode, providers.display_label, providers.enabled, notifications, decision_review. New providers/models in local-overrides raise ValueError. Unknown keys warn-and-ignore. API key validation now uses resolve_secret() instead of os.environ.get(). Edited ai_router/providers.py: all three provider callers (_call_anthropic, _call_google, _call_openai) now use resolve_secret() instead of os.environ[].",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/migration-script",
+      "dateTime": "2026-05-15T14:30:00-04:00",
+      "description": "Created ai_router/migrate_router_config.py: idempotent forward migration using ruamel.yaml AST round-trip for comment preservation. Injects display_label (title-cased key name) and enabled: true per provider if absent; injects routing.outsourcing_mode: whenever-helpful if absent. Renames threshold_scope -> scope per Appendix B rules (project-lifetime -> per-project, per-session-set preserved, monthly -> per-project + period: monthly with deprecation warning). Injects warn_at_percent: 80 if absent. Exit codes: 0 = success/no-op, 1 = parse error. Run with python -m ai_router.migrate_router_config. Added ruamel.yaml>=0.18 to requirements.txt. Ran migration against this repo's router-config.yaml (no changes needed) and budget.yaml (threshold_scope -> scope: per-project, warn_at_percent: 80 added). Second run confirmed idempotent (no changes).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/local-overrides-merge",
+      "dateTime": "2026-05-15T14:35:00-04:00",
+      "description": "Local-overrides merge logic implemented in config.py._apply_local_overrides. Covered by test_local_overrides_merge.py: 9 tests verifying precedence (local wins for routing/provider/enabled), local-only sections (notifications/decision_review merged into config), allowlist violations (ValueError for routing.tier1_max_complexity and providers.anthropic.api_key_env), new-provider rejection, and unknown-key warning-and-ignore behavior.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/test-suite",
+      "dateTime": "2026-05-15T14:40:00-04:00",
+      "description": "Created 5 new test files: test_secret_resolver_env_backend.py (6 tests: present/absent/empty/case-sensitivity/unknown-backend/custom-backend; case-sensitivity test skipped on Windows since os.environ is case-insensitive there), test_migrate_router_config_idempotent.py (6 tests: idempotency, display_label/enabled/outsourcing_mode injection, missing-files no-raise), test_migrate_router_config_threshold_scope_rules.py (6 tests: all four threshold_scope mappings + warn_at_percent), test_migrate_router_config_preserves_comments.py (3 tests: router comments, budget comments, post-migration YAML validity), test_local_overrides_merge.py (9 tests). Final pytest: 414 passed, 1 skipped, 0 failed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/verification",
+      "dateTime": "2026-05-15T14:50:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4 (session-verification task type). Verdict: Accept / VERIFIED. No blocking issues found. Findings: resolve_secret design correct; migration idempotency sound; allowlist correct; env-var exclusions correct. Total verification spend: ~$0.162 (NTE cumulative: ~$0.54 of $10.00).",
+      "status": "complete",
+      "routedApiCalls": [
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 7000, "outputTokens": 3000, "costUsd": 0.087},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6800, "outputTokens": 2900, "costUsd": 0.067},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 1200, "outputTokens": 400, "costUsd": 0.008}
+      ]
     }
   ]
 }
