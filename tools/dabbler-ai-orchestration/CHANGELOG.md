@@ -5,6 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.14] — 2026-05-15
+
+### Removed
+- **Provider Queues and Provider Heartbeats tree views (Set 024).** Both
+  views, their five commands
+  (`dabblerProviderQueues.refresh` / `.openPayload` / `.markFailed` /
+  `.forceReclaim`, `dabblerProviderHeartbeats.refresh`), their menu
+  contributions, and their six configuration properties under
+  `dabblerProviderQueues.*` and `dabblerProviderHeartbeats.*` are gone.
+  These views were scaffolding for the `outsourceMode: last`
+  (subscription-CLI verifier daemon) path; no session set in this repo
+  has declared `outsourceMode: last`, and the persistent yellow
+  warning triangle that surfaced on every refresh ("Failed to read
+  queue status. queue_status exited 1 …") was worse UX than no view at
+  all. The Python CLI surface (`python -m ai_router.queue_status` and
+  `python -m ai_router.heartbeat_status`) stays — operators who run
+  outsource-last in other repos can still invoke those commands from a
+  terminal, and `ai_router/docs/two-cli-workflow.md` still documents
+  the path. The shared `dabblerSessionSetsContainer` activity-bar
+  container stays for the Session Sets view.
+- Five TypeScript source files
+  (`ProviderQueuesProvider.ts`, `ProviderHeartbeatsProvider.ts`,
+  `queueActions.ts`, and the two corresponding test suites) plus
+  `utils/pythonRunner.ts` (now unused after the providers and
+  `queueActions` that called it were removed).
+- The "Falls back to `dabblerProviderQueues.pythonPath` if unset"
+  fallback sentence on `dabblerSessionSets.pythonPath`'s markdown
+  description, and the corresponding code-side fallback in
+  `installAiRouterCommands.ts → resolvePythonPath`. Operators who want
+  to point the install command at a venv interpreter should set
+  `dabblerSessionSets.pythonPath` directly.
+
+### Migration
+
+If you had set `dabblerProviderQueues.pythonPath` or
+`dabblerProviderHeartbeats.*` keys in your user or workspace settings,
+those entries become orphaned on upgrade and are no longer consulted.
+Remove them, or — if you were using `dabblerProviderQueues.pythonPath`
+to point the install command at a venv — rename the key to
+`dabblerSessionSets.pythonPath` so the install command continues to
+honor it.
+
 ## [0.13.13] — 2026-05-15
 
 ### Changed

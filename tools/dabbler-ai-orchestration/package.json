@@ -2,7 +2,7 @@
   "name": "dabbler-ai-orchestration",
   "displayName": "Dabbler AI Orchestration",
   "description": "Project wizard, session-set explorer, cost dashboard, and adoption-bootstrap entry point for the Dabbler AI-led workflow.",
-  "version": "0.13.13",
+  "version": "0.13.14",
   "publisher": "DarndestDabbler",
   "private": true,
   "engines": {
@@ -43,16 +43,6 @@
         {
           "id": "dabblerSessionSets",
           "name": "Session Sets",
-          "contextualTitle": "Dabbler AI Orchestration"
-        },
-        {
-          "id": "dabblerProviderQueues",
-          "name": "Provider Queues",
-          "contextualTitle": "Dabbler AI Orchestration"
-        },
-        {
-          "id": "dabblerProviderHeartbeats",
-          "name": "Provider Heartbeats",
           "contextualTitle": "Dabbler AI Orchestration"
         }
       ]
@@ -160,33 +150,6 @@
         "icon": "$(graph)"
       },
       {
-        "command": "dabblerProviderQueues.refresh",
-        "title": "Refresh Provider Queues",
-        "category": "Dabbler",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "dabblerProviderQueues.openPayload",
-        "title": "Open Payload",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabblerProviderQueues.markFailed",
-        "title": "Mark Failed",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabblerProviderQueues.forceReclaim",
-        "title": "Force Reclaim",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabblerProviderHeartbeats.refresh",
-        "title": "Refresh Provider Heartbeats",
-        "category": "Dabbler",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "dabblerSessionSets.cancel",
         "title": "Cancel Session Set",
         "category": "Dabbler"
@@ -235,16 +198,6 @@
           "command": "dabbler.getStarted",
           "when": "view == dabblerSessionSets",
           "group": "navigation@3"
-        },
-        {
-          "command": "dabblerProviderQueues.refresh",
-          "when": "view == dabblerProviderQueues",
-          "group": "navigation@1"
-        },
-        {
-          "command": "dabblerProviderHeartbeats.refresh",
-          "when": "view == dabblerProviderHeartbeats",
-          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -307,21 +260,6 @@
           "command": "dabblerSessionSets.restore",
           "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:cancelled/",
           "group": "9_lifecycle@2"
-        },
-        {
-          "command": "dabblerProviderQueues.openPayload",
-          "when": "view == dabblerProviderQueues && viewItem =~ /^queueMessage:/",
-          "group": "1_inspect@1"
-        },
-        {
-          "command": "dabblerProviderQueues.markFailed",
-          "when": "view == dabblerProviderQueues && viewItem =~ /^queueMessage:(new|claimed)/",
-          "group": "9_danger@1"
-        },
-        {
-          "command": "dabblerProviderQueues.forceReclaim",
-          "when": "view == dabblerProviderQueues && viewItem =~ /^queueMessage:claimed/",
-          "group": "9_danger@2"
         }
       ]
     },
@@ -348,47 +286,12 @@
         "dabblerSessionSets.pythonPath": {
           "type": "string",
           "default": "python",
-          "markdownDescription": "Python executable used by `Dabbler: Install ai-router` and `Dabbler: Update ai-router` for venv detection / creation and `pip install` commands. Accepts an absolute path, a workspace-relative path (e.g. `.venv/Scripts/python.exe`), or a bare command on `PATH`. When the path points at an interpreter inside an existing venv (parent dir is `Scripts/` or `bin/`), the install command treats that venv as the install target instead of hunting for `.venv/` at the workspace root. Falls back to `dabblerProviderQueues.pythonPath` if unset."
+          "markdownDescription": "Python executable used by `Dabbler: Install ai-router` and `Dabbler: Update ai-router` for venv detection / creation and `pip install` commands. Accepts an absolute path, a workspace-relative path (e.g. `.venv/Scripts/python.exe`), or a bare command on `PATH`. When the path points at an interpreter inside an existing venv (parent dir is `Scripts/` or `bin/`), the install command treats that venv as the install target instead of hunting for `.venv/` at the workspace root."
         },
         "dabblerSessionSets.aiRouterRepoUrl": {
           "type": "string",
           "default": "",
           "markdownDescription": "Git repo URL the `Dabbler: Install ai-router` command's GitHub-fallback path clones from. Leave blank to use the upstream Dabbler repository. Override to point at a fork — handy for fork-trackers who want the GitHub fallback to pull *their* tags / branches rather than upstream's."
-        },
-        "dabblerProviderQueues.autoRefreshSeconds": {
-          "type": "number",
-          "default": 15,
-          "minimum": 0,
-          "markdownDescription": "Auto-refresh interval (seconds) for the Provider Queues view. Set to `0` to disable auto-refresh; manual refresh remains available via the toolbar button."
-        },
-        "dabblerProviderQueues.pythonPath": {
-          "type": "string",
-          "default": "python",
-          "markdownDescription": "Python executable used to invoke `python -m ai_router.queue_status`. Override if your environment requires a virtualenv path (e.g. `.venv/Scripts/python.exe`)."
-        },
-        "dabblerProviderQueues.messageLimit": {
-          "type": "number",
-          "default": 50,
-          "minimum": 1,
-          "markdownDescription": "Maximum number of messages fetched per provider per refresh."
-        },
-        "dabblerProviderHeartbeats.autoRefreshSeconds": {
-          "type": "number",
-          "default": 15,
-          "minimum": 0,
-          "markdownDescription": "Auto-refresh interval (seconds) for the Provider Heartbeats view. Set to `0` to disable auto-refresh."
-        },
-        "dabblerProviderHeartbeats.lookbackMinutes": {
-          "type": "number",
-          "default": 60,
-          "minimum": 1,
-          "markdownDescription": "Lookback window (minutes) for the heartbeats view's completion / token counts. **Observational only** — this does not predict subscription-window exhaustion."
-        },
-        "dabblerProviderHeartbeats.silentWarningMinutes": {
-          "type": "number",
-          "default": 30,
-          "minimum": 1,
-          "markdownDescription": "Show a silent-provider warning when a provider's last completion was more than this many minutes ago."
         }
       }
     }

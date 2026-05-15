@@ -112,19 +112,14 @@ function resolveAiRouterRepoUrl() {
     return raw === "" ? undefined : raw;
 }
 function resolvePythonPath(workspaceRoot) {
-    // Per spec: install command reads ``dabblerSessionSets.pythonPath``
-    // (separate from the per-view ``dabblerProviderQueues.pythonPath`` so
-    // the views and the install command can target different interpreters
-    // if a workspace ever needs to). Falls back to the queue setting for
-    // backward compatibility with workspaces that only set that one, then
-    // to bare ``"python"`` on PATH.
+    // Install command reads ``dabblerSessionSets.pythonPath``, falling
+    // back to bare ``"python"`` on PATH.
     //
     // Use ``inspect()`` to distinguish "operator explicitly set it" from
     // "the contributed default fired" — `getConfiguration().get()` can't
     // tell the difference, so a naive `?? next` chain would never reach
     // the fallback. Round-6 verifier catch.
     const raw = (explicitConfigValue("dabblerSessionSets", "pythonPath") ??
-        explicitConfigValue("dabblerProviderQueues", "pythonPath") ??
         "python").trim();
     if (!raw)
         return "python";

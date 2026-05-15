@@ -106,8 +106,7 @@ function isAiRouterNotInstalled(stderr) {
  *
  * Returns an :class:`InstallOutcome` describing what happened. Never throws
  * for spawn / fs failures — the outcome carries an operator-facing
- * ``message`` instead, mirroring the pattern in ``runPythonModule`` so the
- * UI can surface results uniformly.
+ * ``message`` instead, so the UI can surface results uniformly.
  */
 async function installAiRouter(deps) {
     return doInstall(deps, { mode: "install" });

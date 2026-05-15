@@ -39,15 +39,12 @@ const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const SessionSetsProvider_1 = require("./providers/SessionSetsProvider");
-const ProviderQueuesProvider_1 = require("./providers/ProviderQueuesProvider");
-const ProviderHeartbeatsProvider_1 = require("./providers/ProviderHeartbeatsProvider");
 const fileSystem_1 = require("./utils/fileSystem");
 const openFile_1 = require("./commands/openFile");
 const copyCommand_1 = require("./commands/copyCommand");
 const gitScaffold_1 = require("./commands/gitScaffold");
 const copyAdoptionBootstrapPrompt_1 = require("./commands/copyAdoptionBootstrapPrompt");
 const troubleshoot_1 = require("./commands/troubleshoot");
-const queueActions_1 = require("./commands/queueActions");
 const cancelLifecycleCommands_1 = require("./commands/cancelLifecycleCommands");
 const installAiRouterCommands_1 = require("./commands/installAiRouterCommands");
 const WizardPanel_1 = require("./wizard/WizardPanel");
@@ -156,88 +153,6 @@ function activate(context) {
     const pollHandle = setInterval(refreshAll, 30000);
     context.subscriptions.push({ dispose: () => clearInterval(pollHandle) });
     context.subscriptions.push(vscode.commands.registerCommand("dabblerSessionSets.refresh", refreshAll));
-    // --- Provider Queues view ---
-    const queuesProvider = new ProviderQueuesProvider_1.ProviderQueuesProvider({
-        getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-    });
-    context.subscriptions.push(vscode.window.registerTreeDataProvider("dabblerProviderQueues", queuesProvider));
-    context.subscriptions.push(vscode.commands.registerCommand("dabblerProviderQueues.refresh", () => queuesProvider.refresh()));
-    // Auto-refresh; settings-configurable, 0 disables.
-    let queuesPoll;
-    const rebindQueuesPoll = () => {
-        if (queuesPoll)
-            clearInterval(queuesPoll);
-        const seconds = vscode.workspace
-            .getConfiguration("dabblerProviderQueues")
-            .get("autoRefreshSeconds", 15);
-        if (seconds > 0) {
-            queuesPoll = setInterval(() => queuesProvider.refresh(), seconds * 1000);
-        }
-        else {
-            queuesPoll = undefined;
-        }
-    };
-    rebindQueuesPoll();
-    context.subscriptions.push({
-        dispose: () => {
-            if (queuesPoll)
-                clearInterval(queuesPoll);
-        },
-    });
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("dabblerProviderQueues.autoRefreshSeconds")) {
-            rebindQueuesPoll();
-        }
-    }));
-    (0, queueActions_1.registerQueueActionCommands)(context, {
-        getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-        refreshView: () => queuesProvider.refresh(),
-    });
-    // --- Provider Heartbeats view ---
-    const heartbeatsProvider = new ProviderHeartbeatsProvider_1.ProviderHeartbeatsProvider({
-        getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-    });
-    // The footer makes the observational framing impossible to miss; it
-    // sits in the view header at all times so a user can't skim past it.
-    const heartbeatsTreeView = vscode.window.createTreeView("dabblerProviderHeartbeats", {
-        treeDataProvider: heartbeatsProvider,
-        showCollapseAll: false,
-    });
-    heartbeatsTreeView.description = ProviderHeartbeatsProvider_1.HEARTBEAT_FOOTER;
-    context.subscriptions.push(heartbeatsTreeView);
-    context.subscriptions.push(vscode.commands.registerCommand("dabblerProviderHeartbeats.refresh", () => heartbeatsProvider.refresh()));
-    let heartbeatsPoll;
-    const rebindHeartbeatsPoll = () => {
-        if (heartbeatsPoll)
-            clearInterval(heartbeatsPoll);
-        const seconds = vscode.workspace
-            .getConfiguration("dabblerProviderHeartbeats")
-            .get("autoRefreshSeconds", 15);
-        if (seconds > 0) {
-            heartbeatsPoll = setInterval(() => heartbeatsProvider.refresh(), seconds * 1000);
-        }
-        else {
-            heartbeatsPoll = undefined;
-        }
-    };
-    rebindHeartbeatsPoll();
-    context.subscriptions.push({
-        dispose: () => {
-            if (heartbeatsPoll)
-                clearInterval(heartbeatsPoll);
-        },
-    });
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
-        // Only the polling-interval setting actually requires rebinding the
-        // setInterval; the other two only affect what the next refresh pulls.
-        const affectsTiming = e.affectsConfiguration("dabblerProviderHeartbeats.autoRefreshSeconds");
-        const affectsContent = e.affectsConfiguration("dabblerProviderHeartbeats.lookbackMinutes") ||
-            e.affectsConfiguration("dabblerProviderHeartbeats.silentWarningMinutes");
-        if (affectsTiming)
-            rebindHeartbeatsPoll();
-        if (affectsTiming || affectsContent)
-            heartbeatsProvider.refresh();
-    }));
     // --- Register feature command groups ---
     //
     // Each register*Commands call is wrapped in its own try/catch so a
