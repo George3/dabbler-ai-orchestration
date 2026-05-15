@@ -205,6 +205,18 @@ def register_session_start(
         if not already_emitted:
             append_event(session_set, "work_started", session_number)
 
+    # Preserve completedSessions[] across the snapshot rewrite (Set 022
+    # invariant: the array is the progress ledger and survives session
+    # boundaries). For pre-Set-022 sets without the array on disk,
+    # compute_effective_completed_sessions backfills from the events
+    # ledger so the very first start_session call after the upgrade
+    # heals the snapshot. The backfill is intentionally same-tier as
+    # the close_session writer's backfill — both use the same helper.
+    prior_completed: List[int] = []
+    existing = read_session_state(session_set)
+    if isinstance(existing, dict):
+        prior_completed = compute_effective_completed_sessions(session_set)
+
     state = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
@@ -222,6 +234,12 @@ def register_session_start(
             "effort": orchestrator_effort,
         },
     }
+    if prior_completed:
+        # Only emit the key when there's something to record. Keeps the
+        # not-started → session-1-in-flight transition's snapshot
+        # clean (no empty array), matching the schema doc's "absent
+        # means none closed yet" convention.
+        state["completedSessions"] = prior_completed
     path = _state_path(session_set)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
@@ -256,6 +274,82 @@ def _propagate_total_sessions(session_set: str, total: int) -> None:
     data["totalSessions"] = total
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+
+def compute_effective_completed_sessions(session_set_dir: str) -> List[int]:
+    """Return the authoritative sorted list of closed session numbers.
+
+    Read order, first non-empty result wins:
+
+    1. ``completedSessions[]`` from ``session-state.json`` — the
+       Set-022 invariant: this array is the progress ledger and is
+       maintained on every session close.
+    2. Distinct ``closeout_succeeded`` event session numbers from
+       ``session-events.jsonl`` — Full-tier fallback for sets that
+       pre-date Set 022. Set 022's writer changes use this branch to
+       *backfill* the array on the next boundary write, so this branch
+       only fires once per legacy set.
+    3. ``currentSession - 1`` heuristic — last-resort legacy
+       reconstruction (currentSession reflects "the session in flight
+       *or* just closed"; on a pre-events-ledger set with no other
+       signal, sessions 1..currentSession-1 are presumed done). Emits
+       a WARNING to stderr because the resulting list is conjectural;
+       callers should treat the next boundary write as the
+       authoritative correction point.
+
+    Returns a sorted list of unique session integers. Empty list when
+    the set has produced no signal at all (e.g., the not-started shape
+    with ``currentSession: null``).
+
+    Used by :func:`_flip_state_to_closed` to maintain
+    ``completedSessions[]`` and by the ``start_session`` CLI to infer
+    "what session is next?" without depending on the snapshot's
+    ``currentSession`` field being correct (mixed-mode drift could
+    have left it stale).
+    """
+    state = read_session_state(session_set_dir) or {}
+
+    def _valid_session_number(x: object) -> bool:
+        return (
+            isinstance(x, int)
+            and not isinstance(x, bool)
+            and x > 0
+        )
+
+    completed = state.get("completedSessions")
+    if isinstance(completed, list):
+        ints = sorted({c for c in completed if _valid_session_number(c)})
+        if ints:
+            return ints
+
+    # Lazy import to avoid the session_events ↔ session_state cycle
+    # (session_events imports SessionLifecycleState from this module).
+    try:
+        from session_events import read_events  # type: ignore[import-not-found]
+    except ImportError:
+        from .session_events import read_events  # type: ignore[no-redef]
+    events = read_events(session_set_dir)
+    closeouts = sorted({
+        ev.session_number for ev in events
+        if ev.event_type == "closeout_succeeded"
+        and _valid_session_number(ev.session_number)
+    })
+    if closeouts:
+        return closeouts
+
+    current = state.get("currentSession")
+    if isinstance(current, int) and not isinstance(current, bool) and current > 1:
+        _logger.warning(
+            "compute_effective_completed_sessions: %s has no "
+            "completedSessions[] and no closeout_succeeded events; "
+            "falling back to currentSession-1 heuristic "
+            "(presuming sessions 1..%d closed). The next boundary "
+            "write will backfill completedSessions[] with this list.",
+            session_set_dir, current - 1,
+        )
+        return list(range(1, current))
+
+    return []
 
 
 def _flip_state_to_closed(
@@ -293,20 +387,54 @@ def _flip_state_to_closed(
     # comes out as v2 on the next write (per the schema migration contract).
     state = _migrate_v1_to_v2_inplace(state)
 
-    # Only mark the SET as complete when this is the last session of
-    # the set. The orchestrator authors change-log.md at the end of the
-    # last session (per close-out.md step 9, "Last session only: write
-    # change-log.md"); its presence is the signal. A force-close also
-    # implies last session (incident recovery — the operator is
-    # explicitly asserting the set is done, possibly bypassing gates
-    # like change_log_fresh). For mid-set session close-outs the set is
-    # still in progress — leave status and lifecycleState as
-    # register_session_start set them so the Session Set Explorer keeps
-    # showing the set as In Progress rather than toggling to Done after
-    # every session.
-    is_last_session = forced or os.path.isfile(
+    # Set 022: maintain completedSessions[] on every close. The helper
+    # backfills from the events ledger when the array is empty (legacy
+    # sets that pre-date Set 022) so the very first close after the
+    # upgrade heals the array in one pass. currentSession is appended
+    # after the helper runs because the helper reads the *current*
+    # snapshot's array (which doesn't yet include the session we're
+    # about to close).
+    current_session = state.get("currentSession")
+    if isinstance(current_session, int) and not isinstance(current_session, bool):
+        effective = compute_effective_completed_sessions(session_set)
+        merged = sorted(set(effective) | {current_session})
+        state["completedSessions"] = merged
+
+    # Final-session detection (Set 022): the canonical signal is
+    # ``len(completedSessions) == totalSessions`` after the append
+    # above. change-log.md presence remains a belt-and-suspenders
+    # check — both must indicate "done" before the set flips to
+    # complete, so a stray hand-written change-log doesn't promote
+    # a mid-set close to a set-done flip, and a missing change-log
+    # doesn't let the math alone flip a set the orchestrator hasn't
+    # actually wrapped up. ``forced=True`` still short-circuits to
+    # last-session because incident recovery is explicit operator
+    # intent (close-out.md, "--force is hard-scoped to incident
+    # recovery"); the operator is asserting "this set is done" and
+    # we honor that even when one signal is missing. When
+    # totalSessions is unknown (None / 0 — legacy spec without the
+    # config block), fall back to change-log presence alone so
+    # pre-Set-022 sets close out the way they always have.
+    completed_list = state.get("completedSessions") or []
+    total_sessions = state.get("totalSessions")
+    if (
+        isinstance(total_sessions, int)
+        and not isinstance(total_sessions, bool)
+        and total_sessions > 0
+    ):
+        # Spec invariant 3: SET-level flip requires
+        # len(completedSessions) == totalSessions (post-append).
+        # Equality, not >=: a snapshot where
+        # len(completedSessions) > totalSessions is its own
+        # pathology (likely a hand-edit or test misconfig) and
+        # should fail loud rather than be silently flipped here.
+        sessions_done = len(completed_list) == total_sessions
+    else:
+        sessions_done = True
+    change_log_present = os.path.isfile(
         os.path.join(session_set, "change-log.md")
     )
+    is_last_session = forced or (sessions_done and change_log_present)
     if is_last_session:
         state["status"] = "complete"
         state["lifecycleState"] = SessionLifecycleState.CLOSED.value

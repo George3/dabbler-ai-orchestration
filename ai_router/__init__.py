@@ -61,7 +61,7 @@ the SessionLog class:
     log.log_step(session_number=1, step_number=1, ...)
 """
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 from .config import load_config, resolve_generation_params
 from .models import estimate_complexity, pick_model
@@ -82,6 +82,7 @@ from .session_state import (
     OUTSOURCE_MODES,
     ROLE_VALUES,
     DEFAULT_OUTSOURCE_MODE,
+    compute_effective_completed_sessions,
     register_session_start,
     mark_session_complete,
     read_session_state,

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "sessionSetName": "022-active-lifecycle-management",
+  "currentSession": 1,
+  "totalSessions": 3,
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-15T04:22:30.093717-04:00",
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "medium"
+  }
+}

@@ -887,8 +887,109 @@ def _run_repair(
                     f"for session {target_session}"
                 )
 
+            # Set 022: also backfill completedSessions[] from the
+            # (now-repaired) events ledger. This intentionally reads
+            # ``closeout_succeeded`` events DIRECTLY rather than via
+            # ``compute_effective_completed_sessions()``, because the
+            # helper prefers a non-empty snapshot ``completedSessions[]``
+            # over the events ledger — and a mixed-mode drift snapshot
+            # can carry a stale, partial array. The
+            # unified-master-details-composite incident (2026-05-12)
+            # is the cautionary example: a hand-edited snapshot might
+            # claim ``completedSessions=[1,2,3,4]`` while
+            # ``currentSession=5`` was the session whose closeout
+            # was actually missing; routing through the helper here
+            # would re-write ``[1,2,3,4]`` even though the synthetic
+            # closeout we just appended for session 5 means [1..5]
+            # is the truth. Direct events read avoids that trap and
+            # stays idempotent on the second pass.
+            events_now = read_events(session_set_dir)
+            backfilled = sorted({
+                ev.session_number for ev in events_now
+                if ev.event_type == "closeout_succeeded"
+                and isinstance(ev.session_number, int)
+                and not isinstance(ev.session_number, bool)
+                and ev.session_number > 0
+            })
+            existing_completed = (state or {}).get("completedSessions")
+            existing_list = (
+                sorted(existing_completed)
+                if isinstance(existing_completed, list)
+                else []
+            )
+            if backfilled and backfilled != existing_list:
+                try:
+                    state_path = os.path.join(
+                        session_set_dir, "session-state.json"
+                    )
+                    # Use read_session_state() so a corrupt-or-missing
+                    # snapshot does not crash the repair walk
+                    # (read_session_state returns None on JSONDecodeError
+                    # and missing files). Case 1 only fires when
+                    # ``state_says_closed`` is True, which implies the
+                    # file was readable at trigger time, but a
+                    # concurrent writer or external mutation could
+                    # break it between then and now — fall back to an
+                    # empty dict and write a snapshot that records the
+                    # backfilled completedSessions.
+                    snapshot = read_session_state(session_set_dir) or {}
+                    snapshot["completedSessions"] = backfilled
+                    with open(state_path, "w", encoding="utf-8") as f:
+                        json.dump(snapshot, f, indent=2)
+                        f.write("\n")
+                    messages.append(
+                        "repair applied: backfilled "
+                        f"completedSessions={backfilled} into "
+                        "session-state.json"
+                    )
+                except Exception as exc:  # pragma: no cover — defensive
+                    messages.append(
+                        f"repair could not backfill completedSessions[]: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
     # Case 2: events say closed, state has not caught up.
-    elif lifecycle == SessionLifecycleState.CLOSED and not state_says_closed:
+    #
+    # Set 022 narrows the trigger: under the new completedSessions[]
+    # invariant, "state has not caught up" means specifically that the
+    # currentSession's closeout event exists in the ledger but the
+    # snapshot's ``completedSessions[]`` does not record it. The
+    # pre-Set-022 trigger (``lifecycle == CLOSED and not
+    # state_says_closed``) conflated session-level closedness with
+    # set-level completion, which broke idempotency for mid-set
+    # close-outs: _flip_state_to_closed (Set 022) no longer flips the
+    # SET to complete on a mid-set session, so the snapshot's
+    # ``status`` stays in-progress while ``completedSessions`` grows.
+    # The narrower trigger fires exactly once per drifted session and
+    # stops firing once the helper has recorded the closure.
+    #
+    # Known gap (deferred): a distinct "set-finalization lag" — events
+    # show closeouts for ALL totalSessions sessions and the snapshot
+    # already has them in completedSessions[], but ``status`` is still
+    # ``in-progress`` despite a present ``change-log.md`` — is not
+    # detected here. _flip_state_to_closed writes status and
+    # completedSessions atomically in one file write, so this drift
+    # only occurs from external hand-edits or a crash mid-write. If it
+    # surfaces in practice, add a third repair branch that calls
+    # _flip_state_to_closed when len(completedSessions)==totalSessions
+    # and change-log.md is present and ``status != complete``.
+    completed_in_state = [
+        c for c in ((state or {}).get("completedSessions") or [])
+        if isinstance(c, int)
+        and not isinstance(c, bool)
+        and c > 0
+    ]
+    session_closeout_lag = (
+        state_session_number is not None
+        and _has_event("closeout_succeeded", state_session_number)
+        and state_session_number not in completed_in_state
+    )
+    if (
+        not case1_drift
+        and lifecycle == SessionLifecycleState.CLOSED
+        and not state_says_closed
+        and session_closeout_lag
+    ):
         drift_detected = True
         messages.append(
             "repair drift: session-events.jsonl shows closeout_succeeded "

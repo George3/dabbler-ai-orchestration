@@ -101,10 +101,13 @@ def started_session_set(tmp_path: Path) -> str:
         "# change log\n\nlast-session marker so the snapshot flip fires.\n",
         encoding="utf-8",
     )
+    # total_sessions=1 so closing this session IS the SET's final
+    # close-out (Set 022 invariant: SET-level flip requires
+    # len(completedSessions) == totalSessions AND change-log present).
     register_session_start(
         session_set=str(set_dir),
         session_number=1,
-        total_sessions=2,
+        total_sessions=1,
         orchestrator_engine="claude-code",
         orchestrator_model="claude-opus-4-7",
         orchestrator_effort="high",
@@ -509,15 +512,22 @@ def integration_set(tmp_path: Path) -> Path:
     set_dir.mkdir(parents=True)
     (set_dir / "spec.md").write_text("# spec\n", encoding="utf-8")
     # change-log.md present so mark_session_complete recognizes this as
-    # the last session and actually flips the snapshot.
+    # the last session and actually flips the snapshot. The content
+    # references "session 1" so the change_log_fresh gate's content-
+    # based freshness check passes even though the file is written
+    # before register_session_start (which would otherwise leave the
+    # mtime older than startedAt).
     (set_dir / "change-log.md").write_text(
-        "# change log\n\nlast-session marker so the snapshot flip fires.\n",
+        "# change log\n\nSession 1 work landed (last-session marker).\n",
         encoding="utf-8",
     )
+    # total_sessions=1 so closing this session IS the SET's final
+    # close-out (Set 022 invariant: SET-level flip requires
+    # len(completedSessions) == totalSessions AND change-log present).
     register_session_start(
         session_set=str(set_dir),
         session_number=1,
-        total_sessions=2,
+        total_sessions=1,
         orchestrator_engine="claude-code",
         orchestrator_model="claude-opus-4-7",
         orchestrator_effort="high",
@@ -527,7 +537,7 @@ def integration_set(tmp_path: Path) -> Path:
         json.dumps({
             "sessionSetName": "test-set",
             "createdDate": "2026-04-30T00:00:00-04:00",
-            "totalSessions": 2,
+            "totalSessions": 1,
             "entries": [{
                 "sessionNumber": 1,
                 "stepNumber": 1,

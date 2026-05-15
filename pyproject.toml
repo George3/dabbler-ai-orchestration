@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dabbler-ai-router"
-version = "0.2.2"
+version = "0.2.3"
 description = "Multi-provider model routing, prompt templates, session state, and metrics for the Dabbler AI-led-workflow."
 readme = "README.md"
 license = "MIT"
@@ -41,6 +41,7 @@ Source = "https://github.com/darndestdabbler/dabbler-ai-orchestration"
 Issues = "https://github.com/darndestdabbler/dabbler-ai-orchestration/issues"
 
 [project.scripts]
+start_session = "ai_router.start_session:main"
 close_session = "ai_router.close_session:main"
 report = "ai_router.report:main"
 reconciler = "ai_router.reconciler:main"

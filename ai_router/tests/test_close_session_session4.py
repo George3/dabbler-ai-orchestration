@@ -325,6 +325,134 @@ def test_manual_verify_empty_attestation_rejected(
 # Group 2: ``--repair`` drift detection and ``--apply`` correction
 # ===========================================================================
 
+# Set 022 invariant: _flip_state_to_closed appends currentSession to
+# completedSessions[] on every close (sorted, unique), and the
+# SET-level status flip is gated on
+# len(completedSessions) == totalSessions AND change-log.md present.
+# These tests pin the writer behavior independently of the repair
+# path so a regression in either branch is caught.
+
+def test_flip_state_appends_completed_sessions_mid_set(
+    closeable_set: Path,
+):
+    """Mid-set close: session number is appended to
+    ``completedSessions[]`` but the SET status stays in-progress.
+    """
+    # closeable_set is totalSessions=2 with session 1 in-flight.
+    # Direct _flip_state_to_closed simulates the session-close
+    # boundary write that mark_session_complete performs after the
+    # gate passes; here we exercise the writer in isolation.
+    _flip_state_to_closed(str(closeable_set))
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("completedSessions") == [1], (
+        f"expected completedSessions=[1] after mid-set close; got "
+        f"{state.get('completedSessions')!r}"
+    )
+    assert state.get("status") == "in-progress"
+    assert state.get("lifecycleState") == "work_in_progress"
+    assert state.get("completedAt") is None
+
+
+def test_flip_state_idempotent_completed_sessions(
+    closeable_set: Path,
+):
+    """A second flip for the same currentSession does not duplicate
+    entries in ``completedSessions[]`` — the append is sorted+unique.
+    """
+    _flip_state_to_closed(str(closeable_set))
+    _flip_state_to_closed(str(closeable_set))
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("completedSessions") == [1]
+
+
+def test_flip_state_flips_set_on_final_session(closeable_set: Path):
+    """Final close (len(completedSessions) == totalSessions AND
+    change-log.md present): the SET flips to complete/closed.
+    """
+    # Close session 1 first.
+    _flip_state_to_closed(str(closeable_set))
+    # Register and close session 2 (the final session). Author
+    # change-log.md as required.
+    register_session_start(
+        session_set=str(closeable_set),
+        session_number=2,
+        total_sessions=2,
+        orchestrator_engine="claude-code",
+        orchestrator_model="claude-opus-4-7",
+        orchestrator_effort="high",
+        orchestrator_provider="anthropic",
+    )
+    (closeable_set / "change-log.md").write_text(
+        "# change log\n\nSet done.\n", encoding="utf-8",
+    )
+    _flip_state_to_closed(str(closeable_set))
+
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("completedSessions") == [1, 2]
+    assert state.get("status") == "complete"
+    assert state.get("lifecycleState") == "closed"
+    assert state.get("completedAt") is not None
+
+
+def test_flip_state_no_change_log_does_not_flip_set(
+    closeable_set: Path,
+):
+    """Belt-and-suspenders: even when len(completedSessions) ==
+    totalSessions, a missing change-log.md keeps the SET at
+    in-progress. The math signal alone is not sufficient.
+    """
+    _flip_state_to_closed(str(closeable_set))
+    register_session_start(
+        session_set=str(closeable_set),
+        session_number=2,
+        total_sessions=2,
+        orchestrator_engine="claude-code",
+        orchestrator_model="claude-opus-4-7",
+        orchestrator_effort="high",
+        orchestrator_provider="anthropic",
+    )
+    # Deliberately do NOT write change-log.md.
+    _flip_state_to_closed(str(closeable_set))
+
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("completedSessions") == [1, 2]
+    assert state.get("status") == "in-progress", (
+        "change-log.md absence must keep the SET at in-progress "
+        "even when sessionsCompleted >= totalSessions"
+    )
+
+
+def test_register_session_start_preserves_completed_sessions(
+    closeable_set: Path,
+):
+    """Set 022 invariant: register_session_start preserves
+    ``completedSessions[]`` across the snapshot rewrite. The array
+    is the progress ledger and survives session boundaries.
+    """
+    # Close session 1 so completedSessions=[1] lands on disk.
+    _flip_state_to_closed(str(closeable_set))
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("completedSessions") == [1]
+
+    # Register session 2's start — the snapshot is overwritten,
+    # but completedSessions[] must survive.
+    register_session_start(
+        session_set=str(closeable_set),
+        session_number=2,
+        total_sessions=2,
+        orchestrator_engine="claude-code",
+        orchestrator_model="claude-opus-4-7",
+        orchestrator_effort="high",
+        orchestrator_provider="anthropic",
+    )
+    state = read_session_state(str(closeable_set)) or {}
+    assert state.get("currentSession") == 2
+    assert state.get("completedSessions") == [1], (
+        "register_session_start must preserve completedSessions[] "
+        "across the start-of-session snapshot rewrite"
+    )
+
+
 def test_repair_no_drift_clean_session(closeable_set: Path):
     """A freshly-started, never-closed session has no drift to report."""
     args = _ns(session_set_dir=str(closeable_set), repair=True)
@@ -341,19 +469,26 @@ def test_repair_detects_state_says_closed_but_no_event(
     drift; ``--apply`` appends synthetic events so the ledger and the
     snapshot agree.
     """
-    # Simulate the old close-out path: orchestrator wrote
-    # session-state.json complete but never emitted the closeout
-    # ledger trio. Use the gate-bypass internal flip helper so we
-    # actually reproduce the legacy "snapshot flipped, ledger silent"
-    # drift case — the post-Set 4 mark_session_complete writes a
-    # closeout_succeeded event itself, which would defeat the test.
-    # change-log.md must exist for _flip_state_to_closed to actually
-    # flip the SET status (mid-set close-outs no longer flip).
+    # Simulate the legacy bootstrapping path: orchestrator hand-wrote
+    # session-state.json to complete/closed without emitting the
+    # closeout ledger trio. Set 022 made _flip_state_to_closed
+    # conditional on len(completedSessions) == totalSessions AND
+    # change-log present, so it can no longer be (mis)used as a
+    # "force-flip" shortcut. The fixture is mid-set (totalSessions=2,
+    # only session 1 registered), and a legitimate bootstrapping
+    # drift in the wild always looked like a hand-edit anyway — so
+    # the test now reproduces that directly.
     (closeable_set / "change-log.md").write_text(
         "# change log\n\nlast-session marker for the drift fixture.\n",
         encoding="utf-8",
     )
-    _flip_state_to_closed(str(closeable_set), verification_verdict="VERIFIED")
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-04-30T01:00:00-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
     # Diagnostic: drift surfaces, exit 5, ledger untouched.
     args = _ns(session_set_dir=str(closeable_set), repair=True)
@@ -457,6 +592,20 @@ def test_repair_detects_mixed_mode_drift(closeable_set: Path):
     assert len(session1_closeouts) == 1
     assert session1_closeouts[0].fields.get("repaired") is not True
 
+    # Set 022: --apply also backfills completedSessions[] from the
+    # (now-repaired) events ledger. With sessions 1 and 2 both
+    # showing closeout_succeeded after --apply, the snapshot should
+    # record both as closed.
+    state_after = read_session_state(str(closeable_set)) or {}
+    assert state_after.get("completedSessions") == [1, 2], (
+        f"expected completedSessions=[1, 2] after --apply backfill; "
+        f"got {state_after.get('completedSessions')!r}"
+    )
+    assert any(
+        "backfilled completedSessions=[1, 2]" in m
+        for m in outcome2.messages
+    ), outcome2.messages
+
     # Idempotent.
     outcome3 = close_session.run(args2)
     assert outcome3.result == "succeeded"
@@ -467,17 +616,20 @@ def test_repair_detects_event_says_closed_but_state_lagging(
     closeable_set: Path,
 ):
     """Inverse drift: events ledger shows ``closeout_succeeded`` but
-    ``session-state.json`` is still at ``work_in_progress``. ``--apply``
-    flips the snapshot.
+    ``session-state.json`` has not recorded the session in
+    ``completedSessions[]``. ``--apply`` backfills the array via
+    ``_flip_state_to_closed``.
+
+    Set 022 reshapes this test: under the new completedSessions[]
+    invariant, "state lagging" means session-level lag (a closed
+    session missing from the array) rather than set-level lag
+    (status field not flipped). The fixture is mid-set
+    (totalSessions=2, only session 1 closed in the ledger), so
+    _flip_state_to_closed correctly leaves the SET status at
+    in-progress while recording session 1 as closed. The repair
+    becomes idempotent because Case 2's trigger now reads
+    completedSessions[].
     """
-    # Append the closeout trio but leave session-state.json untouched.
-    # change-log.md must exist so the repair's flip helper recognizes
-    # this as a last-session close-out (mid-set repairs no longer touch
-    # the SET-level status).
-    (closeable_set / "change-log.md").write_text(
-        "# change log\n\nlast-session marker for the lagging-state drift fixture.\n",
-        encoding="utf-8",
-    )
     append_event(
         str(closeable_set), "closeout_requested", 1,
     )
@@ -487,6 +639,7 @@ def test_repair_detects_event_says_closed_but_state_lagging(
 
     state_before = read_session_state(str(closeable_set)) or {}
     assert state_before.get("status") == "in-progress"
+    assert 1 not in (state_before.get("completedSessions") or [])
 
     # Diagnostic.
     args = _ns(session_set_dir=str(closeable_set), repair=True)
@@ -496,15 +649,30 @@ def test_repair_detects_event_says_closed_but_state_lagging(
         "session-state.json is not flipped" in m for m in outcome.messages
     )
 
-    # --apply.
+    # --apply: completedSessions[] is healed; SET-level status stays
+    # in-progress because session 1 of 2 is not the final session.
     args2 = _ns(
         session_set_dir=str(closeable_set), repair=True, apply=True,
     )
     outcome2 = close_session.run(args2)
     assert outcome2.result == "succeeded"
     state_after = read_session_state(str(closeable_set)) or {}
-    assert state_after.get("status") == "complete"
-    assert state_after.get("lifecycleState") == "closed"
+    assert state_after.get("completedSessions") == [1], (
+        f"expected completedSessions=[1] after --apply; got "
+        f"{state_after.get('completedSessions')!r}"
+    )
+    assert state_after.get("status") == "in-progress", (
+        "mid-set session close-out via repair must not flip the SET "
+        "to complete (Set 022 invariant)"
+    )
+    assert state_after.get("lifecycleState") == "work_in_progress"
+
+    # Idempotent: a second --apply pass sees session 1 in
+    # completedSessions[] and Case 2's narrowed trigger does not
+    # fire. The set still has no other drift.
+    outcome3 = close_session.run(args2)
+    assert outcome3.result == "succeeded", outcome3.messages
+    assert any("no drift detected" in m for m in outcome3.messages)
 
 
 def test_repair_reports_stranded_mid_closeout(closeable_set: Path):
@@ -677,16 +845,24 @@ def test_e2e_bootstrapping_recovery_via_repair_apply(
     events trio. ``--repair --apply`` brings the ledger into agreement
     so the reconciler / dashboards stop treating the set as stranded.
     """
-    # Legacy close-out: state-only, no events. Use the gate-bypass
-    # internal flip helper to faithfully reproduce the legacy drift —
-    # mark_session_complete itself would now emit closeout_succeeded.
-    # change-log.md must exist so the flip helper recognizes this as a
-    # last-session close-out (mid-set close-outs no longer flip).
+    # Legacy close-out: state-only, no events. Hand-write the
+    # snapshot to status/lifecycleState=closed — Set 022 made
+    # _flip_state_to_closed conditional on
+    # len(completedSessions)==totalSessions AND change-log present,
+    # so it can no longer be (mis)used as a force-flip helper. The
+    # actual legacy bootstrapping drift in the wild was always a
+    # hand-edited snapshot anyway.
     (closeable_set / "change-log.md").write_text(
         "# change log\n\nlast-session marker for the bootstrapping fixture.\n",
         encoding="utf-8",
     )
-    _flip_state_to_closed(str(closeable_set), verification_verdict="VERIFIED")
+    state_path = closeable_set / "session-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["status"] = "complete"
+    state["lifecycleState"] = "closed"
+    state["completedAt"] = "2026-04-30T01:00:00-04:00"
+    state["verificationVerdict"] = "VERIFIED"
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
     events_before = read_events(str(closeable_set))
     assert not any(
         e.event_type == "closeout_succeeded" for e in events_before
