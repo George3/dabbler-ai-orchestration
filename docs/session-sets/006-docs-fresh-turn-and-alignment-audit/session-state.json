@@ -3,8 +3,8 @@
   "sessionSetName": "006-docs-fresh-turn-and-alignment-audit",
   "currentSession": 3,
   "totalSessions": 3,
-  "status": "completed",
-  "lifecycleState": "verified",
+  "status": "complete",
+  "lifecycleState": "closed",
   "startedAt": "2026-05-01T09:00:00-04:00",
   "completedAt": "2026-05-01T17:00:00-04:00",
   "verificationVerdict": "VERIFIED",
@@ -13,5 +13,6 @@
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "high"
-  }
+  },
+  "completedSessions": [1, 2, 3]
 }

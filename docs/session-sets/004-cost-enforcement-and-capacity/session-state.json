@@ -13,5 +13,6 @@
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "high"
-  }
+  },
+  "completedSessions": [1, 2, 3, 4]
 }
