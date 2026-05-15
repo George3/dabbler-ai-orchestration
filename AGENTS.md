@@ -89,7 +89,7 @@ paragraph that points at the canonical close-out reference:
   (gate checks, idempotent writes, lock contention), common
   failures and remediation, the manual-flag matrix
   (`--interactive`, `--force`, `--manual-verify`, `--repair`), and
-  troubleshooting (stranded sessions, queue-state debugging,
+  troubleshooting (stranded sessions, mixed-mode drift,
   reconciler behavior).
 `close_session --help` echoes Section 2 of `close-out.md`; the doc
 is the single source of truth.
