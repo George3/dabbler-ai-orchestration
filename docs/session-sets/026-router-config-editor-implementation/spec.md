@@ -1,10 +1,10 @@
 # Router-config editor — implementation
 
 > **Purpose:** Implement the router-config editor that Set 025
-> spec'd. Six sessions: outsourceMode clean-sweep → YAML schema +
-> Python reader + resolver → webview foundation → webview sections
-> → significance flagging → wizard + test-notification + release.
-> Ships extension v0.13.15 + ai_router v0.3.0.
+> spec'd. Seven sessions: outsourceMode clean-sweep → budget-dialog
+> simplification → YAML schema + Python reader + resolver → webview
+> foundation → webview sections → significance flagging → wizard +
+> test-notification + release. Ships extension v0.13.15 + ai_router v0.3.0.
 >
 > **Session Set:** `docs/session-sets/026-router-config-editor-implementation/`
 > **Created:** 2026-05-15
@@ -22,7 +22,7 @@
 ## Session Set Configuration
 
 ```yaml
-totalSessions: 6
+totalSessions: 7
 requiresUAT: false
 requiresE2E: false
 uatStyle: ad-hoc
@@ -44,7 +44,7 @@ effort: normal
 > ~500 LOC of edits to existing files) is more than any single
 > session in the recent history. Sessions are sized so each fits
 > in one conversation; the implementing orchestrator may split
-> Session 4 (webview sections) into 4a + 4b if the
+> Session 5 (webview sections) into 5a + 5b if the
 > conversation-budget gets tight.
 
 ---
@@ -57,17 +57,18 @@ from Set 025's `spec.md` are inherited. Audit rationale lives at
 deliverable shapes live at `docs/session-sets/025-router-config-editor-spec/`
 (spec.md, schema-examples.md, wireframes.md).
 
-This spec **expands** Set 025's five-session breakdown into six
-sessions by splitting the webview work into foundation
-(Session 3) and sections (Session 4). The total deliverable set
+This spec **expands** Set 025's five-session breakdown into seven
+sessions by adding a budget-dialog simplification session (Session 2)
+and splitting the webview work into foundation (Session 4) and
+sections (Session 5). The total deliverable set
 is unchanged from Set 025's spec; only the per-session
-granularity is different.
+granularity is different (seven sessions rather than six).
 
 ---
 
 ## Sessions
 
-### Session 1 of 6: `outsourceMode` clean-sweep
+### Session 1 of 7: `outsourceMode` clean-sweep
 
 **Goal:** Remove the queue-mediated daemon (`outsourceMode: last`)
 infrastructure end-to-end. Deletion-only — no new code, no schema
@@ -129,7 +130,7 @@ changes. Mirrors Set 024's deletion-only profile.
     outsource-last consumer); extension `package.json` /
     `package-lock.json` to `0.13.15` (operator-facing release).
 14. Add to `.gitignore`: `ai_router/local-overrides.yaml` (one
-    line; preemptive for Session 2's file creation).
+    line; preemptive for Session 3's file creation).
 15. CHANGELOG entries:
     - `ai_router/CHANGELOG.md` (if it exists) — `[0.3.0]` section
       acknowledging the breaking change.
@@ -174,11 +175,108 @@ Both compile + pytest pass.
 `session-001/verification`.
 
 **Release:** None at the end of Session 1 alone — the version
-bumps land but no Marketplace publish until Session 6.
+bumps land but no Marketplace publish until Session 7.
 
 ---
 
-### Session 2 of 6: YAML schema + Python reader updates + resolver abstraction
+### Session 2 of 7: Budget-dialog simplification (NTE framing)
+
+**Goal:** Replace the four-tier budget-mapping dialog in the adoption
+bootstrap with a simpler NTE-budget ask backed by empirical range
+data. The limited/middle/ample tier distinctions were built around
+outsource-last routing (now gone); all non-zero budgets now use the
+same verification path (`api`). Doc-only session — no Python, no TS.
+
+**Background:** Empirical data from 270 verification calls across
+three repos shows cost ranges $0.00–$1.82/call (median $0.13). The
+range is too wide to estimate reliably; asking for a not-to-exceed
+ceiling with empirical context is more honest. Session 1 already
+deleted the outsource-mode-specific tier recommendations; this
+session replaces them with the NTE pattern and records the new
+`verification_nte_usd` field in the schema.
+
+**Steps:**
+
+1. Edit `docs/adoption-bootstrap.md` Step 5:
+   - Replace the three mid-tier dialog boxes (less-than-$20,
+     $20–$99, $100+) with a single NTE ask:
+     > "Cross-provider verification calls typically cost
+     > **$0.05–$0.80 each**, depending on session size and model
+     > routing. A 3-session set usually runs **$0.15–$2.50**; a
+     > 6-session set **$0.30–$5.00**. What's the most you'd want to
+     > spend on verification for this project? (Enter $0 if you want
+     > to use manual review or skip verification entirely.)"
+   - Keep the $0 special case (manual vs skipped) unchanged.
+   - Keep the tier-to-mode mapping table in the field reference
+     (it still determines the `mode:` value written to
+     `budget.yaml`); only the *dialog* changes, not the schema.
+   - Add `verification_nte_usd` to the `budget.yaml` example and
+     field reference. Definition: the operator's stated ceiling for
+     cumulative API verification spend on this project. Defaults to
+     `threshold_usd` if omitted. The orchestrator reports running
+     spend against this ceiling at every session stop; if the
+     ceiling is reached mid-session, the orchestrator switches to
+     `manual-via-other-engine` for that session rather than failing.
+2. Edit `docs/ai-led-session-workflow.md` "Cost-budgeted
+   verification modes" section:
+   - Collapse the budget-tier table's limited/middle/ample rows.
+     All three use the same `verification_method: api`; the only
+     distinction that still matters is $0 vs non-zero. Replace the
+     four-row table with a two-row version:
+     - `zero-budget` ($0): manual or skipped (unchanged)
+     - `non-zero budget`: api, bounded by `verification_nte_usd`
+   - Remove the `50%-of-threshold tier-upgrade prompt` mention
+     (this was a middle-tier-specific behavior that is now gone).
+   - Update the "What this means at session execution time" sub-
+     section to reference `verification_nte_usd` alongside
+     `verification_method`.
+3. Create `ai_router/budget.yaml` for this repo:
+   ```yaml
+   # dabbler-ai-orchestration — project verification budget.
+   threshold_usd: 10
+   threshold_scope: "project-lifetime"
+   mode: "limited-budget"
+   verification_method: "api"
+   verification_nte_usd: 10
+   set_at: "<ISO timestamp>"
+   set_by: "adoption-bootstrap-flow"
+   notes: |
+     Set during Set 026 Session 2. First explicit budget for this
+     repo; previously spend was tracked but uncapped.
+   ```
+4. Add `local-overrides.yaml` to `.gitignore` (preemptive for
+   Session 3's local-overrides work, if not already present).
+   Check `.gitignore` first; add only if missing.
+5. CHANGELOG: append to `ai_router/CHANGELOG.md` — `[0.3.0]`
+   addendum noting the budget-dialog simplification and the
+   new `verification_nte_usd` field.
+6. Cross-provider verification.
+7. Run `close_session`.
+
+**Creates:**
+- `ai_router/budget.yaml`
+
+**Touches:**
+- `docs/adoption-bootstrap.md`
+- `docs/ai-led-session-workflow.md`
+- `ai_router/CHANGELOG.md`
+- `.gitignore` (if `local-overrides.yaml` not already listed)
+
+**Ends with:** `adoption-bootstrap.md` no longer describes
+outsource-mode-specific tier behaviors. The budget dialog is a
+single NTE question with empirical range context. `budget.yaml`
+exists in this repo with `verification_nte_usd` set.
+
+**Progress keys:** `session-002/bootstrap-dialog`,
+`session-002/workflow-table`,
+`session-002/budget-yaml`,
+`session-002/verification`.
+
+**Release:** None.
+
+---
+
+### Session 3 of 7: YAML schema + Python reader updates + resolver abstraction
 
 **Goal:** Bring the YAML files into the Set-025-Appendix-B shape;
 add the secret-resolver abstraction with env-var as its only
@@ -289,23 +387,23 @@ idempotent (running twice produces no second-run changes);
 `router-config.yaml` carries the new fields; `local-overrides.yaml`
 is gitignored but reading it works end-to-end.
 
-**Progress keys:** `session-002/yaml-schema-fields`,
-`session-002/config-py-readers`,
-`session-002/resolver-abstraction`,
-`session-002/migration-script`,
-`session-002/local-overrides-merge`,
-`session-002/test-suite`,
-`session-002/verification`.
+**Progress keys:** `session-003/yaml-schema-fields`,
+`session-003/config-py-readers`,
+`session-003/resolver-abstraction`,
+`session-003/migration-script`,
+`session-003/local-overrides-merge`,
+`session-003/test-suite`,
+`session-003/verification`.
 
 **Release:** None (still in implementation).
 
 ---
 
-### Session 3 of 6: Webview foundation
+### Session 4 of 7: Webview foundation
 
 **Goal:** Stand up the config-editor webview's *infrastructure* —
 panel registration, YAML round-trip, schema validation. No
-section UIs yet (those land in Session 4). The success criterion is
+section UIs yet (those land in Session 5). The success criterion is
 "I can open the editor, see a placeholder for each section,
 modify a YAML file by hand, reload, and see the validator's
 output."
@@ -347,7 +445,7 @@ output."
    webview's top-level HTML shows the file paths being edited,
    a save state, a section nav, and a single Save button. The
    section content area shows section placeholders saying "Coming
-   in Session 4" — Session 3 wires the shell + load + validate +
+   in Session 5" — Session 4 wires the shell + load + validate +
    save *without* the section UIs.
 7. Implement the load flow:
    - Panel open → call `yamlReadWrite.readYamlFile` for each of
@@ -357,14 +455,14 @@ output."
    - On failure: render a "drift detected" banner with the
      validator's complaints listed; sections stay read-only.
    - On success: sections become editable (still placeholders
-     until Session 4).
+     until Session 5).
 8. Implement the save flow (per Appendix B atomicity rules):
    - In-memory batch validation first; abort on failure with
      inline error highlights.
    - Per-file `tmp write + rename` for atomic per-file writes.
    - Half-batch recovery on next load via mtime + content-hash
      drift detection (the recovery dialog itself ships in
-     Session 4; Session 3 only needs to detect drift and surface
+     Session 5; Session 4 only needs to detect drift and surface
      a one-line warning).
 9. Tests in `src/test/suite/`:
    - `yamlReadWrite.test.ts` — round-trip preservation (comments,
@@ -399,22 +497,22 @@ output."
 **Ends with:** `Dabbler: Open Dabbler Config Editor` opens a
 working webview shell. Save flow round-trips YAML files
 losslessly. Validator surfaces drift on load. No section UIs yet
-— that's Session 4.
+— that's Session 5.
 
-**Progress keys:** `session-003/dependencies`,
-`session-003/panel-shell`,
-`session-003/yaml-readwrite`,
-`session-003/schema-validator`,
-`session-003/load-flow`,
-`session-003/save-flow`,
-`session-003/test-suite`,
-`session-003/verification`.
+**Progress keys:** `session-004/dependencies`,
+`session-004/panel-shell`,
+`session-004/yaml-readwrite`,
+`session-004/schema-validator`,
+`session-004/load-flow`,
+`session-004/save-flow`,
+`session-004/test-suite`,
+`session-004/verification`.
 
 **Release:** None.
 
 ---
 
-### Session 4 of 6: Webview sections
+### Session 5 of 7: Webview sections
 
 **Goal:** Implement the six webview sections inside the Session-3
 shell. Each section reads its bound YAML paths via the
@@ -446,16 +544,16 @@ to the ASCII layouts in Set 025's `wireframes.md`.
      section per Set 025 wireframes §4, with a "Run command
      now..." button bound to
      `dabbler.flagDecisionForReview` (the command itself
-     ships in Session 5; the button surface exists in
-     Session 4 with a graceful fallback message if the
+     ships in Session 6; the button surface exists in
+     Session 5 with a graceful fallback message if the
      command is not yet registered) and the
      `decision_review.honor_annotations` toggle wired to
      `local-overrides.yaml`.
    - `notificationsSection.ts` — Pushover enabled toggle +
      two env-var-name inputs with ✓/(unset) badges. The
      "Send a test notification now" button shows as
-     disabled with "(wired in Session 6)" — implementation
-     happens in Session 6.
+     disabled with "(wired in Session 7)" — implementation
+     happens in Session 7.
    - `localOverridesSummarySection.ts` — read-only listing of
      paths present in `local-overrides.yaml`, side-by-side
      with the shared value, with click-through "Open
@@ -463,8 +561,8 @@ to the ASCII layouts in Set 025's `wireframes.md`.
 2. Each section file exports a `render(state) => HTMLElement`
    function plus an `onSave() => Patch` function the panel
    coordinator calls during save.
-3. Wire each section into the Session-3 shell — replace the
-   "Coming in Session 4" placeholders.
+3. Wire each section into the Session-4 shell — replace the
+   "Coming in Session 5" placeholders.
 4. Implement the half-batch recovery dialog from Appendix B's
    atomicity clarification:
    - On panel open, detect mtime/content-hash drift between the
@@ -521,18 +619,18 @@ to the ASCII layouts in Set 025's `wireframes.md`.
 webview is operator-usable end-to-end for every field listed in
 Appendix B's control-to-YAML mapping table.
 
-**Progress keys:** `session-004/six-sections`,
-`session-004/half-batch-recovery`,
-`session-004/shared-vs-local-indicator`,
-`session-004/section-tests`,
-`session-004/end-to-end-smoke`,
-`session-004/verification`.
+**Progress keys:** `session-005/six-sections`,
+`session-005/half-batch-recovery`,
+`session-005/shared-vs-local-indicator`,
+`session-005/section-tests`,
+`session-005/end-to-end-smoke`,
+`session-005/verification`.
 
 **Release:** None.
 
 ---
 
-### Session 5 of 6: Significance flagging — command + annotation handling
+### Session 6 of 7: Significance flagging — command + annotation handling
 
 **Goal:** Ship the explicit operator-invoked surfaces for "flag a
 decision for cross-provider review" (Set 025 decision G3).
@@ -586,7 +684,7 @@ decision for cross-provider review" (Set 025 decision G3).
 7. Wire `dabbler.flagDecisionForReview` and
    `dabbler.scanAnnotationsForActiveSet` into the
    `significanceFlaggingSection.ts` section's button. Replace
-   Session 4's "graceful fallback message" with the real
+   Session 5's "graceful fallback message" with the real
    command invocations.
 8. Update `docs/ai-led-session-workflow.md` with a new
    "Significance flagging" section documenting both surfaces +
@@ -624,19 +722,19 @@ decision for cross-provider review" (Set 025 decision G3).
 the command, append a queue entry, scan annotations, and see them
 in the section's read-only listing.
 
-**Progress keys:** `session-005/flag-command`,
-`session-005/queue-reader`,
-`session-005/annotation-parser`,
-`session-005/workspace-scanner`,
-`session-005/workflow-doc-update`,
-`session-005/test-suite`,
-`session-005/verification`.
+**Progress keys:** `session-006/flag-command`,
+`session-006/queue-reader`,
+`session-006/annotation-parser`,
+`session-006/workspace-scanner`,
+`session-006/workflow-doc-update`,
+`session-006/test-suite`,
+`session-006/verification`.
 
 **Release:** None.
 
 ---
 
-### Session 6 of 6: Wizard integration + test-notification + end-to-end + release
+### Session 7 of 7: Wizard integration + test-notification + end-to-end + release
 
 **Goal:** Final integration polish, the deferred test-notification
 button, and the Marketplace + Open VSX release. Ships v0.13.15 +
@@ -716,14 +814,14 @@ ai_router 0.3.0.
 Marketplace + Open VSX + PyPI. End-to-end smoke test passes. Set
 026 closes.
 
-**Progress keys:** `session-006/wizard-integration`,
-`session-006/test-notification-wiring`,
-`session-006/adoption-doc-update`,
-`session-006/quick-start-update`,
-`session-006/changelog`,
-`session-006/end-to-end-smoke`,
-`session-006/verification`,
-`session-006/release`.
+**Progress keys:** `session-007/wizard-integration`,
+`session-007/test-notification-wiring`,
+`session-007/adoption-doc-update`,
+`session-007/quick-start-update`,
+`session-007/changelog`,
+`session-007/end-to-end-smoke`,
+`session-007/verification`,
+`session-007/release`.
 
 **Release:** VS Code Marketplace
 `DarndestDabbler.dabbler-ai-orchestration` v0.13.15 via
@@ -737,24 +835,24 @@ approve `marketplace` deployment in GitHub Actions UI per
 ## Risks
 
 - **Largest implementation surface in the repo's history.**
-  Mitigation: six-session split keeps each session bounded; the
-  webview-foundation / webview-sections split (Sessions 3+4) is
+  Mitigation: seven-session split keeps each session bounded; the
+  webview-foundation / webview-sections split (Sessions 4+5) is
   the explicit guard against conversation-budget overrun in the
   middle of UI work.
 - **YAML round-trip fidelity.** The `yaml` npm library and
   Python's `ruamel.yaml` must both preserve comments, ordering,
-  and formatting. Mitigation: Session 3's `yamlReadWrite.test.ts`
+  and formatting. Mitigation: Session 4's `yamlReadWrite.test.ts`
   asserts byte-identical round-trip on the actual
   `router-config.yaml` shipped in this repo. If either library
   fails the test, swap implementations (e.g., add explicit
-  comment-preservation helpers) before proceeding to Session 4.
+  comment-preservation helpers) before proceeding to Session 5.
 - **Migration script breaks an existing operator's
   `router-config.yaml`.** Mitigation: idempotent + comment-
-  preserving; Session 2 runs the migration against this repo's
+  preserving; Session 3 runs the migration against this repo's
   actual file and commits the migrated result. Any unhappy edge
   case is caught before any external user encounters it.
 - **`secretStorage` operator demand materializes mid-set.**
-  Mitigation: the resolver abstraction (Session 2) makes adding
+  Mitigation: the resolver abstraction (Session 3) makes adding
   a new backend a contained change. If demand surfaces during
   Set 026, defer to a follow-up set rather than expanding
   scope.
@@ -776,19 +874,21 @@ Per-session orchestrator recommendation (also captured in this
 set's `ai-assignment.md` once Session 1 starts):
 
 - **Session 1** (deletion-only): Claude Opus 4.7 @ effort=low —
-  mechanical; matches Set 024 profile.
-- **Session 2** (Python schema + reader + migration + resolver):
+  mechanical; matches Set 024 profile. ✓ Complete.
+- **Session 2** (budget-dialog simplification): Claude Opus 4.7 @
+  effort=low — doc-only; minimal risk.
+- **Session 3** (Python schema + reader + migration + resolver):
   Claude Opus 4.7 @ effort=medium — risk is back-compat in
   reader behavior.
-- **Session 3** (webview foundation): Claude Opus 4.7 @ effort=high
+- **Session 4** (webview foundation): Claude Opus 4.7 @ effort=high
   — largest single-session surface in this set;
   YAML-round-trip-fidelity tests must pass before moving on.
-- **Session 4** (webview sections): Claude Opus 4.7 @ effort=high
+- **Session 5** (webview sections): Claude Opus 4.7 @ effort=high
   — six section files + their tests. Implementing orchestrator
-  may split 4a + 4b if the conversation budget gets tight.
-- **Session 5** (significance flagging): Claude Opus 4.7 @
+  may split 5a + 5b if the conversation budget gets tight.
+- **Session 6** (significance flagging): Claude Opus 4.7 @
   effort=medium — bounded surface (one command + one parser).
-- **Session 6** (wizard + release): Claude Opus 4.7 @
+- **Session 7** (wizard + release): Claude Opus 4.7 @
   effort=medium — coordination + release. No new surfaces;
   pulling together prior sessions' deliverables.
 
