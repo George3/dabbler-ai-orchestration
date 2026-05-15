@@ -188,12 +188,15 @@ Once the human picks a tier (and a coexistence mode if applicable), confirm the 
 
 
 
-Ask the human two questions:
+Ask the human:
 
-> 1. **What outsourcing/API budget do you want to set for this project?** This is the dollar amount you're comfortable spending on AI router calls (verification, code review, analysis).
-> 2. **Is that a project-lifetime cap or a monthly recurring cap?** Project-lifetime is the default and simplest — total cumulative spend over the project's life. Monthly is for projects you expect to keep running indefinitely; the threshold resets each month. Pick whichever matches how you think about budget.
+> **Cross-provider verification calls typically cost $0.05–$0.80 each**, depending on session size and model routing. A 3-session set usually runs **$0.15–$2.50**; a 6-session set **$0.30–$5.00**. What's the most you'd want to spend on verification for this project? (Enter $0 if you want to use manual review or skip verification entirely.)
 
-Wait for their answers (a dollar number, or zero; plus `project-lifetime` or `monthly`). Map the dollar amount to a tier and explain what each tier means. The scope answer is recorded in `ai_router/budget.yaml`'s `threshold_scope` field; it doesn't change the tier.
+Then ask about scope:
+
+> **Is that a project-lifetime cap or a monthly recurring cap?** Project-lifetime is the default and simplest — total cumulative spend over the project's life. Monthly is for projects you expect to keep running indefinitely; the threshold resets each month. Pick whichever matches how you think about budget.
+
+Wait for their answers (a dollar amount or zero; plus `project-lifetime` or `monthly`). The scope answer is recorded in `ai_router/budget.yaml`'s `threshold_scope` field.
 
 ### Tier mapping
 
@@ -213,23 +216,11 @@ Tell the human:
 
 Wait for their choice. Note it for the budget.yaml record.
 
-#### Less than ~$20 — limited-budget mode
+#### Non-zero budget
 
 Tell the human:
 
-> A budget under \$20 is real but tight. I'll use synchronous per-call API providers for verification and watch your spend closely, warning you as you approach your threshold. Sound good?
-
-#### $20–$99 — middle-tier mode
-
-Tell the human:
-
-> A budget in this range is comfortable for a project of moderate scope. I'll use synchronous per-call API providers and prompt you when spend crosses 50% of your threshold so you can decide whether to raise the budget or change pace. (The 50% prompt fires against whichever scope you picked — cumulative if `project-lifetime`, current-month if `monthly`.)
-
-#### $100+ — ample-budget mode
-
-Tell the human:
-
-> A budget at this level supports full synchronous per-call API verification. I'll monitor spend periodically rather than per-call (the threshold is far enough away that per-call alarming would be noise).
+> Got it — I'll use synchronous per-call API providers for verification and cap cumulative verification spend at **$[their amount]** (`verification_nte_usd`). At each session stop I'll report running spend against this ceiling. If the ceiling is reached mid-session, I'll switch to manual cross-provider review for that session rather than failing.
 
 ### Confirm and note
 
@@ -386,7 +377,7 @@ Once execution completes, give the human these pointers. **Lightweight-tier proj
 ### More info
 
 - **Repo-root `README.md`** — project overview and quick start.
-- **`docs/ai-led-session-workflow.md`** — the canonical workflow you're now operating under. The new "Cost-budgeted verification modes" section explains the four-tier mapping you just used and the operator-authorized exception to Rule 2 for the $0 + skipped path.
+- **`docs/ai-led-session-workflow.md`** — the canonical workflow you're now operating under. The "Cost-budgeted verification modes" section explains the two-tier (zero vs. non-zero) budget model and the operator-authorized exception to Rule 2 for the $0 + skipped path.
 - **Command palette** — type "Dabbler" to see all available extension commands.
 - **Session Set Explorer** — activity-bar view in VS Code (if the extension is installed) showing all session sets and their states.
 
@@ -441,7 +432,7 @@ extension doesn't fall back to the `currentSession − 1` estimation.
 This is the file you'll write per-project in Step 7 / 8. Embed it in the action checklist with the human's chosen values:
 
 ```yaml
-# Project outsourcing budget — set during adoption bootstrap.
+# Project verification budget — set during adoption bootstrap.
 # Used by ai_router for spend reporting and (in a future set) automated
 # threshold monitoring / pre-call warnings.
 
@@ -449,6 +440,8 @@ threshold_usd: 25                   # 0 (zero) | <20 (limited) | 20-99 (middle) 
 threshold_scope: "project-lifetime" # project-lifetime | monthly
 mode: "middle-tier"                 # zero-budget | limited-budget | middle-tier | ample-budget
 verification_method: "api"          # api | manual-via-other-engine | skipped
+verification_nte_usd: 25            # not-to-exceed ceiling for cumulative API verification spend;
+                                    # defaults to threshold_usd if absent
 set_at: "2026-05-04T15:30:00-04:00"
 set_by: "adoption-bootstrap-flow"
 notes: |
@@ -459,8 +452,16 @@ notes: |
 
 - **`threshold_usd`** — the dollar threshold the human set. Used by report tools and (future) automated enforcement.
 - **`threshold_scope`** — `project-lifetime` (cumulative spend over the life of the project) or `monthly` (recurring). Default is `project-lifetime` for first-time setups; the human can switch to `monthly` if they prefer recurring tracking. Future automated enforcement reads this to decide whether to compare cumulative or windowed spend against `threshold_usd`. **Compatibility rule:** if `threshold_scope` is absent from a `budget.yaml` file (older or hand-authored without it), readers must treat it as `project-lifetime` — that's the safe default and matches the original bootstrap-flow behavior.
-- **`mode`** — one of `zero-budget`, `limited-budget`, `middle-tier`, `ample-budget`. Derived from `threshold_usd` (see Step 5 boundaries).
+- **`mode`** — one of `zero-budget`, `limited-budget`, `middle-tier`, `ample-budget`. Derived from `threshold_usd` using the mapping below (the mode values are stable for schema backward compatibility; all non-zero modes share the same `api` verification path):
+
+  | `threshold_usd` | `mode` value |
+  |---|---|
+  | `0` | `zero-budget` |
+  | `> 0` and `< 20` | `limited-budget` |
+  | `20`–`99` | `middle-tier` |
+  | `100+` | `ample-budget` |
 - **`verification_method`** — `api` (normal API verification), `manual-via-other-engine` (zero-budget option a), or `skipped` (zero-budget option b). **Compatibility rule:** if absent from an older or hand-authored `budget.yaml`, readers must treat it as `api` — matches Rule 2's default behavior in `docs/ai-led-session-workflow.md`.
+- **`verification_nte_usd`** — the operator's stated not-to-exceed ceiling for cumulative API verification spend on this project. Defaults to `threshold_usd` if absent. The orchestrator reports running spend against this ceiling at every session stop; if the ceiling is reached mid-session, the orchestrator switches to `manual-via-other-engine` for that session rather than failing.
 - **`set_at`** — ISO-8601 timestamp of when the budget was set.
 - **`set_by`** — who/what set it; `"adoption-bootstrap-flow"` if set during bootstrap.
 - **`notes`** — free-form text, optional. The human can edit this anytime.
@@ -479,6 +480,6 @@ The bootstrap is opinionated about session sets + budget-driven verification. If
 
 ## End of bootstrap
 
-Once Step 9 is delivered, your job as bootstrap-orchestrator is done. The human has a `project-plan.md`, a budget, an outsource mode, scaffolded session sets, and the agent instruction file(s). They're ready to start running sessions under the canonical workflow.
+Once Step 9 is delivered, your job as bootstrap-orchestrator is done. The human has a `project-plan.md`, a verification budget, scaffolded session sets, and the agent instruction file(s). They're ready to start running sessions under the canonical workflow.
 
 Wish them well.

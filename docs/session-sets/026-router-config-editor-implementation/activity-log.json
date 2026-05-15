@@ -146,6 +146,47 @@
       "description": "pytest 385/385 green; tsc clean. Committed and pushed (3a0defa).",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/bootstrap-dialog",
+      "dateTime": "2026-05-15T12:20:00-04:00",
+      "description": "Edited docs/adoption-bootstrap.md Step 5: replaced three separate non-zero-tier dialog boxes (less-than-$20, $20-$99, $100+) with a single NTE ask backed by empirical range data ($0.05-$0.80/call; 3-session set $0.15-$2.50). Kept $0 zero-budget path (manual/skipped) unchanged. Added explicit tier-to-mode mapping table to the mode field description in the field reference. Added verification_nte_usd to the YAML example and field reference. Fixed stale references: 'outsourcing budget' comment -> 'verification budget', 'an outsource mode' -> 'a verification budget' in End of bootstrap, Step 9 More info pointer updated from 'four-tier mapping' to 'two-tier (zero vs. non-zero) budget model'.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/workflow-table",
+      "dateTime": "2026-05-15T12:25:00-04:00",
+      "description": "Edited docs/ai-led-session-workflow.md Cost-budgeted verification modes section: collapsed four-row budget tier table (zero-budget/limited-budget/middle-tier/ample-budget) to two-row version (zero-budget / non-zero budget); removed 50%-of-threshold tier-upgrade prompt reference; updated Rule 2 Interaction paragraph ('limited / middle / ample tiers' -> 'non-zero budget'); added verification_nte_usd bullet to 'What this means at session execution time' subsection; changed 'outsourcing/API budget threshold' to 'API-verification budget threshold'.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/budget-yaml",
+      "dateTime": "2026-05-15T12:30:00-04:00",
+      "description": "Created ai_router/budget.yaml for this repo: threshold_usd=10, threshold_scope=project-lifetime, mode=limited-budget, verification_method=api, verification_nte_usd=10. First explicit budget for this repo. .gitignore already had local-overrides.yaml from Session 1 (step 4 of spec is no-op).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/verification",
+      "dateTime": "2026-05-15T12:45:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4. Round 1: ISSUES_FOUND (Minor) - missing explicit tier-to-mode mapping table and stale 'see Step 5 boundaries' reference. Fixed. Round 2: ISSUES_FOUND (Minor) - stale 'outsourcing budget' YAML comment and 'outsource mode' in End of bootstrap. Fixed. Round 3: ISSUES_FOUND (Minor) - stale 'outsourcing/API' in workflow doc intro. Fixed. Round 4: VERIFIED. Total verification cost: $0.38 (cumulative NTE: $0.38 of $10.00).",
+      "status": "complete",
+      "routedApiCalls": [
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6005, "outputTokens": 4796, "costUsd": 0.087},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6001, "outputTokens": 5805, "costUsd": 0.1021},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 7355, "costUsd": 0.1254},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 5500, "costUsd": 0.1076}
+      ]
     }
   ]
 }

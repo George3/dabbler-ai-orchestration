@@ -1,23 +1,11 @@
 {
   "status": "completed",
-  "summary": "Session 1b completed the outsourceMode clean-sweep deferred from Session 1a (dda0a5f). Scrubbed outsourceMode/queue_db/verifier-daemon references from 7 active docs, 2 Python source files, 2 scripts, and 25 historical spec.md files. Rebuilt dist/extension.js; deleted orphaned modeBadge test artifacts. Verifier found one real issue (stale 'queue-state debugging' label in agent files), fixed and re-verified. Verification spend: $0.22 of $10 budget. pytest 385/385 green.",
+  "summary": "Session 2 completed the budget-dialog simplification (doc-only). Replaced the three non-zero-tier dialog boxes in adoption-bootstrap.md Step 5 with a single NTE ask backed by empirical range data. Added verification_nte_usd to the budget.yaml schema and field reference. Collapsed the four-row budget tier table in the workflow doc to two rows; removed the 50%-of-threshold tier-upgrade mention; added verification_nte_usd to the 'What this means' section. Created ai_router/budget.yaml for this repo ($10 NTE). Fixed stale outsource-mode terminology in both docs. Verifier (gpt-5-4) found three Minor issues across four rounds (missing explicit tier-to-mode table; stale YAML comment + End-of-bootstrap wording; stale outsourcing/API prefix); all fixed. Final verdict: VERIFIED. Total verification spend: $0.38 of $10.00 NTE.",
   "files_changed": [
-    "CLAUDE.md",
-    "AGENTS.md",
-    "GEMINI.md",
-    "ai_router/close_session.py",
-    "ai_router/session_state.py",
-    "ai_router/docs/close-out.md",
     "docs/adoption-bootstrap.md",
     "docs/ai-led-session-workflow.md",
-    "docs/disposition-schema.md",
-    "docs/quick-start.md",
-    "docs/spec-md-schema.md",
-    "docs/session-sets/001-025/spec.md (25 files)",
-    "scripts/verify_session_005_3.py",
-    "scripts/verify_session_010_1.py",
-    "tools/dabbler-ai-orchestration/dist/extension.js",
-    "tools/dabbler-ai-orchestration/out/test/suite/modeBadge.test.* (deleted)"
+    "ai_router/budget.yaml",
+    "ai_router/CHANGELOG.md"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -28,7 +16,7 @@
     "effort": "medium",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 is Python-only schema work; Claude Opus at medium effort per spec routing notes."
+      "specifics": "Session 3 is Python schema + reader + resolver work; Claude Opus at medium effort per spec routing notes."
     }
   },
   "blockers": []

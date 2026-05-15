@@ -95,18 +95,16 @@ Orchestrator (Claude / Codex / Gemini)
 > not as a cost-budgeted exception. Everything below applies only
 > to Full-adoption projects.
 
-Every Full-adoption project declares an outsourcing/API **budget
+Every Full-adoption project declares an API-verification **budget
 threshold** during the adoption-bootstrap flow (see
 `docs/adoption-bootstrap.md`). The threshold is recorded in
 `ai_router/budget.yaml` and governs which verification path the
-project uses. Four tiers, with two sub-options under the zero tier:
+project uses. Two tiers, with two sub-options under the zero tier:
 
-| Tier (`mode` value) | Threshold (`threshold_usd`) | `verification_method` |
+| Tier | Threshold (`threshold_usd`) | `verification_method` |
 |---|---|---|
 | **`zero-budget`** | `0` | (a) **`manual-via-other-engine`** OR (b) **`skipped`** — operator picks |
-| **`limited-budget`** | `< 20` | `api` (synchronous per-call providers) |
-| **`middle-tier`** | `20–99` | `api` + 50%-of-threshold tier-upgrade prompt |
-| **`ample-budget`** | `100+` | `api` (synchronous per-call providers) |
+| **non-zero budget** | `> 0` | `api`, bounded by `verification_nte_usd` |
 
 The threshold and the chosen verification method are persisted in
 `ai_router/budget.yaml` (see schema in `docs/adoption-bootstrap.md`).
@@ -126,7 +124,7 @@ field, so an older file continues to work without manual migration.
 Rule 2 in the [Rules section](#rules-apply-to-all-orchestrators)
 below — **"Never skip verification"** — is the default for every
 session and remains the default for every project that operates with
-a non-zero budget (limited / middle / ample tiers).
+a non-zero budget.
 
 The zero-budget tier introduces an **operator-authorized exception**
 to Rule 2 via two paths, neither of which weakens the rule itself:
@@ -171,6 +169,12 @@ The orchestrator at Step 6 (end-of-session verification) reads
 - **`verification_method: "skipped"`** — Step 6 is explicitly
   bypassed. The session's `change-log.md` records the skip with a
   pointer to `ai_router/budget.yaml`.
+- **`verification_nte_usd`** — the cumulative ceiling for API
+  verification spend (defaults to `threshold_usd` if absent). At
+  each session stop the orchestrator reports running spend against
+  this ceiling. If the ceiling is reached mid-session, verification
+  switches to `manual-via-other-engine` for that session rather
+  than failing.
 
 If `ai_router/budget.yaml` is absent (project has not yet run the
 adoption bootstrap), the orchestrator treats the project as if

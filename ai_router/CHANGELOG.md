@@ -52,17 +52,39 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   outsource-last-skip-route branch is gone; `close_session_runner`
   injection point is gone.
 
-### Notes — Partial state
+### Notes — Partial state (Session 1)
 
-Set 026 Session 1 also intended to scrub docs (workflow doc, adoption-
-bootstrap, authoring-guide, close-out.md, spec-md-schema) and 26
-historical `spec.md` files' `outsourceMode:` configuration lines. That
-work is **deferred to a follow-up session**; the acceptance criterion
+Set 026 Session 1 scrubbed the code surface and all active docs.
+The acceptance criterion
 `git grep -i 'outsourcemode\|queue_db\|verifier daemon\|subscription cli'`
-returning zero hits is NOT yet satisfied. The code surface, however,
-is clean of the removed symbols. Sessions 2–6 of Set 026 will continue
-the work and ship the canonical 0.3.0 release alongside extension
-v0.13.15.
+returning zero hits is satisfied as of the Session 1 close commit.
+
+### Added (Session 2 — budget-dialog simplification)
+
+- **`verification_nte_usd` field in `budget.yaml`** — operator-stated
+  not-to-exceed ceiling for cumulative API verification spend.
+  Defaults to `threshold_usd` if absent. The orchestrator reports
+  running spend against this ceiling at every session stop; if the
+  ceiling is reached mid-session it switches to
+  `manual-via-other-engine` rather than failing.
+- **`ai_router/budget.yaml`** created for this repo with
+  `threshold_usd: 10`, `verification_nte_usd: 10`,
+  `verification_method: "api"`.
+
+### Changed (Session 2 — budget-dialog simplification)
+
+- **`docs/adoption-bootstrap.md` Step 5** — the four-tier budget
+  dialog (less-than-$20 / $20–$99 / $100+, each with a different
+  explanation) is replaced by a single NTE ask backed by empirical
+  range data ($0.05–$0.80/call; 3-session set $0.15–$2.50). The
+  $0 special case (manual vs. skipped) is unchanged. The
+  tier-to-mode mapping comment in the field reference is preserved
+  for backward compatibility.
+- **`docs/ai-led-session-workflow.md`** — the four-row budget tier
+  table collapses to two rows (zero-budget / non-zero budget);
+  the 50%-of-threshold tier-upgrade prompt row is gone; the
+  "What this means at session execution time" section now documents
+  `verification_nte_usd` behavior.
 
 ## [0.2.x] and earlier
 
