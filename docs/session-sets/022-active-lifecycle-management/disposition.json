@@ -1,0 +1,31 @@
+{
+  "status": "completed",
+  "summary": "Set 022 Session 1 (commit 1a973be): shipped the state-first lifecycle protocol. Promoted register_session_start to a CLI (ai_router/start_session.py) with boundary enforcement — refuses to advance past an open session, refuses to re-open closed sessions, refuses to skip ahead, idempotent re-entry for in-flight sessions. Added compute_effective_completed_sessions() in session_state.py as the single source of truth (snapshot → events → legacy fallback). Updated _flip_state_to_closed to maintain completedSessions[] on every close; mid-set close leaves status=in-progress. register_session_start preserves completedSessions[] across snapshot rewrite (backfills from events for legacy sets). close_session --repair --apply Case 1 backfills completedSessions[] from the events ledger. ai_router bumped to 0.2.3. Cross-provider verified (gpt-5-4 + gemini-pro). 699 tests pass. Disposition + activity-log reconstructed post-hoc to satisfy close-out gates; the code work and verification rounds happened in-session.",
+  "files_changed": [
+    "ai_router/__init__.py",
+    "ai_router/close_session.py",
+    "ai_router/session_state.py",
+    "ai_router/start_session.py",
+    "ai_router/tests/test_close_session_session4.py",
+    "ai_router/tests/test_mark_session_complete_gate.py",
+    "ai_router/tests/test_start_session.py",
+    "pyproject.toml",
+    "docs/session-sets/022-active-lifecycle-management/session-events.jsonl",
+    "docs/session-sets/022-active-lifecycle-management/session-state.json",
+    "docs/session-sets/022-active-lifecycle-management/activity-log.json",
+    "docs/session-sets/022-active-lifecycle-management/disposition.json"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "medium",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Session 2's extension TypeScript work pairs naturally with the same orchestrator that designed and shipped Session 1's writer protocol. The fileSystem.ts / SessionSetsProvider.ts changes derive from the same invariant; continuity keeps that derivation tight."
+    }
+  },
+  "blockers": []
+}

@@ -1,0 +1,94 @@
+{
+  "sessionSetName": "022-active-lifecycle-management",
+  "createdDate": "2026-05-15T04:22:30-04:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/reconstruction-note",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Reconstruction note: Session 1's work landed in commit 1a973be ('ai_router 0.2.3: state-first lifecycle protocol') but activity-log.json was not authored during the session. This file is reconstructed from the commit message + router-metrics.jsonl to satisfy close-out gates. The work itself is on disk and was cross-provider verified (verification rounds logged below).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/start-cli",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Added ai_router/start_session.py: CLI entry point that infers next session via compute_effective_completed_sessions, refuses to advance past an open session (exit 3), refuses to re-open closed sessions, refuses to skip ahead. Idempotent re-entry for in-flight sessions. Wraps register_session_start.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/compute-helper",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Added compute_effective_completed_sessions() to ai_router/session_state.py. Read order: completedSessions[] (authoritative) → distinct closeout_succeeded events (Full-tier fallback) → legacy currentSession-1 heuristic (last resort, stderr warning). Single source of truth for 'how many sessions closed.'",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/close-writer",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Updated _flip_state_to_closed in session_state.py to append currentSession to completedSessions[] (sorted, unique) on every close. Final-session detection now uses len(completedSessions) == totalSessions post-append, with change-log.md presence as belt-and-suspenders. register_session_start preserves completedSessions[] across snapshot rewrite (backfills from events for legacy sets).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/repair-backfill",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Extended close_session --repair --apply Case 1 to backfill completedSessions[] directly from the events ledger using the new helper. Case 2 trigger narrowed for idempotency under the new semantics.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/tests",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Added ai_router/tests/test_start_session.py (idempotency, refuses-N+1-while-N-open, refuses-skip-ahead, refuses-reopen-closed, currentSession inference, work_started emission/dedupe). Extended test_close_session_session4.py with completedSessions[] append assertions on every close. Extended test_repair_detects_mixed_mode_drift to assert backfill. 699 tests pass.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/version-bump",
+      "dateTime": "2026-05-15T11:00:00-04:00",
+      "description": "Bumped ai_router to 0.2.3 (pyproject.toml + __init__.py).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/verification",
+      "dateTime": "2026-05-15T04:28:06-04:00",
+      "description": "Cross-provider verification round 1 (gpt-5-4, $0.21): VERIFIED. Then verification round 2 (gemini-pro, $0.02): VERIFIED. Both providers concurred the state-first lifecycle protocol matches the spec invariant; completedSessions[] writer semantics correct; --repair --apply backfill path sound.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6433,
+          "outputTokens": 13089,
+          "costUsd": 0.212418
+        },
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 9227,
+          "outputTokens": 386,
+          "costUsd": 0.015394
+        }
+      ]
+    }
+  ]
+}
