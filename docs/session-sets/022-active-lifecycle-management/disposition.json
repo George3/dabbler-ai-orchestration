@@ -1,19 +1,35 @@
 {
   "status": "completed",
-  "summary": "Set 022 Session 1 (commit 1a973be): shipped the state-first lifecycle protocol. Promoted register_session_start to a CLI (ai_router/start_session.py) with boundary enforcement — refuses to advance past an open session, refuses to re-open closed sessions, refuses to skip ahead, idempotent re-entry for in-flight sessions. Added compute_effective_completed_sessions() in session_state.py as the single source of truth (snapshot → events → legacy fallback). Updated _flip_state_to_closed to maintain completedSessions[] on every close; mid-set close leaves status=in-progress. register_session_start preserves completedSessions[] across snapshot rewrite (backfills from events for legacy sets). close_session --repair --apply Case 1 backfills completedSessions[] from the events ledger. ai_router bumped to 0.2.3. Cross-provider verified (gpt-5-4 + gemini-pro). 699 tests pass. Disposition + activity-log reconstructed post-hoc to satisfy close-out gates; the code work and verification rounds happened in-session.",
+  "summary": "Set 022 Session 2 (commits dcc8636 + this close-out commit): shipped v0.13.12 of the Dabbler AI Orchestration extension with reader-side support for the state-first lifecycle protocol Session 1 delivered. Dropped activity-log unique-sessionNumber and currentSession-1 as count sources; added countDistinctCloseoutSessions() as the Full-tier events-ledger fallback. Surfaced LiveSession.completedSessions through the type system. progressText gained ` Done` and ` · session N in flight` annotations driven by a new isCurrentSessionInFlight() predicate that implements the spec invariant (currentSession not in completedSessions[]) and guards against legacy snapshots. File watcher pattern extended to include session-events.jsonl + CANCELLED.md so boundary writes from start_session / close_session and cancel/restore commands trigger immediate refresh. 5 new fileSystem regression tests + 13 new SessionSetsProvider tests + 1 round-1-fix regression test added. Cross-provider verification (gpt-5-4): round 1 ISSUES_FOUND with 1 real Major (state-file vs activity-log totalSessions precedence) + 1 context-gap false positive — both addressed in round 2; round 2 VERIFIED. v0.13.12.vsix packaged successfully. Live readSessionSets against set 022 renders `1/3 · session 2 in flight` as the spec demanded.",
   "files_changed": [
-    "ai_router/__init__.py",
-    "ai_router/close_session.py",
-    "ai_router/session_state.py",
-    "ai_router/start_session.py",
-    "ai_router/tests/test_close_session_session4.py",
-    "ai_router/tests/test_mark_session_complete_gate.py",
-    "ai_router/tests/test_start_session.py",
-    "pyproject.toml",
-    "docs/session-sets/022-active-lifecycle-management/session-events.jsonl",
-    "docs/session-sets/022-active-lifecycle-management/session-state.json",
+    "tools/dabbler-ai-orchestration/src/types.ts",
+    "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
+    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/src/providers/SessionSetsProvider.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/sessionSetsProvider.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/forceClosedBadge.test.ts",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/package-lock.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "CLAUDE.md",
+    "tools/dabbler-ai-orchestration/dist/extension.js",
+    "tools/dabbler-ai-orchestration/dist/extension.js.map",
+    "tools/dabbler-ai-orchestration/out/extension.js",
+    "tools/dabbler-ai-orchestration/out/providers/SessionSetsProvider.js",
+    "tools/dabbler-ai-orchestration/out/types.d.ts",
+    "tools/dabbler-ai-orchestration/out/utils/fileSystem.js",
+    "tools/dabbler-ai-orchestration/out/test/suite/sessionSetsProvider.test.js",
     "docs/session-sets/022-active-lifecycle-management/activity-log.json",
-    "docs/session-sets/022-active-lifecycle-management/disposition.json"
+    "docs/session-sets/022-active-lifecycle-management/session-state.json",
+    "docs/session-sets/022-active-lifecycle-management/session-events.jsonl",
+    "docs/session-sets/022-active-lifecycle-management/disposition.json",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/prompt.md",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/result.json",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/session-002-review.md",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/round-2/prompt.md",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/round-2/result.json",
+    "docs/session-sets/022-active-lifecycle-management/session-reviews/round-2/session-002-review.md"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -24,7 +40,7 @@
     "effort": "medium",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2's extension TypeScript work pairs naturally with the same orchestrator that designed and shipped Session 1's writer protocol. The fileSystem.ts / SessionSetsProvider.ts changes derive from the same invariant; continuity keeps that derivation tight."
+      "specifics": "Session 3 is documentation + cross-consumer verification work — the canonical workflow doc, schema doc, and close-out doc all need their voice matched to existing prose. Same orchestrator that wrote Sessions 1 and 2 has the freshest context on the invariant and the spec's framing; switching engines mid-set would force re-learning the protocol's vocabulary."
     }
   },
   "blockers": []

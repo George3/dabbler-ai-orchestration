@@ -496,6 +496,32 @@ suite("fileSystem — readSessionSets", () => {
         assert.strictEqual(sets[0].totalSessions, 4);
         fs.rmSync(dir, { recursive: true });
     });
+    // Set 022 Session 2 round-1 verifier finding: when both
+    // activity-log.json and session-state.json declare `totalSessions`,
+    // the state file wins. The pre-fix path took the activity-log
+    // value first and only fell back to the state file when the
+    // activity-log was absent, which silently mis-displayed the
+    // fraction whenever a Lightweight-tier consumer hand-edited one
+    // file but not the other.
+    test("totalSessions: state-file value beats activity-log value", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "totals-conflict");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# totals-conflict\n");
+        // Activity-log lies (stale value) — state file should beat it.
+        fs.writeFileSync(path.join(setDir, "activity-log.json"), JSON.stringify({ totalSessions: 99, entries: [] }));
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            status: "complete",
+            currentSession: 3,
+            totalSessions: 3,
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].totalSessions, 3);
+        // Plus: done fallback should compute 3, not 99.
+        assert.strictEqual(sets[0].sessionsCompleted, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
     // Set 022 Session 2: surface `completedSessions[]` through the
     // LiveSession model so the tree-view's in-flight predicate can
     // compute without re-reading the state file.

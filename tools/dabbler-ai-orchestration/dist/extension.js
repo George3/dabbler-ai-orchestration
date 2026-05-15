@@ -1438,7 +1438,7 @@ function readSessionSets(root) {
     if (fs3.existsSync(statePath)) {
       try {
         const sd = JSON.parse(fs3.readFileSync(statePath, "utf8"));
-        if (totalSessions === null && typeof sd.totalSessions === "number") {
+        if (typeof sd.totalSessions === "number") {
           totalSessions = sd.totalSessions;
         }
         const stateTouched = sd.completedAt || sd.startedAt;

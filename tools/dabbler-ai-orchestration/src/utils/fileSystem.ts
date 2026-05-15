@@ -332,7 +332,15 @@ export function readSessionSets(root: string): SessionSet[] {
           verificationVerdict?: string;
           forceClosed?: boolean;
         };
-        if (totalSessions === null && typeof sd.totalSessions === "number") {
+        // State file is authoritative for `totalSessions`. The
+        // activity-log carries the field at its top level (and we
+        // read it above for legacy compatibility), but if both are
+        // present the state-file value wins — a Set 022 Session 2
+        // round-1 verifier finding caught the inverted preference,
+        // which would silently mis-display the fraction whenever a
+        // Lightweight-tier set hand-edited one file but not the
+        // other.
+        if (typeof sd.totalSessions === "number") {
           totalSessions = sd.totalSessions;
         }
         const stateTouched = sd.completedAt || sd.startedAt;

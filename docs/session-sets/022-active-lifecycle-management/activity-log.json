@@ -152,6 +152,49 @@
       "description": "`npx vsce package` → DONE Packaged: dabbler-ai-orchestration-0.13.12.vsix (19 files, 398.91 KB). Build is shippable. Live readSessionSets call against the real session-set tree confirmed 22 sets bucket correctly (done=18, in-progress=3, not-started=0, cancelled=1) and set 022 renders the expected `1/3 · session 2 in flight` annotation.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 8,
+      "stepKey": "session-002/verification-round-1",
+      "dateTime": "2026-05-15T06:00:00-04:00",
+      "description": "Cross-provider verification round 1 (gpt-5-4, $0.15): ISSUES_FOUND with 2 Major findings. (1) Correctness — fallback count path uses merged totalSessions variable that prefers activity-log over state file; if activity-log declares a stale totalSessions, the done fallback would compute the wrong count. Real edge case for Lightweight-tier hand-edits. (2) Completeness — verifier claimed package.json / package-lock.json / CLAUDE.md weren't updated. Determined to be a context-gap false positive: those files WERE updated in commit dcc8636 but my verification prompt only listed CHANGELOG.md in the files block. Fixed in subsequent step.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 27227,
+          "outputTokens": 5415,
+          "costUsd": 0.149292
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 9,
+      "stepKey": "session-002/fix-round-1-issue",
+      "dateTime": "2026-05-15T06:05:00-04:00",
+      "description": "Fixed round-1 Major finding 1: `src/utils/fileSystem.ts` readSessionSets() now always lets `sd.totalSessions` (state file) override the activity-log-sourced value when present, rather than only when the merged variable was still null. Added regression test 'totalSessions: state-file value beats activity-log value' in fileSystem.test.ts. Tsc --noEmit clean; live readSessionSets smoke-test against set 022 still renders the expected `1/3 · session 2 in flight`.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 10,
+      "stepKey": "session-002/verification-round-2",
+      "dateTime": "2026-05-15T06:10:00-04:00",
+      "description": "Cross-provider verification round 2 (gpt-5-4, $0.20): VERIFIED, issues: []. Round-2 prompt was expanded to include package.json + CLAUDE.md + a package-lock.json version-line excerpt so the round-1 finding-2 context gap couldn't recur; an explicit note in the verification scope explained finding-1 was fixed (with regression test) and finding-2 was a context-gap false positive now resolved. Verifier concurred. Total Session 2 verification spend: $0.344.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 33037,
+          "outputTokens": 7510,
+          "costUsd": 0.195242
+        }
+      ]
     }
   ]
 }
