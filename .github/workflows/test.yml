@@ -1,0 +1,75 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  python-tests:
+    name: Python tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install ai_router with test dependencies
+        run: pip install -e .[tests]
+
+      - name: Run pytest (all marks including e2e)
+        run: python -m pytest -v
+
+  playwright-tests:
+    name: Playwright Layer 3
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: tools/dabbler-ai-orchestration
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install chromium
+        working-directory: tools/dabbler-ai-orchestration
+
+      - name: Run Playwright tests (Linux with xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run npm run test:playwright
+        working-directory: tools/dabbler-ai-orchestration
+
+      - name: Run Playwright tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:playwright
+        working-directory: tools/dabbler-ai-orchestration
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-test-results-${{ matrix.os }}
+          path: tools/dabbler-ai-orchestration/test-results/
+          retention-days: 7
+
+  # Layer 2 (@vscode/test-electron) is skipped in CI:
+  # - Known broken on Windows 11 + VS Code 1.120 (code.exe / test-electron 2.5.2 arg incompatibility)
+  # - Untested on macOS/Linux (needs explicit OS-specific binary paths, xvfb on Linux)
+  # See: CLAUDE.md "Orchestrator e2e harness (Set 027)" and
+  #      docs/implementation-summary-023-027.md "Key Insights & Hazards"
+  # Layer 2 validation is a candidate for Set 028 follow-up if upstream fixes the Windows breakage.

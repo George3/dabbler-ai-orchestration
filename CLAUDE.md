@@ -39,7 +39,7 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.13.16**
+- Current: **v0.13.17**
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`
@@ -86,6 +86,21 @@ file-watcher invariants belong in Layer 2; rendered-text invariants
 (badges, group counts, "N/N", "in flight" annotation) belong in Layer 3.
 Each layer's runtime grows ~3× over the previous; reach for the cheapest
 that can see the regression.
+
+### Continuous Integration (Set 028 Session 3)
+
+GitHub Actions matrix (`[.github/workflows/test.yml](.github/workflows/test.yml)`) 
+runs on every push to master and all PRs:
+
+- **Python tests:** `python -m pytest` on ubuntu-latest, macos-latest, windows-latest
+- **Playwright Layer 3:** `npm run test:playwright` on all three platforms
+  - Linux: wrapped in `xvfb-run` (headless X11 framebuffer for GUI rendering)
+  - Windows/macOS: run directly
+  - Artifacts (test-results/) uploaded on failure
+
+**Layer 2 (@vscode/test-electron) skipped in CI** — known broken on Windows 11 + VS Code 1.120 
+(upstream arg incompatibility), untested on macOS/Linux. See docs/implementation-summary-023-027.md 
+for details.
 
 ### Router-config editor
 
