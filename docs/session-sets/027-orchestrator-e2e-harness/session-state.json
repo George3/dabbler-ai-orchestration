@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "sessionSetName": "027-orchestrator-e2e-harness",
+  "currentSession": 1,
+  "totalSessions": 4,
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-16T11:28:48.938021-04:00",
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "normal"
+  }
+}
