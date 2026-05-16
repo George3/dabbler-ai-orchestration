@@ -39,7 +39,7 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.13.14**
+- Current: **v0.13.15**
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`
@@ -56,6 +56,22 @@ npx vsce package
 # ai_router (Python, requires .venv with `pip install -e .[tests]` from repo root)
 python -m pytest
 ```
+
+### Router-config editor
+
+The VS Code extension ships a visual config editor (`Dabbler: Open Dabbler Config Editor`)
+that reads and writes `ai_router/router-config.yaml`, `ai_router/budget.yaml`, and
+`ai_router/local-overrides.yaml` (gitignored). The editor is implemented in
+`tools/dabbler-ai-orchestration/src/configEditor/`. Key files:
+
+- `ConfigEditorPanel.ts` — webview panel, load/save/drift-detect, Python subprocess dispatch
+- `yamlReadWrite.ts` — comment-preserving YAML round-trip (uses the `yaml` package)
+- `schemaValidator.ts` — AJV-based validation of all three config files
+- `sections/` — one file per section (routing, budget, providers, significance, notifications, local-overrides-summary)
+- `patch.ts` — `applyPatch()` translates the webview `SavePayload` into YAML mutations
+
+The wizard (`Dabbler: Get Started`) now also has a "Configure AI Router" button
+that opens the config editor directly.
 
 ## Repo layout standard
 

@@ -374,6 +374,11 @@ Once execution completes, give the human these pointers. **Lightweight-tier proj
 - **`Dabbler: Show cost dashboard`** — VS Code extension command (if installed) showing live spend.
 - **Per-session cost report** — automatic at session close; appears in your chat output.
 
+### Configuring the AI router visually (Full tier)
+
+- **`Dabbler: Open Dabbler Config Editor`** — VS Code extension command that opens a visual editor for `router-config.yaml`, `budget.yaml`, and `local-overrides.yaml`. Use it to tune routing mode, verification settings, provider API-key env-var names, and budget threshold without editing YAML directly. This bootstrap writes your initial config; the Config Editor is the recommended surface for ongoing tuning.
+- **`local-overrides.yaml`** lives in `ai_router/` but is gitignored — use it for any per-machine settings (Pushover keys, personal API-key env-var names) you don't want committed.
+
 ### More info
 
 - **Repo-root `README.md`** — project overview and quick start.

@@ -51,6 +51,9 @@ export class WizardPanel {
         case "troubleshoot":
           vscode.commands.executeCommand("dabbler.troubleshoot");
           break;
+        case "openConfigEditor":
+          vscode.commands.executeCommand("dabbler.openConfigEditor");
+          break;
         case "showCost":
           vscode.commands.executeCommand("dabbler.showCostDashboard");
           break;

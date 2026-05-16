@@ -1,3 +1,4 @@
+import * as cp from "child_process";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
@@ -136,6 +137,9 @@ export class ConfigEditorPanel {
           break;
         case "reapplyLastSave":
           this._reapplyLastSave();
+          break;
+        case "sendTestNotification":
+          this._handleTestNotification();
           break;
       }
     });
@@ -657,6 +661,90 @@ export class ConfigEditorPanel {
     await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
   }
 
+  private _handleTestNotification(): void {
+    const aiRouterDir = this._findAiRouterDir();
+    if (!aiRouterDir) {
+      vscode.window.showErrorMessage("No ai_router/ directory found in the workspace.");
+      return;
+    }
+
+    // Resolve the configured env var names for the Pushover keys.
+    const localObj = this._loaded?.localOverridesDoc?.toJSON() as Record<string, unknown> | null ?? null;
+    const pushover = localObj
+      ? ((localObj["notifications"] as Record<string, unknown> | undefined)?.["pushover"] as Record<string, unknown> | undefined)
+      : undefined;
+    const apiKeyEnv = (typeof pushover?.["api_key_env"] === "string" ? pushover["api_key_env"] : "PUSHOVER_API_KEY") || "PUSHOVER_API_KEY";
+    const userKeyEnv = (typeof pushover?.["user_key_env"] === "string" ? pushover["user_key_env"] : "PUSHOVER_USER_KEY") || "PUSHOVER_USER_KEY";
+
+    // Resolve env var values. notifications.py reads PUSHOVER_API_KEY /
+    // PUSHOVER_USER_KEY by name; if the operator has renamed them, read
+    // the value from the configured name and pass it under the canonical
+    // name so the Python helper doesn't need to know about renames.
+    const apiKeyValue = process.env[apiKeyEnv];
+    const userKeyValue = process.env[userKeyEnv];
+
+    if (!apiKeyValue) {
+      vscode.window.showErrorMessage(
+        `Pushover API key env var $${apiKeyEnv} is not set. Export it in your shell before running VS Code.`
+      );
+      return;
+    }
+    if (!userKeyValue) {
+      vscode.window.showErrorMessage(
+        `Pushover user key env var $${userKeyEnv} is not set. Export it in your shell before running VS Code.`
+      );
+      return;
+    }
+
+    const pythonPath = (
+      (vscode.workspace.getConfiguration("dabblerSessionSets").inspect<string>("pythonPath")?.workspaceFolderValue ??
+        vscode.workspace.getConfiguration("dabblerSessionSets").inspect<string>("pythonPath")?.workspaceValue ??
+        vscode.workspace.getConfiguration("dabblerSessionSets").inspect<string>("pythonPath")?.globalValue) ||
+      "python"
+    ).trim() || "python";
+
+    const script = [
+      "import json, sys",
+      "try:",
+      "  from ai_router.notifications import send_pushover_notification",
+      "  r = send_pushover_notification('Dabbler test', 'Test notification from Dabbler Config Editor')",
+      "  print(json.dumps({'ok': True, 'request_id': r.request_id}))",
+      "except Exception as e:",
+      "  print(json.dumps({'ok': False, 'error': str(e)}))",
+    ].join("\n");
+
+    const env = { ...process.env, PUSHOVER_API_KEY: apiKeyValue, PUSHOVER_USER_KEY: userKeyValue };
+
+    const child = cp.spawn(pythonPath, ["-c", script], {
+      cwd: path.dirname(aiRouterDir),
+      env,
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
+    child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+    child.on("error", (err: Error) => {
+      vscode.window.showErrorMessage(`Test notification failed — could not spawn Python: ${err.message}`);
+    });
+    child.on("close", () => {
+      try {
+        const result = JSON.parse(stdout.trim()) as { ok: boolean; request_id?: string; error?: string };
+        if (result.ok) {
+          vscode.window.showInformationMessage(
+            `Pushover test notification sent. Request ID: ${result.request_id ?? "(unknown)"}`
+          );
+        } else {
+          vscode.window.showErrorMessage(`Test notification failed: ${result.error ?? "unknown error"}`);
+        }
+      } catch {
+        const detail = stderr.trim() || stdout.trim() || "no output";
+        vscode.window.showErrorMessage(`Test notification failed — unexpected Python output: ${detail}`);
+      }
+    });
+  }
+
   private async _openLocalOverridesFile(): Promise<void> {
     if (!this._loaded) return;
     const target = this._loaded.localOverridesPath;
@@ -926,6 +1014,10 @@ export class ConfigEditorPanel {
       // --- §4 run-flag-command button ---
       const flagBtn = document.getElementById('s4-run-flag-command');
       if (flagBtn) flagBtn.addEventListener('click', () => { vscode.postMessage({ command: 'runFlagCommand' }); });
+
+      // --- §5 test notification button ---
+      const testNotifBtn = document.getElementById('s5-test-notification');
+      if (testNotifBtn) testNotifBtn.addEventListener('click', () => { vscode.postMessage({ command: 'sendTestNotification' }); });
 
       // --- §6 open-local-overrides button ---
       const openLocalBtn = document.getElementById('s6-open-local-overrides');

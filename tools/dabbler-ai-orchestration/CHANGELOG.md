@@ -53,6 +53,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   resolver, config-editor webview, sections, significance flagging,
   release) are the rest of the work.
 
+### Added (Session 7 — wizard integration + test notification + release)
+
+- **Wizard "Configure AI Router" button** — `Dabbler: Get Started` now includes
+  a "Configure AI Router" button that opens the config editor directly. Wired
+  via a new `openConfigEditor` webview message case in `WizardPanel.ts`.
+- **"Send a test notification now" button (§5 Notifications)** — the button that
+  was rendered but disabled in Session 5 is now enabled and wired. Clicking it
+  spawns a Python subprocess that calls `send_pushover_notification()` from
+  `ai_router/notifications.py`, using the API-key and user-key env var names
+  configured in `local-overrides.yaml` (defaulting to `PUSHOVER_API_KEY` /
+  `PUSHOVER_USER_KEY`). Success surfaces the Pushover request ID via an info
+  notification; failure surfaces the error message. The Python process inherits
+  the VS Code process environment, so both standard and custom env var names
+  resolve correctly.
+- **`docs/quick-start.md` — "Configuring your project" section** — new section
+  covering the config editor command, a table of all six sections, and the
+  shared/local split for sensitive fields.
+- **`docs/adoption-bootstrap.md` — "Configuring the AI router visually" closing
+  pointer** — Step 9 closing pointers (Full tier) now include the config editor
+  as the recommended ongoing-tuning surface alongside the local-overrides note.
+- **`CLAUDE.md` — Router-config editor subsection** — documents the editor's
+  file layout and key files for future session-level context; version line
+  updated to v0.13.15.
+
 ### Added (Session 6 — significance flagging)
 
 - **`dabbler.flagDecisionForReview` command** — operator-invoked input box

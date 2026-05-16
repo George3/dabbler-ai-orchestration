@@ -32,6 +32,27 @@ No install is needed for Lightweight.
 
 ---
 
+## Configuring your project (Full tier)
+
+After `pip install dabbler-ai-router` and the [adoption bootstrap](adoption-bootstrap.md), your project has `ai_router/router-config.yaml` and `ai_router/budget.yaml`. To tune them visually:
+
+**VS Code command:** `Dabbler: Open Dabbler Config Editor`
+
+The editor opens a panel with six sections:
+
+| Section | What you configure |
+|---|---|
+| Routing & Verification | Outsourcing mode (disabled / whenever-helpful / always); verification method |
+| Budget | Spending threshold, scope (project-lifetime / monthly), warn-at percent |
+| Providers | Enable/disable providers; display labels; API-key env-var names |
+| Significance flagging | Annotation style; honor-annotations toggle; flag-decision command |
+| Notifications | Pushover toggle; API-key / user-key env-var names; test-notification button |
+| Local overrides summary | Read-only view of `local-overrides.yaml` (gitignored, per-machine settings) |
+
+Changes to provider API keys and Pushover credentials belong in `local-overrides.yaml` (per-machine, gitignored). The editor's shared/local toggle on each field controls which file is written. The wizard (`Dabbler: Get Started`) is the recommended first-time setup path; the config editor is the recommended surface for ongoing tuning.
+
+---
+
 ## Minimal session-set scaffold
 
 Create two files before your first session:
