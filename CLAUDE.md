@@ -39,7 +39,7 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.13.15**
+- Current: **v0.13.16**
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`
@@ -56,6 +56,36 @@ npx vsce package
 # ai_router (Python, requires .venv with `pip install -e .[tests]` from repo root)
 python -m pytest
 ```
+
+### Orchestrator e2e harness (Set 027)
+
+Three layered test suites — pick the lowest layer that can see the
+regression you're guarding against:
+
+```bash
+# Layer 1: pytest end-to-end against the real start/close CLIs
+#   ~30s; covers state.json, events ledger, completedSessions[], change-log
+python -m pytest -m e2e
+
+# Layer 2: @vscode/test-electron tree-provider harness
+#   ~90s on a clean host; covers SessionSetsProvider.getChildren() bucketing
+#   Note: on Windows 11 + VS Code 1.120 the runner has a pre-existing env
+#   issue; run via the lighter `npm run test:unit` stub harness instead,
+#   which exercises the same provider code through a vscode-stub shim.
+cd tools/dabbler-ai-orchestration && npm test
+cd tools/dabbler-ai-orchestration && npm run test:unit  # Windows fallback
+
+# Layer 3: Playwright Electron rendering smoke
+#   ~90s for 5 scenarios; covers what the operator actually sees painted
+#   on screen (bucket counts, [FORCED] badge, "in flight" annotation)
+cd tools/dabbler-ai-orchestration && npm run test:playwright
+```
+
+Picking a layer: data assertions belong in Layer 1; bucketing / sort /
+file-watcher invariants belong in Layer 2; rendered-text invariants
+(badges, group counts, "N/N", "in flight" annotation) belong in Layer 3.
+Each layer's runtime grows ~3× over the previous; reach for the cheapest
+that can see the regression.
 
 ### Router-config editor
 

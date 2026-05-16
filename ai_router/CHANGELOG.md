@@ -5,6 +5,41 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-16
+
+### Added — repo-only test infrastructure (not in published wheel)
+- **Python e2e harness (`ai_router/tests/e2e/`, Set 027).** Three
+  modules under the repo's test tree: `fixtures.py` (tmpdir-scoped
+  session-set generator with real git working tree + bare remote),
+  `harness_cli.py` (thin JSON-over-stdout dispatcher used by the
+  TS-side Layer 2 and Layer 3 harnesses), and seven scenario files
+  covering happy-path, cancel/restore, force-close, sibling
+  worktree, multiset-sequential, and the `register_session_start`
+  `completedSessions[]`-loss regression that pinned the v0.1.1
+  dabbler-platform incident shut. **These files are excluded from
+  the published wheel** by `[tool.setuptools.packages.find]
+  exclude = ["ai_router.tests", "ai_router.tests.*"]` — PyPI
+  consumers get the same public API as 0.3.0; the harness is only
+  available to contributors cloning the repo.
+- **`e2e` pytest marker** registered in `pytest.ini` — partition the
+  suite via `pytest -m e2e` (full harness) or
+  `pytest -m "not e2e"` (fast pre-commit subset). Also repo-only;
+  consumers running the wheel see no behavior change.
+
+### Behavior notes (no API change)
+
+- 0.3.1 is functionally identical to 0.3.0 for PyPI consumers. The
+  patch bump exists to let the consuming extension declare a
+  matching floor; there are no runtime changes between 0.3.0 and
+  0.3.1.
+- The harness depends on `register_session_start` preserving
+  `completedSessions[]` across rewrites. The current writer at
+  `session_state.py:148` does so when the field is present; the
+  Layer 2 harness pinned a discrepancy on fresh-set writes where
+  the key is omitted entirely (downstream readers' `Array.isArray`
+  predicate then returns false). Fix deserves a targeted writer
+  change in a follow-up set, not 0.3.1.
+
 ## [0.3.0] — 2026-05-15
 
 ### Removed — BREAKING

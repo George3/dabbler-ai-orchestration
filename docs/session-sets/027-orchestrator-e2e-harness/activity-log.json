@@ -207,6 +207,57 @@
           "cost_usd": 0.198835
         }
       ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-4/playwright-scaffold",
+      "dateTime": "2026-05-16T17:15:00-04:00",
+      "description": "Installed @playwright/test ^1.60.0 as dev dep. Created playwright.config.ts (testDir=./src/test/playwright, 90s timeout, workers=1). Added test:playwright npm script (compile + tsc + npx playwright test). Wrote src/test/playwright/electronLaunch.ts (~260 LOC pre-verifier-fixes): fixture helpers mirroring Layer 2 e2eHarness.ts plumbing, launchVSCode/closeVSCode/openSessionSetsView/triggerRefresh, isolated user-data-dir + extensions-dir per launch, binary discovery from .vscode-test/. Bypasses @vscode/test-electron entirely (broken on this Windows host since Session 3) by driving Code.exe directly via _electron.launch.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-4/five-rendering-scenarios",
+      "dateTime": "2026-05-16T17:25:00-04:00",
+      "description": "Wrote src/test/playwright/treeView.spec.ts (~200 LOC): five rendering smoke scenarios — fresh set (Not Started bucket, 3 sets, negative controls); mid-session in flight (In Progress (1) + 1/3 + 'session 2 in flight'); all done (Done (1) + 3/3); cancelled (Cancelled (1) group renders); force-closed ([FORCED] badge + In Progress NOT Done, pinning the truthful-display invariant from Session 3). Initial run failed on selector strict-mode violation (.activitybar selector matched both action-icon <a> and hidden badge <div>); fixed by narrowing to .action-label[aria-label*=...]. All 5 tests passed in 1m24s — well under the 3-min spec budget.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-4/close-out-artifacts",
+      "dateTime": "2026-05-16T17:32:00-04:00",
+      "description": "Version bumps: pyproject.toml 0.3.0 -> 0.3.1; tools/dabbler-ai-orchestration/package.json 0.13.15 -> 0.13.16. CHANGELOG.md entries added in both packages. CLAUDE.md updated with Layer 1/2/3 test commands and 'lowest layer that can see the regression' guidance. CLAUDE.md version reference also bumped to v0.13.16. change-log.md written for the set (~150 LOC) summarizing all four sessions, cost tally, and the two drift discoveries.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-4/cross-provider-verification",
+      "dateTime": "2026-05-16T17:55:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4 in 2 sub-rounds. Round A ($0.174, 128s, focus: launch/helper code): Major — findCodeBinary() string sort would pick 1.99.0 over 1.120.0 once minors cross digit widths; fixed with numeric semver-style comparison. Major — _filteredEnv() reused for Electron launch strips Linux GUI vars (DISPLAY/WAYLAND_DISPLAY/XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS); split into separate _electronEnv() that preserves them. Minor — triggerRefresh() hardcoded Ctrl+Shift+P; switched to F1 (cross-platform). Round B ($0.287, 223s, focus: tests + docs): Major — CHANGELOG/version-bump rationale claimed ai_router 0.3.1 ships the harness, but pyproject.toml excludes ai_router.tests* from the wheel; rewrote both CHANGELOG entries to clarify the harness is repo-only test infrastructure. Minor — cancel scenario name said 'with reason badge' but never asserted reason text; renamed to 'under the Cancelled bucket'. Minor — teardown() skipped tmpdir cleanup if closeVSCode threw; made cleanups independent with nested try/finally. Minor — per-test setTimeout(120_000) overrides contradicted 90s playwright.config; removed all 5 overrides. Minor — change-log Session 4 cost row was TBD; backfilled at $0.46 ($0.174 + $0.287). Re-running Playwright after fixes uncovered a related real-world bug: full-env passthrough leaked ELECTRON_RUN_AS_NODE=1 + VSCODE_* IPC vars from the parent VS Code/Cursor IDE, flipping Code.exe into CLI-arg-parse mode. Added explicit _ELECTRON_VAR_BLOCKLIST (ELECTRON_RUN_AS_NODE, ATOM_SHELL_INTERNAL_RUN_AS_NODE) + VSCODE_ prefix scrub. All 5 tests green after final fix wave (1m24s). Session 4 verification: 2 Major + 5 Minor + 1 latent runtime bug surfaced and fixed.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "purpose": "session-verification-round-a",
+          "input_tokens": 8058,
+          "output_tokens": 10267,
+          "cost_usd": 0.17415
+        },
+        {
+          "model": "gpt-5-4",
+          "purpose": "session-verification-round-b",
+          "input_tokens": 9347,
+          "output_tokens": 17557,
+          "cost_usd": 0.2867225
+        }
+      ]
     }
   ]
 }

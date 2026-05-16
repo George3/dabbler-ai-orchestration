@@ -12,3 +12,5 @@ build/
 dist/*.tar.gz
 dist/*.whl
 ai_router/local-overrides.yaml
+.session-reasons/
+tools/dabbler-ai-orchestration/test-results/

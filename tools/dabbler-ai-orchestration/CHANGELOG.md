@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.16] — 2026-05-16
+
+### Added
+- **Layer 2 tree-provider e2e harness (Set 027 Session 3).** New suite
+  at `src/test/suite/e2e/` (5 test files, 20 scenarios) drives the
+  Python harness shim through real start/close CLIs and asserts on
+  `SessionSetsProvider.getChildren()` output. Covers happy-path,
+  cancel/restore, force-close, multiset, and sibling-worktree
+  bucketing. Pins two pre-existing drift classes: (1) fresh-set
+  `completedSessions[]` omission disables Set 022's in-flight
+  annotation on session 1; (2) `isMidSetComplete` downgrades
+  force-closed mid-set snapshots to In Progress regardless of
+  `forceClosed` / `status` (truthful-display invariant). Neither
+  shipped a fix in this set — both deserve targeted reader/writer
+  work.
+- **Layer 3 Playwright Electron rendering smoke (Set 027 Session 4).**
+  New suite at `src/test/playwright/treeView.spec.ts` (5 scenarios)
+  launches a real VS Code Electron instance via Playwright's
+  `_electron.launch`, opens the Session Sets activity-bar view, and
+  asserts on rendered text — bucket headers (`In Progress (N)`,
+  `Not Started (N)`, `Done (N)`, `Cancelled (N)`), `[FORCED]` badge,
+  `session N in flight` annotation, `N/N` progress text. Bypasses
+  the @vscode/test-electron runner (broken on Windows 11 + VS Code
+  1.120 since Set 027 Session 3) by driving the cached `Code.exe`
+  binary directly. Runs in ~90s for 5 tests.
+- **`test:playwright` npm script** — `npm run test:playwright` runs
+  the Layer 3 suite. Each test owns a fresh user-data-dir and
+  extensions-dir; tests run serially (workers=1) to avoid
+  user-data-dir lock contention.
+
+### Changed
+- **Extension shipped against `ai_router` 0.3.1** (was 0.3.0). 0.3.1
+  is functionally identical to 0.3.0 for PyPI consumers — the patch
+  bump exists to let the extension's version floor track the
+  repo-side test harness Set 027 added (`ai_router/tests/e2e/`),
+  which is excluded from the published wheel. No public-API changes.
+
 ## [0.13.15] — 2026-05-15
 
 ### Removed

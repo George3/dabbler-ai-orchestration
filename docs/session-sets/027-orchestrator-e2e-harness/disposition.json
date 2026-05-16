@@ -1,21 +1,23 @@
 {
   "status": "completed",
-  "summary": "Set 027 Session 3: @vscode/test-electron tree-provider harness. Built Python CLI shim (harness_cli.py, 305 LOC) wrapping Session 1/2 fixture helpers + TS harness module (e2eHarness.ts, 365 LOC) that drives it via subprocess. Shipped five TS test files exercising SessionSetsProvider.getChildren(): treeProvider-happy (6 tests), -cancel (4 tests), -force (3 tests), -multiset (4 tests after Round C added in-progress sort coverage), -worktree (3 tests). 20 new e2e tests + 306 existing unit tests pass via `npm run test:unit` (326 total, 2 pre-existing failures unrelated). Discovered + pinned two real drift classes the harness exists to catch: (1) register_session_start omits empty completedSessions[], defeating Set 022's in-flight predicate on fresh sets; (2) isMidSetComplete downgrades mid-set complete snapshots so a force-closed mid-set surfaces in In Progress with [FORCED], not Done. Neither bug fixed in this session — pinned as current behavior with explicit test comments. Cross-provider verification ($0.597, gpt-5-4, 3 rounds, ~1500 LOC) surfaced 5 Major + 4 Minor findings; all addressed. npm test (full test-electron) blocked by pre-existing Code.exe 1.120 / test-electron 2.5.2 launch-arg incompatibility on this Windows host — environmental, not session-introduced; documented for follow-up.",
+  "summary": "Set 027 Session 4 of 4 (FINAL): Layer 3 Playwright Electron rendering smoke shipped + set closes. Created src/test/playwright/{electronLaunch.ts, treeView.spec.ts} + playwright.config.ts; added @playwright/test ^1.60.0 dev dep + test:playwright npm script. Five scenarios cover fresh-set, mid-session in flight, all-done, cancelled, and force-closed bucketing/badge rendering via aria-label text assertions. Launches Code.exe directly via _electron.launch (bypasses the @vscode/test-electron path that was broken on this Windows host since Session 3). All 5 tests pass in 1m24s on this orchestrator (Windows 11 + VS Code 1.120) — well under the 3-min spec budget. Cross-provider verification via gpt-5-4 in 2 sub-rounds ($0.174 + $0.287 = $0.461); returned 2 Major + 5 Minor findings, all addressed: numeric semver sort for cached-binary discovery; separate _electronEnv() preserving Linux GUI session vars; F1 cross-platform palette shortcut; rewritten CHANGELOG entries clarifying ai_router 0.3.1 harness is repo-only (excluded from wheel); tightened cancel test naming; independent best-effort teardown; per-test setTimeout(120_000) overrides removed; change-log cost row backfilled. The full-env fix uncovered a latent runtime bug — VS Code IPC vars (ELECTRON_RUN_AS_NODE, VSCODE_*) leaking from a parent IDE host would have flipped Code.exe into CLI-arg-parsing mode; added explicit blocklist + VSCODE_ prefix scrub. Versions bumped: ai_router 0.3.0->0.3.1; extension 0.13.15->0.13.16. CHANGELOG entries written for both packages. CLAUDE.md updated with Layer 1/2/3 test commands + layer-choice guidance. change-log.md written for the set; activity-log + state files updated. Set total cost: $1.86 of $5.00 NTE (37% of budget). Release tags pushed by operator post-merge per standard workflow.",
   "files_changed": [
-    "ai_router/tests/e2e/harness_cli.py",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/e2eHarness.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/treeProvider-happy.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/treeProvider-cancel.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/treeProvider-force.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/treeProvider-multiset.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/e2e/treeProvider-worktree.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/index.ts",
-    "tools/dabbler-ai-orchestration/src/test/vscode-stub.js",
+    "tools/dabbler-ai-orchestration/src/test/playwright/electronLaunch.ts",
+    "tools/dabbler-ai-orchestration/src/test/playwright/treeView.spec.ts",
+    "tools/dabbler-ai-orchestration/playwright.config.ts",
     "tools/dabbler-ai-orchestration/package.json",
-    "scripts/verify_session_027_3.py",
+    "tools/dabbler-ai-orchestration/package-lock.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "ai_router/CHANGELOG.md",
+    "pyproject.toml",
+    "CLAUDE.md",
+    "scripts/verify_session_027_4.py",
+    "scripts/verify_session_027_4_result_a.json",
+    "scripts/verify_session_027_4_result_b.json",
+    "docs/session-sets/027-orchestrator-e2e-harness/change-log.md",
+    "docs/session-sets/027-orchestrator-e2e-harness/activity-log.json",
     "docs/session-sets/027-orchestrator-e2e-harness/session-state.json",
     "docs/session-sets/027-orchestrator-e2e-harness/session-events.jsonl",
-    "docs/session-sets/027-orchestrator-e2e-harness/activity-log.json",
     "docs/session-sets/027-orchestrator-e2e-harness/disposition.json"
   ],
   "verification_method": "manual",
@@ -26,8 +28,8 @@
     "model": "claude-opus-4-7",
     "effort": "normal",
     "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "Session 4 adds the Playwright Electron rendering smoke layer + closes the set. Same TS / Electron territory as Session 3, and the harness's Python fixture generator + TS shape helpers are already proven on this orchestrator. Operator should also re-evaluate whether the Layer 3 Playwright smoke is still warranted now that Layer 2 catches text-content drift; the spec's open question #1 explicitly allows trimming Layer 3 scope at Session 4 start."
+      "code": "set-complete",
+      "specifics": "Set 027 closes with Session 4. No follow-up session in this set. The two drift classes pinned by the harness (register_session_start completedSessions[] omission on fresh sets; isMidSetComplete downgrade of force-closed mid-set) are candidate work for a follow-up set if operator decides to fix them — both deserve targeted reader/writer changes with backwards-compat care. No next_orchestrator dependency from this close-out."
     }
   },
   "blockers": []
