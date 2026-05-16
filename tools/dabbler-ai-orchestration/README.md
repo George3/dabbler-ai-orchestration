@@ -42,9 +42,10 @@ and paste it into a fresh AI chat (Claude Code, Gemini Code Assist,
 or any GPT-based tool). The AI fetches the canonical setup
 instructions and walks you through:
 
-1. **A budget-threshold dialog** — pick a tier (zero, under ~$20,
-   $20–$99, or $100+) that maps to a verification mode you can
-   afford.
+1. **A budget dialog** — set a not-to-exceed (NTE) dollar cap for
+   verification spend. Verification calls typically cost $0.05–$0.80
+   each; entering $0 switches to manual cross-provider review at
+   no API cost.
 2. **A plan alignment** — the AI proposes a session-set
    decomposition based on what you describe.
 3. **A numbered action checklist** — *every* intended write, config,
@@ -57,7 +58,9 @@ and the standard activity-bar tree takes over.
 
 If you'd rather drive the setup from VS Code's UI directly, run
 **`Dabbler: Get Started`** from the command palette
-(`Ctrl+Shift+P` / `Cmd+Shift+P`) for the wizard alternative.
+(`Ctrl+Shift+P` / `Cmd+Shift+P`). The wizard includes a
+**Configure AI Router** button that opens the visual config editor
+once your project is set up.
 
 ---
 
@@ -66,15 +69,15 @@ If you'd rather drive the setup from VS Code's UI directly, run
 API spend is real and varies by project size and verification
 appetite. Honest framing:
 
-- **Zero-budget mode** is genuinely free — verification routes
-  through a *different* AI assistant you open manually (e.g.
-  open a second AI chat as the verifier), or you skip verification
-  with the decision logged in the session's `change-log.md`.
-- **Low-budget mode** (under ~$20 over multi-week project life)
-  uses subscription-based AI assistants for the heavy lifting,
-  with API verification only at session end.
-- **High-budget mode** ($20+ over project life) uses synchronous
-  API calls throughout, with full automation.
+- **$0 budget** — verification routes through a *different* AI
+  assistant you open manually (e.g. open a second AI chat as the
+  verifier), or you skip verification with the decision logged. No
+  API spend.
+- **Non-zero budget** — the router makes synchronous API calls for
+  cross-provider verification, capped at your not-to-exceed (NTE)
+  threshold. Verification calls typically run **$0.05–$0.80 each**;
+  a 3-session set usually totals **$0.15–$2.50**; a 6-session set
+  **$0.30–$5.00**. These are empirical medians — outliers exist.
 
 The router writes one JSON line per call to
 `ai_router/router-metrics.jsonl` so you can audit spend at any
@@ -113,9 +116,19 @@ Sign-up links and a full prerequisites checklist live in the
 
 ## Other features
 
-- **Activity-bar views** for Provider Queues and Provider Heartbeats
-  — observe outsource-last work in flight and per-provider activity
-  at a glance.
+- **Visual config editor** (`Dabbler: Open Dabbler Config Editor`) —
+  edit `router-config.yaml`, `budget.yaml`, and the gitignored
+  `local-overrides.yaml` through a six-section panel without touching
+  YAML directly. Sections cover routing mode, budget threshold,
+  provider API-key env vars, significance flagging, Pushover
+  notifications, and a local-overrides summary. Includes a
+  live-validation drift banner and a "Send a test notification" button.
+- **Significance flagging** — `Dabbler: Flag Decision for Cross-Provider
+  Review` appends a one-line reason to the active set's review queue.
+  `Dabbler: Scan Workspace for @dabbler:outsource-review Annotations`
+  walks source files for `# @dabbler:outsource-review("...")` and
+  `// @dabbler:outsource-review("...")` annotations and queues new
+  findings automatically.
 - **Cancel/Restore lifecycle** — cancel a session set mid-stream
   with a recorded reason; restore later if priorities shift. The
   audit trail accumulates across cycles.
