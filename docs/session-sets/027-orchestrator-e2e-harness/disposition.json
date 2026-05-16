@@ -1,14 +1,13 @@
 {
   "status": "completed",
-  "summary": "Set 027 Session 1: orchestrator e2e harness foundation. Built tmpdir-scoped fixture generator (real git repo + bare remote per test) and shipped the 3-session happy-path scenario plus the v0.1.1 register_session_start regression pin. 1 e2e + 2 fast-suite tests added. Cross-provider verification ($0.32, gpt-5-4) surfaced 1 Major + 2 Minor findings; all addressed in this session.",
+  "summary": "Set 027 Session 2: extended Python e2e scenarios. Added four new scenario test files (cancel/restore mid-set, force-close with guard + forensic + final-session tests, worktree discovery via real git worktrees, multiset sequential boundary hygiene). Extended fixtures.py with cancel_set/restore_set/make_sibling_worktree/make_additional_set helpers and drive_close_session(force=True). Cross-provider verification ($0.48, gpt-5-4, 3 rounds) surfaced 2 Major + 5 Minor findings; all addressed. Full suite 437 passed + 1 skipped.",
   "files_changed": [
-    "ai_router/tests/e2e/conftest.py",
     "ai_router/tests/e2e/fixtures.py",
-    "ai_router/tests/e2e/test_happy_3session.py",
-    "ai_router/tests/e2e/test_register_session_start_regression.py",
-    "pytest.ini",
-    "scripts/verify_session_027_1.py",
-    "docs/session-sets/027-orchestrator-e2e-harness/spec.md",
+    "ai_router/tests/e2e/test_cancel_restore_midset.py",
+    "ai_router/tests/e2e/test_force_close_path.py",
+    "ai_router/tests/e2e/test_worktree_discovery.py",
+    "ai_router/tests/e2e/test_multiset_sequential.py",
+    "scripts/verify_session_027_2.py",
     "docs/session-sets/027-orchestrator-e2e-harness/session-state.json",
     "docs/session-sets/027-orchestrator-e2e-harness/session-events.jsonl",
     "docs/session-sets/027-orchestrator-e2e-harness/activity-log.json",
@@ -23,7 +22,7 @@
     "effort": "normal",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 extends the Python harness with four additional scenarios (cancel/restore, force-close, worktree discovery, multiset sequential). Same orchestrator engine and depth profile; no provider switch warranted."
+      "specifics": "Session 3 builds the @vscode/test-electron tree-provider harness in TypeScript. Same orchestrator engine; TypeScript is within Claude Code's strong zone and the Python fixture generator from Sessions 1-2 is already in place."
     }
   },
   "blockers": []

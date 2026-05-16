@@ -75,6 +75,10 @@ from disposition import (  # type: ignore[import-not-found]
     write_disposition,
 )
 from session_events import read_events as _read_events_raw  # type: ignore[import-not-found]
+from session_lifecycle import (  # type: ignore[import-not-found]
+    cancel_session_set,
+    restore_session_set,
+)
 from session_state import (  # type: ignore[import-not-found]
     NextOrchestrator,
     NextOrchestratorReason,
@@ -171,7 +175,15 @@ def _commit_and_push(handle: HarnessHandle, message: str) -> None:
     start_session writes the same snapshot, and we don't want the
     commit step to spuriously fail.
     """
-    _git(handle.repo_root, "add", "-A")
+    # Stage only the session-set directory and the harness-reasons dir
+    # (where reason files for --reason-file live). Using git add -A would
+    # sweep in uncommitted changes from *other* session sets sharing the
+    # same repo, which would hide boundary-hygiene regressions in multiset
+    # tests by silently including cross-set changes in the wrong commit.
+    _git(handle.repo_root, "add", "--", str(handle.set_dir))
+    harness_reasons = handle.repo_root / ".harness-reasons"
+    if harness_reasons.is_dir():
+        _git(handle.repo_root, "add", "--", str(harness_reasons))
     proc = _git(
         handle.repo_root,
         "commit",
@@ -550,6 +562,8 @@ def drive_close_session(
     reason: str = "harness close-out: manual verification attested",
     extra_args: Optional[List[str]] = None,
     commit_after: bool = True,
+    force: bool = False,
+    inject_force_env: bool = True,
 ) -> subprocess.CompletedProcess:
     """Invoke ``python -m ai_router.close_session`` via subprocess.
 
@@ -579,18 +593,30 @@ def drive_close_session(
         "ai_router.close_session",
         "--session-set-dir",
         str(handle.set_dir),
-        "--manual-verify",
-        "--reason-file",
-        str(reason_path),
-        "--json",
     ]
+    # --force and --manual-verify are mutually incompatible; force-close
+    # bypasses verification entirely and requires only --reason-file for
+    # the forensic audit trail.
+    if not force:
+        args.append("--manual-verify")
+    args.extend(["--reason-file", str(reason_path), "--json"])
+    if force:
+        args.append("--force")
     if extra_args:
         args.extend(extra_args)
+
+    env = _subprocess_env()
+    # Always strip the force-close env var so a dev-shell value never leaks
+    # into tests. Inject it only when explicitly requested so the guard test
+    # (inject_force_env=False) sees the absent-variable rejection path.
+    env.pop("AI_ROUTER_ALLOW_FORCE_CLOSE_OUT", None)
+    if force and inject_force_env:
+        env["AI_ROUTER_ALLOW_FORCE_CLOSE_OUT"] = "1"
 
     proc = subprocess.run(
         args,
         cwd=str(handle.repo_root),
-        env=_subprocess_env(),
+        env=env,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -628,3 +654,121 @@ def read_events(handle: HarnessHandle):
     ledger surfaces as an empty list.
     """
     return _read_events_raw(str(handle.set_dir))
+
+
+# ---------------------------------------------------------------------------
+# Cancel / restore helpers
+# ---------------------------------------------------------------------------
+
+
+def cancel_set(
+    handle: HarnessHandle,
+    reason: str = "",
+    *,
+    commit: bool = True,
+) -> None:
+    """Cancel the session set and optionally commit the cancellation marker.
+
+    Delegates to the production ``cancel_session_set`` so the on-disk
+    shape (CANCELLED.md header, preCancelStatus) is byte-for-byte
+    identical to what an operator's VS Code command would produce.
+    """
+    cancel_session_set(str(handle.set_dir), reason)
+    if commit:
+        short = reason[:40] or "no reason"
+        _commit_and_push(handle, f"cancel: {short}")
+
+
+def restore_set(
+    handle: HarnessHandle,
+    reason: str = "",
+    *,
+    commit: bool = True,
+) -> None:
+    """Restore the session set and optionally commit the restore marker.
+
+    Delegates to the production ``restore_session_set``. Raises
+    ``FileNotFoundError`` (from the production helper) when called on
+    a set that has not been cancelled — tests that exercise this error
+    path should call ``restore_session_set`` directly.
+    """
+    restore_session_set(str(handle.set_dir), reason)
+    if commit:
+        short = reason[:40] or "no reason"
+        _commit_and_push(handle, f"restore: {short}")
+
+
+# ---------------------------------------------------------------------------
+# Sibling-worktree helper
+# ---------------------------------------------------------------------------
+
+
+def make_sibling_worktree(handle: HarnessHandle, slug: str) -> Path:
+    """Add a canonical sibling worktree at ``<repo>-worktrees/<slug>/``.
+
+    Creates the ``<repo>-worktrees/`` container alongside the primary
+    working tree and runs ``git worktree add`` with branch
+    ``session-set/<slug>`` — the naming convention that
+    ``worktree.enumerate_worktrees`` classifies as "canonical". The
+    new working tree starts from the current HEAD of the primary.
+
+    Returns the absolute path of the new working tree root.
+    """
+    worktrees_dir = handle.repo_root.parent / f"{handle.repo_root.name}-worktrees"
+    worktrees_dir.mkdir(exist_ok=True)
+    wt_path = worktrees_dir / slug
+    _git(
+        handle.repo_root,
+        "worktree",
+        "add",
+        str(wt_path),
+        "-b",
+        f"session-set/{slug}",
+    )
+    return wt_path
+
+
+# ---------------------------------------------------------------------------
+# Multi-set helper
+# ---------------------------------------------------------------------------
+
+
+def make_additional_set(
+    base_handle: HarnessHandle,
+    new_slug: str,
+    new_total_sessions: int,
+) -> "HarnessHandle":
+    """Add a second (or third …) session set to an existing fixture repo.
+
+    Creates ``docs/session-sets/<new_slug>/`` under the same git
+    working tree as *base_handle*, drops a spec.md and a not-started
+    state file, commits, and returns a new HarnessHandle pointing at
+    the new set. The handle shares the same repo_root and bare_remote
+    as *base_handle* so all subsequent ``drive_start_session`` /
+    ``drive_close_session`` calls operate on the same git history —
+    which is the point: boundary-hygiene tests can assert that
+    close-out for set A leaves set B's state file untouched.
+    """
+    set_dir = base_handle.repo_root / "docs" / "session-sets" / new_slug
+    set_dir.mkdir(parents=True)
+    _write_spec(set_dir, new_slug, new_total_sessions)
+    synthesize_not_started_state(str(set_dir))
+    _git(base_handle.repo_root, "add", "-A")
+    _git(
+        base_handle.repo_root,
+        "commit",
+        "-m",
+        f"add fixture session set {new_slug}",
+    )
+    _git(base_handle.repo_root, "push", "origin", "main")
+    return HarnessHandle(
+        repo_root=base_handle.repo_root,
+        set_dir=set_dir,
+        bare_remote=base_handle.bare_remote,
+        slug=new_slug,
+        total_sessions=new_total_sessions,
+        engine=base_handle.engine,
+        model=base_handle.model,
+        provider=base_handle.provider,
+        effort=base_handle.effort,
+    )
