@@ -91,6 +91,33 @@ New to this repo? Read [`docs/quick-start.md`](docs/quick-start.md) first —
 it explains the framework in five minutes and points to the right reference
 docs from there.
 
+## Session state schema (required reading at every session boundary)
+
+[`docs/session-state-schema.md`](docs/session-state-schema.md) is the
+**authoritative reference** for `session-state.json` on both Full and
+Lightweight tiers. Any AI orchestrator that touches a state file without
+having read it has a high chance of producing the N−1/N display drift
+the Session Set Explorer is known to surface.
+
+The non-negotiable rules:
+
+- `completedSessions: [<int>, ...]` is the canonical "X done out of N"
+  ledger. Append `currentSession` to it (sorted, unique) on every
+  successful close.
+- **Lightweight tier** — the orchestrator (or human) maintains
+  `completedSessions[]` **by hand** on every close. There is no router
+  writer and no events-ledger fallback; this array is the only
+  authoritative count signal.
+- **Full tier** — `close_session` writes `completedSessions[]`
+  automatically. The orchestrator never edits it directly.
+- Canonical `status` values are `"not-started"`, `"in-progress"`,
+  `"complete"`, `"cancelled"`. Never `"completed"` or `"done"` on a
+  new write (the read boundary tolerates them; the writer must emit
+  the canonical token).
+- The state invariant for "in flight" vs. "between sessions" vs. "done"
+  is at the top of the schema doc — consult it before hand-editing any
+  state.
+
 ## Close-out and outsource-last
 
 Step 8 of `docs/ai-led-session-workflow.md` is collapsed to a single
