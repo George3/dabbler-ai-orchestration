@@ -115,14 +115,14 @@
 
   <h2>What do you want to do?</h2>
   <div class="actions">
-    <button class="btn" onclick="send('setupProject')">Set up a new project</button>
-    <button class="btn btn-secondary" onclick="send('importPlan')">Import a project plan</button>
-    <button class="btn btn-secondary" onclick="send('generatePrompt')">Generate session-set prompt</button>
+    <button class="btn" data-command="setupProject">Set up a new project</button>
+    <button class="btn btn-secondary" data-command="importPlan">Import a project plan</button>
+    <button class="btn btn-secondary" data-command="generatePrompt">Generate session-set prompt</button>
   </div>
   <div class="actions">
-    <button class="btn btn-secondary" onclick="send('openConfigEditor')">Configure AI Router</button>
-    <button class="btn btn-secondary" onclick="send('showCost')">Show cost dashboard</button>
-    <button class="btn btn-secondary" onclick="send('troubleshoot')">Troubleshoot</button>
+    <button class="btn btn-secondary" data-command="openConfigEditor">Configure AI Router</button>
+    <button class="btn btn-secondary" data-command="showCost">Show cost dashboard</button>
+    <button class="btn btn-secondary" data-command="troubleshoot">Troubleshoot</button>
   </div>
 
   <hr>
@@ -133,8 +133,12 @@
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
-    function send(command) { vscode.postMessage({ command }); }
-    document.getElementById('pricingLink').addEventListener('click', (e) => {
+    document.querySelectorAll('button[data-command]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        vscode.postMessage({ command: btn.getAttribute('data-command') });
+      });
+    });
+    document.getElementById('pricingLink').addEventListener('click', function(e) {
       e.preventDefault();
       vscode.postMessage({ command: 'openExternal', url: 'https://www.anthropic.com/pricing' });
     });

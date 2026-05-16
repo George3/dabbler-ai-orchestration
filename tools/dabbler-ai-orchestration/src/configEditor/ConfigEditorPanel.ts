@@ -723,12 +723,15 @@ export class ConfigEditorPanel {
 
     let stdout = "";
     let stderr = "";
+    let spawnErrored = false;
     child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
     child.on("error", (err: Error) => {
+      spawnErrored = true;
       vscode.window.showErrorMessage(`Test notification failed — could not spawn Python: ${err.message}`);
     });
     child.on("close", () => {
+      if (spawnErrored) return;
       try {
         const result = JSON.parse(stdout.trim()) as { ok: boolean; request_id?: string; error?: string };
         if (result.ok) {
