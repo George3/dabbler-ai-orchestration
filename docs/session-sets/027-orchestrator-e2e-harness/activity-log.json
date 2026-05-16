@@ -1,0 +1,78 @@
+{
+  "sessionSetName": "027-orchestrator-e2e-harness",
+  "createdDate": "2026-05-16",
+  "totalSessions": 4,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-1/explore-orchestrator-internals",
+      "dateTime": "2026-05-16T11:28:48-04:00",
+      "description": "Read start_session.py, close_session.py, session_state.py, session_events.py, disposition.py, gate_checks.py to map the CLI surface, the on-disk state shape, the events ledger, and the five close-out gates. Verified register_session_start lives at session_state.py:148 and preserves completedSessions[] via compute_effective_completed_sessions; verified DISPOSITION_STATUSES = ('completed', 'failed', 'requires_review') and disposition lives at session-set root.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-1/create-e2e-scaffold",
+      "dateTime": "2026-05-16T11:35:00-04:00",
+      "description": "Created ai_router/tests/e2e/conftest.py with sys.path mutation putting e2e/ on path (so test files import 'from fixtures import ...' bare-style), plus autouse fixture scrubbing AI_ROUTER_ALLOW_FORCE_CLOSE_OUT from the env in every test.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-1/implement-fixtures",
+      "dateTime": "2026-05-16T11:42:00-04:00",
+      "description": "Implemented ai_router/tests/e2e/fixtures.py (~390 LOC). Public API: make_session_set, drive_start_session, drive_close_session, make_disposition, make_activity_log_entry, make_change_log, read_state, read_events, plus HarnessHandle dataclass. Each fixture builds a real git repo with a sibling bare remote in tmpdir, auto-commits/pushes between every step so the close-out gates (working-tree-clean, pushed-to-remote, activity-log-entry, next-orchestrator-present, change-log-fresh) pass naturally. PYTHONPATH injected into subprocess env via _subprocess_env() so 'python -m ai_router.start_session' resolves against the repo checkout without requiring pip install -e .",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-1/write-happy-3session-test",
+      "dateTime": "2026-05-16T11:50:00-04:00",
+      "description": "Wrote ai_router/tests/e2e/test_happy_3session.py: drives a 3-session set through start_session → activity log → disposition → close_session for each N, asserts the full state-invariant bundle at every boundary (currentSession, totalSessions, status/lifecycleState transitions, completedSessions[] preservation across rewrites, startedAt/completedAt, orchestrator block persistence). Also asserts events-ledger history is stable for all sessions 1..n at every boundary, not just the current session (per the verifier-driven strengthening described in step 7).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-1/write-register-session-start-regression",
+      "dateTime": "2026-05-16T11:55:00-04:00",
+      "description": "Wrote ai_router/tests/e2e/test_register_session_start_regression.py: two tests that pin the v0.1.1 completedSessions[]-loss bug shut. Calls register_session_start() directly (no CLI subprocess, no git) on a tmpdir state pre-populated with completedSessions: [1] (and a second test with [1, 2, 3] to guard against an off-by-one fix). Asserts the array survives the rewrite. Per the verifier feedback, this file is intentionally NOT marked e2e — it's narrow and fast and should fire on every pre-commit run.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-1/register-e2e-marker",
+      "dateTime": "2026-05-16T11:58:00-04:00",
+      "description": "Registered the 'e2e' marker in pytest.ini (NOT pyproject.toml — the spec.md was imprecise; the project's actual pytest config is in pytest.ini alongside the existing 'failure_injection' marker). Verified marker partitions: 'pytest' → 430 passed + 1 skipped; 'pytest -m e2e' → 1 passed (5.6s); 'pytest -m \"not e2e\"' → 429 passed + 1 skipped + 1 deselected. 427 baseline preserved with 2 new fast tests added.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-1/cross-provider-verification",
+      "dateTime": "2026-05-16T15:50:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4 ($0.32, 9.3k input tokens, 19.8k output tokens, 263s elapsed, no escalation). Verifier returned 1 Major + 2 Minor findings: (Major) happy-path event assertions only checked current session, missing history-stability invariant — fixed by adding _assert_event_history_stable() that checks counts across all sessions 1..n at every boundary; (Minor) post-close assertions missing currentSession/totalSessions/startedAt/orchestrator block — added; (Minor) regression test wrongly marked e2e — unmarked so it runs in the fast pre-commit suite. Verifier's proposed 'assert total event count == 2*n' was reduced to per-type counts + out-of-range session_number check because close_session legitimately emits closeout_requested + verification_completed + closeout_succeeded per close, and pinning the total would couple the test to internal close-out sequencing. All three findings addressed; re-ran suite green.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "purpose": "session-verification",
+          "input_tokens": 9282,
+          "output_tokens": 19787,
+          "cost_usd": 0.32001
+        }
+      ]
+    }
+  ]
+}
