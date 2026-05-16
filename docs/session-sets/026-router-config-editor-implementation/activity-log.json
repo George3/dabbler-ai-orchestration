@@ -35,7 +35,7 @@
       "stepNumber": 4,
       "stepKey": "session-001/delete-workflow-doc",
       "dateTime": "2026-05-15T09:52:00-04:00",
-      "description": "Deleted ai_router/docs/two-cli-workflow.md \u00e2\u20ac\u201d operating guide for outsource-last mode is no longer applicable.",
+      "description": "Deleted ai_router/docs/two-cli-workflow.md â€” operating guide for outsource-last mode is no longer applicable.",
       "status": "complete",
       "routedApiCalls": []
     },
@@ -98,7 +98,7 @@
       "stepNumber": 11,
       "stepKey": "session-001/partial-stop",
       "dateTime": "2026-05-15T11:20:00-04:00",
-      "description": "PARTIAL STOP \u00e2\u20ac\u201d Session 1 not closed. Deferred to a follow-up session (operator decision required): (a) doc scrubs in docs/ai-led-session-workflow.md, docs/adoption-bootstrap.md, docs/planning/session-set-authoring-guide.md, ai_router/docs/close-out.md, and docs/spec-md-schema.md (still mention outsourceMode / verifier daemon / subscription CLI as live concepts); (b) scrub literal 'outsourceMode: <value>' YAML config line from 26 historical docs/session-sets/*/spec.md files; (c) end-of-session cross-provider verification (manual via IDE-agent paste path per the $10 budget tier). Acceptance criterion 'git grep -i outsourcemode|queue_db|verifier daemon|subscription cli returns zero hits' is NOT satisfied yet \u00e2\u20ac\u201d narrative references remain in docs and historical specs. The CODE surface, however, is clean of the removed symbols (Python imports, exports, types; TS types and parser). Session is left in-progress; close_session has NOT been invoked. Operator to decide whether to (1) commit this partial state and continue Session 1b in a fresh conversation; (2) push through the docs+scrubs in this same conversation if budget allows; (3) split Session 1 retroactively into 1a + 1b in the spec and treat this as Session 1a complete.",
+      "description": "PARTIAL STOP â€” Session 1 not closed. Deferred to a follow-up session (operator decision required): (a) doc scrubs in docs/ai-led-session-workflow.md, docs/adoption-bootstrap.md, docs/planning/session-set-authoring-guide.md, ai_router/docs/close-out.md, and docs/spec-md-schema.md (still mention outsourceMode / verifier daemon / subscription CLI as live concepts); (b) scrub literal 'outsourceMode: <value>' YAML config line from 26 historical docs/session-sets/*/spec.md files; (c) end-of-session cross-provider verification (manual via IDE-agent paste path per the $10 budget tier). Acceptance criterion 'git grep -i outsourcemode|queue_db|verifier daemon|subscription cli returns zero hits' is NOT satisfied yet â€” narrative references remain in docs and historical specs. The CODE surface, however, is clean of the removed symbols (Python imports, exports, types; TS types and parser). Session is left in-progress; close_session has NOT been invoked. Operator to decide whether to (1) commit this partial state and continue Session 1b in a fresh conversation; (2) push through the docs+scrubs in this same conversation if budget allows; (3) split Session 1 retroactively into 1a + 1b in the spec and treat this as Session 1a complete.",
       "status": "complete",
       "routedApiCalls": []
     },
@@ -182,10 +182,34 @@
       "description": "Cross-provider verification via gpt-5-4. Round 1: ISSUES_FOUND (Minor) - missing explicit tier-to-mode mapping table and stale 'see Step 5 boundaries' reference. Fixed. Round 2: ISSUES_FOUND (Minor) - stale 'outsourcing budget' YAML comment and 'outsource mode' in End of bootstrap. Fixed. Round 3: ISSUES_FOUND (Minor) - stale 'outsourcing/API' in workflow doc intro. Fixed. Round 4: VERIFIED. Total verification cost: $0.38 (cumulative NTE: $0.38 of $10.00).",
       "status": "complete",
       "routedApiCalls": [
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6005, "outputTokens": 4796, "costUsd": 0.087},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6001, "outputTokens": 5805, "costUsd": 0.1021},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 7355, "costUsd": 0.1254},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6016, "outputTokens": 5500, "costUsd": 0.1076}
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6005,
+          "outputTokens": 4796,
+          "costUsd": 0.087
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6001,
+          "outputTokens": 5805,
+          "costUsd": 0.1021
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6016,
+          "outputTokens": 7355,
+          "costUsd": 0.1254
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6016,
+          "outputTokens": 5500,
+          "costUsd": 0.1076
+        }
       ]
     },
     {
@@ -250,9 +274,27 @@
       "description": "Cross-provider verification via gpt-5-4 (session-verification task type). Verdict: Accept / VERIFIED. No blocking issues found. Findings: resolve_secret design correct; migration idempotency sound; allowlist correct; env-var exclusions correct. Total verification spend: ~$0.162 (NTE cumulative: ~$0.54 of $10.00).",
       "status": "complete",
       "routedApiCalls": [
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 7000, "outputTokens": 3000, "costUsd": 0.087},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6800, "outputTokens": 2900, "costUsd": 0.067},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 1200, "outputTokens": 400, "costUsd": 0.008}
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 7000,
+          "outputTokens": 3000,
+          "costUsd": 0.087
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6800,
+          "outputTokens": 2900,
+          "costUsd": 0.067
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 1200,
+          "outputTokens": 400,
+          "costUsd": 0.008
+        }
       ]
     },
     {
@@ -326,11 +368,41 @@
       "description": "Cross-provider verification via gpt-5-4 (session-verification task type). Five rounds total. Round 1: 4 Major (empty api_key_env bypass; local-overrides api_key_env not validated; additionalProperties: false missing; YAML parse errors not surfaced). Round 2: 3 Major (residual schema closure gaps; models block in local-overrides not rejected; missing budget.yaml silently accepted). Round 3: 1 Major (XSS-style injection in drift banner) + 1 Minor (missing-file message hardcoded to router-config.yaml). Round 4: 1 Major (router-config/budget schema-strictness — declined; documented in code as deliberate scope decision since router-config carries many non-Appendix-B fields) + 2 Minor (duplicate errors between Ajv and custom checker; inconsistent ai_router/ prefix in file list). Round 5: 1 Minor (additionalProperties errors lose offending key path — fixed to use _ajvErrorPath). All Blocker/Major issues resolved or documented as out-of-scope. Final verdict: ACCEPT-WITH-FIXES. Total verification spend: $1.31 across 5 rounds (cumulative Set 026: $1.85 of $10.00 NTE). Files patched in response: schemaValidator.ts (empty-string env-var fix; local-overrides additionalProperties: false; pushover env-var validation; display_label denial; deduped overlapping errors; _ajvErrorPath helper), yamlReadWrite.ts (collectParseErrors; ParsedYaml.parseErrors), ConfigEditorPanel.ts (parse-error banner; drift-banner HTML escaping; required budget.yaml; consistent ai_router/ prefix; missing-file rendering uses path.basename; fixed `as HTMLElement` cast in webview script that would have thrown SyntaxError). Test count: 29 → 38 unit tests passing.",
       "status": "complete",
       "routedApiCalls": [
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 5958, "outputTokens": 17266, "costUsd": 0.273885},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6779, "outputTokens": 17025, "costUsd": 0.272322},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 6800, "outputTokens": 17400, "costUsd": 0.277652},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 7100, "outputTokens": 14100, "costUsd": 0.264702},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 7300, "outputTokens": 14006, "costUsd": 0.228340}
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 5958,
+          "outputTokens": 17266,
+          "costUsd": 0.273885
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6779,
+          "outputTokens": 17025,
+          "costUsd": 0.272322
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6800,
+          "outputTokens": 17400,
+          "costUsd": 0.277652
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 7100,
+          "outputTokens": 14100,
+          "costUsd": 0.264702
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 7300,
+          "outputTokens": 14006,
+          "costUsd": 0.22834
+        }
       ]
     },
     {
@@ -386,10 +458,38 @@
       "description": "Cross-provider verification via gpt-5-4. Session 5's surface (12 files, ~2011 LOC) exceeded the single-call read-timeout for high-effort reasoning; split into three sub-rounds: Part A (8 section files + helpers + types, ~720 LOC), Part B1 (patch.ts alone, ~304 LOC), Part B2 (ConfigEditorPanel.ts alone, ~977 LOC). Findings + fixes: (A) 1 Minor — §2 Budget cost-messaging copy missing multi-week scale element from feedback_user_facing_cost_messaging memory; fixed by adding '$0-$200/month' + '$5-$50 per 2-3 week set' framing alongside existing $0-~$50/week range. Test budgetSection.test.ts strengthened to assert all four required elements. (B1) 2 Major — (i) applyPatch over-reported PatchApplyResult.*Changed flags on no-op saves (always set true regardless of whether value actually changed); fixed by introducing setIfChanged(doc, path, value) helper that compares doc.getIn(path) === value before mutating, with flag-set only on actual mutation. (ii) threshold_usd and warn_at_percent shared branches didn't demote — an existing local override would still win after the save; fixed by adding deleteIfPresent(localOverridesDoc, ...) calls in the shared branches. Tests added: no-op-save, partial-no-op, threshold/warn/outsourcing demote-from-local. (B2 round 1) 2 Blocker + 2 Major + 1 Minor — (i) Blocker: _detectDrift overwrote active failed-write _recovery; fixed by guarding 'if (!this._recovery || this._recovery.failed.length === 0)' around drift detection. (ii) Blocker: _lastSaveSnapshot used doc.toString() / null inconsistently; refactored to use raw text comparison (SaveSnapshot.routerConfigText/budgetText/localOverridesText) and new _captureSnapshot helper. (iii) Major: retry didn't refresh baseline on full success; fixed by calling _captureSnapshot in _retryFailedWrite. (iv) Major: _reapplyLastSave rewrote disk-loaded state, not last save; fixed by writing _lastSaveSnapshot.*Text bytes directly. (v) Minor: truncation-to-empty drift hidden by truthiness checks; fixed by replacing with explicit !== null. (B2 round 2) 1 Blocker + 2 Major — (i) Blocker: half-batch retry sourced docs from _loaded.*Doc after _refresh repopulated them from disk (so retry would write wrong bytes, or fail when localOverridesDoc==null after refresh); fixed by adding HalfBatchRecovery.pendingContents Map<file,string> populated in _handleSave BEFORE _refresh, and _retryFailedWrite writes from the cache. (ii) Major: _handleSave passed _loaded.*Doc directly into applyPatch — a failed validation left in-memory state mutated without rollback; fixed by cloning via parseDocumentFromText(doc.toString()) and only committing clones to _loaded.*Doc after validation passes. (iii) Major: _reapplyLastSave wrote three files inside one try block, no per-file recovery; fixed by adopting the same per-file succeeded/failed pattern + setting _recovery on partial failure. (B2 round 3) Rate-limited 429 from OpenAI after 3 retries; deferred re-confirmation — operator can re-run scripts/verify_session_026_5_b2.py once the TPM bucket clears. All findings from B2 rounds 1 and 2 are addressed in code per the verifier's specific guidance; unit tests cover the new behaviors. Total verification spend Session 5: $1.218 (cumulative Set 026 NTE: $3.07 of $10.00).",
       "status": "complete",
       "routedApiCalls": [
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 8409, "outputTokens": 17004, "costUsd": 0.276082, "round": "A"},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 3198, "outputTokens": 13931, "costUsd": 0.21696, "round": "B1"},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 11515, "outputTokens": 21852, "costUsd": 0.356568, "round": "B2.1"},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 12053, "outputTokens": 22567, "costUsd": 0.368638, "round": "B2.2"}
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 8409,
+          "outputTokens": 17004,
+          "costUsd": 0.276082,
+          "round": "A"
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 3198,
+          "outputTokens": 13931,
+          "costUsd": 0.21696,
+          "round": "B1"
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 11515,
+          "outputTokens": 21852,
+          "costUsd": 0.356568,
+          "round": "B2.1"
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 12053,
+          "outputTokens": 22567,
+          "costUsd": 0.368638,
+          "round": "B2.2"
+        }
       ]
     },
     {
@@ -463,8 +563,94 @@
       "description": "Cross-provider verification via gpt-5-4 across two slices. First attempt 429'd with OpenAI insufficient_quota (not rate-limit); operator topped up. Slice A (Python queue reader + annotation parser + section comment + workflow-doc paragraph, ~330 LOC production): 3 Major findings. (1) ANNOTATION_RE allowed CR/LF inside the reason capture so an unterminated `\"` could stitch to a later line's `\")`; tightened to [^\"\\\\\\\\\\\\r\\\\n] + 3 tests for newline/CRLF/unterminated-then-later-line. (2) Path normalization used path.sep-based split (host-dependent); rewrote to replace(/\\\\\\\\/g, '/') so Windows-style input normalizes on POSIX hosts too + tests for mixed/already-POSIX. (3) Section HTML said 'orchestrator scans open files at session start; any new annotations are queued automatically' — stale Session-5 copy promising never-shipped behavior; rewrote to name the workspace-scan command + dedup behavior + both comment styles, with 2 strengthened rendering tests. Slice B (TS commands + extension wiring, ~390 LOC production): 1 Major + 1 Minor. (4) Operator-layer normalization missing — scanFilesForAnnotations and loadExistingQueueEntries took host-native paths through to dedup; added toPosixPath helper + applied at both call sites + cross-host queue-replay test confirming Windows-written queue entries collide with POSIX re-scan. (5) Existing path test was host-conditional (constructed input with path.sep so the bug couldn't surface off Windows); added a literal-Windows-input test that asserts backslash-free output regardless of host. Final test counts: 120 pure-unit TS (+18 annotation, +9 flag, +26 scan, +2 significance, plus existing 65); 427 Python (+13 queue reader, unchanged otherwise). tsc clean. Verification spend Session 6: $0.426. Cumulative Set 026 NTE: $3.50 of $10.00.",
       "status": "complete",
       "routedApiCalls": [
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 9067, "outputTokens": 15430, "costUsd": 0.254117, "round": "A"},
-        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 8908, "outputTokens": 9956, "costUsd": 0.17162, "round": "B"}
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 9067,
+          "outputTokens": 15430,
+          "costUsd": 0.254117,
+          "round": "A"
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 8908,
+          "outputTokens": 9956,
+          "costUsd": 0.17162,
+          "round": "B"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 1,
+      "stepKey": "session-007/start-session-protocol",
+      "dateTime": "2026-05-16T03:28:04-04:00",
+      "description": "Started Session 7 (final session of Set 026). session-state.json flipped currentSession 6 -> 7. Budget position: $3.50 of $10.00 NTE spent across Sessions 1-6.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 2,
+      "stepKey": "session-007/wizard-integration",
+      "dateTime": "2026-05-16T04:00:00-04:00",
+      "description": "Wizard integration. wizard.html: added Configure AI Router button. WizardPanel.ts: added openConfigEditor message case -> executes dabbler.openConfigEditor.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 3,
+      "stepKey": "session-007/test-notification-button",
+      "dateTime": "2026-05-16T04:10:00-04:00",
+      "description": "Test-notification button wired. notificationsSection.ts: removed disabled attribute and (wired in Session 7) placeholder. ConfigEditorPanel.ts: added child_process import; sendTestNotification message case; _handleTestNotification() method (~80 LOC) that reads configured env-var names from local-overrides.yaml, resolves values from process.env, spawns Python subprocess calling ai_router.notifications.send_pushover_notification(), surfaces result via showInformationMessage/showErrorMessage. Added s5 button click handler in _getHtml() script.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 4,
+      "stepKey": "session-007/doc-updates",
+      "dateTime": "2026-05-16T04:20:00-04:00",
+      "description": "Documentation updates. docs/quick-start.md: new Configuring your project (Full tier) section with six-section table and shared/local field split explanation. docs/adoption-bootstrap.md: Step 9 closing pointers now include Configuring the AI router visually subsection pointing at Dabbler: Open Dabbler Config Editor. CLAUDE.md: version line bumped to v0.13.15; new Router-config editor subsection documenting the editor file layout and key files.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 5,
+      "stepKey": "session-007/changelog",
+      "dateTime": "2026-05-16T04:25:00-04:00",
+      "description": "CHANGELOG.md (extension) expanded. Added Session 7 Added block to [0.13.15] section covering wizard integration, test-notification button wiring, doc updates (quick-start, adoption-bootstrap, CLAUDE.md).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 6,
+      "stepKey": "session-007/build-checks",
+      "dateTime": "2026-05-16T04:30:00-04:00",
+      "description": "Build checks: tsc --noEmit clean; pytest 427 passed, 1 skipped. No regressions.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 7,
+      "stepNumber": 7,
+      "stepKey": "session-007/verification",
+      "dateTime": "2026-05-16T04:45:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4 (single slice, all Session 7 production changes). 1 Blocker + 2 Minors found. Blocker: wizard.html inline onclick attributes violate nonce-based CSP; all six action buttons converted to data-command attributes with addEventListener binding in the nonce-bearing script block. Minor 1: missing openExternal case in WizardPanel.ts (pricing-link click posted openExternal but panel never handled it); added case with URL validation. Minor 2: duplicate error toast on spawn failure (child.on error + child.on close both showed errors); added spawnErrored flag, close handler returns early if error fired. All three fixed. Verification spend: $0.358. Cumulative Set 026 NTE: $3.50 + $0.36 = $3.86 of $10.00.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 17734,
+          "outputTokens": 20896,
+          "costUsd": 0.357775,
+          "round": "A"
+        }
       ]
     }
   ]

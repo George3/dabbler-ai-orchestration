@@ -1,41 +1,23 @@
 {
   "status": "completed",
-  "summary": "Session 6 shipped both significance-flagging surfaces end-to-end. New files: ai_router/decision_review_queue.py (~168 LOC: read_queue / clear_queue / queue_path with malformed-line and non-object-line skip-with-WARN, idempotent clear, FileNotFoundError-tolerant); tools/dabbler-ai-orchestration/src/configEditor/annotationParser.ts (~165 LOC: findAnnotations regex parser supporting # and // comment styles, escaped quotes/backslashes, newline-rejection inside reason; deduplicateAnnotations file+line+reason dedup; binary-search line-number lookup; host-independent POSIX path normalization via replace); tools/dabbler-ai-orchestration/src/commands/{decisionReviewQueue,flagDecisionForReview,annotationScanner,scanAnnotationsForActiveSet}.ts (~390 LOC: pure helpers split from vscode wiring so the testable surface — appendQueueEntry, findActiveSessionSetDir, scanFilesForAnnotations, loadHonorAnnotationsToggle, loadExistingQueueEntries, toPosixPath — runs without @vscode/test-electron). Updated: tools/dabbler-ai-orchestration/package.json (two new command registrations), src/extension.ts (safeRegister wiring), src/configEditor/ConfigEditorPanel.ts (_runFlagDecisionCommand now unconditional executeCommand), src/configEditor/sections/significanceFlaggingSection.ts (docblock + rendered HTML corrected to describe the actual workspace-walk command rather than the stale Session-5 'orchestrator scans open files at session start' copy), docs/ai-led-session-workflow.md (new 'Significance flagging' Key Concept section documenting both surfaces, queue path, JSON shape, honor-annotations toggle, session-start read+clear flow), ai_router/__init__.py (re-exports the queue surface), ai_router/CHANGELOG.md + tools/dabbler-ai-orchestration/CHANGELOG.md (Session-6 'Added' blocks). Test counts: 107 -> 120 pure-unit TS; 414 -> 427 Python. tsc clean. Cross-provider verification: 2 slices via gpt-5-4 ($0.254 A + $0.172 B = $0.426 total). Slice A returned 3 Major findings — regex newline crossing, host-dependent path normalization, stale section HTML copy — all addressed in code with new tests. Slice B returned 1 Major + 1 Minor — belt-and-suspenders POSIX normalization at the scanner boundary + a host-conditional test that wouldn't surface the bug off-Windows — both addressed via a new toPosixPath helper applied at both call sites + a literal-Windows-input host-independent test. Cumulative Set 026 verification spend: $3.07 + $0.43 = $3.50 of $10.00 NTE.",
+  "summary": "Session 7 (final session of Set 026) delivered wizard integration, the test-notification button, adoption-doc and quick-start updates, CLAUDE.md version bump, and CHANGELOG finalization. Wizard integration: wizard.html action buttons converted from inline onclick to data-command + addEventListener (CSP fix, Blocker finding from cross-provider verification); new 'Configure AI Router' button wired to dabbler.openConfigEditor via WizardPanel.ts openConfigEditor message case; openExternal case added for pricing-link (was posted but never handled — Minor finding). Test-notification button: notificationsSection.ts button enabled (was disabled since Session 5); ConfigEditorPanel.ts _handleTestNotification() implementation (~80 LOC): reads configured Pushover env-var names from local-overrides.yaml, resolves values from process.env, spawns Python subprocess calling ai_router.notifications.send_pushover_notification() with PUSHOVER_API_KEY/PUSHOVER_USER_KEY env injection, surfaces result via showInformationMessage/showErrorMessage; spawnErrored flag added to prevent duplicate error toasts (Minor finding). Docs: quick-start.md new 'Configuring your project' section; adoption-bootstrap.md Step 9 closing pointers add 'Configuring the AI router visually' subsection; CLAUDE.md version line v0.13.14 -> v0.13.15 + Router-config editor subsection. CHANGELOG.md [0.13.15] block expanded with Session 7 Added entries. tsc clean throughout. pytest 427 passed, 1 skipped. Cross-provider verification via gpt-5-4: 1 Blocker (CSP) + 2 Minors (openExternal + duplicate toast) — all addressed and fixed. Verification cost: $0.358. Cumulative Set 026 verification spend: $3.86 of $10.00 NTE. Extension v0.13.15 + ai_router 0.3.0 ship with this set complete.",
   "files_changed": [
-    "ai_router/decision_review_queue.py",
-    "ai_router/__init__.py",
-    "ai_router/CHANGELOG.md",
-    "ai_router/tests/test_decision_review_queue_reader.py",
-    "tools/dabbler-ai-orchestration/src/configEditor/annotationParser.ts",
+    "tools/dabbler-ai-orchestration/webview/wizard.html",
+    "tools/dabbler-ai-orchestration/src/wizard/WizardPanel.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/notificationsSection.ts",
     "tools/dabbler-ai-orchestration/src/configEditor/ConfigEditorPanel.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/significanceFlaggingSection.ts",
-    "tools/dabbler-ai-orchestration/src/commands/decisionReviewQueue.ts",
-    "tools/dabbler-ai-orchestration/src/commands/flagDecisionForReview.ts",
-    "tools/dabbler-ai-orchestration/src/commands/annotationScanner.ts",
-    "tools/dabbler-ai-orchestration/src/commands/scanAnnotationsForActiveSet.ts",
-    "tools/dabbler-ai-orchestration/src/extension.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/annotationParser.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/flagDecisionForReview.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/scanAnnotationsForActiveSet.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/significanceFlaggingSection.test.ts",
-    "tools/dabbler-ai-orchestration/package.json",
     "tools/dabbler-ai-orchestration/CHANGELOG.md",
-    "docs/ai-led-session-workflow.md",
-    "scripts/verify_session_026_6_a.py",
-    "scripts/verify_session_026_6_b.py"
+    "docs/quick-start.md",
+    "docs/adoption-bootstrap.md",
+    "CLAUDE.md",
+    "scripts/verify_session_026_7.py"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
-  "next_orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "medium",
-    "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "Session 7 is wizard integration + test-notification button + adoption-doc / quick-start updates + CHANGELOG finalization + end-to-end smoke test + Marketplace + PyPI release (v0.13.15 + ai_router 0.3.0). Coordination-heavy rather than new-surface-heavy: pulling together prior sessions' deliverables. Spec routing notes call for Opus at effort=medium."
-    }
-  },
+  "next_orchestrator": null,
   "blockers": [],
-  "deferred_followups": []
+  "deferred_followups": [
+    "Marketplace release: tag vsix-v0.13.15 + push tags to trigger tag-driven Marketplace deployment job (operator approves in GitHub Actions UI)",
+    "PyPI release: ai_router 0.3.0 via existing tag-driven flow"
+  ]
 }
