@@ -391,6 +391,81 @@
         {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 11515, "outputTokens": 21852, "costUsd": 0.356568, "round": "B2.1"},
         {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 12053, "outputTokens": 22567, "costUsd": 0.368638, "round": "B2.2"}
       ]
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 1,
+      "stepKey": "session-006/annotation-parser",
+      "dateTime": "2026-05-16T02:45:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/configEditor/annotationParser.ts: pure regex parser for `# @dabbler:outsource-review(\"...\")` (Python/shell/YAML) and `// @dabbler:outsource-review(\"...\")` (JS/TS/Java/C#/C/C++/Go) annotations. findAnnotations(text, filePath, now?) returns {ts, reason, source: 'annotation', file, line} per match — non-greedy reason capture stopping at the first unescaped `\"`; escaped quotes/backslashes unescaped; raw `\\r`/`\\n` forbidden inside reason (verifier-driven hardening — see Step 7); empty reasons rejected; line-number computation via binary search over precomputed newline offsets; file path POSIX-normalized via replace(/\\\\/g, '/'). deduplicateAnnotations(incoming, existing) keyed on file+line+reason.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 2,
+      "stepKey": "session-006/queue-reader",
+      "dateTime": "2026-05-16T02:50:00-04:00",
+      "description": "Created ai_router/decision_review_queue.py: read_queue(session_set_dir) -> list[dict], clear_queue(session_set_dir) -> int, queue_path(session_set_dir) -> Path. Tolerates missing/empty file (returns []), malformed lines (skip with WARN), non-object lines (skip with WARN). clear_queue is idempotent (multiple calls return 0 after the first). DECISION_REVIEW_QUEUE_FILENAME exported alongside. Re-exported from ai_router/__init__.py as read_decision_review_queue / clear_decision_review_queue / decision_review_queue_path (aliased to disambiguate from session_events.read_events).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 3,
+      "stepKey": "session-006/flag-command",
+      "dateTime": "2026-05-16T02:55:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/commands/decisionReviewQueue.ts (pure helpers: appendQueueEntry, findActiveSessionSetDir, QueueEntry type, QUEUE_FILENAME constant) and tools/dabbler-ai-orchestration/src/commands/flagDecisionForReview.ts (vscode wiring: input box -> JSONL append with source: 'command', file: null, line: null; cancel/empty-reason silent no-op; missing-active-set info notification; error-on-append surfaces as error notification rather than propagating). Split into pure + wiring so the helpers can be unit-tested via plain mocha + ts-node without the @vscode/test-electron harness.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 4,
+      "stepKey": "session-006/workspace-scanner",
+      "dateTime": "2026-05-16T03:00:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/commands/annotationScanner.ts (pure helpers: scanFilesForAnnotations with FileReader test seam, loadHonorAnnotationsToggle reading ai_router/local-overrides.yaml -> decision_review.honor_annotations defaulting true, loadExistingQueueEntries deserializing the queue into dedup keys, toPosixPath helper, SCAN_GLOB covering ts/tsx/js/jsx/mjs/cjs/py/rb/go/rs/java/cs/kt/swift/c/cc/cpp/h/hpp/sh/bash/zsh/ps1/yaml/yml/toml, SCAN_EXCLUDE_GLOB for node_modules/dist/out/build/.venv/venv/__pycache__/.git) and tools/dabbler-ai-orchestration/src/commands/scanAnnotationsForActiveSet.ts (vscode wiring: workspace.findFiles -> scan -> dedup against existing queue -> append fresh entries). Wiring uses vscode.RelativePattern so the glob is scoped to the active set's workspace root rather than the session-set dir.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 5,
+      "stepKey": "session-006/test-suite",
+      "dateTime": "2026-05-16T03:05:00-04:00",
+      "description": "Created tests: src/test/suite/annotationParser.test.ts (21 tests: # and // comment styles, no-marker rejection, multi-match order, CR/LF + first-line line numbers, escape handling, unicode round-trip, empty-reason rejection, nested parens, newline-rejection in reason, path normalization both styles + mixed, dedup keying, ts/source ignored); src/test/suite/flagDecisionForReview.test.ts (9 tests: appendQueueEntry create+append+unicode; findActiveSessionSetDir null/single/multi-tie-break/null-lastTouched; writer is dumb-append-only; dedup is reader-side); src/test/suite/scanAnnotationsForActiveSet.test.ts (26 tests: scan empty/multi-file/relative/host-independent-POSIX/read-error-skip/multi-annotation; toggle default-true + explicit-false + non-boolean fallback + lookup path; queue loader absent/dedup-key-shape/malformed-skip/injected-reader; toPosixPath unit; SCAN_GLOB content; end-to-end dedup re-scan no-op + new-annotation appends; cross-host backslash queue replay); src/test/suite/significanceFlaggingSection.test.ts strengthened (8 tests: command name + annotation syntax + queue path; button id; honor default ON + explicit OFF; indicators; describes workspace-scan command not session-start auto-scan; documents both # and // styles). ai_router/tests/test_decision_review_queue_reader.py (13 tests: read empty/file-absent/multi-entry-order/blank-line-skip/malformed-skip-with-WARN/non-object-skip-with-WARN/extra-fields-preserved/unicode; clear absent-returns-zero/removes-and-counts/idempotent/counts-only-parseable; queue_path filename). tsc clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 6,
+      "stepKey": "session-006/extension-wiring",
+      "dateTime": "2026-05-16T03:10:00-04:00",
+      "description": "Wired commands into the extension surface. package.json contributes.commands: added 'dabbler.flagDecisionForReview' ('Flag Decision for Cross-Provider Review') and 'dabbler.scanAnnotationsForActiveSet' ('Scan Workspace for @dabbler:outsource-review Annotations'), both under category 'Dabbler'. extension.ts: imported registerFlagDecisionForReview + registerScanAnnotationsForActiveSet; added two safeRegister calls alongside the existing config-editor registration. ConfigEditorPanel.ts._runFlagDecisionCommand: removed the Session-5 graceful-fallback branch — the command is registered alongside the panel from this version on, so executeCommand runs unconditionally. significanceFlaggingSection.ts: docblock updated to describe the now-shipping commands; rendered HTML copy corrected (verifier-driven, Step 7) to describe the actual workspace-walk command rather than the never-implemented 'orchestrator scans open files at session start' promise.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 7,
+      "stepKey": "session-006/workflow-doc-update",
+      "dateTime": "2026-05-16T03:15:00-04:00",
+      "description": "Added 'Significance flagging' section to docs/ai-led-session-workflow.md under Key Concepts, between 'Cross-Provider Verification' and 'Session-Set Lifecycle and State File'. Documents both surfaces (command + annotation), the queue file path, the JSON line shape for each source, the honor-annotations toggle and its default, and the orchestrator-side read+clear flow that consumes the queue at session start. Updated ai_router/CHANGELOG.md [0.3.0] with a Session-6 'Added' block citing decision_review_queue.py + DECISION_REVIEW_QUEUE_FILENAME. Updated tools/dabbler-ai-orchestration/CHANGELOG.md [0.13.15] with a Session-6 'Added' block citing both commands + the annotation parser + the pure-helper split + the section copy correction.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 8,
+      "stepKey": "session-006/verification",
+      "dateTime": "2026-05-16T03:25:00-04:00",
+      "description": "Cross-provider verification via gpt-5-4 across two slices. First attempt 429'd with OpenAI insufficient_quota (not rate-limit); operator topped up. Slice A (Python queue reader + annotation parser + section comment + workflow-doc paragraph, ~330 LOC production): 3 Major findings. (1) ANNOTATION_RE allowed CR/LF inside the reason capture so an unterminated `\"` could stitch to a later line's `\")`; tightened to [^\"\\\\\\\\\\\\r\\\\n] + 3 tests for newline/CRLF/unterminated-then-later-line. (2) Path normalization used path.sep-based split (host-dependent); rewrote to replace(/\\\\\\\\/g, '/') so Windows-style input normalizes on POSIX hosts too + tests for mixed/already-POSIX. (3) Section HTML said 'orchestrator scans open files at session start; any new annotations are queued automatically' — stale Session-5 copy promising never-shipped behavior; rewrote to name the workspace-scan command + dedup behavior + both comment styles, with 2 strengthened rendering tests. Slice B (TS commands + extension wiring, ~390 LOC production): 1 Major + 1 Minor. (4) Operator-layer normalization missing — scanFilesForAnnotations and loadExistingQueueEntries took host-native paths through to dedup; added toPosixPath helper + applied at both call sites + cross-host queue-replay test confirming Windows-written queue entries collide with POSIX re-scan. (5) Existing path test was host-conditional (constructed input with path.sep so the bug couldn't surface off Windows); added a literal-Windows-input test that asserts backslash-free output regardless of host. Final test counts: 120 pure-unit TS (+18 annotation, +9 flag, +26 scan, +2 significance, plus existing 65); 427 Python (+13 queue reader, unchanged otherwise). tsc clean. Verification spend Session 6: $0.426. Cumulative Set 026 NTE: $3.50 of $10.00.",
+      "status": "complete",
+      "routedApiCalls": [
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 9067, "outputTokens": 15430, "costUsd": 0.254117, "round": "A"},
+        {"model": "gpt-5-4", "taskType": "session-verification", "inputTokens": 8908, "outputTokens": 9956, "costUsd": 0.17162, "round": "B"}
+      ]
     }
   ]
 }

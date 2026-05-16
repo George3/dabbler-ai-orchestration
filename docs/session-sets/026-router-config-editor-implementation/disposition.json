@@ -1,31 +1,28 @@
 {
   "status": "completed",
-  "summary": "Session 5 implemented the six webview sections inside the Session 4 shell, the half-batch recovery + (shared)/(local override) indicator system, and the supporting test suite. New files: src/configEditor/sections/{types,helpers,routingAndVerificationSection,budgetSection,providersTableSection,significanceFlaggingSection,notificationsSection,localOverridesSummarySection}.ts (8 files; ~720 LOC) + src/configEditor/patch.ts (~304 LOC, SavePayload + applyPatch + setIfChanged + content-hash helpers). ConfigEditorPanel.ts was rewritten to splice section HTML into the shell, route a structured SavePayload through applyPatch into yaml AST mutations (preserving comments via the yaml@2.7 library), surface a half-batch-recovery banner with Retry / Accept-as-baseline / Re-apply actions, and detect cross-load drift via raw-text comparison. The save flow clones the loaded Documents via parseDocumentFromText(doc.toString()) before patching so a failed validation leaves in-memory + on-disk state untouched. Retry writes the bytes cached in _recovery.pendingContents at the time of the original save (not from _loaded.*Doc which gets re-read from disk by _refresh). Test count: 38 -> 109 unit tests passing; tsc clean. Cross-provider verification: 4 successful gpt-5-4 rounds (Part A sections, Part B1 patch.ts, B2 round 1, B2 round 2) raised 1 Minor + 2 Major + 5 issues (1 Blocker + 2 Major + 2 Major) respectively — all 8 findings addressed in code per verifier guidance. B2 round 3 confirmation hit OpenAI 429 Too Many Requests after retries (TPM bucket not refreshing within a 15-minute wait window); operator can re-run scripts/verify_session_026_5_b2.py to confirm fixes once the rate-limit window clears. Total Session 5 verification spend: $1.218 (cumulative Set 026 NTE: $3.07 of $10.00).",
+  "summary": "Session 6 shipped both significance-flagging surfaces end-to-end. New files: ai_router/decision_review_queue.py (~168 LOC: read_queue / clear_queue / queue_path with malformed-line and non-object-line skip-with-WARN, idempotent clear, FileNotFoundError-tolerant); tools/dabbler-ai-orchestration/src/configEditor/annotationParser.ts (~165 LOC: findAnnotations regex parser supporting # and // comment styles, escaped quotes/backslashes, newline-rejection inside reason; deduplicateAnnotations file+line+reason dedup; binary-search line-number lookup; host-independent POSIX path normalization via replace); tools/dabbler-ai-orchestration/src/commands/{decisionReviewQueue,flagDecisionForReview,annotationScanner,scanAnnotationsForActiveSet}.ts (~390 LOC: pure helpers split from vscode wiring so the testable surface — appendQueueEntry, findActiveSessionSetDir, scanFilesForAnnotations, loadHonorAnnotationsToggle, loadExistingQueueEntries, toPosixPath — runs without @vscode/test-electron). Updated: tools/dabbler-ai-orchestration/package.json (two new command registrations), src/extension.ts (safeRegister wiring), src/configEditor/ConfigEditorPanel.ts (_runFlagDecisionCommand now unconditional executeCommand), src/configEditor/sections/significanceFlaggingSection.ts (docblock + rendered HTML corrected to describe the actual workspace-walk command rather than the stale Session-5 'orchestrator scans open files at session start' copy), docs/ai-led-session-workflow.md (new 'Significance flagging' Key Concept section documenting both surfaces, queue path, JSON shape, honor-annotations toggle, session-start read+clear flow), ai_router/__init__.py (re-exports the queue surface), ai_router/CHANGELOG.md + tools/dabbler-ai-orchestration/CHANGELOG.md (Session-6 'Added' blocks). Test counts: 107 -> 120 pure-unit TS; 414 -> 427 Python. tsc clean. Cross-provider verification: 2 slices via gpt-5-4 ($0.254 A + $0.172 B = $0.426 total). Slice A returned 3 Major findings — regex newline crossing, host-dependent path normalization, stale section HTML copy — all addressed in code with new tests. Slice B returned 1 Major + 1 Minor — belt-and-suspenders POSIX normalization at the scanner boundary + a host-conditional test that wouldn't surface the bug off-Windows — both addressed via a new toPosixPath helper applied at both call sites + a literal-Windows-input host-independent test. Cumulative Set 026 verification spend: $3.07 + $0.43 = $3.50 of $10.00 NTE.",
   "files_changed": [
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/types.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/helpers.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/routingAndVerificationSection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/budgetSection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/providersTableSection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/significanceFlaggingSection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/notificationsSection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/sections/localOverridesSummarySection.ts",
-    "tools/dabbler-ai-orchestration/src/configEditor/patch.ts",
+    "ai_router/decision_review_queue.py",
+    "ai_router/__init__.py",
+    "ai_router/CHANGELOG.md",
+    "ai_router/tests/test_decision_review_queue_reader.py",
+    "tools/dabbler-ai-orchestration/src/configEditor/annotationParser.ts",
     "tools/dabbler-ai-orchestration/src/configEditor/ConfigEditorPanel.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/routingAndVerificationSection.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/budgetSection.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/providersTableSection.test.ts",
+    "tools/dabbler-ai-orchestration/src/configEditor/sections/significanceFlaggingSection.ts",
+    "tools/dabbler-ai-orchestration/src/commands/decisionReviewQueue.ts",
+    "tools/dabbler-ai-orchestration/src/commands/flagDecisionForReview.ts",
+    "tools/dabbler-ai-orchestration/src/commands/annotationScanner.ts",
+    "tools/dabbler-ai-orchestration/src/commands/scanAnnotationsForActiveSet.ts",
+    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/annotationParser.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/flagDecisionForReview.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/scanAnnotationsForActiveSet.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/significanceFlaggingSection.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/notificationsSection.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/localOverridesSummarySection.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/patch.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/configEditor-e2e.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/halfBatchRecovery.test.ts",
-    "scripts/verify_session_026_5.py",
-    "scripts/verify_session_026_5_a.py",
-    "scripts/verify_session_026_5_b.py",
-    "scripts/verify_session_026_5_b1.py",
-    "scripts/verify_session_026_5_b2.py"
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "docs/ai-led-session-workflow.md",
+    "scripts/verify_session_026_6_a.py",
+    "scripts/verify_session_026_6_b.py"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -36,11 +33,9 @@
     "effort": "medium",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 6 ships the significance-flagging command (dabbler.flagDecisionForReview) + annotation parser + scanner + ai_router/decision_review_queue.py + workflow-doc update + 6 test files. Bounded surface (one command + one parser + one scanner). Spec routing notes call for Opus at effort=medium."
+      "specifics": "Session 7 is wizard integration + test-notification button + adoption-doc / quick-start updates + CHANGELOG finalization + end-to-end smoke test + Marketplace + PyPI release (v0.13.15 + ai_router 0.3.0). Coordination-heavy rather than new-surface-heavy: pulling together prior sessions' deliverables. Spec routing notes call for Opus at effort=medium."
     }
   },
   "blockers": [],
-  "deferred_followups": [
-    "B2 round 3 cross-provider verification confirmation — operator can re-run `python scripts/verify_session_026_5_b2.py` once the OpenAI gpt-5-4 TPM rate-limit window clears (15+ minutes wasn't enough this session). All 3 findings from B2 round 2 are addressed in code per verifier guidance; unit tests cover the new behaviors, but a fresh independent verifier read would close the loop."
-  ]
+  "deferred_followups": []
 }
