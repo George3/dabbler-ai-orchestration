@@ -50,6 +50,8 @@ const installAiRouterCommands_1 = require("./commands/installAiRouterCommands");
 const WizardPanel_1 = require("./wizard/WizardPanel");
 const CostDashboard_1 = require("./dashboard/CostDashboard");
 const ConfigEditorPanel_1 = require("./configEditor/ConfigEditorPanel");
+const flagDecisionForReview_1 = require("./commands/flagDecisionForReview");
+const scanAnnotationsForActiveSet_1 = require("./commands/scanAnnotationsForActiveSet");
 const SESSION_SETS_REL = path.join("docs", "session-sets");
 function evaluateSupportContextKeys(allSets) {
     const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
@@ -187,6 +189,8 @@ function activate(context) {
     safeRegister("registerCancelLifecycleCommands", () => (0, cancelLifecycleCommands_1.registerCancelLifecycleCommands)(context, { refreshView: refreshAll }));
     safeRegister("registerInstallAiRouterCommands", () => (0, installAiRouterCommands_1.registerInstallAiRouterCommands)(context));
     safeRegister("registerConfigEditorCommand", () => (0, ConfigEditorPanel_1.registerConfigEditorCommand)(context));
+    safeRegister("registerFlagDecisionForReview", () => (0, flagDecisionForReview_1.registerFlagDecisionForReview)(context));
+    safeRegister("registerScanAnnotationsForActiveSet", () => (0, scanAnnotationsForActiveSet_1.registerScanAnnotationsForActiveSet)(context));
     // Show onboarding on first activation in a workspace with no session sets
     const hasSeenOnboarding = context.workspaceState.get("hasSeenOnboarding", false);
     if (!hasSeenOnboarding) {

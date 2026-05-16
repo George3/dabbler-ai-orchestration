@@ -2,13 +2,16 @@ import { SectionState, SectionRenderResult } from "./types";
 /**
  * §4 Significance flagging.
  *
- * Mostly read-only documentation. The actual commands ship in Session 6:
- * - dabbler.flagDecisionForReview
- * - dabbler.scanAnnotationsForActiveSet
+ * Mostly read-only documentation. Two commands back the operator-invoked
+ * surfaces (both shipped in Set 026 Session 6):
  *
- * Session 5 surfaces a "Run command now..." button that posts a message
- * the host turns into a `vscode.commands.executeCommand` call — with a
- * graceful fallback notification when the command is not yet registered.
+ * - `dabbler.flagDecisionForReview` — input box → JSONL append.
+ * - `dabbler.scanAnnotationsForActiveSet` — workspace walk for
+ *   `# @dabbler:outsource-review("...")` annotations → dedup + JSONL
+ *   append.
+ *
+ * The "Run command now..." button posts a message the host turns into a
+ * `vscode.commands.executeCommand("dabbler.flagDecisionForReview")` call.
  *
  * Appendix B: decision_review.honor_annotations → local-overrides.yaml.
  */

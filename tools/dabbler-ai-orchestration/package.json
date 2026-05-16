@@ -176,6 +176,16 @@
         "title": "Open Dabbler Config Editor",
         "category": "Dabbler",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "dabbler.flagDecisionForReview",
+        "title": "Flag Decision for Cross-Provider Review",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.scanAnnotationsForActiveSet",
+        "title": "Scan Workspace for @dabbler:outsource-review Annotations",
+        "category": "Dabbler"
       }
     ],
     "menus": {

@@ -13,6 +13,8 @@ import { registerInstallAiRouterCommands } from "./commands/installAiRouterComma
 import { registerWizardCommands } from "./wizard/WizardPanel";
 import { registerCostDashboardCommand } from "./dashboard/CostDashboard";
 import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
+import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
+import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -192,6 +194,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("registerConfigEditorCommand", () =>
     registerConfigEditorCommand(context),
+  );
+  safeRegister("registerFlagDecisionForReview", () =>
+    registerFlagDecisionForReview(context),
+  );
+  safeRegister("registerScanAnnotationsForActiveSet", () =>
+    registerScanAnnotationsForActiveSet(context),
   );
 
   // Show onboarding on first activation in a workspace with no session sets

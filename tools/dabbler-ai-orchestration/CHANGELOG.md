@@ -53,6 +53,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   resolver, config-editor webview, sections, significance flagging,
   release) are the rest of the work.
 
+### Added (Session 6 — significance flagging)
+
+- **`dabbler.flagDecisionForReview` command** — operator-invoked input box
+  prompts for a one-line reason, appends one JSON line to the active
+  session set's `decision-review-queue.jsonl`. With no in-progress set,
+  surfaces an info notification and exits cleanly. The "Run command
+  now..." button in the config editor's §4 section is now wired to
+  this command unconditionally (the Session-5 graceful-fallback branch
+  is gone).
+- **`dabbler.scanAnnotationsForActiveSet` command** — walks workspace
+  source files (ts/tsx/js/py/go/rs/java/cs/cpp/sh/yaml/toml/...) for
+  `# @dabbler:outsource-review("...")` or `// @...` annotations,
+  deduplicates against the existing queue (file+line+reason), and
+  appends new findings. Honors
+  `local-overrides.yaml → decision_review.honor_annotations` (default
+  `true`; setting `false` makes the scan a no-op with an info
+  notification).
+- **`src/configEditor/annotationParser.ts`** — pure annotation regex
+  parser. `findAnnotations(text, filePath)` returns one entry per match
+  with `{ts, reason, source: "annotation", file, line}`; supports
+  escaped quotes and backslashes inside the reason and CRLF line
+  endings. `deduplicateAnnotations(incoming, existing)` filters out
+  collisions keyed on `file+line+reason`.
+- **`src/commands/decisionReviewQueue.ts`** — pure helpers shared by
+  both commands (`appendQueueEntry`, `findActiveSessionSetDir`,
+  `QueueEntry` type). Split from the vscode wiring so the helpers can
+  be unit-tested via plain mocha + ts-node.
+- **`src/commands/annotationScanner.ts`** — pure helpers for the scan
+  command (`scanFilesForAnnotations`, `loadHonorAnnotationsToggle`,
+  `loadExistingQueueEntries`, `SCAN_GLOB`, `SCAN_EXCLUDE_GLOB`). Same
+  unit-testability rationale.
+
 ## [0.13.14] — 2026-05-15
 
 ### Removed

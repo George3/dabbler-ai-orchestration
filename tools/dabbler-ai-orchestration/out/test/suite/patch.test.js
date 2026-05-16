@@ -235,6 +235,83 @@ suite("patch — comment preservation across applyPatch", () => {
         assert.ok(serialized.includes("threshold_usd: 99"));
     });
 });
+suite("patch — no-op save (write-on-change)", () => {
+    test("no-op when payload values match disk values", () => {
+        const router = newRouterConfig();
+        const budget = newBudget();
+        const local = (0, patch_1.emptyLocalOverridesDoc)();
+        // Apply payload that matches the existing doc state exactly
+        const result = (0, patch_1.applyPatch)(router, budget, local, {
+            outsourcingMode: { value: "whenever-helpful", source: "shared" },
+            verificationMethod: "api",
+            thresholdUsd: { value: 10, source: "shared" },
+            scope: "per-project",
+            warnAtPercent: { value: 80, source: "shared" },
+            providers: [
+                { id: "anthropic", displayLabel: "Anthropic", enabled: { value: true, source: "shared" }, apiKeyEnv: { value: "ANTHROPIC_API_KEY", source: "shared" } },
+            ],
+        });
+        assert.strictEqual(result.routerConfigChanged, false, "router-config should not be marked changed on no-op");
+        assert.strictEqual(result.budgetChanged, false, "budget should not be marked changed on no-op");
+        assert.strictEqual(result.localOverridesChanged, false, "local-overrides should not be marked changed on no-op");
+    });
+    test("partial no-op: only the changed field flips its flag", () => {
+        const router = newRouterConfig();
+        const budget = newBudget();
+        const local = (0, patch_1.emptyLocalOverridesDoc)();
+        const budgetMissing = budget.toJSON();
+        void budgetMissing;
+        const result = (0, patch_1.applyPatch)(router, budget, local, {
+            verificationMethod: "api", // unchanged
+            thresholdUsd: { value: 99, source: "shared" }, // CHANGED
+        });
+        assert.strictEqual(result.budgetChanged, true, "budget should change because threshold_usd flipped");
+        assert.strictEqual(result.routerConfigChanged, false);
+        assert.strictEqual(result.localOverridesChanged, false);
+    });
+});
+suite("patch — demote from local to shared", () => {
+    test("threshold_usd shared demotes any existing local override", () => {
+        const router = newRouterConfig();
+        const budget = newBudget();
+        const local = (0, yaml_1.parseDocument)("threshold_usd: 5\n");
+        const result = (0, patch_1.applyPatch)(router, budget, local, {
+            thresholdUsd: { value: 25, source: "shared" },
+        });
+        assert.ok(result.budgetChanged);
+        assert.ok(result.localOverridesChanged, "local override must be deleted on demote");
+        const localJson = local.toJSON();
+        assert.ok(!("threshold_usd" in localJson), "threshold_usd should be removed from local-overrides");
+        const budgetJson = budget.toJSON();
+        assert.strictEqual(budgetJson.threshold_usd, 25, "budget should reflect the new value");
+    });
+    test("warn_at_percent shared demotes any existing local override", () => {
+        const router = newRouterConfig();
+        const budget = newBudget();
+        const local = (0, yaml_1.parseDocument)("warn_at_percent: 50\n");
+        const result = (0, patch_1.applyPatch)(router, budget, local, {
+            warnAtPercent: { value: 70, source: "shared" },
+        });
+        assert.ok(result.budgetChanged);
+        assert.ok(result.localOverridesChanged);
+        const localJson = local.toJSON();
+        assert.ok(!("warn_at_percent" in localJson));
+        const budgetJson = budget.toJSON();
+        assert.strictEqual(budgetJson.warn_at_percent, 70);
+    });
+    test("outsourcing_mode shared demotes any existing local override", () => {
+        const router = newRouterConfig();
+        const budget = newBudget();
+        const local = (0, yaml_1.parseDocument)("routing:\n  outsourcing_mode: disabled\n");
+        const result = (0, patch_1.applyPatch)(router, budget, local, {
+            outsourcingMode: { value: "verification-only", source: "shared" },
+        });
+        assert.ok(result.routerConfigChanged);
+        assert.ok(result.localOverridesChanged, "local override must be deleted on demote");
+        const localJson = local.toJSON();
+        assert.ok(!localJson || !("routing" in localJson), "empty routing container should be pruned");
+    });
+});
 suite("patch — content hash helper", () => {
     test("docContentHash returns null for null doc", () => {
         assert.strictEqual((0, patch_1.docContentHash)(null), null);

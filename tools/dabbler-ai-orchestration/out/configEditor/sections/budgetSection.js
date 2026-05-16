@@ -42,7 +42,8 @@ function render(state) {
   <h3>Budget threshold</h3>
   <p class="section-help">
     Operating cost is governed by an open-source AI orchestration framework — actual provider costs vary
-    <strong>$0–~$50/week</strong> depending on routing mode and session frequency.
+    <strong>$0–~$50/week</strong>, which works out to <strong>~$0–$200/month</strong> or
+    <strong>~$5–$50 for a typical 2–3 week session set</strong>, depending on routing mode and session frequency.
     See the cost dashboard (Dabbler: Show Cost Dashboard) for live cumulative spend.
     The framework is open-source; you are not billed by Dabbler — you are billed by
     Anthropic, Google, and/or OpenAI directly per their pricing.

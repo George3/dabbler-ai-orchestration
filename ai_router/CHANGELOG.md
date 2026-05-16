@@ -124,6 +124,19 @@ returning zero hits is satisfied as of the Session 1 close commit.
   (`_call_anthropic`, `_call_google`, `_call_openai`) now look up API
   keys via `resolve_secret` instead of `os.environ[...]`.
 
+### Added (Session 6 — significance flagging)
+
+- **`ai_router/decision_review_queue.py`** — reader for the per-session-set
+  `decision-review-queue.jsonl`. Exports `read_queue(session_set_dir)
+  -> list[dict]` and `clear_queue(session_set_dir) -> int`. The queue is
+  populated by two VS Code extension surfaces (`dabbler.flagDecisionForReview`
+  and `dabbler.scanAnnotationsForActiveSet`); orchestrators consume it
+  at session start to surface flagged decisions in the planning
+  checklist. Schema is intentionally open — callers look up fields
+  defensively rather than assuming a fixed shape.
+- **`DECISION_REVIEW_QUEUE_FILENAME`** constant (`"decision-review-queue.jsonl"`)
+  exported alongside the read/clear surface.
+
 ## [0.2.x] and earlier
 
 Prior versions of `ai_router` did not maintain a CHANGELOG.md. The

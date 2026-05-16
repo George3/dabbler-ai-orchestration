@@ -15,6 +15,15 @@ export declare class ConfigEditorPanel {
     private _detectDrift;
     private _deriveState;
     private _handleSave;
+    /**
+     * Snapshot the exact file contents the panel just persisted. For files
+     * NOT touched this save, we use the raw text already on disk (loaded
+     * earlier). For files written, we use doc.toString() which matches
+     * what writeYamlFile serialized. If local-overrides was not written
+     * AND the file exists on disk, we still snapshot it so drift detection
+     * uses the loaded text as the baseline rather than null.
+     */
+    private _captureSnapshot;
     private _retryFailedWrite;
     private _acceptHalfBatchAsBaseline;
     private _reapplyLastSave;

@@ -254,6 +254,68 @@ did the work. This catches provider-specific biases and blind spots:
 - If the orchestrator is Codex/Gemini, verification goes to an Anthropic model
 - The verifier's raw output is saved and never edited
 
+### Significance flagging
+
+End-of-session verification covers the *code* that landed. Significance
+flagging covers the *decisions* — judgment calls the orchestrator (or
+the operator) wants a second-engine read on at the next session start,
+before any code is written.
+
+There are two operator-facing surfaces. Both append to the active
+session set's `decision-review-queue.jsonl`, an append-only ledger
+that lives alongside `session-state.json` and `session-events.jsonl`
+in the session-set folder.
+
+**1. The command — `Dabbler: Flag Decision for Cross-Provider Review`.**
+Invoke from the command palette (or the "Run command now..." button
+in the config editor's Significance flagging section). Prompts for a
+one-line reason; appends one JSON line:
+
+```json
+{"ts":"2026-05-16T12:00:00Z","reason":"<text>","source":"command","file":null,"line":null}
+```
+
+The command requires an in-progress session set. With no active set,
+it surfaces an info notification and exits without writing.
+
+**2. The annotation — `@dabbler:outsource-review("reason text")` in source code.**
+The orchestrator can drop annotations inline when making a judgment
+call that warrants confirmation. Both common comment styles are
+recognized:
+
+```python
+# @dabbler:outsource-review("default tier feels too aggressive — confirm with Gemini")
+```
+
+```typescript
+// @dabbler:outsource-review("debounce window: 500ms vs 1000ms — pick once we have telemetry")
+```
+
+`Dabbler: Scan Workspace for @dabbler:outsource-review Annotations`
+walks the workspace's source files (extensions: ts/tsx/js/jsx/py/rb/
+go/rs/java/cs/kt/swift/c/cc/cpp/h/hpp/sh/bash/zsh/ps1/yaml/yml/toml),
+applies the regex, deduplicates against the existing queue (so the
+same annotation does not double-append on a re-scan), and writes one
+line per new finding:
+
+```json
+{"ts":"<ISO>","reason":"<captured>","source":"annotation","file":"src/foo.py","line":42}
+```
+
+Annotation honoring is gated by `decision_review.honor_annotations`
+in `local-overrides.yaml` (default: true). Set it to `false` if the
+project uses the annotation syntax for a different purpose; the
+scanner becomes a no-op for that workspace.
+
+**Queue handling at session start.** The orchestrator reads
+`decision-review-queue.jsonl` as part of Step 1's planning checklist
+(via `ai_router.decision_review_queue.read_queue`), surfaces each
+entry for triage, and clears the queue (`clear_queue`) once the
+entries are either addressed or rolled into the session's spec.
+Entries that remain relevant after planning are typically addressed
+in-session and re-flagged afterward if needed; the queue is a ledger
+of intent, not a state machine.
+
 ### Session-Set Lifecycle and State File
 
 Every session-set folder under `docs/session-sets/<slug>/` carries a

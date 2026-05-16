@@ -650,15 +650,11 @@ export class ConfigEditorPanel {
   }
 
   private async _runFlagDecisionCommand(): Promise<void> {
-    const all = await vscode.commands.getCommands();
-    if (all.includes("dabbler.flagDecisionForReview")) {
-      await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
-      return;
-    }
-    vscode.window.showInformationMessage(
-      "dabbler.flagDecisionForReview is not registered yet — it ships in Set 026 Session 6. " +
-        "Until then, hand-edit the active session-set's decision-review-queue.jsonl directly."
-    );
+    // Set 026 Session 6 shipped both significance-flagging commands as
+    // proper registrations. The Session 5 graceful-fallback branch is
+    // gone — if the command is missing here it's a real bug, not an
+    // expected pre-Session-6 state, so let vscode surface the failure.
+    await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
   }
 
   private async _openLocalOverridesFile(): Promise<void> {

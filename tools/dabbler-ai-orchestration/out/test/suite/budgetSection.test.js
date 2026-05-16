@@ -63,12 +63,15 @@ suite("budgetSection — rendering", () => {
         assert.ok(/Between 50% and 100% \(\$10\.00.{1,3}\$20\.00\)/.test(html));
         assert.ok(/At or above \$20\.00/.test(html));
     });
-    test("cost-messaging copy includes explicit dollar ranges + open-source caveat + dashboard pointer", () => {
+    test("cost-messaging copy includes all four feedback_user_facing_cost_messaging elements", () => {
         const { html } = (0, budgetSection_1.render)(baseState());
-        // Memory: feedback_user_facing_cost_messaging
-        assert.ok(html.includes("$0") && html.includes("$50/week"), "explicit dollar range required");
-        assert.ok(html.toLowerCase().includes("open-source"), "open-source caveat required");
-        assert.ok(html.toLowerCase().includes("cost dashboard"), "dashboard pointer required");
+        // Memory: feedback_user_facing_cost_messaging requires
+        //   (1) explicit dollar ranges, (2) multi-week scale,
+        //   (3) open-source caveat, (4) dashboard pointer.
+        assert.ok(html.includes("$0") && html.includes("$50/week"), "(1) explicit dollar range required");
+        assert.ok(html.includes("/month") || /\d+\s*(?:weeks|week\s|-week)/i.test(html), "(2) multi-week scale required (e.g., per-month or N-week framing)");
+        assert.ok(html.toLowerCase().includes("open-source"), "(3) open-source caveat required");
+        assert.ok(html.toLowerCase().includes("cost dashboard"), "(4) dashboard pointer required");
     });
     test("local threshold override surfaces (local override) indicator", () => {
         const { html } = (0, budgetSection_1.render)(baseState({

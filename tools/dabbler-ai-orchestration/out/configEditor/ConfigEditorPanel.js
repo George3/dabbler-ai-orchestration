@@ -176,38 +176,42 @@ class ConfigEditorPanel {
             budget: budgetObj,
             localOverrides: localObj,
         });
-        // Half-batch / external-drift detection: compare current on-disk content
-        // hashes to the last successful save snapshot. If we have a snapshot and
-        // any file's hash has changed, surface the recovery banner.
-        this._recovery = this._detectDrift();
+        // Half-batch / external-drift detection. Preserve any active
+        // failed-write recovery — _handleSave sets that state right before
+        // calling _refresh, and overwriting it here would lose the
+        // actionable Retry/Accept buttons.
+        if (!this._recovery || this._recovery.failed.length === 0) {
+            this._recovery = this._detectDrift();
+        }
     }
     _detectDrift() {
         if (!this._lastSaveSnapshot || !this._loaded)
             return null;
         const drifted = [];
-        const currentRouter = this._loaded.routerConfigText
-            ? (0, patch_1.stringContentHash)(this._loaded.routerConfigText)
-            : null;
-        const currentBudget = this._loaded.budgetText
-            ? (0, patch_1.stringContentHash)(this._loaded.budgetText)
-            : null;
-        const currentLocal = this._loaded.localOverridesText
-            ? (0, patch_1.stringContentHash)(this._loaded.localOverridesText)
-            : null;
-        if (currentRouter && currentRouter !== this._lastSaveSnapshot.routerConfigHash) {
+        // Strict !== null checks (not truthiness) so a truncation-to-empty
+        // on disk registers as drift rather than disappearing.
+        const currentRouter = this._loaded.routerConfigText;
+        const currentBudget = this._loaded.budgetText;
+        const currentLocal = this._loaded.localOverridesText;
+        if (currentRouter !== null && currentRouter !== this._lastSaveSnapshot.routerConfigText) {
             drifted.push("router-config.yaml");
         }
-        if (currentBudget && currentBudget !== this._lastSaveSnapshot.budgetHash) {
+        else if (currentRouter === null && this._lastSaveSnapshot.routerConfigText !== "") {
+            // file disappeared since last save
+            drifted.push("router-config.yaml");
+        }
+        if (currentBudget !== null && currentBudget !== this._lastSaveSnapshot.budgetText) {
             drifted.push("budget.yaml");
         }
-        if (currentLocal !== this._lastSaveSnapshot.localOverridesHash &&
-            // Only flag drift if either side knew about a local-overrides hash
-            (currentLocal !== null || this._lastSaveSnapshot.localOverridesHash !== null)) {
+        else if (currentBudget === null && this._lastSaveSnapshot.budgetText !== "") {
+            drifted.push("budget.yaml");
+        }
+        if (currentLocal !== this._lastSaveSnapshot.localOverridesText) {
             drifted.push("local-overrides.yaml");
         }
         if (drifted.length === 0)
             return null;
-        return { succeeded: [], failed: [], drifted };
+        return { succeeded: [], failed: [], drifted, pendingContents: {} };
     }
     _deriveState() {
         if (!this._loaded) {
@@ -275,151 +279,232 @@ class ConfigEditorPanel {
             vscode.window.showErrorMessage("Save aborted — no payload from webview.");
             return;
         }
-        // 1) Ensure all three Documents exist. If the operator's save introduces
-        //    a local override and local-overrides.yaml doesn't exist on disk yet,
-        //    create an in-memory Document.
+        // 1) Required-files gate.
         if (!this._loaded.routerConfigDoc || !this._loaded.budgetDoc) {
             vscode.window.showErrorMessage("Save aborted — required config files are missing.");
             return;
         }
-        if (!this._loaded.localOverridesDoc) {
-            this._loaded.localOverridesDoc = (0, patch_1.emptyLocalOverridesDoc)();
-        }
-        // 2) Apply the patch to the in-memory yaml docs.
+        // 2) Clone the loaded docs before patching. If applyPatch throws OR
+        //    validation rejects the result, the clones are discarded and
+        //    `_loaded.*Doc` remains in the exact state the operator can see.
+        //    The yaml library has no Document.clone(), so we parse-then-stringify.
+        const routerClone = (0, yamlReadWrite_1.parseDocumentFromText)(this._loaded.routerConfigDoc.toString());
+        const budgetClone = (0, yamlReadWrite_1.parseDocumentFromText)(this._loaded.budgetDoc.toString());
+        const localClone = this._loaded.localOverridesDoc
+            ? (0, yamlReadWrite_1.parseDocumentFromText)(this._loaded.localOverridesDoc.toString())
+            : (0, patch_1.emptyLocalOverridesDoc)();
         let applyResult;
         try {
-            applyResult = (0, patch_1.applyPatch)(this._loaded.routerConfigDoc, this._loaded.budgetDoc, this._loaded.localOverridesDoc, payload);
+            applyResult = (0, patch_1.applyPatch)(routerClone, budgetClone, localClone, payload);
         }
         catch (err) {
             vscode.window.showErrorMessage(`Save aborted — patch application failed: ${err instanceof Error ? err.message : String(err)}`);
             return;
         }
-        // 3) Pre-validate the in-memory batch.
-        const routerObj = this._loaded.routerConfigDoc.toJSON() ?? null;
-        const budgetObj = this._loaded.budgetDoc.toJSON() ?? null;
-        const localObj = this._loaded.localOverridesDoc.toJSON() ?? null;
+        // 3) Pre-validate the patched clones.
+        const routerObj = routerClone.toJSON() ?? null;
+        const budgetObj = budgetClone.toJSON() ?? null;
+        const localObj = localClone.toJSON() ?? null;
         const validation = (0, schemaValidator_1.validateBatch)({ routerConfig: routerObj, budget: budgetObj, localOverrides: localObj });
         if (!validation.valid) {
             const msgs = validation.errors.map((e) => `${e.file}${e.path}: ${e.message}`).join("\n");
             vscode.window.showErrorMessage(`Save aborted — ${validation.errors.length} validation error(s):\n${msgs}`, { modal: false });
             return;
         }
-        // 4) Write each file. Track per-file success/failure for half-batch recovery.
+        // 4) Commit the validated clones into _loaded so they're visible to
+        //    subsequent renders and (importantly) to _captureSnapshot.
+        this._loaded.routerConfigDoc = routerClone;
+        this._loaded.budgetDoc = budgetClone;
+        this._loaded.localOverridesDoc = localClone;
+        // 5) Pre-compute the exact bytes we intend to write per file. Caching
+        //    these into _recovery.pendingContents lets _retryFailedWrite
+        //    persist the same bytes it originally tried, instead of writing
+        //    whatever _loaded looks like after `_refresh()` reloads from disk.
+        const localJson = localClone.toJSON();
+        const localHasContent = localJson && Object.keys(localJson).length > 0;
+        const shouldWriteLocal = applyResult.localOverridesChanged && (localHasContent || this._loaded.localOverridesFileExists);
+        const pending = {};
+        if (applyResult.routerConfigChanged)
+            pending["router-config.yaml"] = routerClone.toString();
+        if (applyResult.budgetChanged)
+            pending["budget.yaml"] = budgetClone.toString();
+        if (shouldWriteLocal)
+            pending["local-overrides.yaml"] = localClone.toString();
+        // 6) Write each file. Track per-file success/failure.
         const succeeded = [];
         const failed = [];
-        const tryWrite = (file, target, doc, write) => {
-            if (!write)
-                return;
+        const writeAtomic = (file, target, content) => {
+            const tmp = target + ".tmp";
             try {
-                (0, yamlReadWrite_1.writeYamlFile)(target, doc);
+                fs.writeFileSync(tmp, content, "utf8");
+                fs.renameSync(tmp, target);
                 succeeded.push(file);
             }
             catch (err) {
-                failed.push({
-                    file,
-                    reason: err instanceof Error ? err.message : String(err),
-                });
+                try {
+                    if (fs.existsSync(tmp))
+                        fs.unlinkSync(tmp);
+                }
+                catch { /* swallow cleanup error */ }
+                failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
             }
         };
-        tryWrite("router-config.yaml", this._loaded.routerConfigPath, this._loaded.routerConfigDoc, applyResult.routerConfigChanged);
-        tryWrite("budget.yaml", this._loaded.budgetPath, this._loaded.budgetDoc, applyResult.budgetChanged);
-        // local-overrides: only write if the in-memory doc has any content OR the file already exists.
-        const localJson = this._loaded.localOverridesDoc.toJSON();
-        const localHasContent = localJson && Object.keys(localJson).length > 0;
-        const shouldWriteLocal = applyResult.localOverridesChanged && (localHasContent || this._loaded.localOverridesFileExists);
-        tryWrite("local-overrides.yaml", this._loaded.localOverridesPath, this._loaded.localOverridesDoc, shouldWriteLocal);
+        if (pending["router-config.yaml"] !== undefined) {
+            writeAtomic("router-config.yaml", this._loaded.routerConfigPath, pending["router-config.yaml"]);
+        }
+        if (pending["budget.yaml"] !== undefined) {
+            writeAtomic("budget.yaml", this._loaded.budgetPath, pending["budget.yaml"]);
+        }
+        if (pending["local-overrides.yaml"] !== undefined) {
+            writeAtomic("local-overrides.yaml", this._loaded.localOverridesPath, pending["local-overrides.yaml"]);
+        }
         if (failed.length > 0 && succeeded.length > 0) {
-            // Half-batch failure. Surface a recovery banner on the next render.
-            this._recovery = { succeeded, failed, drifted: [] };
+            // Half-batch failure. Cache the bytes for each failed file so
+            // retry persists exactly what we just tried to write.
+            const pendingContents = {};
+            for (const f of failed) {
+                const content = pending[f.file];
+                if (content !== undefined)
+                    pendingContents[f.file] = content;
+            }
+            this._recovery = { succeeded, failed, drifted: [], pendingContents };
             this._refresh();
             vscode.window.showErrorMessage(`Partial save — ${succeeded.length} file(s) saved, ${failed.length} failed. See the recovery banner in the editor.`);
             return;
         }
         if (failed.length > 0) {
-            // All writes that were attempted failed; nothing got through.
             this._refresh();
             vscode.window.showErrorMessage(`Save failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`);
             return;
         }
-        // 5) Update last-save snapshot for drift detection.
-        const routerHash = this._loaded.routerConfigDoc
-            ? (0, patch_1.stringContentHash)(this._loaded.routerConfigDoc.toString())
-            : "";
-        const budgetHash = this._loaded.budgetDoc
-            ? (0, patch_1.stringContentHash)(this._loaded.budgetDoc.toString())
-            : "";
-        const localHash = shouldWriteLocal && this._loaded.localOverridesDoc
-            ? (0, patch_1.stringContentHash)(this._loaded.localOverridesDoc.toString())
-            : null;
-        this._lastSaveSnapshot = {
-            routerConfigHash: routerHash,
-            budgetHash: budgetHash,
-            localOverridesHash: localHash,
-            at: Date.now(),
-        };
+        // 7) Update last-save snapshot for drift detection.
+        this._lastSaveSnapshot = this._captureSnapshot(applyResult.routerConfigChanged, applyResult.budgetChanged, shouldWriteLocal);
         if (applyResult.warnings.length > 0) {
             vscode.window.showWarningMessage(applyResult.warnings.join(" "));
         }
-        vscode.window.showInformationMessage("Dabbler config saved.");
+        if (applyResult.routerConfigChanged || applyResult.budgetChanged || applyResult.localOverridesChanged) {
+            vscode.window.showInformationMessage("Dabbler config saved.");
+        }
+        else {
+            vscode.window.showInformationMessage("No changes to save.");
+        }
         this._refresh();
+    }
+    /**
+     * Snapshot the exact file contents the panel just persisted. For files
+     * NOT touched this save, we use the raw text already on disk (loaded
+     * earlier). For files written, we use doc.toString() which matches
+     * what writeYamlFile serialized. If local-overrides was not written
+     * AND the file exists on disk, we still snapshot it so drift detection
+     * uses the loaded text as the baseline rather than null.
+     */
+    _captureSnapshot(routerWritten, budgetWritten, localWritten) {
+        const routerText = routerWritten && this._loaded?.routerConfigDoc
+            ? this._loaded.routerConfigDoc.toString()
+            : (this._loaded?.routerConfigText ?? "");
+        const budgetText = budgetWritten && this._loaded?.budgetDoc
+            ? this._loaded.budgetDoc.toString()
+            : (this._loaded?.budgetText ?? "");
+        let localText;
+        if (localWritten && this._loaded?.localOverridesDoc) {
+            localText = this._loaded.localOverridesDoc.toString();
+        }
+        else if (this._loaded?.localOverridesFileExists) {
+            // Existed but not written this save — baseline against the on-disk text.
+            localText = this._loaded.localOverridesText;
+        }
+        else {
+            localText = null;
+        }
+        return {
+            routerConfigText: routerText,
+            budgetText: budgetText,
+            localOverridesText: localText,
+            at: Date.now(),
+        };
     }
     _retryFailedWrite() {
         if (!this._recovery || this._recovery.failed.length === 0 || !this._loaded)
             return;
         const stillFailed = [];
         const newSucceeded = [...this._recovery.succeeded];
+        const remainingPending = {};
         for (const f of this._recovery.failed) {
-            let target = null;
-            let doc = null;
-            if (f.file === "router-config.yaml") {
-                target = this._loaded.routerConfigPath;
-                doc = this._loaded.routerConfigDoc;
-            }
-            else if (f.file === "budget.yaml") {
-                target = this._loaded.budgetPath;
-                doc = this._loaded.budgetDoc;
-            }
-            else if (f.file === "local-overrides.yaml") {
-                target = this._loaded.localOverridesPath;
-                doc = this._loaded.localOverridesDoc;
-            }
-            if (!target || !doc) {
-                stillFailed.push({ file: f.file, reason: "internal: no target/doc" });
+            const cachedContent = this._recovery.pendingContents?.[f.file];
+            if (cachedContent === undefined) {
+                stillFailed.push({ file: f.file, reason: "internal: no cached content to retry" });
                 continue;
             }
+            let target = null;
+            if (f.file === "router-config.yaml")
+                target = this._loaded.routerConfigPath;
+            else if (f.file === "budget.yaml")
+                target = this._loaded.budgetPath;
+            else if (f.file === "local-overrides.yaml")
+                target = this._loaded.localOverridesPath;
+            if (!target) {
+                stillFailed.push({ file: f.file, reason: "internal: no target path" });
+                continue;
+            }
+            const tmp = target + ".tmp";
             try {
-                (0, yamlReadWrite_1.writeYamlFile)(target, doc);
+                fs.writeFileSync(tmp, cachedContent, "utf8");
+                fs.renameSync(tmp, target);
                 newSucceeded.push(f.file);
             }
             catch (err) {
+                try {
+                    if (fs.existsSync(tmp))
+                        fs.unlinkSync(tmp);
+                }
+                catch { /* swallow */ }
                 stillFailed.push({ file: f.file, reason: err instanceof Error ? err.message : String(err) });
+                remainingPending[f.file] = cachedContent;
             }
         }
         if (stillFailed.length === 0) {
+            // After full retry success, recompute the baseline so subsequent
+            // loads compare against what's now on disk. _captureSnapshot
+            // reads from the in-memory docs (which `_refresh()` will refill
+            // from disk at the next loadFiles call, but we capture BEFORE
+            // refresh so we use the values that match what we just wrote).
+            this._lastSaveSnapshot = this._captureSnapshot(newSucceeded.includes("router-config.yaml"), newSucceeded.includes("budget.yaml"), newSucceeded.includes("local-overrides.yaml"));
+            // Override snapshot with the exact cached bytes for fidelity.
+            if (this._lastSaveSnapshot && this._recovery.pendingContents) {
+                const pc = this._recovery.pendingContents;
+                if (pc["router-config.yaml"] !== undefined) {
+                    this._lastSaveSnapshot.routerConfigText = pc["router-config.yaml"];
+                }
+                if (pc["budget.yaml"] !== undefined) {
+                    this._lastSaveSnapshot.budgetText = pc["budget.yaml"];
+                }
+                if (pc["local-overrides.yaml"] !== undefined) {
+                    this._lastSaveSnapshot.localOverridesText = pc["local-overrides.yaml"];
+                }
+            }
             this._recovery = null;
             vscode.window.showInformationMessage("Retry succeeded — all files saved.");
         }
         else {
-            this._recovery = { succeeded: newSucceeded, failed: stillFailed, drifted: [] };
+            this._recovery = {
+                succeeded: newSucceeded,
+                failed: stillFailed,
+                drifted: [],
+                pendingContents: remainingPending,
+            };
             vscode.window.showErrorMessage(`Retry partial — ${stillFailed.length} file(s) still failing.`);
         }
         this._refresh();
     }
     _acceptHalfBatchAsBaseline() {
         // Operator chose to accept the current on-disk state as the new baseline.
-        // Clear recovery state and re-snapshot to current contents.
+        // Clear recovery state and re-snapshot to current raw on-disk contents.
         this._recovery = null;
         if (this._loaded) {
             this._lastSaveSnapshot = {
-                routerConfigHash: this._loaded.routerConfigText
-                    ? (0, patch_1.stringContentHash)(this._loaded.routerConfigText)
-                    : "",
-                budgetHash: this._loaded.budgetText
-                    ? (0, patch_1.stringContentHash)(this._loaded.budgetText)
-                    : "",
-                localOverridesHash: this._loaded.localOverridesText
-                    ? (0, patch_1.stringContentHash)(this._loaded.localOverridesText)
-                    : null,
+                routerConfigText: this._loaded.routerConfigText ?? "",
+                budgetText: this._loaded.budgetText ?? "",
+                localOverridesText: this._loaded.localOverridesText,
                 at: Date.now(),
             };
         }
@@ -427,43 +512,80 @@ class ConfigEditorPanel {
         vscode.window.showInformationMessage("On-disk state accepted as new baseline.");
     }
     _reapplyLastSave() {
-        // The drifted state is what's currently in memory (re-read from disk).
-        // "Re-apply" means: write the in-memory docs back out. This is a no-op
-        // for a single-process editor; for true cross-load recovery it would
-        // re-apply the cached snapshot. For Session 5 scope, this just re-writes
-        // the current in-memory docs so the operator can confirm the editor's
-        // view becomes the disk truth.
-        if (!this._loaded)
+        // Genuine re-apply: write the bytes from _lastSaveSnapshot back to
+        // disk. Use the same per-file half-batch recovery pattern as the
+        // main save flow so a mid-reapply filesystem failure doesn't leave
+        // disk in an undetected partial state.
+        if (!this._lastSaveSnapshot || !this._loaded) {
+            vscode.window.showErrorMessage("Re-apply unavailable — no last-saved snapshot exists in this session.");
             return;
-        try {
-            if (this._loaded.routerConfigDoc) {
-                (0, yamlReadWrite_1.writeYamlFile)(this._loaded.routerConfigPath, this._loaded.routerConfigDoc);
+        }
+        const succeeded = [];
+        const failed = [];
+        const pendingContents = {};
+        const reapply = (file, target, content) => {
+            pendingContents[file] = content;
+            const tmp = target + ".tmp";
+            try {
+                fs.writeFileSync(tmp, content, "utf8");
+                fs.renameSync(tmp, target);
+                succeeded.push(file);
             }
-            if (this._loaded.budgetDoc) {
-                (0, yamlReadWrite_1.writeYamlFile)(this._loaded.budgetPath, this._loaded.budgetDoc);
-            }
-            if (this._loaded.localOverridesDoc) {
-                const localJson = this._loaded.localOverridesDoc.toJSON();
-                if (localJson && Object.keys(localJson).length > 0) {
-                    (0, yamlReadWrite_1.writeYamlFile)(this._loaded.localOverridesPath, this._loaded.localOverridesDoc);
+            catch (err) {
+                try {
+                    if (fs.existsSync(tmp))
+                        fs.unlinkSync(tmp);
                 }
+                catch { /* swallow */ }
+                failed.push({ file, reason: err instanceof Error ? err.message : String(err) });
             }
-            this._recovery = null;
-            vscode.window.showInformationMessage("In-memory state re-applied to disk.");
+        };
+        reapply("router-config.yaml", this._loaded.routerConfigPath, this._lastSaveSnapshot.routerConfigText);
+        reapply("budget.yaml", this._loaded.budgetPath, this._lastSaveSnapshot.budgetText);
+        if (this._lastSaveSnapshot.localOverridesText !== null) {
+            reapply("local-overrides.yaml", this._loaded.localOverridesPath, this._lastSaveSnapshot.localOverridesText);
+        }
+        else if (fs.existsSync(this._loaded.localOverridesPath)) {
+            // Snapshot said the file didn't exist; remove on-disk copy.
+            try {
+                fs.unlinkSync(this._loaded.localOverridesPath);
+                succeeded.push("local-overrides.yaml");
+            }
+            catch (err) {
+                failed.push({
+                    file: "local-overrides.yaml",
+                    reason: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+        if (failed.length > 0 && succeeded.length > 0) {
+            // Reapply itself half-batched. Surface the same recovery banner.
+            const failedPending = {};
+            for (const f of failed) {
+                if (pendingContents[f.file] !== undefined)
+                    failedPending[f.file] = pendingContents[f.file];
+            }
+            this._recovery = { succeeded, failed, drifted: [], pendingContents: failedPending };
             this._refresh();
+            vscode.window.showErrorMessage(`Re-apply partial — ${succeeded.length} file(s) restored, ${failed.length} failed. See the recovery banner.`);
+            return;
         }
-        catch (err) {
-            vscode.window.showErrorMessage(`Re-apply failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (failed.length > 0) {
+            this._refresh();
+            vscode.window.showErrorMessage(`Re-apply failed: ${failed.map((f) => `${f.file}: ${f.reason}`).join("; ")}`);
+            return;
         }
+        this._recovery = null;
+        this._lastSaveSnapshot = { ...this._lastSaveSnapshot, at: Date.now() };
+        vscode.window.showInformationMessage("Last-saved state re-applied to disk.");
+        this._refresh();
     }
     async _runFlagDecisionCommand() {
-        const all = await vscode.commands.getCommands();
-        if (all.includes("dabbler.flagDecisionForReview")) {
-            await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
-            return;
-        }
-        vscode.window.showInformationMessage("dabbler.flagDecisionForReview is not registered yet — it ships in Set 026 Session 6. " +
-            "Until then, hand-edit the active session-set's decision-review-queue.jsonl directly.");
+        // Set 026 Session 6 shipped both significance-flagging commands as
+        // proper registrations. The Session 5 graceful-fallback branch is
+        // gone — if the command is missing here it's a real bug, not an
+        // expected pre-Session-6 state, so let vscode surface the failure.
+        await vscode.commands.executeCommand("dabbler.flagDecisionForReview");
     }
     async _openLocalOverridesFile() {
         if (!this._loaded)

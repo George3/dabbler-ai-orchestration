@@ -57,49 +57,62 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
     if (payload.outsourcingMode !== undefined) {
         const { value, source } = payload.outsourcingMode;
         if (source === "local") {
-            setIn(localOverridesDoc, ["routing", "outsourcing_mode"], value);
+            if (setIfChanged(localOverridesDoc, ["routing", "outsourcing_mode"], value)) {
+                result.localOverridesChanged = true;
+            }
             deleteIfPresent(routerConfigDoc, ["routing", "outsourcing_mode"], result, "routerConfigChanged");
-            result.localOverridesChanged = true;
         }
         else {
-            setIn(routerConfigDoc, ["routing", "outsourcing_mode"], value);
+            if (setIfChanged(routerConfigDoc, ["routing", "outsourcing_mode"], value)) {
+                result.routerConfigChanged = true;
+            }
             deleteIfPresent(localOverridesDoc, ["routing", "outsourcing_mode"], result, "localOverridesChanged");
             // Clean up an empty routing: {} container in local-overrides
             pruneEmptyContainer(localOverridesDoc, ["routing"], result, "localOverridesChanged");
-            result.routerConfigChanged = true;
         }
     }
     if (payload.verificationMethod !== undefined) {
-        setIn(budgetDoc, ["verification_method"], payload.verificationMethod);
-        result.budgetChanged = true;
+        if (setIfChanged(budgetDoc, ["verification_method"], payload.verificationMethod)) {
+            result.budgetChanged = true;
+        }
     }
     // --- §2 Budget --------------------------------------------------------
     if (payload.thresholdUsd !== undefined) {
         const { value, source } = payload.thresholdUsd;
         if (source === "local") {
-            setIn(localOverridesDoc, ["threshold_usd"], value);
-            result.localOverridesChanged = true;
+            if (setIfChanged(localOverridesDoc, ["threshold_usd"], value)) {
+                result.localOverridesChanged = true;
+            }
             result.warnings.push("threshold_usd is project-canonical per Appendix B and may be rejected by the local-overrides allowlist.");
         }
         else {
-            setIn(budgetDoc, ["threshold_usd"], value);
-            result.budgetChanged = true;
+            if (setIfChanged(budgetDoc, ["threshold_usd"], value)) {
+                result.budgetChanged = true;
+            }
+            // Demote: if a local override existed, remove it so the shared
+            // value actually takes effect after the merge.
+            deleteIfPresent(localOverridesDoc, ["threshold_usd"], result, "localOverridesChanged");
         }
     }
     if (payload.scope !== undefined) {
-        setIn(budgetDoc, ["scope"], payload.scope);
-        result.budgetChanged = true;
+        if (setIfChanged(budgetDoc, ["scope"], payload.scope)) {
+            result.budgetChanged = true;
+        }
     }
     if (payload.warnAtPercent !== undefined) {
         const { value, source } = payload.warnAtPercent;
         if (source === "local") {
-            setIn(localOverridesDoc, ["warn_at_percent"], value);
-            result.localOverridesChanged = true;
+            if (setIfChanged(localOverridesDoc, ["warn_at_percent"], value)) {
+                result.localOverridesChanged = true;
+            }
             result.warnings.push("warn_at_percent is project-canonical per Appendix B and may be rejected by the local-overrides allowlist.");
         }
         else {
-            setIn(budgetDoc, ["warn_at_percent"], value);
-            result.budgetChanged = true;
+            if (setIfChanged(budgetDoc, ["warn_at_percent"], value)) {
+                result.budgetChanged = true;
+            }
+            // Demote: remove any local override so the shared value wins.
+            deleteIfPresent(localOverridesDoc, ["warn_at_percent"], result, "localOverridesChanged");
         }
     }
     // --- §3 Providers -----------------------------------------------------
@@ -112,8 +125,9 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
                 continue;
             }
             if (p.displayLabel !== undefined) {
-                setIn(routerConfigDoc, ["providers", p.id, "display_label"], p.displayLabel);
-                result.routerConfigChanged = true;
+                if (setIfChanged(routerConfigDoc, ["providers", p.id, "display_label"], p.displayLabel)) {
+                    result.routerConfigChanged = true;
+                }
             }
             if (p.enabled !== undefined) {
                 applyOverridableField(routerConfigDoc, localOverridesDoc, ["providers", p.id, "enabled"], p.enabled.value, p.enabled.source, result);
@@ -130,22 +144,26 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
     }
     // --- §4 Significance flagging ----------------------------------------
     if (payload.honorAnnotations !== undefined) {
-        setIn(localOverridesDoc, ["decision_review", "honor_annotations"], payload.honorAnnotations);
-        result.localOverridesChanged = true;
+        if (setIfChanged(localOverridesDoc, ["decision_review", "honor_annotations"], payload.honorAnnotations)) {
+            result.localOverridesChanged = true;
+        }
     }
     // --- §5 Notifications ------------------------------------------------
     // These three live exclusively in local-overrides per Appendix B.
     if (payload.pushoverEnabled !== undefined) {
-        setIn(localOverridesDoc, ["notifications", "pushover", "enabled"], payload.pushoverEnabled);
-        result.localOverridesChanged = true;
+        if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "enabled"], payload.pushoverEnabled)) {
+            result.localOverridesChanged = true;
+        }
     }
     if (payload.pushoverApiKeyEnv !== undefined) {
-        setIn(localOverridesDoc, ["notifications", "pushover", "api_key_env"], payload.pushoverApiKeyEnv);
-        result.localOverridesChanged = true;
+        if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "api_key_env"], payload.pushoverApiKeyEnv)) {
+            result.localOverridesChanged = true;
+        }
     }
     if (payload.pushoverUserKeyEnv !== undefined) {
-        setIn(localOverridesDoc, ["notifications", "pushover", "user_key_env"], payload.pushoverUserKeyEnv);
-        result.localOverridesChanged = true;
+        if (setIfChanged(localOverridesDoc, ["notifications", "pushover", "user_key_env"], payload.pushoverUserKeyEnv)) {
+            result.localOverridesChanged = true;
+        }
     }
     return result;
 }
@@ -155,17 +173,31 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
  */
 function applyOverridableField(routerConfigDoc, localOverridesDoc, path, value, source, result) {
     if (source === "local") {
-        setIn(localOverridesDoc, path, value);
+        if (setIfChanged(localOverridesDoc, path, value)) {
+            result.localOverridesChanged = true;
+        }
         deleteIfPresent(routerConfigDoc, path, result, "routerConfigChanged");
-        result.localOverridesChanged = true;
     }
     else {
-        setIn(routerConfigDoc, path, value);
+        if (setIfChanged(routerConfigDoc, path, value)) {
+            result.routerConfigChanged = true;
+        }
         deleteIfPresent(localOverridesDoc, path, result, "localOverridesChanged");
     }
 }
-function setIn(doc, path, value) {
+/**
+ * Set a scalar at `path` only if the current value differs. Returns true
+ * iff the document was mutated. The flag-driven write-on-change pattern
+ * lets the panel skip filesystem writes (and the resulting mtime bump
+ * that would otherwise trip drift detection) when a Save lands an
+ * effective no-op.
+ */
+function setIfChanged(doc, path, value) {
+    const current = doc.getIn(path);
+    if (current === value)
+        return false;
     doc.setIn(path, value);
+    return true;
 }
 function deleteIfPresent(doc, path, result, flag) {
     if (doc.hasIn(path)) {
