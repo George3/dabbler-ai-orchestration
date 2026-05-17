@@ -11,6 +11,18 @@
       "session": 0,
       "event": "spec_revised",
       "message": "Set 030 spec revised per GPT-5.4 implementation review (2026-05-17). Five changes applied: (1) final publish moved from S4 to S5 (after migration UX ships) - D14; (2) dual-write kept as operational steady state, stop-legacy deferred to future set gated on consumer v3-reader confirmation - D5 revision; (3) terminology drift resolved by updating proposal doc to use 'complete' instead of 'done' globally - D2 alignment; (4) lint rule narrowed to 'no application reader may read legacy fields except through approved compat helpers' - D13; (5) spec-title-extraction routing config registered in S1 instead of S5 - removes dependency risk. Added D15 (Set 029 ordering: both orders supported) and D16 (Lightweight ergonomics dry-run vs accessdb state file before publish)."
+    },
+    {
+      "timestamp": "2026-05-17T05:30:00.000000-04:00",
+      "session": 1,
+      "event": "implementation",
+      "message": "Session 1: shipped read-side schema v3 foundation. ai_router/progress.py + tools/.../utils/progress.ts with get_progress(), synthesize_v3_from_v2(), validate_invariants() enforcing the 8 invariants, ProgressView/SessionRecord dataclasses, SessionStateInvariantError. tools/.../types.ts adds SessionStatus/SessionRecord/ProgressView/SessionStateV3 interfaces. docs/session-state-schema.md fully rewritten for v3 (shape, derived values, 8 invariants, Lightweight one-field-flip worked example, migration recipe, reader contract). docs/session-state-schema-example.{json,md} updated to v3 closed shape + v2-vs-v3 narrative. Proposal doc 'done' references at lines 139/246 patched to 'complete' (D2). Router-config registers spec-title-extraction task type (D14). 48 pytest + 46 mocha + 6 router-config tests. Full pytest: 484 passed, 1 skipped, 8 e2e deselected."
+    },
+    {
+      "timestamp": "2026-05-17T05:35:00.000000-04:00",
+      "session": 1,
+      "event": "verification",
+      "message": "Session 1 verification: gpt-5-4 Round A, $0.275525. Verifier flagged 6 must-fix issues: (1) synthesize_v3_from_v2 force-promote-on-complete contradicts default-to-not-started + fail-loud; (2) bool/float type confusion in v2 currentSession + completedSessions[]; (3) rule 2 didn't enforce contiguous-from-1 per spec D12; (4) session-level 'cancelled' silently accepted despite being reserved for future schema; (5) rules 5-8 skipped when top_status is None — bypassed rule 8 for lifecycleState='closed'; (6) unknown top-level status reported wrong rule number. All 6 addressed: synthesizer leaves contradictions for rule 7 to surface; strict-int filter (Python: type is int; TS: Number.isInteger + typeof !== boolean); contiguous-from-1 with start-at-1 enforcement; SESSION_STATUSES excludes 'cancelled'; rule 8 hoisted above null-guard; unknown top status raises rule 2 as shape/enum error. +8 pytest cases for new edge coverage."
     }
   ],
   "totalSessions": 5
