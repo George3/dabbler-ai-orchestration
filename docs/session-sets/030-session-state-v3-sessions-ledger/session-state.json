@@ -1,13 +1,18 @@
 {
   "schemaVersion": 2,
   "sessionSetName": "030-session-state-v3-sessions-ledger",
-  "currentSession": null,
+  "currentSession": 1,
   "totalSessions": 5,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-17T05:08:54.752778-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": null,
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high"
+  },
   "completedSessions": []
 }

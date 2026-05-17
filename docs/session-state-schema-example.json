@@ -1,8 +1,6 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "sessionSetName": "example-session-set",
-  "currentSession": 2,
-  "totalSessions": 4,
   "status": "complete",
   "lifecycleState": "closed",
   "startedAt": "2026-04-30T13:00:00-04:00",
@@ -21,7 +19,32 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 verified clean; the same orchestrator is well-positioned to continue with Session 3."
+      "specifics": "Set 2 verified clean; the same orchestrator is well-positioned to continue."
     }
-  }
+  },
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Inventory + scaffold",
+      "status": "complete"
+    },
+    {
+      "number": 2,
+      "title": "Implement + verify",
+      "status": "complete"
+    },
+    {
+      "number": 3,
+      "title": "Migrate + bulk run",
+      "status": "complete"
+    },
+    {
+      "number": 4,
+      "title": "Migration UX + release",
+      "status": "complete"
+    }
+  ],
+  "currentSession": 4,
+  "totalSessions": 4,
+  "completedSessions": [1, 2, 3, 4]
 }

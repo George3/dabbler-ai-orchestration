@@ -136,7 +136,7 @@ Writers and readers should enforce these rules:
 5. Top-level `status: "not-started"` requires every session to be
    `"not-started"`.
 6. Top-level `status: "in-progress"` allows either exactly one in-progress
-   session or a between-sessions state with at least one done session and at
+   session or a between-sessions state with at least one complete session and at
    least one not-started session.
 7. Top-level `status: "complete"` requires every session to be `"complete"`.
 8. `lifecycleState: "closed"` pairs with top-level `status: "complete"` or
@@ -243,7 +243,7 @@ for old files indefinitely.
 The events ledger remains authoritative for audit history: when a close-out
 happened, which gate emitted it, and what repair path ran. The `sessions`
 ledger is the consumer-readable lifecycle snapshot: what session is active,
-what is done, and what comes next.
+what is complete, and what comes next.
 
 This proposal does not remove `status`, `lifecycleState`, timestamps,
 `verificationVerdict`, `orchestrator`, `forceClosed`, or cancellation marker

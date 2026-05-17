@@ -259,6 +259,18 @@ routing:
     # is the verdict; a separate verifier round adds cost without
     # improving reliability.
     session-close-out: sonnet
+    # Set 030 Session 1: spec-title-extraction is the AI-fallback path
+    # the Session 5 in-extension migrator and the bulk migrator use
+    # when ``### Session K of N: <title>`` regex extraction fails on a
+    # malformed spec.md. The task is mechanical: read spec.md, emit a
+    # JSON array of {number, title} records. Pinned to gemini-flash
+    # because Flash is the cheapest structured-JSON producer in the
+    # pool and short-extract latency matters more than depth here.
+    # NOT auto-routed (operator-driven only — see absence from
+    # delegation.always_route_task_types) and NOT auto-verified
+    # (structured output is its own verdict; a second-opinion round
+    # would burn budget without buying reliability).
+    spec-title-extraction: gemini-flash
 
 # --- Delegation ---
 # Guidance for orchestrators (Claude Code / Codex / Gemini) on which
@@ -308,6 +320,17 @@ task_type_params:
     sonnet:     { effort: low, thinking: { enabled: false } }
     gemini-pro: { thinking_budget: 0 }
     gpt-5-4-mini: { reasoning_effort: none }
+  # Set 030 Session 1: spec-title-extraction is a short structured
+  # extract; thinking off everywhere for speed + cost. Defaults are
+  # provided for every model in the pool so a tier-bump or override
+  # never lands on an un-tuned config.
+  spec-title-extraction:
+    gemini-flash: { thinking_budget: 0 }
+    gemini-pro:   { thinking_budget: 0 }
+    sonnet:       { effort: low, thinking: { enabled: false } }
+    opus:         { effort: low, thinking: { enabled: false } }
+    gpt-5-4-mini: { reasoning_effort: none }
+    gpt-5-4:      { reasoning_effort: none }
 
   # Medium tasks: adaptive thinking, medium effort.
   test-generation:
@@ -410,6 +433,7 @@ complexity:
     refactoring: 65
     session-verification: 70
     session-close-out: 15        # mechanical: read doc + run CLI
+    spec-title-extraction: 20    # short structured-JSON extract from spec.md
     general: 50
 
   # Keywords that push complexity up (+3 each, capped at +15)

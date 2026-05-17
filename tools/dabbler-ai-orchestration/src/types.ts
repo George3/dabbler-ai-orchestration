@@ -1,5 +1,48 @@
 export type SessionState = "done" | "in-progress" | "not-started" | "cancelled";
 
+// Set 030 Session 1 — session-state.json schema v3 ledger.
+// The set-level `SessionState` above is the extension's bucketing
+// state (Cancelled / Done / Active / Not Started); the union below
+// is the per-session status used in v3's `sessions[]` ledger and
+// must match Python's `SESSION_STATUSES` in `ai_router/progress.py`.
+// (Set 030 Session 3 will migrate the user-visible "Done" label to
+// "Complete"; the bucketing string literal stays "done" until then so
+// existing readers don't break.)
+export type SessionStatus = "not-started" | "in-progress" | "complete" | "cancelled";
+
+export interface SessionRecord {
+  number: number;
+  title: string;
+  status: SessionStatus;
+}
+
+export interface ProgressView {
+  sessions: SessionRecord[];
+  totalSessions: number;
+  completedSessions: number[];
+  currentSession: number | null;
+  nextSession: number | null;
+  isBetweenSessions: boolean;
+}
+
+// v3 session-state.json shape. Top-level fields mirror v2 except
+// the legacy progress triple (currentSession / totalSessions /
+// completedSessions) is replaced by the `sessions[]` ledger.
+// Set 030 Session 2's dual-write writers emit BOTH shapes on disk
+// so legacy readers keep working; this interface describes the v3
+// canonical fields only.
+export interface SessionStateV3 {
+  schemaVersion: 3;
+  sessionSetName: string;
+  status: "not-started" | "in-progress" | "complete" | "cancelled";
+  lifecycleState: "work_in_progress" | "closed" | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  verificationVerdict: string | null;
+  orchestrator: OrchestratorInfo | null;
+  sessions: SessionRecord[];
+}
+
 export interface SessionSetConfig {
   requiresUAT: boolean;
   requiresE2E: boolean;

@@ -3,8 +3,8 @@
 The machine-readable lifecycle file for every session set. The Session
 Set Explorer extension, `ai_router`'s `close_session`, the cancel /
 restore commands, and the cost dashboard all read it; on Full tier
-`ai_router` writes it, on Lightweight tier the human (or AI orchestrator)
-maintains it by hand.
+`ai_router` writes it, on Lightweight tier the human (or AI
+orchestrator) maintains it by hand.
 
 The schema is **strict where machines parse**: a fixed field set with
 canonical string values for `status` and `lifecycleState`. Field-name
@@ -14,54 +14,82 @@ hand-written file with `status: "completed"` (past participle) instead
 of `"complete"`, which displayed as N−1/N until the count derivation
 was canonicalized in extension v0.13.10.
 
+## v3 is canonical; v2 read support is permanent
+
+Set 030 (proposal at
+`docs/proposals/2026-05-17-session-state-sessions-ledger-v3.md`)
+replaced the v2 progress triple (`currentSession` /
+`totalSessions` / `completedSessions`) with a single canonical
+`sessions[]` ledger. **New writes always use v3.** v2 files keep
+working: the read-time synthesizer at
+[`ai_router/progress.py`](../ai_router/progress.py) normalizes v2 to
+a v3 view on the fly, and tolerant v2 read support is permanent.
+
+Dual-write of legacy fields is the operational steady state through
+this set (per Set 030 D5): Full-tier writers emit BOTH `sessions[]`
+and the legacy triple, so consumer repos pinned to older versions of
+the extension or the router keep working through the migration. A
+future set may flip "stop writing legacy" once every consumer has
+confirmed v3-reader support.
+
 ## When this applies
 
 Every directory under `docs/session-sets/<slug>/` that contains a
 `spec.md`. The state file sits next to `spec.md`, `activity-log.json`,
 and `change-log.md`. A directory with a spec but no state file is
-lazy-synthesized on first read by `ensureSessionStateFile` (mirrored in
-`ai_router/session_state.py` and `tools/.../utils/sessionState.ts`),
-which infers the initial status from current file presence.
+lazy-synthesized on first read (`ensureSessionStateFile` in the
+extension; `ensure_state_file` in the router), which infers the
+initial status from current file presence and writes a v3 skeleton.
 
 The schema applies to all four Dabbler consumer repos and to any new
 repo adopted through the bootstrap prompt.
 
-## State invariant (Set 022 — canonical)
+---
 
-Both writers (`start_session`, `close_session`) and all readers (the
-extension tree view, the close-out gate checks, the reconciler) derive
-their semantics from these three lines. When the snapshot's other
-fields disagree, this invariant wins:
+## Reader contract — every reader uses `get_progress()`
 
-```
-currentSession not in completedSessions[]                   → session currentSession is in flight
-currentSession in completedSessions[] AND status="in-progress"  → between sessions (set is live but no session is active)
-status = "complete"                                         → set done
-```
+There is exactly one reader path:
 
-The "in flight" predicate is what the extension uses to render
-`0/N · session 1 in flight` (the fresh-set case) versus `1/4` plain
-(the between-sessions case). The "between sessions" branch only
-exists for a brief moment between `close_session` returning and the
-human triggering the next session.
+- **Python:** `from ai_router.progress import get_progress`
+  (or, when reading a v2 file: `synthesize_v3_from_v2(state, spec_md_path)`
+  first, then `get_progress(state)`).
+- **TypeScript (extension):** `import { getProgress } from "../utils/progress";`
+  (with `synthesizeV3FromV2(state, specMdPath)` for v2 inputs).
 
-## Required fields
+The helper returns a `ProgressView` with every derived field already
+populated. Readers **MUST NOT** directly interpret `currentSession`,
+`totalSessions`, or `completedSessions` — those fields are legacy
+compatibility surface and the writer derives them from `sessions[]`.
+Direct reads risk re-introducing the off-by-one and drift bugs that
+motivated v3.
 
-A conforming `session-state.json` is a JSON object with these fields:
+Set 030 Session 3 ships a lint rule that fails CI on any direct
+legacy-field read inside application code (`ai_router/` and the
+extension's `src/`), with explicit carve-outs for `progress.py` /
+`progress.ts` themselves, the migrator, tests, and v2 compat code.
+
+---
+
+## v3 schema shape
+
+A conforming v3 `session-state.json` is a JSON object with these
+fields:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "sessionSetName": "<slug matching the directory name>",
-  "currentSession": <int | null>,
-  "totalSessions": <int | null>,
   "status": "not-started" | "in-progress" | "complete" | "cancelled",
-  "lifecycleState": "closed" | "work_in_progress" | null,
+  "lifecycleState": "work_in_progress" | "closed" | null,
   "startedAt": "<ISO 8601 timestamp | null>",
   "completedAt": "<ISO 8601 timestamp | null>",
   "verificationVerdict": "VERIFIED" | null,
   "orchestrator": { "engine": "...", "provider": "...", "model": "...", "effort": "..." } | null,
-  "completedSessions": [<int>, ...]
+  "sessions": [
+    { "number": 1, "title": "Schema doc + helper", "status": "complete" },
+    { "number": 2, "title": "Writers + scaffolding", "status": "in-progress" },
+    { "number": 3, "title": "Reader migration",     "status": "not-started" }
+  ]
 }
 ```
 
@@ -69,172 +97,287 @@ A conforming `session-state.json` is a JSON object with these fields:
 
 | Field | Type | Purpose |
 |---|---|---|
-| `schemaVersion` | int (currently `2`) | Schema gate; bump when breaking. |
+| `schemaVersion` | int (currently `3`) | Schema gate; bump when breaking. |
 | `sessionSetName` | string | Must equal the parent directory's basename. |
-| `currentSession` | int or null | 1-indexed; `null` only when status is `"not-started"`. |
-| `totalSessions` | int or null | Planned session count. May be `null` if uncertain; the extension also reads `totalSessions` from spec.md's yaml block. |
-| `status` | enum (see below) | Canonical lifecycle state. **Drives Done/Active bucketing and count derivation in the extension.** |
+| `status` | enum (see below) | Canonical top-level lifecycle state. Drives Done/Active bucketing in the extension. |
 | `lifecycleState` | enum or null | Coarser-grained machine-readable lifecycle (close-out's view). |
 | `startedAt` | ISO 8601 or null | First session start time. |
 | `completedAt` | ISO 8601 or null | Final session completion time. |
 | `verificationVerdict` | `"VERIFIED"` or null | Set by `close_session` after all gates pass. |
-| `orchestrator` | object or null | Engine / provider / model that ran the set. Null for fully-hand-driven Lightweight runs. |
+| `orchestrator` | object or null | Engine / provider / model / effort that ran the set. Null for hand-driven Lightweight runs. |
+| `sessions` | array of objects | The canonical progress ledger. See below. |
 
-## Status — the canonical string
+### `sessions[]` — the canonical progress ledger
 
-Exactly one of four values:
+Each entry is an object with three required fields:
 
-- `"not-started"` — no work yet; `currentSession` should be `null`.
-- `"in-progress"` — at least one session has begun and not all are complete.
-- `"complete"` — all sessions completed; close-out has run (or, on Lightweight, the human has confirmed).
-- `"cancelled"` — set was cancelled mid-flight. See `## Cancel / restore` below.
+| Field | Type | Purpose |
+|---|---|---|
+| `number` | positive int | 1-indexed session number. Unique within the array, sorted ascending. |
+| `title` | string | Display title, copied from `spec.md`'s `### Session K of N: <title>` heading. Cosmetic — drift between `spec.md` and the state file is benign. |
+| `status` | enum (see below) | Per-session lifecycle state. |
 
-**Aliases tolerated on read, never written:** the extension's `readStatus()`
-and `ai_router.session_state` both canonicalize `"completed"` and `"done"`
-to `"complete"` at the read boundary (`STATUS_ALIASES` in
-`tools/dabbler-ai-orchestration/src/utils/sessionState.ts`). The
-canonicalization keeps legacy files functional but **all new writes must
-emit the canonical token**. Drift to `"completed"` or `"done"` is a bug
-in the writer, not a valid alternate spelling.
+`number` and `status` are authoritative for progress semantics; `title`
+exists so consumers don't have to re-parse `spec.md` for every UI
+refresh. A future repair command may refresh stale titles from
+`spec.md`; until then, title drift is cosmetic (per the Set 030
+Gemini-approved clarification).
 
-## lifecycleState — the coarse machine view
+### Dual-write legacy fields (Set 030 steady state)
+
+Through this set and indefinitely after, Full-tier writers also emit
+the legacy progress triple, derived from `sessions[]`:
+
+```json
+{
+  ...,
+  "currentSession": 2,
+  "totalSessions": 3,
+  "completedSessions": [1]
+}
+```
+
+These three fields are **observability only** in v3 — they exist so
+older readers (consumer repos still on a pre-v3 extension, ad-hoc
+scripts, the cost dashboard's legacy paths) keep working. They are
+never the source of truth; if the dual-write parity test ever flags a
+disagreement between `sessions[]` and the legacy triple, the bug is
+on the writer side and the legacy values must be regenerated from
+`sessions[]`.
+
+---
+
+## Status — the canonical glossary
+
+### Top-level `status`
+
+Exactly one of four values; same vocabulary as the per-session
+ledger:
+
+- `"not-started"` — no session has begun.
+- `"in-progress"` — at least one session has begun and not all are
+  complete. **Includes the between-sessions state** (one session
+  closed, the next not yet started).
+- `"complete"` — every session in `sessions[]` is `"complete"`.
+- `"cancelled"` — set was cancelled mid-flight. Filename
+  (`CANCELLED.md`) is the primary marker; `status: "cancelled"`
+  follows.
+
+**Aliases tolerated on read, never written:** the canonicalizer in
+both helpers maps `"completed"` and `"done"` to `"complete"`. The
+canonicalization keeps legacy files functional but **all new writes
+must emit the canonical token**. Drift to `"completed"` or `"done"`
+is a bug in the writer, not a valid alternate spelling.
+
+> **Terminology note (Set 030):** the Session Set Explorer's display
+> label has been unified from "Done" to "Complete" everywhere it
+> appears (rendered tree labels, viewsWelcome text, README
+> screenshots). The JSON canonical token and the display label now
+> match: one word, one mental model. The legacy "Done" string only
+> survives as an internal bucketing type alias
+> (`SessionState = "done" | ...`) and the read-time alias map.
+
+### Per-session `sessions[].status`
+
+Three accepted values today:
+
+- `"not-started"` — this session has not begun.
+- `"in-progress"` — this session is currently active. **At most one
+  session may be in this state at a time** (invariant rule 3).
+- `"complete"` — this session has closed successfully.
+
+**Not accepted:** `"cancelled"` at the session level is reserved
+for a future schema. Set 030 only exercises set-level cancellation
+(`CANCELLED.md` filename marker plus top-level
+`status: "cancelled"`). Validators raise
+`SessionStateInvariantError(rule=2)` if a session entry uses it.
+
+### `lifecycleState` — the coarse machine view
 
 Exactly one of:
 
 - `null` — set is `not-started`; nothing to track.
-- `"work_in_progress"` — at least one session has begun; the set is still
-  live for close-out and queue routing.
-- `"closed"` — final close-out has run. Pairs with `status: "complete"`
-  or `status: "cancelled"` (via cancel-flow markers).
+- `"work_in_progress"` — at least one session has begun; the set is
+  still live for close-out and queue routing.
+- `"closed"` — final close-out has run. Pairs with
+  `status: "complete"` or `status: "cancelled"` only (invariant rule
+  8).
 
-`lifecycleState: "done"`, `"active"`, `"finished"`, or any other value
-is **not** canonical. The extension's bucketing uses `status` first
-(via the alias map) and `lifecycleState` only as a tiebreaker; a mismatch
-won't crash the UI but it surfaces in events-ledger audits and may
-confuse other consumers.
+---
 
-### `completedSessions: number[]` (always written on Full; always maintained on Lightweight)
+## Derived values — the `get_progress()` view
 
-Array of 1-indexed session numbers that have been completed, sorted
-ascending, no duplicates. **Schema v2's authoritative progress
-ledger.** Set 022 promoted this field from "optional but planned" to
-the canonical "X done out of N" signal on both tiers.
+`get_progress(state)` returns:
 
-When present, the extension uses `completedSessions.length` directly
-and computes the "in flight" predicate
-(`currentSession not in completedSessions[]`) to drive the
-`· session N in flight` annotation on early-session-1 rows. When
-absent on legacy sets, the extension falls back to the events-ledger
-count (distinct `closeout_succeeded` session numbers) and then to
-`totalSessions` when `status === "complete"`. The
-`currentSession − 1` fallback has been retired from the reader side
-(extension v0.13.12) — the writer-side helper
-`compute_effective_completed_sessions` makes it unnecessary, and
-removing the reader fallback eliminates an off-by-one class.
-
-Writer responsibility:
-
-- **Full tier.** `close_session` appends `currentSession` to
-  `completedSessions[]` on every successful close (non-final and
-  final), backfilling the array from the events ledger if the legacy
-  set was missing it. `start_session` preserves the existing array
-  across its snapshot rewrite, also backfilling from events for
-  pre-Set-022 sets.
-- **Lightweight tier.** The orchestrator or human appends
-  `currentSession` to `completedSessions[]` by hand on every close.
-  Without a router-driven writer, this array is the only authoritative
-  count signal — there is no events ledger to fall back to.
-
-```json
-{ ..., "completedSessions": [1, 2, 3] }
+```text
+sessions            = state.sessions
+totalSessions       = sessions.length
+completedSessions   = [s.number for s in sessions if s.status == "complete"]
+currentSession      = the single session where s.status == "in-progress", else null
+nextSession         = first session where s.status == "not-started", else null
+isBetweenSessions   = currentSession is null
+                      AND completedSessions is non-empty
+                      AND nextSession is not null
 ```
 
-## Optional fields
+The `isBetweenSessions` predicate is what the extension's tree view
+uses to distinguish a fresh-start row from a "set is live but no
+session is active right now" row, and to decide whether to render the
+"session N in flight" annotation.
 
-### `forceClosed: boolean`
+---
 
-Set by `close_session --force` to record that gates were bypassed.
-Observability only; doesn't change UI behavior.
+## Invariants — the 8 v3 rules
 
-### `orchestrator.effort`
+Writers and readers enforce these rules; violations raise
+`SessionStateInvariantError` (Python) /
+`SessionStateInvariantError` (TypeScript) with the violated rule
+number and an actionable message. **Fail loud, never silently
+recover.** Recovery lives in explicit repair tooling
+(`close_session --repair`, future `migrate_session_state`); the
+normal writers and the read-side validator never paper over a
+violation.
 
-Optional `"low"`, `"medium"`, or `"high"` hint carried through to the
-provider.
+1. **`sessions` is required and non-empty** for any set with a
+   known plan.
+2. **`sessions[].number` values are positive integers, unique, and
+   contiguous starting at 1** (per spec decision D12: skipped
+   sessions are not supported; the invariant is *strict sequential*,
+   so `[1, 3]` is rejected, not just `[2, 1]`). Each entry's
+   `status` must be one of `"not-started"`, `"in-progress"`, or
+   `"complete"` — **session-level `"cancelled"` is reserved for a
+   future schema** and rejected today.
+3. **At most one session may have `status: "in-progress"`.**
+4. **No session may be `"complete"` if an earlier session is
+   `"not-started"` or `"in-progress"`.** Complete sessions form a
+   contiguous prefix.
+5. **Top-level `status: "not-started"`** requires every session to
+   be `"not-started"`.
+6. **Top-level `status: "in-progress"`** allows either exactly one
+   in-progress session OR a between-sessions state (≥1 complete, ≥1
+   not-started, 0 in-progress).
+7. **Top-level `status: "complete"`** requires every session to be
+   `"complete"`. The synthesizer is intentionally non-papering: a
+   v2 file with `status: "complete"` but an incomplete
+   `completedSessions[]` ledger is surfaced as a rule-7 violation
+   rather than coerced into a "consistent" shape.
+8. **`lifecycleState: "closed"`** pairs with top-level
+   `status: "complete"` or `"cancelled"` only. This rule fires even
+   when top-level `status` is absent — a state with
+   `lifecycleState: "closed"` and missing `status` is internally
+   inconsistent regardless.
 
-## Cancel / restore
+> **Shape-vs-invariant errors.** Unknown top-level `status` values
+> (typos, future tokens) raise `SessionStateInvariantError(rule=2)`
+> as a structural/enum error, not rule 5/6/7 specifically — those
+> rules are about consistency between top-level and per-session
+> states, not about the top-level vocabulary itself.
 
-Cancellation is tracked by **file presence** (`CANCELLED.md` /
-`RESTORED.md`), not by a `status: "cancelled"` field alone. The
-extension's bucketing rule (per Set 008's spec) is filename-first:
-`CANCELLED.md` present → tree state is Cancelled regardless of
-`status`. The `cancelLifecycle` helpers in `ai_router` and the
-extension keep `status` in lockstep with the markdown markers so the
-two signals don't diverge; manual edits resolve via the file-presence
-path.
+---
 
-## Lazy synthesis (file-absent branch)
+## Lightweight tier — one-field-flip worked example
 
-A folder with `spec.md` but no `session-state.json` triggers
-`ensureSessionStateFile`, which infers a starting shape from current
-file presence:
+The Lightweight tier maintains `session-state.json` by hand. The v3
+shape is deliberately optimized so each session transition is a
+**single-field edit** to one `sessions[]` entry, plus an optional
+top-level `status` flip on the first/last transition.
 
-| Files present | Inferred `status` | Inferred `lifecycleState` |
-|---|---|---|
-| `change-log.md` | `"complete"` | `"closed"` |
-| `activity-log.json` (no change-log) | `"in-progress"` | `"work_in_progress"` |
-| Neither | `"not-started"` | `null` |
-
-Both the TS and Python writers must produce structurally identical
-content — concurrent synthesis under a race resolves last-rename-wins
-without confusion.
-
-## Tier expectations
-
-- **Full tier** (`Workflow: Full` in the spec frontmatter): `ai_router`
-  writes the state file on every session boundary.
-  - `start_session` (Set 022): writes the in-flight shape — `currentSession`,
-    `status: "in-progress"`, `lifecycleState: "work_in_progress"`,
-    `startedAt` (if previously null), clears `completedAt` and
-    `verificationVerdict`. Preserves `completedSessions[]` from prior
-    state (or backfills from the events ledger on a legacy set).
-  - `close_session`: appends `currentSession` to `completedSessions[]`
-    on every close; flips `status` to `"complete"` and
-    `lifecycleState` to `"closed"` only on the final close (when
-    `len(completedSessions) == totalSessions` post-append).
-- **Lightweight tier** (`Workflow: Lightweight`): no router writes.
-  The human or AI orchestrator maintains the file by hand on each
-  session boundary, following the same field-by-field rules. **Always
-  include and maintain `completedSessions[]`** — it is the only
-  authoritative count signal under hand-maintenance.
-
-## Worked examples
-
-### Lightweight tier, all sessions complete
+Starting state (fresh set, 3 sessions planned):
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "sessionSetName": "002-extraction-pipeline",
-  "currentSession": 3,
-  "totalSessions": 3,
-  "status": "complete",
-  "lifecycleState": "closed",
-  "startedAt": "2026-05-12",
-  "completedAt": "2026-05-12",
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": null,
-  "completedSessions": [1, 2, 3]
+  "sessions": [
+    { "number": 1, "title": "Discover sources", "status": "not-started" },
+    { "number": 2, "title": "Extract + normalize", "status": "not-started" },
+    { "number": 3, "title": "Load + verify", "status": "not-started" }
+  ]
 }
 ```
 
-### Full tier, mid-set (session 2 in flight, session 1 closed)
+### Start session 1
+
+- Flip `sessions[0].status`: `"not-started"` → `"in-progress"`
+- Flip top-level `status`: `"not-started"` → `"in-progress"`
+- Flip `lifecycleState`: `null` → `"work_in_progress"`
+- Set `startedAt` to today's ISO timestamp
+
+(The top-level flips happen only on the first session's start.)
+
+### Close session 1
+
+- Flip `sessions[0].status`: `"in-progress"` → `"complete"`
+
+That's it. No other edits required. The top-level `status` stays
+`"in-progress"` because session 2 has not started yet — this is the
+canonical between-sessions state.
+
+### Start session 2
+
+- Flip `sessions[1].status`: `"not-started"` → `"in-progress"`
+
+One edit.
+
+### Close session 2
+
+- Flip `sessions[1].status`: `"in-progress"` → `"complete"`
+
+One edit.
+
+### Start + close session 3 (final)
+
+- Start: flip `sessions[2].status`: `"not-started"` →
+  `"in-progress"`
+- Close: flip `sessions[2].status`: `"in-progress"` → `"complete"`
+- Final-close additional flips: top-level `status` →
+  `"complete"`, `lifecycleState` → `"closed"`, set `completedAt` to
+  today's ISO timestamp.
+
+The Set 030 D10 ergonomic test (Session 4) replays this exact
+sequence against a real `dabbler-homehealthcare-accessdb` state file
+to confirm the one-field-flip property holds end-to-end before the GA
+release.
+
+---
+
+## Worked examples (v3)
+
+### Not-started
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "sessionSetName": "022-next-up",
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "sessions": [
+    { "number": 1, "title": "Plan",   "status": "not-started" },
+    { "number": 2, "title": "Build",  "status": "not-started" },
+    { "number": 3, "title": "Verify", "status": "not-started" }
+  ]
+}
+```
+
+`get_progress()` returns
+`currentSession=None`, `nextSession=1`, `isBetweenSessions=False`.
+
+### Mid-set, session 2 in flight
+
+```json
+{
+  "schemaVersion": 3,
   "sessionSetName": "021-developer-approachability",
-  "currentSession": 2,
-  "totalSessions": 4,
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
   "startedAt": "2026-05-11T14:30:00-04:00",
@@ -246,112 +389,238 @@ without confusion.
     "model": "claude-opus-4-7",
     "effort": "normal"
   },
-  "completedSessions": [1]
+  "sessions": [
+    { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
+    { "number": 2, "title": "Wire the wizard into onboarding", "status": "in-progress" },
+    { "number": 3, "title": "Marketplace launch checklist",    "status": "not-started" },
+    { "number": 4, "title": "Final round of dogfood feedback", "status": "not-started" }
+  ]
 }
 ```
 
-The invariant: `currentSession (2) not in completedSessions[]
-([1])` → session 2 is in flight. The extension's tree view renders
-this as `1/4 · session 2 in flight`.
+`get_progress()` returns `currentSession=2`, `nextSession=3`,
+`completedSessions=[1]`, `isBetweenSessions=False`. The extension's
+tree view renders this as `1/4 · session 2 in flight`.
 
-### Not started
+### Between sessions
+
+Session 1 has closed; session 2 has not yet started. Top-level status
+is still `in-progress` (the set is live), but no session is in
+flight.
 
 ```json
 {
-  "schemaVersion": 2,
-  "sessionSetName": "022-next-up",
-  "currentSession": null,
-  "totalSessions": 3,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
+  "schemaVersion": 3,
+  "sessionSetName": "030-session-state-v3-sessions-ledger",
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-17T05:00:00-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": null
+  "orchestrator": { "engine": "claude", "provider": "anthropic", "model": "claude-opus-4-7", "effort": "high" },
+  "sessions": [
+    { "number": 1, "title": "Schema doc + get_progress() helper + v2-read synthesizer", "status": "complete" },
+    { "number": 2, "title": "Dual-write writers + scaffolding",                          "status": "not-started" },
+    { "number": 3, "title": "Reader migration + Explorer label",                         "status": "not-started" },
+    { "number": 4, "title": "Bulk migrator + in-repo migration + RC build",              "status": "not-started" },
+    { "number": 5, "title": "Migration UX + loading state + final release",              "status": "not-started" }
+  ]
 }
 ```
 
-## Parser cheat-sheet (for AI orchestrators and tooling)
+`get_progress()` returns `currentSession=None`, `nextSession=2`,
+`completedSessions=[1]`, `isBetweenSessions=True`. The extension's
+tree view renders this as `1/5` plain (no in-flight annotation).
 
-Reading the canonical state of a folder:
+### Complete
 
-1. Parse `session-state.json` as a JSON object.
-2. Read `status`; canonicalize via the alias map (`"completed"` →
-   `"complete"`, `"done"` → `"complete"`).
-3. Read `completedSessions` if present; that's the authoritative count.
-4. Else read `session-events.jsonl` and count distinct
-   `closeout_succeeded` session numbers (Full-tier fallback for sets
-   that pre-date Set 022 — extension v0.13.12 reader path, and what
-   `ai_router.session_state.compute_effective_completed_sessions`
-   uses to backfill the array on the next boundary write).
-5. Else if canonical `status === "complete"`, count = `totalSessions`.
-6. Do **not** fall back to `currentSession − 1`. The reader-side
-   fallback was retired in extension v0.13.12; the writer-side helper
-   keeps `completedSessions[]` correct, and removing the reader
-   fallback eliminates an off-by-one class. Sets without either
-   `completedSessions[]` or a closeout-events trail read as 0
-   completed until the next boundary write heals them.
+```json
+{
+  "schemaVersion": 3,
+  "sessionSetName": "021-developer-approachability",
+  "status": "complete",
+  "lifecycleState": "closed",
+  "startedAt": "2026-05-11T14:30:00-04:00",
+  "completedAt": "2026-05-13T18:45:00-04:00",
+  "verificationVerdict": "VERIFIED",
+  "orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "normal"
+  },
+  "sessions": [
+    { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
+    { "number": 2, "title": "Wire the wizard into onboarding", "status": "complete" },
+    { "number": 3, "title": "Marketplace launch checklist",    "status": "complete" },
+    { "number": 4, "title": "Final round of dogfood feedback", "status": "complete" }
+  ]
+}
+```
 
-Computing the "in flight" predicate (used by the tree view to
-distinguish a fresh-start row from a between-sessions row):
+---
 
-- If `completedSessions` is missing or null → unknown, fall back to
-  count-only display.
-- If `currentSession` is set and not in `completedSessions[]` →
-  session `currentSession` is in flight.
-- Else → between sessions (set is live but no session is active).
+## Cancel / restore
 
-Bucketing in the Session Sets Explorer:
+Cancellation is tracked by **file presence** (`CANCELLED.md` /
+`RESTORED.md`), not by `status: "cancelled"` alone. The extension's
+bucketing rule is filename-first: `CANCELLED.md` present → tree
+state is Cancelled regardless of `status`. The `cancelLifecycle`
+helpers keep `status` in lockstep with the markdown markers so the
+two signals don't diverge; manual edits resolve via the file-presence
+path.
 
-- `CANCELLED.md` present → Cancelled (filename wins).
-- Else canonical `status === "complete"` and not mid-set → Done.
-- Else canonical `status === "in-progress"` → Active.
-- Else → Not Started.
+Per-session cancellation is reserved for a future schema. v3 readers
+tolerate `"cancelled"` in `sessions[]` but no v3 writer emits it.
+
+---
+
+## Lazy synthesis (file-absent branch)
+
+A folder with `spec.md` but no `session-state.json` triggers
+`ensureSessionStateFile` (extension) / `ensure_state_file` (router),
+which infers a starting shape from current file presence:
+
+| Files present | Inferred `status` | Inferred `lifecycleState` |
+|---|---|---|
+| `change-log.md` | `"complete"` | `"closed"` |
+| `activity-log.json` (no change-log) | `"in-progress"` | `"work_in_progress"` |
+| Neither | `"not-started"` | `null` |
+
+Both writers also seed `sessions[]` by parsing `spec.md` headings
+(`### Session K of N: <title>`); when the spec has no headings, they
+fall back to generic `"Session N"` titles up to the planned count.
+
+---
+
+## Tier expectations
+
+- **Full tier** (`Workflow: Full` in the spec frontmatter): `ai_router`
+  writes the state file on every session boundary.
+  - `start_session`: validates no other session is in-progress
+    (invariant rule 3), flips `sessions[N-1].status` to
+    `"in-progress"`, sets top-level `status` and `lifecycleState`
+    accordingly, sets `startedAt` if previously null. Always backfills
+    `sessions[]` from `spec.md` if absent.
+  - `close_session`: validates `sessions[N-1].status` is
+    `"in-progress"` (or already `"complete"` under idempotent
+    retry), flips it to `"complete"`, then re-derives top-level
+    status (rule 6/7) and lifecycleState (rule 8). Final close also
+    sets `completedAt` and `verificationVerdict`.
+- **Lightweight tier** (`Workflow: Lightweight`): no router writes.
+  The human or AI orchestrator maintains the file by hand on each
+  session boundary using the one-field-flip recipe above. **Always
+  include and maintain `sessions[]`** — it is the only authoritative
+  progress signal under hand-maintenance.
+
+---
+
+## Reading a v2 file (compat path)
+
+Before v3 reaches every consumer repo, readers will still encounter
+v2 files in the wild. The compat path is:
+
+1. Read the file as JSON. Check `schemaVersion`.
+2. If `schemaVersion == 3`: pass directly to `get_progress(state)`.
+3. If `schemaVersion == 2` (or missing): call
+   `synthesize_v3_from_v2(state, spec_md_path)` first. The
+   synthesizer returns a NEW dict (does not mutate the input) with
+   `sessions[]` derived from `completedSessions[]`, `currentSession`,
+   and `spec.md` titles. Pass the result to `get_progress()`.
+4. The Session 5 bulk migrator (`python -m
+   ai_router.migrate_session_state`) is the eventual one-shot path
+   for converting v2 files in place. Until then, the read-side
+   synthesizer is the daily-driver path.
+
+### v2 → v3 default-to-not-started rule
+
+The synthesizer follows the project's
+`feedback_default_not_started_evidence_to_escalate` rule: every
+session defaults to `"not-started"` and is only escalated when
+concrete evidence is present:
+
+- A session escalates to `"complete"` **only** if its number is
+  present in v2's `completedSessions[]` as a strict positive integer
+  (not `true`, not `1.0`).
+- A session escalates to `"in-progress"` **only** if it equals v2's
+  `currentSession` AND the top-level status is `"in-progress"` AND
+  the session is not already complete.
+- All other sessions stay `"not-started"`.
+
+This biases conservatively: a hand-edited v2 file with ambiguous
+fields reads as less progressed than it might be, which the operator
+can fix by hand, rather than reading as more progressed and silently
+producing wrong "X/N" counts.
+
+**The synthesizer does not "fix" contradictions.** A v2 file with
+top-level `status: "complete"` but an incomplete
+`completedSessions[]` is reported faithfully: the named-complete
+sessions are `"complete"`, the rest are `"not-started"`, and the
+contradiction surfaces as a rule-7 violation on the next
+`get_progress()` call. Per the "fail loud, never silently recover"
+rule, the operator (or a repair tool) is responsible for resolving
+the inconsistency before the file becomes readable. Earlier drafts
+of the synthesizer force-promoted every session to complete in this
+case; that papered over real human errors and was removed.
+
+---
+
+## Migration recipe (one-time, for legacy v1/v2 files)
+
+The bulk migrator in Set 030 Session 4 will run this recipe
+automatically on every state file under `docs/session-sets/`. For
+ad-hoc hand-migration of a single file:
+
+1. Run `synthesize_v3_from_v2()` on the existing state with the set's
+   `spec.md` path. The returned dict is the v3 shape.
+2. Inspect the synthesized `sessions[]` titles. Edit any that the
+   regex got wrong (titles drift on hand-rewritten specs).
+3. Bump `schemaVersion` to `3`.
+4. Remove the legacy progress triple — or leave them in place if the
+   file will be read by an old reader; the dual-write contract treats
+   the triple as compat surface and ignores it on the source-of-truth
+   path.
+5. Write the file back. The next `start_session` /
+   `close_session` invocation will rewrite the dual-write shape and
+   normalize anything that drifted further.
+
+Lifecycle-state and status-token migration recipes are unchanged from
+v2:
+
+- Rewrite `status: "completed"` → `"complete"` and
+  `status: "done"` → `"complete"`.
+- Rewrite `lifecycleState: "done"` / `"active"` / `"finished"` to
+  the canonical `"closed"` (terminal) or `"work_in_progress"`
+  (live).
+
+---
+
+## Bucketing in the Session Sets Explorer (v3)
+
+The extension's tree view buckets each row from `get_progress()` plus
+filename signals:
+
+- `CANCELLED.md` present → **Cancelled** (filename wins).
+- Else top-level `status === "complete"` and `isBetweenSessions ===
+  false` → **Complete** (the user-visible label that was "Done"
+  through v0.13.x).
+- Else top-level `status === "in-progress"` → **Active**.
+- Else → **Not Started**.
 
 The "not mid-set" guard (`isMidSetComplete` in
-`tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`) consults two
-authoritative whether-closed signals as of extension v0.13.13:
+`tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`) consults
+the same `sessions[]` ledger as `get_progress()`; v3 makes the guard
+trivial since "every session complete" is directly readable. The
+legacy `completedSessions[]` + events-ledger fallback paths described
+in earlier versions of this doc are still tolerated for reading old
+files but are not exercised by v3 writers.
 
-1. `completedSessions[]` — if it includes `currentSession`, the
-   snapshot agrees the final session is closed. The guard accepts this
-   even when the events ledger lacks the corresponding
-   `closeout_succeeded` event (the migration shape from a
-   pre-Set-022 set whose operator hand-added the array). When the
-   array overrides a missing ledger entry, a one-line `console.warn`
-   surfaces the drift; the override is correct, the warn is
-   observability only.
-2. `session-events.jsonl` — if `closeout_succeeded` is present for
-   `currentSession`, the ledger agrees. The legacy path for sets
-   without `completedSessions[]`.
+---
 
-The guard downgrades to Active only when both signals lack a
-whether-closed answer for `currentSession`. **The phrasing matters:**
-`completedSessions[]` is authoritative for *whether* a session is
-closed; the events ledger is authoritative for *when* each closeout
-was recorded. Future maintainers should not read "both are
-authoritative" as "must agree" — they are alternative
-whether-closed signals.
+## Drift check
 
-## Migration
-
-For consumer repos carrying pre-Set-7 drift:
-
-1. Rewrite `status: "completed"` → `"complete"` and `status: "done"` →
-   `"complete"`.
-2. Rewrite `lifecycleState: "done"` / `"active"` / `"finished"` to the
-   canonical `"closed"` (for terminal states) or `"work_in_progress"`
-   (for live ones).
-3. Add `completedSessions: [1, 2, ...]` listing every session that
-   has completed. **Required on both tiers as of Set 022.** On Full
-   tier the next `start_session` or `close_session` call backfills
-   this automatically (via `compute_effective_completed_sessions`),
-   so a hand-migration is optional but never harmful.
-4. Leave timestamps and other observability fields alone unless
-   demonstrably wrong.
-
-The extension tolerates the unmigrated state files via the
-read-boundary alias map (since v0.13.10) and the events-ledger
-fallback (since v0.13.12), so this migration can be done at leisure
-without breaking the UI. Migrate to keep the files self-describing
-for non-extension readers and to make the count derivation cheap
-(reading one JSON array beats parsing the full events ledger).
+The v3 example file at `docs/session-state-schema-example.json` is
+the canonical reference. A future drift check (Session 4 of Set 030
+or later) will regenerate it from the live schema constants and
+fail-loud when the documented example and the live writer
+disagree. Until then, keep them in sync by hand when either changes.
