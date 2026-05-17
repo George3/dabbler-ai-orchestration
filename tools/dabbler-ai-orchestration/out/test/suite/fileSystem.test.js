@@ -419,11 +419,34 @@ suite("fileSystem — readSessionSets", () => {
         assert.strictEqual(written.sessions.length, 2);
         fs.rmSync(dir, { recursive: true });
     });
-    test("lazy-synth infers 'in-progress' from legacy activity-log.json", () => {
+    test("lazy-synth with change-log.md but NO spec totalSessions stays not-started (Round A fix)", () => {
+        // Round-A regression (Set 030 Session 3 verifier): when spec.md
+        // has no Session Set Configuration totalSessions, buildSessions
+        // returns undefined and the writer cannot emit a reader-valid
+        // status=complete snapshot. The backfill must fall through to
+        // not-started rather than write {status: "complete"} with no
+        // sessions[] / completedSessions[] (which would fail rule 1 +
+        // rule 7 on the next readProgress call).
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "plan-less");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# plan-less\n");
+        fs.writeFileSync(path.join(setDir, "change-log.md"), "# Changes\n");
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        // Without a plan, the snapshot can't claim complete — bucket as
+        // not-started.
+        assert.strictEqual(sets[0].state, "not-started");
+        const written = JSON.parse(fs.readFileSync(path.join(setDir, "session-state.json"), "utf8"));
+        assert.strictEqual(written.status, "not-started");
+        assert.strictEqual(written.lifecycleState, null);
+        assert.strictEqual(written.sessions, undefined);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("lazy-synth infers 'in-progress' from legacy activity-log.json (with spec totalSessions)", () => {
         const dir = makeTmpDir();
         const setDir = path.join(dir, "docs", "session-sets", "legacy-active");
         fs.mkdirSync(setDir, { recursive: true });
-        fs.writeFileSync(path.join(setDir, "spec.md"), "# legacy-active\n");
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# legacy-active\n\n## Session Set Configuration\n\n```yaml\ntotalSessions: 3\n```\n");
         fs.writeFileSync(path.join(setDir, "activity-log.json"), JSON.stringify({
             entries: [{ sessionNumber: 1, dateTime: "2026-01-01T00:00:00-04:00" }],
         }));
@@ -432,6 +455,9 @@ suite("fileSystem — readSessionSets", () => {
         const written = JSON.parse(fs.readFileSync(path.join(setDir, "session-state.json"), "utf8"));
         assert.strictEqual(written.status, "in-progress");
         assert.strictEqual(written.startedAt, "2026-01-01T00:00:00-04:00");
+        assert.strictEqual(written.schemaVersion, 3);
+        assert.ok(Array.isArray(written.sessions));
+        assert.strictEqual(written.sessions[0].status, "in-progress");
         fs.rmSync(dir, { recursive: true });
     });
     test("skips directories starting with underscore", () => {

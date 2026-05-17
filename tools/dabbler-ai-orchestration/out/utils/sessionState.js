@@ -157,9 +157,25 @@ function backfillPayload(sessionSetDir) {
     // the v3 invariants. change-log present -> all complete;
     // activity-log only -> session 1 in-progress; neither -> all
     // not-started (the notStartedPayload default).
+    //
+    // Round A fix: when totalSessions is unknown (no spec.md or no
+    // Session Set Configuration block), buildSessions returns undefined
+    // and we CANNOT escalate to complete/in-progress without violating
+    // rule 1 (sessions[] required for any set with a known plan). In
+    // that case the backfill stays at the not-started shape — the
+    // operator's intent (signaled by change-log.md presence) is
+    // preserved via the file presence itself; the next boundary write
+    // with a spec.md plan will re-promote.
     const totalSessions = readTotalSessionsFromSpec(sessionSetDir);
     const changelogPath = path.join(sessionSetDir, "change-log.md");
     if (fs.existsSync(changelogPath)) {
+        const sessions = buildSessions(totalSessions, "complete");
+        if (sessions === undefined) {
+            // No spec plan — cannot emit a reader-valid `complete` snapshot.
+            // Fall through to the not-started shape; preserves operator
+            // intent without producing an invariant-violating file.
+            return notStartedPayload(sessionSetDir);
+        }
         const base = notStartedPayload(sessionSetDir);
         base.status = "complete";
         base.lifecycleState = "closed";
@@ -170,16 +186,19 @@ function backfillPayload(sessionSetDir) {
         catch {
             base.completedAt = null;
         }
-        const sessions = buildSessions(totalSessions, "complete");
-        if (sessions !== undefined) {
-            base.sessions = sessions;
-            base.completedSessions = sessions.map((s) => s.number);
-            base.currentSession = null;
-        }
+        base.sessions = sessions;
+        base.completedSessions = sessions.map((s) => s.number);
+        base.currentSession = null;
         return base;
     }
     const activityPath = path.join(sessionSetDir, "activity-log.json");
     if (fs.existsSync(activityPath)) {
+        const sessions = buildSessions(totalSessions, "in-progress");
+        if (sessions === undefined) {
+            // No spec plan — cannot emit a reader-valid `in-progress`
+            // snapshot. Fall through to not-started.
+            return notStartedPayload(sessionSetDir);
+        }
         const base = notStartedPayload(sessionSetDir);
         base.status = "in-progress";
         base.lifecycleState = "work_in_progress";
@@ -196,12 +215,9 @@ function backfillPayload(sessionSetDir) {
         catch {
             base.startedAt = null;
         }
-        const sessions = buildSessions(totalSessions, "in-progress");
-        if (sessions !== undefined) {
-            base.sessions = sessions;
-            base.completedSessions = [];
-            base.currentSession = 1;
-        }
+        base.sessions = sessions;
+        base.completedSessions = [];
+        base.currentSession = 1;
         return base;
     }
     return notStartedPayload(sessionSetDir);

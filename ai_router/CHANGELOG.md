@@ -5,6 +5,69 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.0rc1] — 2026-05-17 (release candidate, not published)
+
+### Added
+
+- **`session-state.json` schema v3 (Set 030).** Replaces the v2
+  progress triple (`currentSession` / `totalSessions` /
+  `completedSessions`) with a single canonical `sessions[]` ledger.
+  Status terminology unified on `"complete"` at both session and set
+  level (the v2 `"done"` / `"completed"` aliases are tolerated on
+  read, canonicalized on write). New writes carry `schemaVersion: 3`;
+  read-side tolerates v2 indefinitely via `synthesize_v3_from_v2()`.
+- **Single normalized progress helper (`ai_router/progress.py`,
+  Session 1).** `get_progress()` is the canonical reader path; every
+  application reader in `ai_router/` was migrated to it in Session 3
+  (close-out gates, the reconciler, `start_session` preflight, the
+  cost reporter). Direct reads of the legacy triple are forbidden in
+  source under a pytest grep guard (D13 lint rule, also Session 3).
+- **8 v3 invariants enforced by writers and readers (Sessions 1-2).**
+  `register_session_start` and `_flip_state_to_closed` raise
+  `SessionStateInvariantError` (re-exported from `progress`) on every
+  rule violation — no silent recovery, no force-close fallback (spec
+  D6).
+- **Dual-write writers (Session 2).** Writers emit BOTH the v3
+  `sessions[]` and the legacy triple (derived, never independently
+  maintained) so consumer repos still on v2 readers see no
+  disruption. The legacy emission stays in place for the entire
+  Set 030 release window (spec D5); a future set may flip "stop
+  writing legacy" once consumers confirm v3-reader migration.
+- **Bulk migrator CLI (`python -m ai_router.migrate_session_state`,
+  Session 4).** One-shot v2→v3 migration. Inferential (force-promote
+  closed sets even when `completedSessions[]` was never populated).
+  Strategies: `regex` (spec.md headings, default), `generic`
+  (`Session N` labels), `ai` (reserved for Session 5),
+  `interactive`. Idempotent. Dry-run default; `--in-place` to
+  write. JSON output for CI hooks. See
+  [`docs/migration-v3-dry-run.md`](../docs/migration-v3-dry-run.md).
+- **`spec-title-extraction` task type registered in
+  `router-config.yaml` (Session 1, per spec D14).** Pinned to
+  `gemini-flash`; not auto-routed; the Session 5 in-extension AI
+  fallback consumes it. Landing the task type early removes a
+  Session 5 dependency risk.
+
+### Schema
+
+- `session-state.json` now carries `sessions[]` (required, non-empty,
+  contiguous from 1, max one `"in-progress"`). The legacy
+  `currentSession` / `totalSessions` / `completedSessions` are
+  retained as derived dual-write fields.
+- See [`docs/session-state-schema.md`](../docs/session-state-schema.md)
+  for the canonical v3 reference (rewritten in Session 1).
+
+### Release notes
+
+- **`0.4.0rc1` is the Session 4 release candidate.** Not published to
+  PyPI. The GA build (`0.4.0`) ships with Session 5, after the
+  in-extension migration UX lands so operators never see broken v2
+  state on first contact with the new release. The RC version exists
+  so this repo can pin tests against the same wheel shape consumers
+  will see after GA.
+- Internal smoke test only: `python -m build` + `pip install
+  dist/dabbler_ai_router-0.4.0rc1-py3-none-any.whl` from a clean
+  venv; do NOT `twine upload`.
+
 ## [0.3.2] — 2026-05-16
 
 ### Fixed

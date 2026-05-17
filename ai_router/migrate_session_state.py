@@ -66,6 +66,7 @@ import dataclasses
 import json
 import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
@@ -115,6 +116,7 @@ ACTION_SKIPPED_V3 = "skipped-v3"
 ACTION_SKIPPED_NO_STATE = "skipped-no-state"
 ACTION_SKIPPED_MALFORMED = "skipped-malformed"
 ACTION_SKIPPED_OPERATOR = "skipped-operator"
+ACTION_SKIPPED_FUTURE_SCHEMA = "skipped-future-schema"
 ACTION_WOULD_VIOLATE = "would-violate"
 
 
@@ -224,10 +226,30 @@ def _build_v3_sessions(
     lifecycle = state.get("lifecycleState")
     current_raw = state.get("currentSession")
     current_int = current_raw if _strict_positive_int(current_raw) else None
+    # Round A fix: the alternative closed-signal disjunct must compare
+    # against the LEGACY ``totalSessions`` field, not the resolved total.
+    # If spec.md (or completedSessions[]) widened the total beyond the
+    # legacy value, the operator's "I reached the last session" signal
+    # was made against the old plan, not the widened one. Using resolved
+    # total here meant a v2 file with status=complete, totalSessions=3,
+    # currentSession=3, spec.md=4 sessions would fall out of the closed
+    # branch (currentSession=3 < resolved=4) and into the all-not-started
+    # else-branch — which then violates rule 7 (status=complete requires
+    # every session complete). With this fix, the closed-signal fires
+    # against legacy_total=3, every session in the resolved (=4) ledger
+    # is force-promoted to complete, and rule 7 is satisfied.
+    legacy_total_raw = state.get("totalSessions")
+    legacy_total_int = (
+        legacy_total_raw if _strict_positive_int(legacy_total_raw) else None
+    )
 
     closed_signal = top_status == SESSION_STATUS_COMPLETE and (
         lifecycle == LIFECYCLE_STATE_CLOSED
-        or (current_int is not None and current_int >= total)
+        or (
+            legacy_total_int is not None
+            and current_int is not None
+            and current_int >= legacy_total_int
+        )
     )
 
     completed_legacy = _strip_legacy_completed(state.get("completedSessions"), total)
@@ -402,13 +424,47 @@ def migrate_one_set(
         )
 
     schema_version = state.get("schemaVersion")
-    if schema_version == SCHEMA_VERSION_V3 and isinstance(state.get("sessions"), list):
+    # Round A fix: refuse to run the v2→v3 migration on any file whose
+    # schemaVersion is already v3 or higher. Exact v3 with sessions[] is
+    # the idempotent skip case. Exact v3 without sessions[] is a corrupt
+    # v3 shape (must NOT be reinterpreted as v2 and rewritten). Any
+    # schemaVersion > 3 belongs to a future schema this migrator does not
+    # know about; downgrading it by treating its fields as v2 would
+    # silently corrupt state.
+    if isinstance(schema_version, int) and schema_version > SCHEMA_VERSION_V3:
         return MigrationResult(
             set_dir=set_dir,
-            action=ACTION_SKIPPED_V3,
-            reason="already v3 (sessions[] present)",
+            action=ACTION_SKIPPED_FUTURE_SCHEMA,
+            reason=(
+                f"schemaVersion={schema_version} is newer than this migrator "
+                f"(v{SCHEMA_VERSION_V3}); refusing to downgrade. Upgrade the "
+                "migrator or hand-edit the file."
+            ),
             before=state,
-            after=state,
+        )
+    if schema_version == SCHEMA_VERSION_V3:
+        if isinstance(state.get("sessions"), list):
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_SKIPPED_V3,
+                reason="already v3 (sessions[] present)",
+                before=state,
+                after=state,
+            )
+        # Self-identified v3 but missing/broken sessions[] — refuse to
+        # rewrite by re-running v2 inference (which would treat the
+        # missing array as a default-not-started signal and obliterate
+        # any operator intent recorded by the v3 writer that produced
+        # this file).
+        return MigrationResult(
+            set_dir=set_dir,
+            action=ACTION_SKIPPED_MALFORMED,
+            reason=(
+                "schemaVersion=3 but sessions[] is missing or not a list; "
+                "this is a broken v3 file, not a v2 file. Hand-repair or "
+                "restore from git."
+            ),
+            before=state,
         )
 
     spec_md_path = Path(set_dir) / "spec.md"
@@ -449,18 +505,48 @@ def migrate_one_set(
 
 
 def _atomic_write_json(path: str, data: dict) -> None:
-    """Write ``data`` to ``path`` via tempfile + os.replace.
+    """Write ``data`` to ``path`` via unique tempfile + os.replace.
 
     Atomic on POSIX and on Windows for same-volume replaces; the
     migrator never crosses volumes (the temp file is created in the
     same directory as the target).
+
+    Round A fix: use ``tempfile.mkstemp`` with a per-invocation unique
+    suffix so concurrent migrator runs cannot collide on a fixed
+    ``.{basename}.tmp`` path. The earlier implementation also left a
+    half-written temp file behind if ``json.dump`` or ``f.write`` raised
+    (disk full mid-write, etc.). The ``try/finally`` ensures the temp
+    is unlinked on any failure path BEFORE ``os.replace``; after a
+    successful replace, the original temp filename no longer exists.
     """
     directory = os.path.dirname(path) or "."
-    tmp_path = os.path.join(directory, f".{os.path.basename(path)}.tmp")
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-    os.replace(tmp_path, path)
+    basename = os.path.basename(path)
+    # mkstemp creates the file atomically with mode 0600 and returns a
+    # raw file descriptor + the absolute path. We close the fd
+    # immediately and reopen via the standard open() so the text-mode
+    # write semantics (newline translation off via encoding="utf-8")
+    # match the historical write behavior.
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{basename}.",
+        suffix=".tmp",
+        dir=directory,
+    )
+    os.close(fd)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, path)
+    except BaseException:
+        # Best-effort cleanup. If the temp file is still on disk (the
+        # failure happened before os.replace consumed it), unlink it.
+        # Suppress secondary errors so the original exception
+        # propagates with its original cause.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def discover_session_sets(scan_root: str) -> List[str]:
@@ -541,6 +627,8 @@ def _print_result_line(r: MigrationResult, *, verbose: bool) -> None:
         print(f"  [skip:bad]    {name}  ({r.reason})")
     elif r.action == ACTION_SKIPPED_OPERATOR:
         print(f"  [skip:user]   {name}  ({r.reason})")
+    elif r.action == ACTION_SKIPPED_FUTURE_SCHEMA:
+        print(f"  [skip:future] {name}  ({r.reason})")
     elif r.action == ACTION_WOULD_VIOLATE:
         print(f"  [WOULD-VIOLATE] {name}  ({r.reason})")
     else:
@@ -665,6 +753,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "skipped_no_state": 0,
                     "skipped_malformed": 0,
                     "skipped_operator": 0,
+                    "skipped_future_schema": 0,
                     "would_violate": 0,
                     "total": 0,
                 },
@@ -710,6 +799,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "skipped_no_state": sum(1 for r in results if r.action == ACTION_SKIPPED_NO_STATE),
         "skipped_malformed": sum(1 for r in results if r.action == ACTION_SKIPPED_MALFORMED),
         "skipped_operator": sum(1 for r in results if r.action == ACTION_SKIPPED_OPERATOR),
+        "skipped_future_schema": sum(1 for r in results if r.action == ACTION_SKIPPED_FUTURE_SCHEMA),
         "would_violate": sum(1 for r in results if r.action == ACTION_WOULD_VIOLATE),
         "total": len(results),
     }
@@ -760,6 +850,7 @@ __all__ = [
     "ACTION_SKIPPED_NO_STATE",
     "ACTION_SKIPPED_MALFORMED",
     "ACTION_SKIPPED_OPERATOR",
+    "ACTION_SKIPPED_FUTURE_SCHEMA",
     "ACTION_WOULD_VIOLATE",
     "MigrationResult",
     "migrate_one_set",

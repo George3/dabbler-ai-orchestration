@@ -14795,6 +14795,10 @@ function backfillPayload(sessionSetDir) {
   const totalSessions = readTotalSessionsFromSpec(sessionSetDir);
   const changelogPath = path2.join(sessionSetDir, "change-log.md");
   if (fs.existsSync(changelogPath)) {
+    const sessions = buildSessions(totalSessions, "complete");
+    if (sessions === void 0) {
+      return notStartedPayload(sessionSetDir);
+    }
     const base = notStartedPayload(sessionSetDir);
     base.status = "complete";
     base.lifecycleState = "closed";
@@ -14804,16 +14808,17 @@ function backfillPayload(sessionSetDir) {
     } catch {
       base.completedAt = null;
     }
-    const sessions = buildSessions(totalSessions, "complete");
-    if (sessions !== void 0) {
-      base.sessions = sessions;
-      base.completedSessions = sessions.map((s) => s.number);
-      base.currentSession = null;
-    }
+    base.sessions = sessions;
+    base.completedSessions = sessions.map((s) => s.number);
+    base.currentSession = null;
     return base;
   }
   const activityPath = path2.join(sessionSetDir, "activity-log.json");
   if (fs.existsSync(activityPath)) {
+    const sessions = buildSessions(totalSessions, "in-progress");
+    if (sessions === void 0) {
+      return notStartedPayload(sessionSetDir);
+    }
     const base = notStartedPayload(sessionSetDir);
     base.status = "in-progress";
     base.lifecycleState = "work_in_progress";
@@ -14829,12 +14834,9 @@ function backfillPayload(sessionSetDir) {
     } catch {
       base.startedAt = null;
     }
-    const sessions = buildSessions(totalSessions, "in-progress");
-    if (sessions !== void 0) {
-      base.sessions = sessions;
-      base.completedSessions = [];
-      base.currentSession = 1;
-    }
+    base.sessions = sessions;
+    base.completedSessions = [];
+    base.currentSession = 1;
     return base;
   }
   return notStartedPayload(sessionSetDir);

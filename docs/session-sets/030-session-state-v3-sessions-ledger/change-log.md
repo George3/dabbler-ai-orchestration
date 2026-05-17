@@ -1,8 +1,8 @@
 # Set 030: Session-state v3 `sessions` ledger + terminology alignment
 
-**Status:** In progress (3 of 5 sessions complete)
+**Status:** In progress (4 of 5 sessions complete)
 **Created:** 2026-05-17
-**Cost so far:** $1.25 (Session 1: $0.28 Round A; Session 2: $0.27 Round A + $0.19 Round B; Session 3: $0.28 Round A + $0.23 Round B)
+**Cost so far:** $1.51 (Session 1: $0.28 Round A; Session 2: $0.27 Round A + $0.19 Round B; Session 3: $0.28 Round A + $0.23 Round B; Session 4: $0.19 Round A + $0.07 Round B)
 
 ---
 
@@ -539,9 +539,214 @@ change is a one-line edit in `synthesize_v3_from_v2`.
 - The Round B new finding (strict-vs-defensive synthesizer) is
   deferred — see "Round B new finding (deferred)" above.
 
-## Session 4: (pending — bulk migrator + in-repo migration + RC build, NO publish)
+## Session 4: Bulk migrator + in-repo migration + consumer dry-run docs (NO publish)
 
-(populated at session close)
+**Status:** Complete (2026-05-17)
+**Orchestrator:** Claude Opus 4.7 @ effort=high (held high per Session 3
+disposition — the architectural context for how the v3 invariants
+interact with the inferential migration logic was load-bearing for
+getting the closed-signal force-promote rule right)
+**Verification:** gpt-5-4, Round A $0.190, Round B $0.068 — 3 must-fix
+issues addressed and confirmed VERIFIED on Round B.
+
+### Shipped
+
+1. **`ai_router/migrate_session_state.py`** — the one-shot v2→v3
+   bulk migrator CLI. Inferential semantics (closed-signal
+   force-promote even when `completedSessions[]` is missing), strict
+   bool/float filtering at the v2-field boundary, atomic in-place
+   writes via unique tempfile. Strategies: `regex` (default, spec.md
+   headings), `generic` (`Session N` labels), `ai` (raises
+   `NotImplementedError` — wired in Session 5 per spec D7/D14),
+   `interactive` (CLI-only, per-set prompt, non-TTY fallback to
+   `regex`). Flags: `--scan`, `--in-place`, `--strategy`, `--only`,
+   `--verbose`, `--json`. Exit 0 when clean; exit 1 when any set
+   would violate the 8 v3 invariants. Shared `migrate_one_set(path,
+   strategy)` helper — Session 5's in-extension lazy migrator will
+   call it via Python subprocess (per Session 5 step 5).
+
+2. **`ai_router/tests/test_migrate_session_state.py`** — 44 pytest
+   cases:
+   - Idempotency (v3 inputs skip; v3-without-sessions is malformed-skip)
+   - Closed sets (force-promote-all via lifecycle OR `currentSession
+     >= legacy_totalSessions` disjunct)
+   - In-flight, between-sessions, not-started
+   - Cancelled (top status preserved; per-session statuses reflect
+     actual completion)
+   - Status aliases (`done`/`completed` → `complete`)
+   - Strict bool/float filtering
+   - Title resolution (regex/generic/missing-spec)
+   - Malformed inputs (no state file, bad JSON, top-level array,
+     no totalSessions signal)
+   - Dry-run vs in-place atomicity
+   - AI strategy `NotImplementedError`, unknown-strategy `ValueError`
+   - Discovery sort + filter
+   - CLI exit codes + JSON output + non-TTY interactive fallback
+   - Round A regression tests (6 new): legacy-total closed-signal,
+     lifecycle-only closed-signal when legacy total absent,
+     future-schema refusal, broken-v3 malformed-skip, atomic-write
+     tempfile cleanup on json.dump failure, concurrent atomic-writes
+     no temp collision
+
+3. **`docs/migration-v3-dry-run.md`** — consumer dry-run guide
+   (~250 lines). Covers what the migrator does, the inference rules
+   table, dry-run + in-place + `--only` invocations, rollback via
+   git, Lightweight-tier hand-edit ergonomics (one session-level
+   flip per transition), set-ordering note (D15: no dependency on
+   Set 029), the in-repo migration summary, and a reporting-issues
+   section.
+
+4. **29 in-repo v2 state files migrated** — `--strategy regex
+   --in-place` against `docs/session-sets/001-...` through
+   `docs/session-sets/029-...`. Set 030 skipped (already v3 from
+   Session 1 scaffolding). Counts: 29 migrated, 1 already v3, 0
+   skipped by operator, 0 no state file, 0 malformed, 0
+   would-violate. Each migrated file round-trips through
+   `read_progress()` cleanly. **Migration shipped as its own commit**
+   (`Set 030 Session 4: bulk-migrate 29 v2 state files to v3
+   (dual-write)`) so the diff is reviewable independently of the
+   migrator code commit.
+
+5. **D16 Lightweight-tier ergonomics dry-run** — copied
+   `dabbler-homehealthcare-accessdb/docs/session-sets/001-forms-detail-uat`
+   (the operator's representative closed-set fixture) into
+   `C:/tmp/v3-ergonomics-dry-run/`, ran the migrator (clean:
+   `[migrated] 001-forms-detail-uat (4 complete, 0 in-progress, 0
+   not-started)`), then exercised hand-edit transitions through a
+   demo script. Captured each transition's diff in
+   `verification-output/lightweight-ergonomics-demo.txt`:
+   - **start session 1**: flip `sessions[0].status` not-started →
+     in-progress (1 session-level field). Set-level status +
+     lifecycleState also flip on the first-ever start (set-level
+     invariant). Legacy triple update is optional (reader derives).
+   - **close session 1**: flip `sessions[0].status` in-progress →
+     complete (1 session-level field). Set-level stays in-progress
+     until last session closes.
+   - **start session 2**: flip `sessions[1].status` not-started →
+     in-progress (1 session-level field, the canonical
+     one-field-flip).
+   Each step validates cleanly through `get_progress()`. Confirms
+   D10: Lightweight orchestrators hand-edit one field per
+   transition once the set is already in motion; the set-level
+   fields only flip at the boundaries (first start, final close).
+
+6. **RC version bumps + CHANGELOG entries** — `dabbler-ai-router`
+   0.3.2 → 0.4.0rc1 (PEP 440-canonical form); extension 0.13.17 →
+   0.14.0-rc.1 (semver form). Both `__version__` and `pyproject.toml`
+   updated. Both CHANGELOG.md entries added with the explicit "NOT
+   PUBLISHED" disclaimer and the Session 5 publish-gate note.
+
+7. **RC artifacts built locally (not committed, not published)** —
+   - `dist/dabbler_ai_router-0.4.0rc1-py3-none-any.whl`
+   - `tools/dabbler-ai-orchestration/dabbler-ai-orchestration-0.14.0-rc.1.vsix`
+     (728 KB; 20 files). VSIX includes the v3-aware
+     `SessionSetsProvider` + the `Complete` label rename from Session 3.
+   Neither `vsce publish` nor `twine upload` were invoked. Per spec
+   D14, the GA release ships in Session 5 after the in-extension
+   migration UX lands.
+
+8. **Lint allowlist update** — `ai_router/tests/test_no_legacy_field_reads.py`
+   adds `migrate_session_state.py` to the file-level D13 allowlist.
+   The migrator IS the v2-compat path; reading the legacy triple is
+   its job (mirrors the rationale for `close_session.py`'s
+   `_run_repair` carve-out and `session_state.py`'s writer
+   derivation). Without this, the lint test fires 8+ false-positives
+   on the new module.
+
+### Round A verification fixes applied
+
+gpt-5-4 verifier flagged 3 must-fix issues; all addressed and
+Round-B-verified:
+
+1. **Closed-signal disjunct must use LEGACY totalSessions, not the
+   resolved total.** Pre-fix: a v2 file with `status: complete`,
+   `totalSessions: 3`, `currentSession: 3`, `completedSessions:
+   []`, but `spec.md` declaring 4 sessions would have resolved
+   total=4, then failed `currentSession(3) >= total(4)`, fallen
+   into the else-branch (all not-started), and surfaced as
+   ACTION_WOULD_VIOLATE under rule 7. Post-fix: the disjunct reads
+   `state["totalSessions"]` directly (gated by
+   `_strict_positive_int`); the closed-signal correctly fires
+   against the operator's "I closed here" total; all 4 sessions
+   in the widened ledger are force-promoted to complete; rule 7 is
+   satisfied. The case is now covered by a regression test
+   (`test_closed_signal_uses_legacy_total_not_resolved_total`).
+2. **Future-schema files must be refused, not downgraded.**
+   Pre-fix: a file claiming `schemaVersion: 4` (or a broken
+   `schemaVersion: 3` without `sessions[]`) fell through the
+   v3-skip check and was treated as v2 input — silently
+   reinterpreting future-schema fields as v2 and rewriting the
+   file. Post-fix: `schemaVersion > 3` returns
+   `ACTION_SKIPPED_FUTURE_SCHEMA` with a clear reason and a
+   "refusing to downgrade" message. `schemaVersion == 3` without a
+   list `sessions[]` returns `ACTION_SKIPPED_MALFORMED` (must be
+   hand-repaired). Both cases leave the on-disk file untouched
+   even with `--in-place`. Regression tests:
+   `test_future_schema_version_refused` and
+   `test_v3_without_sessions_is_malformed_not_re_migrated`.
+3. **`_atomic_write_json` must use a unique tempfile and clean up
+   on failure.** Pre-fix: fixed `.{basename}.tmp` path collided on
+   concurrent runs, and a `json.dump` failure mid-write left the
+   temp file behind. Post-fix: `tempfile.mkstemp` with a unique
+   suffix in the same directory; `try/finally` with best-effort
+   `os.unlink` on the temp path before re-raising. Regression
+   tests: `test_atomic_write_uses_unique_tempfile_and_cleans_up_on_failure`
+   (forces `json.dump` to raise; asserts original content intact
+   and no `.tmp` leftover) and
+   `test_atomic_write_two_concurrent_calls_dont_collide`.
+
+### Tests after Session 4
+
+- pytest: **574 passed, 1 skipped, 8 e2e deselected** (was 568 pre-S4;
+  +6 from the new Round A regression tests).
+- Mocha unit: 376 passing, 2 failing (both pre-existing baseline
+  failures unrelated to v3 — identical to Session 3's set).
+- Layer 3 Playwright: 5/5 passing against v3 fixtures.
+- tsc --noEmit: clean.
+
+### Files changed in Session 4
+
+**Created:**
+- `ai_router/migrate_session_state.py`
+- `ai_router/tests/test_migrate_session_state.py`
+- `docs/migration-v3-dry-run.md`
+- `docs/session-sets/030-session-state-v3-sessions-ledger/verify_session4.py`
+- `docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/round-a-session-4-result.json`
+- `docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/round-b-session-4-result.json`
+- `docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/lightweight-ergonomics-demo.txt`
+
+**Touched:**
+- `pyproject.toml` (0.3.2 → 0.4.0rc1)
+- `ai_router/__init__.py` (`__version__`)
+- `ai_router/CHANGELOG.md` (v0.4.0rc1 entry)
+- `tools/dabbler-ai-orchestration/package.json` (0.13.17 → 0.14.0-rc.1)
+- `tools/dabbler-ai-orchestration/CHANGELOG.md` (v0.14.0-rc.1 entry)
+- `ai_router/tests/test_no_legacy_field_reads.py` (allowlist
+  `migrate_session_state.py`)
+- 29 × `docs/session-sets/00*-029*/session-state.json` (v2 → v3
+  dual-write, committed separately so the diff is reviewable)
+
+### What did NOT ship in Session 4
+
+- No `vsce publish`. No `twine upload`. Final publish moves to
+  Session 5 (spec D14).
+- No in-extension migration UX. Session 5.
+- No drop of legacy field emission. Per spec D5 dual-write is the
+  steady state for Set 030; a future set may flip "stop writing
+  legacy."
+
+### Progress keys
+
+- `session-004/bulk-migrator-shipped` ✓
+- `session-004/inrepo-files-migrated` ✓ (29 files, separate commit)
+- `session-004/lightweight-dry-run-passed` ✓
+- `session-004/consumer-dry-run-doc-published` ✓
+  (`docs/migration-v3-dry-run.md`)
+- `session-004/rc-vsix-built` ✓ (0.14.0-rc.1, 728 KB local artifact)
+- `session-004/rc-smoke-passed` ✓ (RC wheel + VSIX both build clean;
+  full smoke install into a clean VS Code instance is deferred to
+  Session 5's GA-build smoke pass since the migration UX it gates on
+  doesn't exist yet)
 
 ## Session 5: (pending — alignment migration UX + loading state + final release)
 

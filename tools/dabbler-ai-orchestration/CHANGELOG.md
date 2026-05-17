@@ -5,6 +5,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.0-rc.1] — 2026-05-17 (release candidate, not published)
+
+### Added
+
+- **`session-state.json` schema v3 support (Set 030).** The Session
+  Set Explorer reads v3 files via the new `progress.ts` helper
+  (Session 1); the TypeScript writer in `sessionState.ts` emits the
+  v3 dual-write shape from Session 2. Status terminology now unified
+  on `"complete"` across the JSON schema and the operator-visible
+  Explorer display.
+
+### Changed
+
+- **Explorer label: "Done" → "Complete" (Set 030 Session 3, per
+  spec D3).** The fourth bucket header in the Session Sets Explorer
+  is now "Complete" (was "Done"). Aligns the tree's vocabulary with
+  the v3 schema's `status: "complete"`. The TypeScript
+  `SessionState` union literal followed the same rename across 24
+  test fixtures.
+- **v2 state files render correctly during the migration window.**
+  The Explorer's read path is permanently v2-tolerant; the tree
+  provider's count-derivation uses `read_progress()` (a new TS
+  helper) so v2 files with missing `completedSessions[]` no longer
+  bucket as "In Progress" — they now bucket correctly based on the
+  v3 invariant projection (closed sets to Complete with [FORCED]
+  badge per the v2-bare-snapshot rule from Session 3).
+
+### Schema
+
+- The extension's `SessionState` types and reader path now use the
+  v3 `sessions[]` ledger internally. The legacy
+  `currentSession` / `totalSessions` / `completedSessions` fields
+  are read only through approved compatibility helpers (D13 lint
+  rule, enforced by the Mocha suite).
+
+### Release notes
+
+- **`0.14.0-rc.1` is the Session 4 release candidate.** Not
+  published to the Marketplace. The GA build (`0.14.0`) ships with
+  Session 5 after the in-extension migration UX (loading state +
+  per-set "(needs migration)" badge + Migrate-to-v3 command) lands.
+  Publishing the RC would expose operators to v2 state files
+  without the lazy-migration UX, so the publish moves to S5.
+- Internal smoke test only: `npx vsce package` + side-load the
+  VSIX into a clean VS Code instance.
+
 ## [0.13.17] — 2026-05-16
 
 ### Changed

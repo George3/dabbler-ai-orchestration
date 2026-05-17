@@ -47,6 +47,7 @@ import migrate_session_state as mss
 import progress
 from migrate_session_state import (
     ACTION_MIGRATED,
+    ACTION_SKIPPED_FUTURE_SCHEMA,
     ACTION_SKIPPED_MALFORMED,
     ACTION_SKIPPED_NO_STATE,
     ACTION_SKIPPED_OPERATOR,
@@ -940,3 +941,202 @@ class TestCLI:
         payload = json.loads(capsys.readouterr().out)
         assert rc == 0
         assert payload["counts"]["migrated"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Round A verifier fixes
+# ---------------------------------------------------------------------------
+
+
+class TestRoundAFixes:
+    """Regression coverage for the 3 must-fix issues gpt-5-4 flagged.
+
+    1. Closed-signal disjunct must use LEGACY totalSessions, not the
+       resolved total (spec.md / completedSessions can widen the
+       resolved total beyond the operator's "I closed here" signal).
+    2. Future-schema files (schemaVersion > 3) must be refused, not
+       silently treated as v2 and downgraded.
+    3. ``_atomic_write_json`` must use a unique tempfile (not a fixed
+       ``.{basename}.tmp`` path) and clean up on failure.
+    """
+
+    def test_closed_signal_uses_legacy_total_not_resolved_total(self, tmp_path):
+        """Specific scenario from the Round A verifier feedback.
+
+        A v2 file with status=complete, lifecycle=null, currentSession=3,
+        totalSessions=3, completedSessions=[], plus spec.md that
+        declares 4 sessions. Pre-fix: resolved total widens to 4,
+        currentSession=3 < 4 → closed_signal=False → all not-started →
+        rule 7 violation (would-violate). Post-fix: closed_signal
+        checks legacy total (3); currentSession=3 >= 3 →
+        closed_signal=True → all 4 sessions promoted to complete.
+        """
+        set_dir = tmp_path / "spec-widened-closed"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "spec-widened-closed",
+                "currentSession": 3,
+                "totalSessions": 3,
+                "status": "complete",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=4,  # spec.md has 4 headings; widens resolved total
+        )
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_REGEX, dry_run=True)
+        assert r.action == ACTION_MIGRATED
+        out = _migrated(r.after)
+        assert out["totalSessions"] == 4
+        assert [s["status"] for s in out["sessions"]] == ["complete"] * 4
+        assert out["status"] == "complete"
+        assert out["lifecycleState"] == "closed"
+
+    def test_closed_signal_no_legacy_total_only_lifecycle_branch_fires(self, tmp_path):
+        """Without a strict-positive legacy total, only the
+        ``lifecycle=closed`` disjunct can fire — the currentSession
+        comparison no longer triggers (we won't compare against a
+        widened resolved total). lifecycle=closed alone still
+        force-promotes."""
+        set_dir = tmp_path / "lifecycle-only-closed"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "lifecycle-only-closed",
+                "currentSession": 3,
+                "totalSessions": None,  # legacy total missing
+                "status": "complete",
+                "lifecycleState": "closed",
+                "completedSessions": [],
+            },
+            spec_n=3,
+        )
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_REGEX, dry_run=True)
+        assert r.action == ACTION_MIGRATED
+        out = _migrated(r.after)
+        assert [s["status"] for s in out["sessions"]] == ["complete"] * 3
+
+    def test_future_schema_version_refused(self, tmp_path):
+        """A file claiming schemaVersion=4 must not be downgraded."""
+        set_dir = tmp_path / "future-v4"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 4,  # future schema
+                "sessionSetName": "future-v4",
+                "currentSession": 3,
+                "totalSessions": 3,
+                "status": "complete",
+                "lifecycleState": "closed",
+                "completedSessions": [1, 2, 3],
+            },
+        )
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_REGEX, dry_run=False)
+        assert r.action == ACTION_SKIPPED_FUTURE_SCHEMA
+        # On-disk file is untouched (still schemaVersion=4)
+        on_disk = json.loads((set_dir / "session-state.json").read_text())
+        assert on_disk["schemaVersion"] == 4
+        assert "sessions" not in on_disk  # not added
+
+    def test_v3_without_sessions_is_malformed_not_re_migrated(self, tmp_path):
+        """A self-identified v3 file missing ``sessions[]`` is broken,
+        not a v2 file to be re-migrated. Re-running v2 inference would
+        obliterate operator intent recorded by the v3 writer."""
+        set_dir = tmp_path / "v3-broken"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 3,
+                "sessionSetName": "v3-broken",
+                # sessions[] intentionally missing
+                "currentSession": None,
+                "totalSessions": 3,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+        )
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_REGEX, dry_run=False)
+        assert r.action == ACTION_SKIPPED_MALFORMED
+        assert "schemaVersion=3" in r.reason
+        # On-disk file is untouched
+        on_disk = json.loads((set_dir / "session-state.json").read_text())
+        assert "sessions" not in on_disk
+
+    def test_atomic_write_uses_unique_tempfile_and_cleans_up_on_failure(
+        self, tmp_path, monkeypatch
+    ):
+        """Force json.dump to raise mid-write; assert no temp file
+        survives and the original file content is untouched."""
+        from ai_router import migrate_session_state as mss_module
+
+        set_dir = tmp_path / "atomic"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "atomic",
+                "currentSession": 3,
+                "totalSessions": 3,
+                "status": "complete",
+                "lifecycleState": "closed",
+                "completedSessions": [1, 2, 3],
+            },
+        )
+        # The original v2 content on disk:
+        original_bytes = (set_dir / "session-state.json").read_bytes()
+
+        # Patch json.dump to raise after pretending to start writing.
+        original_dump = mss_module.json.dump
+
+        def boom(*args, **kwargs):
+            raise OSError("simulated disk full")
+
+        monkeypatch.setattr(mss_module.json, "dump", boom)
+
+        with pytest.raises(OSError, match="simulated disk full"):
+            migrate_one_set(str(set_dir), strategy=STRATEGY_REGEX, dry_run=False)
+
+        # Restore so the rest of the test can read normally.
+        monkeypatch.setattr(mss_module.json, "dump", original_dump)
+
+        # Original file content is intact (atomic guarantee held).
+        assert (set_dir / "session-state.json").read_bytes() == original_bytes
+        # No leftover temp file in the directory.
+        leftover = [
+            p.name
+            for p in set_dir.iterdir()
+            if p.name != "session-state.json" and p.name != "spec.md" and p.name.endswith(".tmp")
+        ]
+        assert leftover == [], f"temp files left behind: {leftover}"
+
+    def test_atomic_write_two_concurrent_calls_dont_collide(self, tmp_path):
+        """The mkstemp approach generates unique names per call; two
+        sequential migrate_one_set invocations in the same directory
+        must each succeed without overlapping temp paths."""
+        set_dir_a = tmp_path / "set-a"
+        set_dir_b = tmp_path / "set-b"
+        for d, name in ((set_dir_a, "set-a"), (set_dir_b, "set-b")):
+            _write_state(
+                d,
+                {
+                    "schemaVersion": 2,
+                    "sessionSetName": name,
+                    "currentSession": 3,
+                    "totalSessions": 3,
+                    "status": "complete",
+                    "lifecycleState": "closed",
+                    "completedSessions": [1, 2, 3],
+                },
+            )
+
+        r_a = migrate_one_set(str(set_dir_a), strategy=STRATEGY_REGEX, dry_run=False)
+        r_b = migrate_one_set(str(set_dir_b), strategy=STRATEGY_REGEX, dry_run=False)
+        assert r_a.action == ACTION_MIGRATED
+        assert r_b.action == ACTION_MIGRATED
+        # No leftover tmp files
+        for d in (set_dir_a, set_dir_b):
+            leftover = [p.name for p in d.iterdir() if p.name.endswith(".tmp")]
+            assert leftover == []

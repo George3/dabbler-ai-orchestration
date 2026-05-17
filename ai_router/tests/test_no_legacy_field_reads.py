@@ -65,6 +65,7 @@ _ALLOWLIST = {
     "session_state.py",           # writer emits dual shape from sessions[]
     "session_log.py",             # different artifact (activity-log)
     "close_session.py",           # repair walk is v2-compat (per-line noqa)
+    "migrate_session_state.py",   # migrator IS the v2-compat path (Set 030 S4)
 }
 
 # Path prefixes (any file under these dirs is exempt).
