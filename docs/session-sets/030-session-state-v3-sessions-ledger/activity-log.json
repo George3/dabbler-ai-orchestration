@@ -1,29 +1,133 @@
 {
+  "sessionSetName": "030-session-state-v3-sessions-ledger",
+  "createdDate": "2026-05-17",
+  "totalSessions": 5,
   "entries": [
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 0,
-      "event": "set_created",
-      "message": "Set 030 initialized: session-state v3 sessions ledger + terminology alignment (5 sessions). Proposal authored by/with GPT-5.4, strong-approved by Gemini Pro. Operator-locked decisions: complete-everywhere terminology unification, regex-first AI-fallback migration, on-activation detection trigger, Setting-up-your-project loading state."
+      "sessionNumber": 0,
+      "stepNumber": 1,
+      "stepKey": "set-zero/scaffold",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Set 030 initialized: session-state v3 sessions ledger + terminology alignment (5 sessions). Proposal authored by/with GPT-5.4, strong-approved by Gemini Pro. Operator-locked decisions: complete-everywhere terminology unification, regex-first AI-fallback migration, on-activation detection trigger, Setting-up-your-project loading state.",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 0,
-      "event": "spec_revised",
-      "message": "Set 030 spec revised per GPT-5.4 implementation review (2026-05-17). Five changes applied: (1) final publish moved from S4 to S5 (after migration UX ships) - D14; (2) dual-write kept as operational steady state, stop-legacy deferred to future set gated on consumer v3-reader confirmation - D5 revision; (3) terminology drift resolved by updating proposal doc to use 'complete' instead of 'done' globally - D2 alignment; (4) lint rule narrowed to 'no application reader may read legacy fields except through approved compat helpers' - D13; (5) spec-title-extraction routing config registered in S1 instead of S5 - removes dependency risk. Added D15 (Set 029 ordering: both orders supported) and D16 (Lightweight ergonomics dry-run vs accessdb state file before publish)."
+      "sessionNumber": 0,
+      "stepNumber": 2,
+      "stepKey": "set-zero/spec-revised",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Set 030 spec revised per GPT-5.4 implementation review (2026-05-17). Five changes applied: (1) final publish moved from S4 to S5 (after migration UX ships) - D14; (2) dual-write kept as operational steady state, stop-legacy deferred to future set gated on consumer v3-reader confirmation - D5 revision; (3) terminology drift resolved by updating proposal doc to use 'complete' instead of 'done' globally - D2 alignment; (4) lint rule narrowed to 'no application reader may read legacy fields except through approved compat helpers' - D13; (5) spec-title-extraction routing config registered in S1 instead of S5 - removes dependency risk. Added D15 (Set 029 ordering: both orders supported) and D16 (Lightweight ergonomics dry-run vs accessdb state file before publish).",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T05:30:00.000000-04:00",
-      "session": 1,
-      "event": "implementation",
-      "message": "Session 1: shipped read-side schema v3 foundation. ai_router/progress.py + tools/.../utils/progress.ts with get_progress(), synthesize_v3_from_v2(), validate_invariants() enforcing the 8 invariants, ProgressView/SessionRecord dataclasses, SessionStateInvariantError. tools/.../types.ts adds SessionStatus/SessionRecord/ProgressView/SessionStateV3 interfaces. docs/session-state-schema.md fully rewritten for v3 (shape, derived values, 8 invariants, Lightweight one-field-flip worked example, migration recipe, reader contract). docs/session-state-schema-example.{json,md} updated to v3 closed shape + v2-vs-v3 narrative. Proposal doc 'done' references at lines 139/246 patched to 'complete' (D2). Router-config registers spec-title-extraction task type (D14). 48 pytest + 46 mocha + 6 router-config tests. Full pytest: 484 passed, 1 skipped, 8 e2e deselected."
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-1/read-baseline",
+      "dateTime": "2026-05-17T05:10:00-04:00",
+      "description": "Read existing schema doc, examples, proposal, session_state.py, types.ts, router-config.yaml, test_session_state_v2.py to map baseline state of v2 schema, existing test conventions, and extension wiring. Confirmed proposal terminology was already 95% aligned to 'complete'; identified two lingering 'done' references at lines 139 and 246 that need patching per D2.",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T05:35:00.000000-04:00",
-      "session": 1,
-      "event": "verification",
-      "message": "Session 1 verification: gpt-5-4 Round A, $0.275525. Verifier flagged 6 must-fix issues: (1) synthesize_v3_from_v2 force-promote-on-complete contradicts default-to-not-started + fail-loud; (2) bool/float type confusion in v2 currentSession + completedSessions[]; (3) rule 2 didn't enforce contiguous-from-1 per spec D12; (4) session-level 'cancelled' silently accepted despite being reserved for future schema; (5) rules 5-8 skipped when top_status is None — bypassed rule 8 for lifecycleState='closed'; (6) unknown top-level status reported wrong rule number. All 6 addressed: synthesizer leaves contradictions for rule 7 to surface; strict-int filter (Python: type is int; TS: Number.isInteger + typeof !== boolean); contiguous-from-1 with start-at-1 enforcement; SESSION_STATUSES excludes 'cancelled'; rule 8 hoisted above null-guard; unknown top status raises rule 2 as shape/enum error. +8 pytest cases for new edge coverage."
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-1/python-helper",
+      "dateTime": "2026-05-17T05:20:00-04:00",
+      "description": "Created ai_router/progress.py (~530 LOC) with ProgressView + SessionRecord dataclasses, SessionStateInvariantError exception, canonicalize_status alias map, extract_session_titles_from_spec regex helper, synthesize_v3_from_v2 read-time normalizer, get_progress + validate_invariants enforcing all 8 invariants. Pure functional (no filesystem coupling beyond the spec.md read in extract_session_titles_from_spec).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-1/python-tests",
+      "dateTime": "2026-05-17T05:24:00-04:00",
+      "description": "Created ai_router/tests/test_progress.py covering v3 happy paths (fresh/in-flight/between/complete/cancelled), each of the 8 invariant violations with rule-number assertions, v2 synthesis (in-flight, between, complete-consistent, complete-with-missing-fails-loud, alias canonicalization, spec-missing fallback, bool/float type confusion), title extraction (4 cases), canonicalizeStatus (8 parametric cases), and direct validator entry with top_status=None. 40 → 48 tests after Round A.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-1/ts-mirror",
+      "dateTime": "2026-05-17T05:30:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/utils/progress.ts (~440 LOC) as line-for-line TS mirror of progress.py. Updated tools/.../src/types.ts adding SessionStatus, SessionRecord, ProgressView, SessionStateV3 interfaces (kept legacy SessionState 'done'|'in-progress'|... type alias for the extension's bucketing layer until Session 3 migrates it). Created tools/.../test/suite/progress.test.ts mirroring the pytest suite shape (mocha tdd). 38 → 46 tests after Round A. tsc --noEmit clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-1/schema-doc-rewrite",
+      "dateTime": "2026-05-17T05:35:00-04:00",
+      "description": "Rewrote docs/session-state-schema.md from v2 to v3. New sections: 'v3 is canonical; v2 read support is permanent', 'Reader contract — every reader uses get_progress()', 'v3 schema shape', 'sessions[] — the canonical progress ledger', 'Dual-write legacy fields (Set 030 steady state)', 'Status — the canonical glossary' with the Set 030 terminology note retiring 'Done' from display labels, 'Derived values — the get_progress() view', the 8 invariants with explicit rule-2-tightened-to-contiguous-from-1 note, Lightweight one-field-flip worked example with every transition, v3 worked examples (not-started/mid-set/between-sessions/complete), tier expectations, v2 read compat path with default-to-not-started rule explanation, bucketing rules.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-1/schema-example-v3",
+      "dateTime": "2026-05-17T05:37:00-04:00",
+      "description": "Rewrote docs/session-state-schema-example.json to v3 closed shape (schemaVersion: 3, sessions[] with 4 entries all complete, dual-write legacy triple still present). Rewrote docs/session-state-schema-example.md with v2-vs-v3 side-by-side narrative, lifecycle shapes (not-started/in-progress/complete), and regenerator workflow notes. Patched lingering 'done' references in docs/proposals/2026-05-17-...md at lines 139 and 246 to 'complete' per spec D2.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-1/router-config-registration",
+      "dateTime": "2026-05-17T05:40:00-04:00",
+      "description": "Registered spec-title-extraction task type in ai_router/router-config.yaml per spec D14 (removes Session 5 dependency risk). Added task_type_overrides entry pinning to gemini-flash; task_type_scores entry at 20 (low/mechanical band); per-model task_type_params with thinking off for cost predictability. Created ai_router/tests/test_spec_title_extraction_registered.py with 6 guard tests asserting the routing wiring stays correct (score in low band, override pins tier-1 model, per-model params present for all 6 pool models, pick_model resolves via override, NOT in always_route_task_types, NOT in auto_verify_task_types).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-1/full-suite-pretest",
+      "dateTime": "2026-05-17T05:45:00-04:00",
+      "description": "Ran full pytest suite (testpaths = ai_router/tests, -m 'not e2e'): 476 passed, 1 skipped, 8 e2e deselected. No regressions in existing suite from Session 1's additions. Confirmed test_dump_session_state_schema.py is broken pre-existing (import issue, predates Session 1).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-1/verification-round-a",
+      "dateTime": "2026-05-17T05:48:00-04:00",
+      "description": "Round A verification: gpt-5-4 via ai_router.route(task_type='session-verification'). Initial Round A attempt with ~2000 LOC bundle (Python+TS helpers + tests + types + config) hit 3-attempt read timeout. Retried with tighter scope (Python helper only, ~514 LOC) per memory feedback_split_large_verification_bundles. Cost: $0.275525, elapsed 213s, in=5138 out=17512 tokens, no escalation. Verifier returned REJECTED with 6 must-fix issues.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "costUsd": 0.275525,
+          "elapsedSeconds": 213.197,
+          "verdict": "REJECTED",
+          "issuesFound": 6
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-1/round-a-fixes",
+      "dateTime": "2026-05-17T05:55:00-04:00",
+      "description": "Applied all 6 must-fix issues from Round A: (1) removed synthesize_v3_from_v2 force-promote-on-complete (now defaults to not-started; rule 7 surfaces contradiction); (2) added strict-int filter (Python: type(v) is int; TS: Number.isInteger + typeof !== boolean) to reject bool/float in v2 currentSession/completedSessions[]; (3) tightened rule 2 to contiguous-from-1 per spec D12 (rejects [1, 3] and [2, 3]); (4) removed 'cancelled' from SESSION_STATUSES (top-level still accepted); (5) hoisted rule 8 above the top_status None-guard so it always fires; (6) changed unknown top-level status from rule 5 to rule 2 (shape/enum). Updated 8 pytest cases + 8 mocha cases for new behavior. Updated schema.md, example.md to document tightened invariants and fail-loud synthesizer.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 11,
+      "stepKey": "session-1/full-suite-postfix",
+      "dateTime": "2026-05-17T06:00:00-04:00",
+      "description": "Re-ran full pytest suite after Round A fixes: 484 passed, 1 skipped, 8 e2e deselected (+8 vs pre-Session-1). Mocha progress.test.ts: 46/46. TypeScript tsc --noEmit: clean. No regressions in any pre-existing tests.",
+      "status": "complete",
+      "routedApiCalls": []
     }
-  ],
-  "totalSessions": 5
+  ]
 }
