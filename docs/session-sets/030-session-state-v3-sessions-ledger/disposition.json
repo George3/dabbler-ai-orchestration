@@ -1,24 +1,21 @@
 {
   "status": "completed",
-  "summary": "Set 030 Session 1: shipped read-side schema v3 foundation. Python helper (ai_router/progress.py) and TypeScript mirror (tools/dabbler-ai-orchestration/src/utils/progress.ts) with get_progress(), synthesize_v3_from_v2(), validate_invariants() enforcing the 8 v3 rules. Schema doc fully rewritten for v3 (shape, derived values, invariants, Lightweight one-field-flip worked example, migration recipe). Example JSON/MD updated to v3 closed shape with v2-vs-v3 narrative. Proposal doc lingering 'done' references patched to 'complete' (D2 terminology lock). Router-config registers spec-title-extraction task type (D14: Session 5 fallback dependency removed). Round A verification (gpt-5-4, $0.275525) found 6 must-fix issues; all addressed (force-promote removed; strict-int filtering; contiguous-from-1; session-level cancelled rejected; rule 8 always-fires; rule-2 label for unknown top status). Tests: 484 pytest passed, 1 skipped, 8 e2e deselected (+8 vs pre-S1); 46/46 mocha in new progress.test.ts; TypeScript type-check clean.",
+  "summary": "Set 030 Session 2: Phase 2 dual-write writers shipped per spec D5. ai_router/session_state.py: SCHEMA_VERSION 2->3; register_session_start and _flip_state_to_closed emit BOTH v3 sessions[] and the legacy progress triple (currentSession / totalSessions / completedSessions derived from sessions[] via _derive_legacy_fields). Five new helpers (_existing_sessions_records, _spec_titles_for_set, _build_sessions_array, _derive_legacy_fields, _validate_sessions_or_raise). Scaffolding (_not_started_payload, _backfill_payload) writes v3 when totalSessions is known. Writer-side invariant enforcement is fail-loud per spec D6 - SessionStateInvariantError raised BEFORE any file write or event emission. New forced-incident-recovery semantic: force=True promotes every session in sessions[] to complete so rule 7 holds by construction. Round A verification (gpt-5-4, $0.266495) found 4 must-fix issues: (1) silent out-of-range truncation in _build_sessions_array; (2) natural last-session close promoting all; (3) unvalidated legacy-only fallback; (4) work_started event emitted before validation. All four addressed with +7 regression tests. Round B verification (gpt-5-4, $0.193638) VERIFIED line-by-line. Tests: 529 pytest passed, 1 skipped, 8 e2e deselected (+45 from new test_session_state_v3.py + Round-A regression tests + v2 file updates for v3 dual-write shape). TypeScript tsc --noEmit clean. Operator-visible behavior change: currentSession is now derived strictly as the in-progress session's number (or null when no session is in-flight), resolving the v2 'in-flight OR most-recently-closed' ambiguity called out in the spec problem statement. Consumer-repo reader migration ships in Session 3.",
   "verification_method": "manual",
   "files_changed": [
-    "ai_router/progress.py",
-    "ai_router/router-config.yaml",
-    "ai_router/tests/test_progress.py",
-    "ai_router/tests/test_spec_title_extraction_registered.py",
-    "docs/proposals/2026-05-17-session-state-sessions-ledger-v3.md",
+    "ai_router/session_state.py",
+    "ai_router/tests/test_session_state_v2.py",
+    "ai_router/tests/test_session_state_v3.py",
+    "ai_router/tests/e2e/test_force_close_path.py",
+    "ai_router/tests/e2e/test_happy_3session.py",
+    "ai_router/tests/test_close_session_snapshot_flip.py",
+    "docs/session-sets/030-session-state-v3-sessions-ledger/activity-log.json",
     "docs/session-sets/030-session-state-v3-sessions-ledger/change-log.md",
-    "docs/session-sets/030-session-state-v3-sessions-ledger/session-events.jsonl",
+    "docs/session-sets/030-session-state-v3-sessions-ledger/disposition.json",
     "docs/session-sets/030-session-state-v3-sessions-ledger/session-state.json",
-    "docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/round-a-result.json",
-    "docs/session-sets/030-session-state-v3-sessions-ledger/verify_session1.py",
-    "docs/session-state-schema-example.json",
-    "docs/session-state-schema-example.md",
-    "docs/session-state-schema.md",
-    "tools/dabbler-ai-orchestration/src/test/suite/progress.test.ts",
-    "tools/dabbler-ai-orchestration/src/types.ts",
-    "tools/dabbler-ai-orchestration/src/utils/progress.ts"
+    "docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/round-a-session-2-result.json",
+    "docs/session-sets/030-session-state-v3-sessions-ledger/verification-output/round-b-session-2-result.json",
+    "docs/session-sets/030-session-state-v3-sessions-ledger/verify_session2.py"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -28,7 +25,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 ships the Phase 2 dual-write writers (register_session_start + close_session emit BOTH v3 sessions[] and the legacy progress triple derived from it). Session 1's read-side helpers + invariants are the contract those writers must satisfy; keeping the same orchestrator preserves the architectural context of how get_progress() drives the dual-write parity test and how SessionStateInvariantError is raised on writer-side rule violations."
+      "specifics": "Session 3 migrates readers (close-out gates, the extension tree provider, the reconciler, repair logic) from direct legacy-field reads to get_progress() calls and adds the D13 lint rule. Cross-cutting refactor across Python and TypeScript; the writer-side contract Session 2 just shipped is the load-bearing precondition. Keeping Claude Opus 4.7 @ effort=high preserves the architectural context of what dual-write parity guarantees the readers can rely on and how the Explorer's 'Done' to 'Complete' label migration interacts with the v3 status glossary."
     }
   },
   "blockers": []

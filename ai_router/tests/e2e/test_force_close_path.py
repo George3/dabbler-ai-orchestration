@@ -144,9 +144,25 @@ def test_force_close_nonfinal_session(tmp_path: Path) -> None:
     )
     assert state.get("lifecycleState") == "closed"
     assert state.get("completedAt") is not None
-    # Exact completedSessions: [1, 2] — not [1, 2, 3] or anything else.
-    assert state.get("completedSessions") == [1, 2], (
-        f"expected completedSessions=[1, 2]; got {state.get('completedSessions')!r}"
+    # Set 030 Session 2: forced-incident-recovery promotes every
+    # session in the v3 ``sessions[]`` ledger to ``complete`` so rule 7
+    # (top-status complete ⟹ every session complete) holds by
+    # construction. The legacy ``completedSessions`` is derived from
+    # ``sessions[]`` per spec D5, so it reflects [1, 2, 3] for the
+    # 3-session set even though only sessions 1 and 2 went through
+    # the work-and-close cycle. The ``closeout_force_used`` event
+    # below preserves the forensic record of WHICH session triggered
+    # the force.
+    assert state.get("completedSessions") == [1, 2, 3], (
+        f"expected completedSessions=[1, 2, 3] under v3 forced-recovery "
+        f"semantics (operator asserts the SET is done); got "
+        f"{state.get('completedSessions')!r}"
+    )
+    # v3 ledger reflects the operator's "set is done" assertion.
+    sessions = state.get("sessions")
+    assert isinstance(sessions, list)
+    assert all(s["status"] == "complete" for s in sessions), (
+        f"expected every session in sessions[] to be complete; got {sessions!r}"
     )
 
     # Events ledger: closeout_force_used pinned to session 2.

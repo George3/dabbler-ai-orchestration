@@ -182,14 +182,20 @@ def test_happy_3session_full_cycle(tmp_path: Path) -> None:
             closed_through=n,
         )
 
-        # Full state-invariant bundle. close_session does not advance
-        # currentSession (it stays at the just-closed session — the
-        # next start_session is what bumps it), does not change
-        # totalSessions, does not clear startedAt, and preserves the
-        # orchestrator block. All four must hold across every close.
-        assert state.get("currentSession") == n, (
-            f"close_session should not advance currentSession; "
-            f"saw {state.get('currentSession')!r} after closing N={n}"
+        # Full state-invariant bundle. Set 030 Session 2 dual-write
+        # derives ``currentSession`` strictly from ``sessions[]``: it
+        # is the single in-progress session's number, or ``None`` when
+        # no session is in flight. After a close, no session is
+        # in-progress, so ``currentSession`` is ``None`` — both in the
+        # between-sessions window and after the final close. This is
+        # the v3 fix for the ambiguous "in-flight or most-recently-
+        # closed" v2 semantic (per spec problem statement). The
+        # totalSessions, startedAt, and orchestrator block invariants
+        # are unchanged across the migration.
+        assert state.get("currentSession") is None, (
+            f"close_session must derive currentSession from sessions[]; "
+            f"saw {state.get('currentSession')!r} after closing N={n}, "
+            "expected None (no session in-progress)"
         )
         assert state.get("totalSessions") == total
         assert state.get("startedAt") is not None

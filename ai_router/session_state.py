@@ -27,14 +27,20 @@ Schema versions
   (``"in-progress" | "complete"``). Did not carry per-session lifecycle
   granularity — work-verified vs closeout-pending vs closed all collapsed
   to ``"complete"``.
-- v2 (current): adds ``lifecycleState`` from :class:`SessionLifecycleState`
+- v2 (legacy): adds ``lifecycleState`` from :class:`SessionLifecycleState`
   for explicit lifecycle granularity. Keeps ``status`` for backward
   compatibility with consumers (VS Code Session Set Explorer, dashboards)
   that have not yet been updated. New writes always set both. v1 files
   are migrated lazily on read — the in-memory dict gets ``schemaVersion``
-  bumped and ``lifecycleState`` derived from ``status``; the file on disk
-  is rewritten as v2 on the next ``register_session_start`` or
-  ``mark_session_complete`` call.
+  bumped and ``lifecycleState`` derived from ``status``.
+- v3 (current, Set 030): collapses the v2 progress triple
+  (``currentSession`` / ``totalSessions`` / ``completedSessions``) into
+  a single canonical ``sessions[]`` ledger. Per spec D5, writers
+  emit BOTH the v3 ``sessions[]`` and the legacy triple derived from
+  it; legacy fields are derivation outputs, never independently
+  maintained. Per spec D6, writer-side invariant violations raise
+  :class:`SessionStateInvariantError` (re-exported from
+  :mod:`ai_router.progress`) — no silent recovery.
 """
 
 import json
@@ -45,13 +51,44 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Literal, Optional, Tuple
+from pathlib import Path
+from typing import Iterable, List, Literal, Optional, Tuple
 
 import yaml
 
+# Set 030 Session 2: re-export the v3 invariant validators and the
+# exception class so writers in this module raise the same error type
+# that the read-side progress.py validators raise. Callers that catch
+# ``SessionStateInvariantError`` see one exception class regardless of
+# which side (read or write) detected the violation.
+try:
+    from progress import (  # type: ignore[import-not-found]
+        SESSION_STATUS_COMPLETE,
+        SESSION_STATUS_IN_PROGRESS,
+        SESSION_STATUS_NOT_STARTED,
+        SessionRecord,
+        SessionStateInvariantError,
+        canonicalize_status,
+        extract_session_titles_from_spec,
+        synthesize_v3_from_v2,
+        validate_invariants,
+    )
+except ImportError:
+    from .progress import (  # type: ignore[no-redef]
+        SESSION_STATUS_COMPLETE,
+        SESSION_STATUS_IN_PROGRESS,
+        SESSION_STATUS_NOT_STARTED,
+        SessionRecord,
+        SessionStateInvariantError,
+        canonicalize_status,
+        extract_session_titles_from_spec,
+        synthesize_v3_from_v2,
+        validate_invariants,
+    )
+
 
 SESSION_STATE_FILENAME = "session-state.json"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 _logger = logging.getLogger("ai_router.session_state")
@@ -145,6 +182,229 @@ def _state_path(session_set_dir: str) -> str:
     return os.path.join(session_set_dir, SESSION_STATE_FILENAME)
 
 
+# ---------------------------------------------------------------------------
+# Set 030 Session 2: v3 dual-write helpers
+# ---------------------------------------------------------------------------
+#
+# Per spec D5, every Full-tier writer emits BOTH the canonical
+# ``sessions[]`` ledger AND the legacy progress triple
+# (``currentSession`` / ``totalSessions`` / ``completedSessions``)
+# derived from it. Legacy fields are output of derivation, never
+# independently maintained.
+#
+# Three helpers below split the work:
+#
+# - :func:`_existing_sessions_records` reads any ``sessions[]`` already
+#   present on disk (a previous v3 write) and returns it as
+#   ``SessionRecord``s with ``title`` carried forward.
+# - :func:`_build_sessions_array` is the single source of truth for the
+#   v3 ledger shape. It composes prior-closed sessions (``complete``),
+#   the in-flight session (``in-progress`` when present), and the
+#   remaining sessions (``not-started``), filling titles from any prior
+#   v3 ledger, then ``spec.md``, then the generic ``Session N``
+#   fallback. It also handles the "extra closed sessions outside
+#   sessions[]" case: an existing v3 file's titles are preserved when
+#   the array is consistent with the requested transition.
+# - :func:`_derive_legacy_fields` is the only path that materializes
+#   the legacy triple. The same function runs on both writers
+#   (``register_session_start`` and ``_flip_state_to_closed``) so the
+#   parity invariant ("legacy fields always agree with ``sessions[]``")
+#   holds by construction.
+
+
+def _existing_sessions_records(state: Optional[dict]) -> List[SessionRecord]:
+    """Return ``sessions[]`` as a list of records, or ``[]`` if absent.
+
+    A previous v3 write on this set produced ``sessions[]`` already; the
+    titles inside are the highest-fidelity source for the next writer's
+    title column (regex extraction from ``spec.md`` is the fallback for
+    sets that have never been through a v3 write). Returns ``[]`` for
+    v1/v2-shaped or fresh state.
+
+    Coercion is intentionally tolerant: a malformed prior ``sessions[]``
+    on disk should not block a writer call. Records that fail basic
+    type checks are dropped here; the validate_invariants() call later
+    in :func:`_build_sessions_array` will fail loud if the resulting
+    array is invalid.
+    """
+    if not isinstance(state, dict):
+        return []
+    raw = state.get("sessions")
+    if not isinstance(raw, list):
+        return []
+    out: List[SessionRecord] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        number = entry.get("number")
+        if type(number) is not int or number <= 0:
+            continue
+        title = entry.get("title")
+        if not isinstance(title, str):
+            title = f"Session {number}"
+        raw_status = entry.get("status")
+        status = canonicalize_status(raw_status) if isinstance(raw_status, str) else None
+        if status not in (
+            SESSION_STATUS_NOT_STARTED,
+            SESSION_STATUS_IN_PROGRESS,
+            SESSION_STATUS_COMPLETE,
+        ):
+            status = SESSION_STATUS_NOT_STARTED
+        out.append(SessionRecord(number=number, title=title, status=status))
+    return out
+
+
+def _spec_titles_for_set(session_set_dir: str) -> dict:
+    """Return ``{number: title}`` parsed from the set's ``spec.md``.
+
+    Empty dict if the spec is absent or has no parseable session
+    headings. Backfill helper for sets that have never been through a
+    v3 write — :func:`_build_sessions_array` consults this when an
+    incoming ``sessions[]`` has no entry for a given number.
+    """
+    spec_path = Path(session_set_dir) / "spec.md"
+    return {n: t for n, t in extract_session_titles_from_spec(spec_path)}
+
+
+def _build_sessions_array(
+    session_set_dir: str,
+    *,
+    total: int,
+    completed_numbers: Iterable[int] = (),
+    in_progress_number: Optional[int] = None,
+    prior_state: Optional[dict] = None,
+) -> List[dict]:
+    """Construct the v3 ``sessions[]`` ledger as a list of plain dicts.
+
+    Title resolution order, per record:
+
+    1. The existing v3 ``sessions[]`` on disk (carries forward across
+       boundary writes).
+    2. ``spec.md`` regex extraction (the canonical authoring source).
+    3. ``Session N`` fallback (always available).
+
+    Status assignment, per record at position ``k`` (1..total):
+
+    - ``in_progress_number == k`` → ``in-progress``
+    - ``k in completed_numbers`` → ``complete``
+    - otherwise → ``not-started``
+
+    Raises :class:`SessionStateInvariantError` if the resulting array
+    would violate any of the 8 invariants. The writer's fail-loud
+    contract (spec D6) — no silent recovery — means the writer's
+    in-process check happens here, BEFORE any file is written.
+    """
+    if not isinstance(total, int) or total <= 0:
+        raise SessionStateInvariantError(
+            1,
+            f"_build_sessions_array: total must be a positive int, got {total!r}",
+        )
+
+    # Fail loud (spec D6) on any number outside ``[1, total]``. Silent
+    # truncation would let callers produce a "looks valid" sessions[]
+    # by quietly dropping bogus inputs — e.g., starting session 3
+    # against total=2 would write a between-sessions snapshot with
+    # currentSession=None, hiding the off-by-one. Rule 2 is the
+    # appropriate rule number (positive ints, contiguous from 1, in
+    # range).
+    if in_progress_number is not None:
+        if (
+            type(in_progress_number) is not int
+            or in_progress_number < 1
+            or in_progress_number > total
+        ):
+            raise SessionStateInvariantError(
+                2,
+                f"in_progress_number must be an int in [1, {total}], "
+                f"got {in_progress_number!r}",
+            )
+    completed_set: set = set()
+    for n in completed_numbers:
+        if type(n) is not int or n < 1 or n > total:
+            raise SessionStateInvariantError(
+                2,
+                f"completed_numbers entries must be ints in [1, {total}], "
+                f"got {n!r}",
+            )
+        completed_set.add(n)
+
+    existing = {r.number: r for r in _existing_sessions_records(prior_state)}
+    spec_titles = _spec_titles_for_set(session_set_dir)
+
+    out: List[dict] = []
+    for k in range(1, total + 1):
+        if existing.get(k) is not None:
+            title = existing[k].title
+        elif k in spec_titles:
+            title = spec_titles[k]
+        else:
+            title = f"Session {k}"
+
+        if in_progress_number is not None and k == in_progress_number:
+            status = SESSION_STATUS_IN_PROGRESS
+        elif k in completed_set:
+            status = SESSION_STATUS_COMPLETE
+        else:
+            status = SESSION_STATUS_NOT_STARTED
+        out.append({"number": k, "title": title, "status": status})
+
+    return out
+
+
+def _derive_legacy_fields(
+    sessions: List[dict],
+) -> Tuple[Optional[int], int, List[int]]:
+    """Return ``(current_session, total_sessions, completed_sessions)``.
+
+    The legacy triple is always derived from ``sessions[]``, never
+    independently maintained. ``current_session`` is the single
+    in-progress session's number, or ``None`` when no session is
+    in-flight (between-sessions or complete). ``completed_sessions``
+    is sorted ascending.
+    """
+    current: Optional[int] = None
+    completed: List[int] = []
+    for entry in sessions:
+        num = entry["number"]
+        status = entry["status"]
+        if status == SESSION_STATUS_IN_PROGRESS:
+            current = num
+        elif status == SESSION_STATUS_COMPLETE:
+            completed.append(num)
+    completed.sort()
+    return current, len(sessions), completed
+
+
+def _validate_sessions_or_raise(
+    sessions: List[dict],
+    *,
+    top_status: Optional[str],
+    lifecycle_state: Optional[str],
+) -> None:
+    """Convert a list-of-dicts ``sessions`` into records, then validate.
+
+    Writer-side wrapper around :func:`progress.validate_invariants` so
+    callers in this module can pass plain dicts (the on-disk shape) and
+    get a fail-loud :class:`SessionStateInvariantError` on any rule
+    violation. The conversion preserves the structural-error rule
+    numbers from ``progress._parse_sessions``.
+    """
+    records: List[SessionRecord] = []
+    for entry in sessions:
+        records.append(
+            SessionRecord(
+                number=entry["number"],
+                title=entry.get("title", f"Session {entry['number']}"),
+                status=entry["status"],
+            )
+        )
+    validate_invariants(
+        records,
+        top_status=top_status,
+        lifecycle_state=lifecycle_state,
+    )
+
+
 def register_session_start(
     session_set: str,
     session_number: int,
@@ -165,46 +425,34 @@ def register_session_start(
 
     Events emission
     ---------------
-    Before writing the snapshot, this function appends a ``work_started``
-    event to ``session-events.jsonl`` for *session_number*. The append is
-    idempotent: if a ``work_started`` event for this session number is
-    already in the ledger, no second event is appended (covers the
-    orchestrator-restart case where ``register_session_start`` is called
-    twice on the same session). The append happens **before** the
-    snapshot write so that an event-write failure leaves the snapshot
-    un-flipped — same ordering invariant as :func:`mark_session_complete`
-    (event is the audit trail, snapshot is the consumer-readable cache;
-    if the snapshot is missing on the next call, idempotency dedupes
-    the event and the retry succeeds cleanly). The append is best-
-    effort with respect to a missing session-set directory: if the
-    directory does not exist, the event is skipped (the snapshot write
-    below will raise ``FileNotFoundError`` for the same reason, so the
-    skip never hides a recoverable case).
-    """
-    # Append the work_started event before the snapshot write so a
-    # failed event leaves the snapshot un-flipped (mirrors the ordering
-    # in mark_session_complete). Lazy import to avoid a top-level cycle:
-    # session_events imports from session_state at module load.
-    if os.path.isdir(session_set):
-        try:
-            from session_events import (  # type: ignore[import-not-found]
-                append_event,
-                read_events,
-            )
-        except ImportError:
-            from .session_events import (  # type: ignore[no-redef]
-                append_event,
-                read_events,
-            )
-        existing = read_events(session_set)
-        already_emitted = any(
-            ev.event_type == "work_started"
-            and ev.session_number == session_number
-            for ev in existing
-        )
-        if not already_emitted:
-            append_event(session_set, "work_started", session_number)
+    After validating the prospective sessions[] (spec D6: fail loud
+    before any file is written), this function appends a
+    ``work_started`` event to ``session-events.jsonl`` for
+    *session_number*, THEN writes the snapshot. The append is
+    idempotent: if a ``work_started`` event for this session number
+    is already in the ledger, no second event is appended (covers
+    the orchestrator-restart case where ``register_session_start``
+    is called twice on the same session). The append happens
+    **before** the snapshot write so that an event-write failure
+    leaves the snapshot un-flipped — same ordering invariant as
+    :func:`mark_session_complete` (event is the audit trail,
+    snapshot is the consumer-readable cache; if the snapshot is
+    missing on the next call, idempotency dedupes the event and the
+    retry succeeds cleanly). The append is best-effort with respect
+    to a missing session-set directory: if the directory does not
+    exist, the event is skipped (the snapshot write below will
+    raise ``FileNotFoundError`` for the same reason, so the skip
+    never hides a recoverable case).
 
+    Set 030 Session 2 reordered the steps so the writer-side
+    invariant check runs FIRST. The previous v2 ordering (event,
+    then snapshot) trusted the caller to pass valid arguments;
+    under D6 a bad call would have appended a work_started event
+    before raising, leaving the events ledger ahead of the
+    snapshot. The new ordering — build sessions[], validate, emit
+    event, write snapshot — keeps both files in lockstep on every
+    failure path.
+    """
     # Preserve completedSessions[] across the snapshot rewrite (Set 022
     # invariant: the array is the progress ledger and survives session
     # boundaries). For pre-Set-022 sets without the array on disk,
@@ -217,12 +465,116 @@ def register_session_start(
     if isinstance(existing, dict):
         prior_completed = compute_effective_completed_sessions(session_set)
 
+    # Set 030 Session 2: build the v3 sessions[] ledger first; the
+    # legacy triple is derived from it. The session count is the
+    # caller's ``total_sessions``, falling back to the existing state's
+    # value, then to the largest known number across prior_completed +
+    # session_number + spec.md headings. The order matters: writer
+    # callers (the start_session CLI) always pass the spec-known
+    # ``totalSessions`` so the first branch wins on every legitimate
+    # invocation; the fallbacks protect the very rare case where a
+    # caller doesn't have the total at hand.
+    effective_total = total_sessions
+    if not (isinstance(effective_total, int) and effective_total > 0):
+        if isinstance(existing, dict):
+            prior_total = existing.get("totalSessions")
+            if isinstance(prior_total, int) and prior_total > 0:
+                effective_total = prior_total
+    if not (isinstance(effective_total, int) and effective_total > 0):
+        spec_titles = _spec_titles_for_set(session_set)
+        max_spec_number = max(spec_titles.keys()) if spec_titles else 0
+        max_completed = max(prior_completed) if prior_completed else 0
+        effective_total = max(max_spec_number, max_completed, session_number)
+    # Spec D6 fail-loud: if the caller-supplied (or
+    # backfilled-from-existing) total is smaller than the session
+    # number being started or any prior-closed session, the input
+    # is incoherent — the CLI's boundary checks should have caught
+    # it upstream, and silently stretching the total here would
+    # mask the upstream bug. Surface it instead. The
+    # _build_sessions_array call below would also raise on the
+    # same condition (in_progress_number > total), but this earlier
+    # check produces a clearer error message that names both
+    # values.
+    if session_number > effective_total:
+        raise SessionStateInvariantError(
+            2,
+            f"session_number {session_number} exceeds total_sessions "
+            f"{effective_total}; the CLI's boundary check should have "
+            "refused this. If you are calling the Python helper "
+            "directly, pass a total_sessions that covers your "
+            "session_number, or update the spec.md totalSessions "
+            "field first.",
+        )
+    if prior_completed and max(prior_completed) > effective_total:
+        raise SessionStateInvariantError(
+            2,
+            f"prior completedSessions contains {max(prior_completed)} "
+            f"which exceeds total_sessions {effective_total}; "
+            "totalSessions on disk is inconsistent with the closed-set "
+            "history. Run close_session --repair or update the spec.md "
+            "totalSessions field.",
+        )
+
+    # in_progress is session_number unless it's already in
+    # prior_completed (which would violate rule 4 — the writer must
+    # refuse, since the start_session CLI's boundary gate should have
+    # caught this earlier).
+    sessions = _build_sessions_array(
+        session_set,
+        total=effective_total,
+        completed_numbers=prior_completed,
+        in_progress_number=session_number,
+        prior_state=existing,
+    )
+
+    # Writer-side invariant enforcement (spec D6, fail loud).
+    # Validation happens BEFORE any file is written or any event is
+    # appended, so a violation leaves both the on-disk snapshot and
+    # the events ledger in their previous (consistent) state.
+    _validate_sessions_or_raise(
+        sessions,
+        top_status=SESSION_STATUS_IN_PROGRESS,
+        lifecycle_state=SessionLifecycleState.WORK_IN_PROGRESS.value,
+    )
+
+    # Validation passed — now append the work_started event (the
+    # audit trail) and write the snapshot (the consumer-readable
+    # cache). Event-before-snapshot ordering means an event-write
+    # failure leaves the snapshot un-flipped; idempotency on the
+    # event ledger covers the orchestrator-restart case.
+    if os.path.isdir(session_set):
+        try:
+            from session_events import (  # type: ignore[import-not-found]
+                append_event,
+                read_events,
+            )
+        except ImportError:
+            from .session_events import (  # type: ignore[no-redef]
+                append_event,
+                read_events,
+            )
+        prior_events = read_events(session_set)
+        already_emitted = any(
+            ev.event_type == "work_started"
+            and ev.session_number == session_number
+            for ev in prior_events
+        )
+        if not already_emitted:
+            append_event(session_set, "work_started", session_number)
+
+    derived_current, derived_total, derived_completed = _derive_legacy_fields(sessions)
+
     state = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
-        "currentSession": session_number,
-        "totalSessions": total_sessions,
-        "status": "in-progress",
+        "sessions": sessions,
+        # Dual-write legacy triple per spec D5. Always derived from
+        # ``sessions[]`` by :func:`_derive_legacy_fields`; never
+        # independently maintained.
+        "currentSession": derived_current,
+        "totalSessions": derived_total,
+        "completedSessions": derived_completed,
+        "status": SESSION_STATUS_IN_PROGRESS,
         "lifecycleState": SessionLifecycleState.WORK_IN_PROGRESS.value,
         "startedAt": _now_iso(),
         "completedAt": None,
@@ -234,7 +586,6 @@ def register_session_start(
             "effort": orchestrator_effort,
         },
     }
-    state["completedSessions"] = prior_completed
     path = _state_path(session_set)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
@@ -379,59 +730,150 @@ def _flip_state_to_closed(
     with open(path, "r", encoding="utf-8") as f:
         state = json.load(f)
     # Migrate v1 → v2 in-memory before rewriting, so the on-disk file
-    # comes out as v2 on the next write (per the schema migration contract).
+    # comes out as at least v2 on the next write (per the schema
+    # migration contract). The v3 promotion (with sessions[] backfill)
+    # happens below.
     state = _migrate_v1_to_v2_inplace(state)
 
-    # Set 022: maintain completedSessions[] on every close. The helper
-    # backfills from the events ledger when the array is empty (legacy
-    # sets that pre-date Set 022) so the very first close after the
-    # upgrade heals the array in one pass. currentSession is appended
-    # after the helper runs because the helper reads the *current*
-    # snapshot's array (which doesn't yet include the session we're
-    # about to close).
+    # Set 022 / Set 030 Session 2: maintain completedSessions[] AND
+    # sessions[] on every close. The legacy helper
+    # ``compute_effective_completed_sessions`` is the canonical signal
+    # for "what sessions are already closed"; we then append the
+    # currentSession to that set, build the new v3 sessions[] (with
+    # the close applied), and let :func:`_derive_legacy_fields`
+    # produce the legacy triple from the result. Single source of
+    # truth → no parity drift between v3 and legacy.
     current_session = state.get("currentSession")
-    if isinstance(current_session, int) and not isinstance(current_session, bool):
-        effective = compute_effective_completed_sessions(session_set)
-        merged = sorted(set(effective) | {current_session})
-        state["completedSessions"] = merged
+
+    effective_completed_before = compute_effective_completed_sessions(session_set)
+    if (
+        isinstance(current_session, int)
+        and not isinstance(current_session, bool)
+    ):
+        # Idempotency: re-running close on an already-closed session
+        # is a no-op for the completed set (it's already a member).
+        new_completed = sorted(set(effective_completed_before) | {current_session})
+    else:
+        new_completed = sorted(set(effective_completed_before))
 
     # Final-session detection (Set 022): the canonical signal is
-    # ``len(completedSessions) == totalSessions`` after the append
-    # above. change-log.md presence remains a belt-and-suspenders
-    # check — both must indicate "done" before the set flips to
-    # complete, so a stray hand-written change-log doesn't promote
-    # a mid-set close to a set-done flip, and a missing change-log
-    # doesn't let the math alone flip a set the orchestrator hasn't
-    # actually wrapped up. ``forced=True`` still short-circuits to
-    # last-session because incident recovery is explicit operator
-    # intent (close-out.md, "--force is hard-scoped to incident
-    # recovery"); the operator is asserting "this set is done" and
-    # we honor that even when one signal is missing. When
-    # totalSessions is unknown (None / 0 — legacy spec without the
-    # config block), fall back to change-log presence alone so
-    # pre-Set-022 sets close out the way they always have.
-    completed_list = state.get("completedSessions") or []
+    # ``len(new_completed) == totalSessions``. change-log.md presence
+    # remains a belt-and-suspenders check — both must indicate "done"
+    # before the set flips to complete, so a stray hand-written
+    # change-log doesn't promote a mid-set close to a set-done flip,
+    # and a missing change-log doesn't let the math alone flip a set
+    # the orchestrator hasn't actually wrapped up. ``forced=True``
+    # still short-circuits to last-session because incident recovery
+    # is explicit operator intent (close-out.md, "--force is
+    # hard-scoped to incident recovery").
+    #
+    # Set 030 Session 2: totalSessions MUST be resolvable. When the
+    # on-disk value is missing/zero, we backfill from spec.md +
+    # ledger + existing sessions[] data. If even that lands on zero,
+    # raise SessionStateInvariantError rather than fall through to
+    # an unvalidated legacy-only write — the previous v2 fallback
+    # silently produced a snapshot that no v3 reader could parse.
     total_sessions = state.get("totalSessions")
-    if (
+    if not (
         isinstance(total_sessions, int)
         and not isinstance(total_sessions, bool)
         and total_sessions > 0
     ):
-        # Spec invariant 3: SET-level flip requires
-        # len(completedSessions) == totalSessions (post-append).
-        # Equality, not >=: a snapshot where
-        # len(completedSessions) > totalSessions is its own
-        # pathology (likely a hand-edit or test misconfig) and
-        # should fail loud rather than be silently flipped here.
-        sessions_done = len(completed_list) == total_sessions
-    else:
-        sessions_done = True
+        spec_titles = _spec_titles_for_set(session_set)
+        max_spec = max(spec_titles.keys()) if spec_titles else 0
+        max_closed = max(new_completed) if new_completed else 0
+        existing_records = _existing_sessions_records(state)
+        max_existing = max(
+            (r.number for r in existing_records), default=0
+        )
+        total_sessions = max(max_spec, max_closed, max_existing)
+    if not (isinstance(total_sessions, int) and total_sessions > 0):
+        raise SessionStateInvariantError(
+            1,
+            f"cannot determine totalSessions for {session_set!r}: no "
+            "value on disk, no spec.md headings, no closed sessions, "
+            "no existing sessions[]. Provide totalSessions via the "
+            "spec.md config block or via prior writer state.",
+        )
+
+    sessions_done = len(new_completed) == total_sessions
     change_log_present = os.path.isfile(
         os.path.join(session_set, "change-log.md")
     )
     is_last_session = forced or (sessions_done and change_log_present)
+
+    # Build the v3 sessions[] reflecting the post-close state.
+    #
+    # Two paths diverge on ``forced``:
+    #
+    # 1. Natural close (forced=False), whether mid-set or last
+    #    session: ``completed_for_array = new_completed``. The
+    #    invariant validator then enforces rule 7 (top-status
+    #    complete ⟹ every session complete). For natural
+    #    last-session, ``new_completed`` must already cover every
+    #    session — sessions_done is True by definition, which means
+    #    len(new_completed) == total_sessions, and the values are
+    #    sorted+unique from compute_effective_completed_sessions,
+    #    so the array is contiguous 1..total. No silent promotion.
+    #    If the math fails (e.g., a hand-edited snapshot with gaps
+    #    in completedSessions), the validator surfaces it rather
+    #    than masking with a forced-style promotion.
+    #
+    # 2. Forced incident-recovery close (forced=True): operator
+    #    intent per close-out.md Section 5 is "the SET is done."
+    #    Promote every session in the ledger to ``complete``. The
+    #    ``forceClosed: true`` marker on the snapshot plus the
+    #    ``closeout_force_used`` event in ``session-events.jsonl``
+    #    preserve the forensic trail of which session triggered
+    #    the force.
+    if forced:
+        completed_for_array = list(range(1, total_sessions + 1))
+        top_status_after = SESSION_STATUS_COMPLETE
+        lifecycle_after = SessionLifecycleState.CLOSED.value
+    elif is_last_session:
+        # Natural last-session close: every session must already be
+        # in new_completed. Use new_completed as-is so the validator
+        # catches any inconsistency rather than papering over it.
+        completed_for_array = new_completed
+        top_status_after = SESSION_STATUS_COMPLETE
+        lifecycle_after = SessionLifecycleState.CLOSED.value
+    else:
+        completed_for_array = new_completed
+        top_status_after = SESSION_STATUS_IN_PROGRESS
+        lifecycle_after = SessionLifecycleState.WORK_IN_PROGRESS.value
+
+    sessions = _build_sessions_array(
+        session_set,
+        total=total_sessions,
+        completed_numbers=completed_for_array,
+        in_progress_number=None,
+        prior_state=state,
+    )
+    state["sessions"] = sessions
+
+    # Writer-side invariant enforcement (spec D6, fail loud). For
+    # natural last-session close this is the asserter: if
+    # new_completed had a gap (e.g., [1, 3] for a 3-session set
+    # with sessions_done somehow True via hand-edit), rule 7 will
+    # raise here BEFORE the snapshot is rewritten.
+    _validate_sessions_or_raise(
+        sessions,
+        top_status=top_status_after,
+        lifecycle_state=lifecycle_after,
+    )
+
+    # Derive legacy triple from the v3 ledger; this is the only
+    # path that materializes those fields.
+    derived_current, derived_total, derived_completed = _derive_legacy_fields(
+        sessions
+    )
+    state["currentSession"] = derived_current
+    state["totalSessions"] = derived_total
+    state["completedSessions"] = derived_completed
+
+    state["schemaVersion"] = SCHEMA_VERSION
     if is_last_session:
-        state["status"] = "complete"
+        state["status"] = SESSION_STATUS_COMPLETE
         state["lifecycleState"] = SessionLifecycleState.CLOSED.value
         state["completedAt"] = _now_iso()
     if verification_verdict is not None:
@@ -625,14 +1067,26 @@ def _finalize_total_sessions_from_entries(session_set: str) -> None:
 def _migrate_v1_to_v2_inplace(state: dict) -> dict:
     """Transform a v1 state dict to v2 shape in-memory.
 
-    No-op for dicts already at schemaVersion >= 2. v1 files that lack a
-    recognized status value get ``lifecycleState=work_in_progress`` as a
-    safe default — that mirrors what an orchestrator would have written had
-    it been authoring a fresh start, and the next legitimate write (start
-    or complete) corrects it.
+    No-op for dicts already at schemaVersion >= 2 (the v2 -> v3
+    promotion happens at write time in :func:`register_session_start`
+    and :func:`_flip_state_to_closed`; readers that need a
+    fully-synthesized v3 view go through
+    :func:`ai_router.progress.synthesize_v3_from_v2`). v1 files that
+    lack a recognized status value get
+    ``lifecycleState=work_in_progress`` as a safe default — that
+    mirrors what an orchestrator would have written had it been
+    authoring a fresh start, and the next legitimate write (start or
+    complete) corrects it.
+
+    Set 030 Session 2 left this function unchanged in behavior — it
+    still only fills the v1 -> v2 gap. The gate uses the literal ``2``
+    rather than :data:`SCHEMA_VERSION` (now 3) so a v2 file on disk
+    passes through this function unchanged; the v3 promotion is the
+    writer's job, not the reader's, and a "partial" in-memory v3 with
+    ``schemaVersion: 3`` but no ``sessions[]`` would be confusing.
     """
     schema_version = state.get("schemaVersion")
-    if isinstance(schema_version, int) and schema_version >= SCHEMA_VERSION:
+    if isinstance(schema_version, int) and schema_version >= 2:
         return state
     if "lifecycleState" not in state:
         legacy_status = state.get("status")
@@ -640,7 +1094,7 @@ def _migrate_v1_to_v2_inplace(state: dict) -> dict:
             legacy_status, SessionLifecycleState.WORK_IN_PROGRESS
         )
         state["lifecycleState"] = derived.value
-    state["schemaVersion"] = SCHEMA_VERSION
+    state["schemaVersion"] = 2
     return state
 
 
@@ -762,14 +1216,25 @@ def _not_started_payload(session_set_dir: str) -> dict:
 
     All session-tracking fields are ``null``: no session has started, so
     there is no current session, no start time, no orchestrator. The
-    ``totalSessions`` field is best-effort populated from the spec; it
-    is the only field that has a meaningful value in this shape.
+    ``totalSessions`` field is best-effort populated from the spec.
+
+    Set 030 Session 2: when ``totalSessions`` is known from the spec,
+    the payload also carries a v3 ``sessions[]`` array — every entry
+    ``not-started``, titles from ``spec.md`` headings when present, the
+    ``Session N`` fallback otherwise. When ``totalSessions`` is
+    unknown (no spec config block, or a spec without a numeric
+    ``totalSessions`` field), ``sessions[]`` is left absent — a
+    not-started shape without a known plan is one of the few cases v3
+    invariant rule 1 explicitly allows (the rule guards "any set with
+    a known plan"). The next legitimate write (register_session_start)
+    will materialize ``sessions[]`` when the total is known.
     """
-    return {
+    total = _read_total_sessions_from_spec(session_set_dir)
+    payload: dict = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set_dir.rstrip("/\\")),
         "currentSession": None,
-        "totalSessions": _read_total_sessions_from_spec(session_set_dir),
+        "totalSessions": total,
         "status": NOT_STARTED_STATUS,
         "lifecycleState": None,
         "startedAt": None,
@@ -777,6 +1242,30 @@ def _not_started_payload(session_set_dir: str) -> dict:
         "verificationVerdict": None,
         "orchestrator": None,
     }
+    if isinstance(total, int) and total > 0:
+        sessions = _build_sessions_array(
+            session_set_dir,
+            total=total,
+            completed_numbers=(),
+            in_progress_number=None,
+            prior_state=None,
+        )
+        # The not-started shape always passes invariants by
+        # construction (every session not-started, top-status
+        # not-started, no lifecycle), but run the validator anyway so
+        # a malformed spec.md is caught here rather than at the first
+        # read.
+        _validate_sessions_or_raise(
+            sessions,
+            top_status=SESSION_STATUS_NOT_STARTED,
+            lifecycle_state=None,
+        )
+        payload["sessions"] = sessions
+        # Derived legacy fields. completedSessions is always an empty
+        # list for the not-started shape; currentSession stays None
+        # (no in-flight session) per Decision D5's dual-write rule.
+        payload["completedSessions"] = []
+    return payload
 
 
 def synthesize_not_started_state(session_set_dir: str) -> str:
@@ -898,6 +1387,17 @@ def _backfill_payload(session_set_dir: str) -> dict:
     The orchestrator block is always ``null`` in backfilled files; the
     activity log carries per-step model info for anyone who needs to
     recover that history. (Risk noted in spec.)
+
+    Set 030 Session 2: the not-started base already includes the v3
+    ``sessions[]`` array when ``totalSessions`` is known (see
+    :func:`_not_started_payload`). For backfilled-complete and
+    backfilled-in-progress shapes we promote individual sessions in
+    that array to match the inferred state — see the per-branch
+    logic below. The activity-log branch cannot reliably tell *which*
+    session is in flight (the file is a step-level log, not a session
+    ledger), so it conservatively promotes session 1 to in-progress;
+    the next legitimate writer call corrects the array with full
+    information.
     """
     base = _not_started_payload(session_set_dir)
 
@@ -905,12 +1405,44 @@ def _backfill_payload(session_set_dir: str) -> dict:
         base["status"] = COMPLETE_STATUS
         base["lifecycleState"] = SessionLifecycleState.CLOSED.value
         base["completedAt"] = _change_log_mtime_iso(session_set_dir)
+        # Promote every session in the ledger to complete (rule 7
+        # requires top-level "complete" pairs with every session
+        # complete). If sessions[] is absent (totalSessions unknown),
+        # leave the legacy fields alone — backfill stays as-is.
+        if isinstance(base.get("sessions"), list):
+            for entry in base["sessions"]:
+                entry["status"] = SESSION_STATUS_COMPLETE
+            _validate_sessions_or_raise(
+                base["sessions"],
+                top_status=SESSION_STATUS_COMPLETE,
+                lifecycle_state=SessionLifecycleState.CLOSED.value,
+            )
+            _, _, derived_completed = _derive_legacy_fields(base["sessions"])
+            base["completedSessions"] = derived_completed
         return base
 
     if os.path.isfile(os.path.join(session_set_dir, "activity-log.json")):
         base["status"] = IN_PROGRESS_STATUS
         base["lifecycleState"] = SessionLifecycleState.WORK_IN_PROGRESS.value
         base["startedAt"] = _earliest_activity_log_timestamp(session_set_dir)
+        # Conservatively promote session 1 to in-progress in the v3
+        # ledger when totalSessions is known. Rule 6 allows exactly
+        # one in-progress session; session 1 is the safest assumption
+        # for a legacy folder with no other signal. The next
+        # legitimate writer call (register_session_start or
+        # close_session) will resync the ledger.
+        if isinstance(base.get("sessions"), list) and base["sessions"]:
+            base["sessions"][0]["status"] = SESSION_STATUS_IN_PROGRESS
+            _validate_sessions_or_raise(
+                base["sessions"],
+                top_status=SESSION_STATUS_IN_PROGRESS,
+                lifecycle_state=SessionLifecycleState.WORK_IN_PROGRESS.value,
+            )
+            derived_current, _, derived_completed = _derive_legacy_fields(
+                base["sessions"]
+            )
+            base["currentSession"] = derived_current
+            base["completedSessions"] = derived_completed
         return base
 
     return base

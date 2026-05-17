@@ -558,7 +558,12 @@ def test_close_session_multi_session_set_clean(tmp_path: Path):
         "path (Set 014 (b))"
     )
     assert s2_state_after["status"] == "complete"
-    assert s2_state_after["currentSession"] == 2
+    # Set 030 Session 2: v3 derives currentSession from sessions[] —
+    # strictly the in-progress session, or None when no session is
+    # in-flight. After the final close, no session is in-progress, so
+    # currentSession is None (replaces the v2 "stays at the
+    # just-closed session" semantic).
+    assert s2_state_after["currentSession"] is None
 
     # The events ledger has a session-2 closeout_succeeded.
     events_after_s2 = read_events(str(set_dir))

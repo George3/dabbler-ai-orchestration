@@ -1,9 +1,16 @@
 """Unit tests for Session 3 deliverables in ``session_state``:
 
 - ``SessionLifecycleState`` enum
-- v1 → v2 lazy migration on read; rewrite-as-v2 on next write
+- v1 → v2 lazy migration on read; rewrite-as-v2-or-v3 on next write
 - ``NextOrchestrator`` / ``NextOrchestratorReason`` dataclasses
 - ``validate_next_orchestrator``
+
+Set 030 Session 2 bumped ``SCHEMA_VERSION`` to 3 and made writers
+dual-write (v3 ``sessions[]`` + legacy triple). Tests below were
+updated to assert v3 output. The v3-specific dual-write parity tests
+live in ``test_session_state_v3.py``; the assertions here are the
+load-bearing v1→v2 lazy-migration tests plus NextOrchestrator
+validator coverage that the v3 dual-write does not touch.
 
 The tests bypass ``ai_router/`` package import via ``conftest.py`` adding
 the package directory to ``sys.path``; modules are imported by filename.
@@ -90,7 +97,7 @@ class TestSessionLifecycleState:
 # ---------------------------------------------------------------------------
 
 class TestRegisterSessionStartV2:
-    def test_writes_v2_with_lifecycle_state(self, session_set_dir):
+    def test_writes_v3_with_lifecycle_state(self, session_set_dir):
         register_session_start(
             session_set=session_set_dir,
             session_number=1,
@@ -103,11 +110,22 @@ class TestRegisterSessionStartV2:
         path = os.path.join(session_set_dir, SESSION_STATE_FILENAME)
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        assert data["schemaVersion"] == 2 == SCHEMA_VERSION
+        # Set 030 Session 2: schemaVersion is now 3; dual-write keeps
+        # the legacy triple alongside ``sessions[]``.
+        assert data["schemaVersion"] == 3 == SCHEMA_VERSION
         assert data["lifecycleState"] == "work_in_progress"
         assert data["status"] == "in-progress"  # backward-compat field
         assert data["currentSession"] == 1
         assert data["completedSessions"] == []  # fresh set always has empty array
+        assert data["totalSessions"] == 5
+        # v3 ledger present, all five entries, session 1 in-progress.
+        assert isinstance(data["sessions"], list)
+        assert len(data["sessions"]) == 5
+        assert data["sessions"][0]["number"] == 1
+        assert data["sessions"][0]["status"] == "in-progress"
+        assert all(
+            s["status"] == "not-started" for s in data["sessions"][1:]
+        )
 
     def test_register_session_start_emits_work_started(self, session_set_dir):
         """Set 014 Session 1 (a): a fresh ``register_session_start`` call
@@ -257,13 +275,35 @@ class TestRegisterSessionStartV2:
 
 class TestMarkSessionCompleteV2:
     def test_writes_closed_lifecycle_state(self, session_set_dir):
+        # Register sessions 1 and 2 to mirror a real boundary write —
+        # without session 1 already closed, the v3 invariant rule 4
+        # would reject session 2 as complete-before-1.
         register_session_start(
             session_set=session_set_dir,
-            session_number=2,
-            total_sessions=5,
+            session_number=1,
+            total_sessions=2,
             orchestrator_engine="claude-code",
             orchestrator_model="claude-opus-4-7",
         )
+        # First-session close. Pre-existing change-log presence drives
+        # the SET to complete on the last session; for this mid-set
+        # close we need change-log to be absent.
+        mark_session_complete(
+            session_set_dir, verification_verdict="VERIFIED", force=True,
+        )
+        register_session_start(
+            session_set=session_set_dir,
+            session_number=2,
+            total_sessions=2,
+            orchestrator_engine="claude-code",
+            orchestrator_model="claude-opus-4-7",
+        )
+        # Add change-log to satisfy is_last_session for the final
+        # close (Set 022 belt-and-suspenders).
+        with open(
+            os.path.join(session_set_dir, "change-log.md"), "w", encoding="utf-8",
+        ) as f:
+            f.write("# Test change log\n")
         # force=True bypasses the gate — this test asserts the snapshot
         # flip mechanics, not gate enforcement (covered separately in
         # test_mark_session_complete_gate.py).
@@ -273,11 +313,19 @@ class TestMarkSessionCompleteV2:
         path = os.path.join(session_set_dir, SESSION_STATE_FILENAME)
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        assert data["schemaVersion"] == 2
+        # Set 030 Session 2: schemaVersion is now 3.
+        assert data["schemaVersion"] == 3
         assert data["lifecycleState"] == "closed"
         assert data["status"] == "complete"
         assert data["verificationVerdict"] == "VERIFIED"
         assert data["completedAt"] is not None
+        # v3 ledger reflects both sessions complete.
+        assert data["sessions"] == [
+            {"number": 1, "title": "Session 1", "status": "complete"},
+            {"number": 2, "title": "Session 2", "status": "complete"},
+        ]
+        assert data["completedSessions"] == [1, 2]
+        assert data["currentSession"] is None  # no session in flight
 
 
 # ---------------------------------------------------------------------------
@@ -315,21 +363,38 @@ class TestLazyMigrationOnRead:
         after = open(path, encoding="utf-8").read()
         assert before == after  # file unchanged
 
-    def test_mark_complete_rewrites_v1_as_v2(self, session_set_dir):
-        """Next legitimate write must produce a v2 file from a v1 input."""
-        _write_v1_state(session_set_dir, status="in-progress")
-        # force=True bypasses the gate; this test asserts schema rewrite,
-        # not gate enforcement.
+    def test_mark_complete_rewrites_v1_as_current_schema(self, session_set_dir):
+        """Next legitimate write must produce a current-schema file from v1.
+
+        Set 030 Session 2 incident-recovery semantics: ``force=True``
+        means "operator asserts the SET is done"; the writer promotes
+        every session in the resulting v3 ledger to ``complete`` so
+        rule 7 (top-status complete ⟹ every session complete) holds
+        by construction. The v2 writer left an inconsistent state on
+        disk in this case (top-status complete + currentSession=1
+        only); the v3 writer makes the operator's assertion explicit.
+        """
+        _write_v1_state(session_set_dir, status="in-progress", currentSession=1)
+        # force=True bypasses the gate AND triggers incident-recovery
+        # semantics (operator asserts the SET is done).
         mark_session_complete(
             session_set_dir, verification_verdict="VERIFIED", force=True,
         )
         with open(os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8") as f:
             data = json.load(f)
-        assert data["schemaVersion"] == 2
-        assert data["lifecycleState"] == "closed"
+        assert data["schemaVersion"] == 3
+        # Forced close → top-status complete, lifecycle closed, EVERY
+        # session in the ledger promoted to complete.
         assert data["status"] == "complete"
+        assert data["lifecycleState"] == "closed"
+        assert isinstance(data["sessions"], list)
+        assert len(data["sessions"]) == 5
+        assert all(s["status"] == "complete" for s in data["sessions"])
+        assert data["completedSessions"] == [1, 2, 3, 4, 5]
+        # Forensic marker per Set 9 Session 3 / D-2.
+        assert data.get("forceClosed") is True
 
-    def test_v2_file_passes_through_unchanged(self, session_set_dir):
+    def test_v3_file_passes_through_unchanged(self, session_set_dir):
         register_session_start(
             session_set=session_set_dir,
             session_number=1,
@@ -341,8 +406,10 @@ class TestLazyMigrationOnRead:
             os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8"
         ).read()
         state = read_session_state(session_set_dir)
-        assert state["schemaVersion"] == 2
-        # Reading v2 should not perturb the on-disk content either.
+        # Writer now emits schemaVersion 3 (Set 030 Session 2).
+        assert state["schemaVersion"] == 3
+        # Reading the current-schema file should not perturb the
+        # on-disk content either.
         after = open(
             os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8"
         ).read()

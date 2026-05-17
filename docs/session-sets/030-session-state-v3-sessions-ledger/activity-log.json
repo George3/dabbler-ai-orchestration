@@ -128,6 +128,141 @@
       "description": "Re-ran full pytest suite after Round A fixes: 484 passed, 1 skipped, 8 e2e deselected (+8 vs pre-Session-1). Mocha progress.test.ts: 46/46. TypeScript tsc --noEmit: clean. No regressions in any pre-existing tests.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-2/start",
+      "dateTime": "2026-05-17T12:25:13-04:00",
+      "description": "Registered Session 2 start via python -m ai_router.start_session. Snapshot flipped to currentSession=2, completedSessions=[1] preserved from Session 1 close-out. work_started event #2 appended to session-events.jsonl.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-2/writer-changes",
+      "dateTime": "2026-05-17T12:35:00-04:00",
+      "description": "Bumped SCHEMA_VERSION 2->3. Added 5 v3 helpers to session_state.py (_existing_sessions_records, _spec_titles_for_set, _build_sessions_array, _derive_legacy_fields, _validate_sessions_or_raise). Re-exported SessionStateInvariantError + 3 session-status constants + helpers from progress.py so writers raise the same exception class the read-side validators use. Updated _migrate_v1_to_v2_inplace gate to literal '>= 2' so v2 files pass through on read (v3 promotion is the writer's job).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-2/register-start-dual-write",
+      "dateTime": "2026-05-17T12:40:00-04:00",
+      "description": "register_session_start rewritten to dual-write per spec D5: builds v3 sessions[] via _build_sessions_array, validates via _validate_sessions_or_raise BEFORE any file write or event emission (per spec D6 + Round-A fix #4), then derives the legacy triple via _derive_legacy_fields. effective_total fallback: caller-supplied -> existing state -> max(spec_titles, completed, session_number). Includes Round-A fix #1 fail-loud rejection of session_number > effective_total and prior completed > effective_total.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-2/flip-state-dual-write",
+      "dateTime": "2026-05-17T12:50:00-04:00",
+      "description": "_flip_state_to_closed rewritten to dual-write. Resolves totalSessions through the fallback chain; raises SessionStateInvariantError if still 0 (Round-A fix #3). Splits forced (incident-recovery promotes 1..total to complete) from natural close (uses new_completed as-is; validator catches gaps - Round-A fix #2). Always builds v3 sessions[], always validates before write.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-2/scaffolding-writes-v3",
+      "dateTime": "2026-05-17T13:00:00-04:00",
+      "description": "_not_started_payload now includes a v3 sessions[] array when totalSessions is known from spec.md (all entries not-started). Per rule 1, sessions[] is omitted only when totalSessions is unknown ('any set with a known plan'). _backfill_payload promotes the array's per-session statuses to match the inferred top-status: change-log present -> all complete; activity-log only -> session 1 in-progress (conservative); neither -> all not-started. All scaffolding paths run _validate_sessions_or_raise.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-2/test-updates-v2-file",
+      "dateTime": "2026-05-17T13:05:00-04:00",
+      "description": "Updated test_session_state_v2.py for v3 dual-write semantics: schemaVersion assertions bumped 2->3; test_writes_v3_with_lifecycle_state asserts sessions[] present with session 1 in-progress + others not-started + derived legacy triple; test_writes_closed_lifecycle_state restructured to close sessions 1 and 2 naturally (without force=True) so the final state passes invariants; test_mark_complete_rewrites_v1_as_current_schema updated to assert forced=True now promotes all 5 sessions to complete (incident-recovery semantic) + forceClosed=True marker.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-2/test-updates-downstream",
+      "dateTime": "2026-05-17T13:10:00-04:00",
+      "description": "Updated 3 downstream tests for v3 currentSession semantics (strictly the in-progress session's number, or None when no session in-flight - replaces v2's ambiguous 'in-flight OR most-recently-closed'): test_happy_3session.test_happy_3session_full_cycle (currentSession is None after every close); test_force_close_path.test_force_close_nonfinal_session (completedSessions=[1,2,3] under forced incident-recovery, not [1,2]); test_close_session_snapshot_flip.test_close_session_multi_session_set_clean (currentSession is None after final close).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 8,
+      "stepKey": "session-2/test-session-state-v3",
+      "dateTime": "2026-05-17T13:15:00-04:00",
+      "description": "Created ai_router/tests/test_session_state_v3.py (~720 LOC). 37 mocha-style test cases covering: SCHEMA_VERSION; _build_sessions_array unit tests (status assignment, title carry-forward, generic fallback, rejection of invalid total); _derive_legacy_fields unit tests; register_session_start v3 dual-write (sessions[] + legacy triple, title carry-forward across spec.md mutation, dual-write parity at session 2 start, idempotent work_started, totalSessions backfill); mark_session_complete v3 dual-write (mid-set keeps SET in-progress, final close flips to complete, forced promotes all); scaffolding writes v3 (synthesize_not_started_state, ensure_session_state_file, backfill_session_state_files); writer-rejects-out-of-range (Round-A fix coverage); flip-requires-totalSessions; natural-close-does-not-promote-all; SessionStateInvariantError re-export identity.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 9,
+      "stepKey": "session-2/full-suite-pretest",
+      "dateTime": "2026-05-17T13:25:00-04:00",
+      "description": "Ran full pytest suite after writer changes + test updates: 522 passed, 1 skipped, 8 e2e deselected (+38 vs pre-Session-2). 3 downstream failures identified and fixed inline (currentSession-after-close semantic shift). TypeScript tsc --noEmit clean (no TS-side code changed; Session 3 owns the reader migration).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 10,
+      "stepKey": "session-2/verification-round-a",
+      "dateTime": "2026-05-17T13:50:00-04:00",
+      "description": "Round A verification: gpt-5-4 via ai_router.route(task_type='session-verification'). Focused slice of session_state.py (~770 LOC across 7 ranges per memory feedback_split_large_verification_bundles). Cost: $0.266495, elapsed 242s, in=13058 out=15590 tokens, no escalation. Verifier returned REJECTED with 4 must-fix issues: (1) silent truncation of out-of-range session numbers; (2) _flip_state_to_closed promotes all on natural close (not just forced); (3) unvalidated legacy-only fallback write when totalSessions unknown; (4) work_started event emitted before invariant validation.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "costUsd": 0.266495,
+          "elapsedSeconds": 242.071,
+          "verdict": "REJECTED",
+          "issuesFound": 4
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 11,
+      "stepKey": "session-2/round-a-fixes",
+      "dateTime": "2026-05-17T14:05:00-04:00",
+      "description": "Applied all 4 must-fix issues from Round A: (1) _build_sessions_array now raises rule 2 if in_progress_number or any completed_numbers fall outside [1, total]; register_session_start raises rule 2 if session_number > effective_total or max(prior_completed) > effective_total; (2) _flip_state_to_closed now splits forced (promote 1..total to complete) from natural close (completed_for_array = new_completed; validator surfaces any gap) at lines 807-843; (3) removed legacy-only fallback write; if totalSessions can't be resolved through fallbacks, raise rule 1 at lines 790-797; (4) reordered register_session_start: build sessions[] -> validate -> emit work_started -> write snapshot (was: emit -> build -> validate -> write). Added 7 regression tests covering each fix in test_session_state_v3.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 12,
+      "stepKey": "session-2/full-suite-postfix",
+      "dateTime": "2026-05-17T14:10:00-04:00",
+      "description": "Re-ran full pytest suite after Round A fixes: 529 passed, 1 skipped, 8 e2e deselected (+7 vs pre-Round-A from new regression tests). TypeScript tsc --noEmit clean. No regressions in any pre-existing tests.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 13,
+      "stepKey": "session-2/verification-round-b",
+      "dateTime": "2026-05-17T14:20:00-04:00",
+      "description": "Round B verification: gpt-5-4 via ai_router.route(task_type='session-verification'). Same slice strategy as Round A; updated line ranges for the post-fix file (~870 LOC across 7 ranges). Cost: $0.193638, elapsed 151s, in=13249 out=10701 tokens, no escalation. Verifier returned VERIFIED with explicit line-by-line confirmation for each of the 4 Round A issues plus 'no new contradiction' assessment per fix.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "costUsd": 0.193638,
+          "elapsedSeconds": 151.392,
+          "verdict": "VERIFIED",
+          "issuesFound": 0
+        }
+      ]
     }
   ]
 }
