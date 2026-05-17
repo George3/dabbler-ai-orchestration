@@ -15,7 +15,7 @@
     {
       "number": 3,
       "title": "Phase 3 reader migration + Explorer \"Done\" \u2192 \"Complete\"",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 4,
@@ -28,11 +28,12 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 3,
+  "currentSession": null,
   "totalSessions": 5,
   "completedSessions": [
     1,
-    2
+    2,
+    3
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
