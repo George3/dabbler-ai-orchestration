@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "sessionSetName": "029-orchestrator-model-effort-gauges",
+  "currentSession": null,
+  "totalSessions": 4,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "completedSessions": []
+}

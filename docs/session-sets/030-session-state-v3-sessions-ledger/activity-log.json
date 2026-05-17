@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 0,
+      "event": "set_created",
+      "message": "Set 030 initialized: session-state v3 sessions ledger + terminology alignment (5 sessions). Proposal authored by/with GPT-5.4, strong-approved by Gemini Pro. Operator-locked decisions: complete-everywhere terminology unification, regex-first AI-fallback migration, on-activation detection trigger, Setting-up-your-project loading state."
+    },
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 0,
+      "event": "spec_revised",
+      "message": "Set 030 spec revised per GPT-5.4 implementation review (2026-05-17). Five changes applied: (1) final publish moved from S4 to S5 (after migration UX ships) - D14; (2) dual-write kept as operational steady state, stop-legacy deferred to future set gated on consumer v3-reader confirmation - D5 revision; (3) terminology drift resolved by updating proposal doc to use 'complete' instead of 'done' globally - D2 alignment; (4) lint rule narrowed to 'no application reader may read legacy fields except through approved compat helpers' - D13; (5) spec-title-extraction routing config registered in S1 instead of S5 - removes dependency risk. Added D15 (Set 029 ordering: both orders supported) and D16 (Lightweight ergonomics dry-run vs accessdb state file before publish)."
+    }
+  ],
+  "totalSessions": 5
+}

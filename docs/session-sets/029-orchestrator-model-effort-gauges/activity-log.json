@@ -1,0 +1,35 @@
+{
+  "entries": [
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 0,
+      "event": "set_created",
+      "message": "Set 029 initialized: orchestrator model + effort indicator gauges (4 sessions). Operator-initiated feature request. NTE budget pending operator confirmation; estimated $0.55-$1.55 routed spend across the set."
+    },
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 1,
+      "event": "audit_proposal_drafted",
+      "message": "Session 1: design audit proposal authored at docs/proposals/2026-05-17-model-effort-gauges-design-audit/proposal.md (~340 LOC, self-contained, 6 open questions, JSON response format requested)."
+    },
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 1,
+      "event": "audit_verdicts_received",
+      "message": "Session 1: cross-provider audit verdicts received from GPT-5.4 (comprehensive prose review with primary-doc citations) and Gemini Pro (freeform commentary covering Q5 + 2 escalations). Audit conducted by manual paste-and-collect, no router calls. Cost: $0.00."
+    },
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 1,
+      "event": "audit_synthesized",
+      "message": "Session 1: audit-summary.md authored synthesizing both verdicts. Five showstoppers resolved with mitigations (S1: Stop hook lacks model field -> use SessionStart; S2: /think* as live effort -> Medium default + last-observed treatment; S3: initialSize not a real VS Code property -> drop, use Playwright screenshot tests; S4: Stop timing lagging -> same fix as S1; S5: Windows atomic-write contention -> retry loop 50/150/400ms). Marker schema bumped to v2 with signalKind + confidence fields. Manual-override quickpick spec'd with MRU + hotkey-bindable args."
+    },
+    {
+      "timestamp": "2026-05-17T00:00:00.000000-04:00",
+      "session": 1,
+      "event": "spec_updated_from_audit",
+      "message": "Session 1: spec.md Q1-Q6 marked RESOLVED with one-liner pointers to audit-summary.md sections. D8 (hook installer) rewritten to reflect Claude-only auto-detection in v1. Effort normalization table revised (Claude column: Medium default + last-observed for /think*). Session 2 steps rewritten (SessionStart hook not Stop; retry loop; visual-treatment matrix for 4 signalKind values; drop initialSize). Session 3 steps rewritten (Codex config.toml auto; Gemini/Copilot manual-only; quickpick MRU + hotkey args). Risks R5 (Windows write contention) and R6 (UserPromptSubmit payload uncertainty) added."
+    }
+  ],
+  "totalSessions": 4
+}

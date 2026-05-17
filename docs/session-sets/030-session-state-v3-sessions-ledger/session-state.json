@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "sessionSetName": "030-session-state-v3-sessions-ledger",
+  "currentSession": null,
+  "totalSessions": 5,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "completedSessions": []
+}
