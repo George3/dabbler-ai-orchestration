@@ -2,7 +2,7 @@ import * as assert from "assert";
 import {
   isCurrentSessionInFlight,
   progressText,
-} from "../../providers/sessionSetsProvider";
+} from "../../providers/SessionSetsProvider";
 import { LiveSession, SessionSet } from "../../types";
 
 function fakeLive(over: Partial<LiveSession> = {}): LiveSession {

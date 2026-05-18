@@ -14685,7 +14685,7 @@ var vscode19 = __toESM(require("vscode"));
 var fs19 = __toESM(require("fs"));
 var path21 = __toESM(require("path"));
 
-// src/providers/sessionSetsProvider.ts
+// src/providers/SessionSetsProvider.ts
 var vscode2 = __toESM(require("vscode"));
 var path5 = __toESM(require("path"));
 
@@ -15675,7 +15675,7 @@ function readAllSessionSets() {
   return Array.from(merged.values());
 }
 
-// src/providers/sessionSetsProvider.ts
+// src/providers/SessionSetsProvider.ts
 function needsMigrationBadge(set) {
   return set.needsMigration ? "(needs migration)" : "";
 }

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { SessionSetsProvider } from "./providers/sessionSetsProvider";
+import { SessionSetsProvider } from "./providers/SessionSetsProvider";
 import { ScanState } from "./providers/scanState";
 import { registerMigrateSetCommand } from "./commands/migrateSet";
 import { discoverRoots, readAllSessionSets } from "./utils/fileSystem";

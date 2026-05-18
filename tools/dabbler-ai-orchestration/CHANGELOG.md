@@ -5,7 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-## [0.14.0] — 2026-05-17 (GA)
+## [0.14.1] — 2026-05-17 (GA hotfix — Linux build casing)
+
+### Fixed
+
+- **Linux CI build failure: `SessionSetsProvider.ts` import casing.**
+  The 0.14.0 commit normalized five imports to the lowercase form
+  `./providers/sessionSetsProvider` while the file on disk in git is
+  `SessionSetsProvider.ts` (capital S). On Windows this worked because
+  the filesystem is case-insensitive; on Linux runners the lowercase
+  import resolved to nothing and esbuild errored with "Could not
+  read from file: .../providers/sessionSetsProvider.ts." This hotfix
+  reverts the five imports to capital `SessionSetsProvider`. Affected
+  files: `src/extension.ts` and four test files under `src/test/`.
+- The `vsix-v0.14.0` tag's CI build never produced a Marketplace
+  artifact; 0.14.1 is the first Marketplace-published version of the
+  Session 5 deliverables. Functionally identical to 0.14.0 as
+  documented below.
+
+## [0.14.0] — 2026-05-17 (GA — never published; superseded by 0.14.1)
 
 ### Added — Session 5 deliverables
 

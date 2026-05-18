@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { readSessionSets } from "../../utils/fileSystem";
-import { SessionSetsProvider } from "../../providers/sessionSetsProvider";
+import { SessionSetsProvider } from "../../providers/SessionSetsProvider";
 import { cancelSessionSet, restoreSessionSet } from "../../utils/cancelLifecycle";
 
 function makeTmpDir(): string {
