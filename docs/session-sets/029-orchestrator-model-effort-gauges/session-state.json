@@ -10,7 +10,7 @@
     {
       "number": 2,
       "title": "Core webview + Claude detection + hook installer",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 3,
@@ -23,10 +23,11 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 2,
+  "currentSession": null,
   "totalSessions": 4,
   "completedSessions": [
-    1
+    1,
+    2
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
