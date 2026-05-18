@@ -752,7 +752,15 @@ Round-B-verified:
 
 **Status:** Complete (2026-05-17)
 **Orchestrator:** Claude Opus 4.7 @ effort=high
-**Verification:** (verifier round below — populated at close)
+**Verification:** gpt-5-4 Round A $0.120 + Round B $0.158 = **$0.278**.
+Round A REJECTED with three must-fix issues (no-creds classifier
+scope, ImportError mis-classification, missing forensic snippets);
+all three addressed in-session. Round B VERIFIED all three Round-A
+fixes and surfaced one additional finding (OSError reading spec.md
+should be ACTION_SKIPPED_MALFORMED, not ACTION_FAILED_AI_BAD_OUTPUT)
+which was applied as a one-line discriminator fix. No Round C — per
+memory `feedback_verifier_spiral_recruit_codex`, a single-finding
+Round B doesn't justify another routed pass.
 
 ### Shipped
 
@@ -1041,4 +1049,30 @@ hygienic path).
 
 ## Final cost summary
 
-(populated after Session 5 close-out)
+| Session | Round A | Round B | Notes |
+|---|---|---|---|
+| Session 1 | $0.276 | — | one verification round only |
+| Session 2 | $0.273 | $0.190 | round B confirmed fixes |
+| Session 3 | $0.281 | $0.231 | round B confirmed fixes |
+| Session 4 | $0.190 | $0.068 | round B confirmed fixes |
+| Session 5 | $0.120 | $0.158 | round B verified 3 fixes + 1 new (applied) |
+| **Set total** | | | **$1.787** |
+
+Spec forecast was $0.50–$1.50. The set landed at $1.79 — modestly
+over the forecast upper bound. The overshoot is primarily Session 5's
+Round B doing a more substantial code review than expected
+($0.158 vs forecast ~$0.10), plus the higher-than-forecast Session 1
+verification. None of the individual rounds exceeded the per-call
+$0.10–$0.30 verification budget.
+
+## Marketplace tag tombstone
+
+Set 030's GA was meant to ship as extension v0.14.0. The
+`vsix-v0.14.0` tag's CI build failed on Linux because a casing-
+normalization edit ("./providers/SessionSetsProvider" →
+"./providers/sessionSetsProvider") broke esbuild's case-sensitive
+file resolver on Linux runners. Windows local builds had hidden the
+issue (case-insensitive FS). The tag remains in the repo as a
+tombstone; the published GA is `vsix-v0.14.1`, identical to 0.14.0 in
+content except for the casing revert. CHANGELOG entries for both
+versions are present.
