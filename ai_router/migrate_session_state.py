@@ -404,6 +404,120 @@ def _migrate_state_dict(
     return out, sessions
 
 
+def _probe_env_var_scopes(var_name: str) -> Dict[str, bool]:
+    """Probe Process, User, and (on Windows) Machine scopes for ``var_name``.
+
+    Returns a dict ``{"process": bool, "user": bool, "machine": bool}``
+    indicating where the variable is set. On non-Windows platforms,
+    User and Machine scopes are mapped to Process scope (Linux/macOS
+    don't have the same persistent-scope distinction; what
+    ``os.environ`` sees is the canonical answer).
+
+    The Windows-specific path reads the registry via ``winreg`` because
+    Python's ``os.environ`` is a snapshot taken at process launch and
+    won't see User/Machine vars set AFTER Python started. This is the
+    exact failure mode that motivated this probe: an operator sets
+    ANTHROPIC_API_KEY in System Properties -> Environment Variables
+    (User scope), but Python was already running, so ``os.getenv``
+    returns None and ai_router raises "Missing environment variable."
+    The operator's intuition ("I set the key") is correct; the process
+    inheritance is the problem.
+
+    Defensive: any winreg/os errors degrade to "scope not visible to
+    this probe," so the probe never raises. The caller treats absent
+    scopes as "no signal" rather than "absent."
+    """
+    out: Dict[str, bool] = {
+        "process": bool(os.environ.get(var_name)),
+        "user": False,
+        "machine": False,
+    }
+
+    if sys.platform != "win32":
+        # On Linux/macOS the persistent scopes don't exist as a
+        # separate registry; what's in os.environ is canonical. Mirror
+        # the process result so the caller's logic is platform-agnostic.
+        out["user"] = out["process"]
+        out["machine"] = out["process"]
+        return out
+
+    try:
+        import winreg  # type: ignore[import-not-found]
+    except ImportError:
+        return out
+
+    def _read(hive, subkey: str) -> bool:
+        try:
+            with winreg.OpenKey(hive, subkey) as key:
+                value, _type = winreg.QueryValueEx(key, var_name)
+                return isinstance(value, str) and len(value) > 0
+        except (OSError, FileNotFoundError):
+            return False
+
+    out["user"] = _read(winreg.HKEY_CURRENT_USER, r"Environment")
+    out["machine"] = _read(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+    )
+    return out
+
+
+def _augment_no_creds_reason(underlying_error: str) -> str:
+    """Augment the no-creds reason with scope-probe diagnostics.
+
+    Parses the underlying error text for tokens that look like Dabbler
+    provider env-var names (``ANTHROPIC_API_KEY``, ``GEMINI_API_KEY``,
+    ``GOOGLE_API_KEY``, ``OPENAI_API_KEY``). For each one found, probes
+    Process / User / Machine scopes and, if the var is set in a
+    persistent scope but NOT inherited by this Python process,
+    appends an inheritance-trap note so the operator sees the right
+    next step ("restart your shell" rather than "set the key").
+
+    Returns the augmented text. If no candidate env-var names are
+    found in the error, returns the empty string.
+    """
+    import re
+
+    # Anchored on Dabbler's provider env-var convention: all-uppercase,
+    # underscore-separated, ends with _API_KEY. Two-letter min prefix
+    # to avoid catching bare "API_KEY".
+    candidates = sorted(set(re.findall(r"[A-Z][A-Z_]+_API_KEY", underlying_error)))
+    if not candidates:
+        return ""
+
+    lines: List[str] = []
+    for var in candidates:
+        scopes = _probe_env_var_scopes(var)
+        if scopes["process"]:
+            # Process sees it; ai_router's error text is suspicious —
+            # maybe an empty-string value or whitespace-only? Surface
+            # this state so the operator can investigate.
+            lines.append(
+                f"  - {var}: SET in this Python process, but ai_router "
+                f"reported it missing — value may be empty/whitespace."
+            )
+        elif scopes["user"] or scopes["machine"]:
+            scope_label = (
+                "User" if scopes["user"] and not scopes["machine"]
+                else "Machine" if scopes["machine"] and not scopes["user"]
+                else "User AND Machine"
+            )
+            lines.append(
+                f"  - {var}: set in {scope_label} scope but NOT inherited "
+                f"by this Python process. The process was likely started "
+                f"BEFORE the env var was added. Restart your shell (or "
+                f"VS Code), or set the var ephemerally for this session: "
+                f"`$env:{var} = '...'` (PowerShell) / "
+                f"`export {var}=...` (bash)."
+            )
+        else:
+            lines.append(
+                f"  - {var}: not set in Process, User, or Machine scope."
+            )
+
+    return "Env-var scope probe:\n" + "\n".join(lines)
+
+
 def _build_ai_title_prompt(spec_text: str, expected_count: int) -> str:
     """Render the system+user prompt for ``task_type='spec-title-extraction'``.
 
@@ -471,21 +585,35 @@ def _resolve_titles_via_ai(
     # generate plausible "Session 1, 2, …" titles from the slug
     # alone. Empty file is fine; the model receives the empty
     # context and falls back to generic-style output.
-    try:
-        spec_text = spec_md_path.read_text(encoding="utf-8") if spec_md_path.is_file() else ""
-    except OSError as exc:
-        raise AiBadOutputError(f"could not read spec.md: {exc}") from exc
+    #
+    # Round B fix: an OSError reading spec.md is a LOCAL input failure
+    # — the AI never gets called. Letting the OSError propagate (rather
+    # than wrapping in AiBadOutputError) lets migrate_one_set's
+    # STRATEGY_AI branch route it through ACTION_SKIPPED_MALFORMED,
+    # which is the correct kind. AiBadOutputError specifically means
+    # "the model returned something we couldn't use," which would be
+    # misleading when no model call ever happened.
+    spec_text = spec_md_path.read_text(encoding="utf-8") if spec_md_path.is_file() else ""
 
     # Deferred import: keeps the migrator's import lightweight when
     # only regex/generic strategies are used. ai_router's top-level
     # __init__ loads router-config.yaml on first call, which is
     # expensive on cold starts.
+    #
+    # Round A fix #2: an ``ImportError`` here means the package isn't
+    # installed; the operator action is "install dabbler-ai-router,"
+    # not "set an API key." Route through AiProviderError so the
+    # extension's notification points at the install-ai-router command
+    # rather than the env-var configuration page.
     try:
         from ai_router import route as _route  # type: ignore[no-redef]
     except ImportError as exc:
-        raise AiNoCredentialsError(
-            f"ai_router module unavailable: {exc}. Install with "
-            f"`pip install dabbler-ai-router`."
+        raise AiProviderError(
+            f"ai_router module not importable ({exc}); the "
+            f"`dabbler-ai-router` package is not installed in the active "
+            f"environment. Run `Dabbler: Install ai-router` from the "
+            f"command palette (or `pip install dabbler-ai-router` "
+            f"manually) and retry."
         ) from exc
 
     prompt = _build_ai_title_prompt(spec_text, expected_count)
@@ -493,14 +621,68 @@ def _resolve_titles_via_ai(
     try:
         result = _route(content=prompt, task_type="spec-title-extraction")
     except Exception as exc:  # noqa: BLE001 — route() can raise provider-specific exceptions
+        # Round A fix #1: classify provider exceptions narrowly. Common
+        # transient failures (rate limit, quota, network) often mention
+        # the API key or credentials in their human-readable text
+        # without actually meaning "your credential is invalid." Order
+        # the matchers so quota/rate-limit/server tokens are checked
+        # FIRST and route to AiProviderError, even when the message
+        # also mentions credentials. Only after those negative
+        # screens do we accept the narrow "missing or invalid
+        # auth credential" reading.
         msg = str(exc).lower()
-        if any(token in msg for token in ("api key", "api_key", "apikey", "credential", "unauthorized", "401")):
-            raise AiNoCredentialsError(
+        rate_limit_or_transient = (
+            "rate limit", "rate-limit", "ratelimit",
+            "429", "quota", "resource exhausted", "resource_exhausted",
+            "timeout", "timed out", "connection",
+            "503", "service unavailable", "internal server error", "500",
+        )
+        if any(token in msg for token in rate_limit_or_transient):
+            raise AiProviderError(f"ai_router.route() failed: {exc}") from exc
+
+        # Narrow no-creds matchers — explicit "missing API key" or
+        # "invalid API key" phrasings + the canonical HTTP 401 /
+        # unauthorized tokens. Bare "credential" alone is too broad
+        # (Round A: "renewing credentials, please retry" misclassified)
+        # so the matcher requires "credential" to be combined with an
+        # invalid/missing qualifier.
+        #
+        # `"missing environment variable"` is added because that's the
+        # exact phrasing emitted by ai_router's own providers (see
+        # ai_router/providers.py: "Missing environment variable
+        # ANTHROPIC_API_KEY for Anthropic"). Without it, the migrator
+        # would receive ai_router's most common missing-credential
+        # error and route it through AiProviderError instead of
+        # AiNoCredentialsError.
+        no_creds_phrases = (
+            "missing environment variable",  # ai_router's own phrasing
+            "missing api key", "no api key", "invalid api key",
+            "missing api_key", "no api_key", "invalid api_key",
+            "missing apikey", "no apikey", "invalid apikey",
+            "missing credential", "no credential", "invalid credential",
+            "authentication failed", "authentication error",
+            "unauthorized", "http 401", "401 unauthorized", "401 error",
+            "not authenticated",
+            "api_key is not set", "api key is not set",
+            "apikey is not set",
+        )
+        if any(phrase in msg for phrase in no_creds_phrases):
+            # Operator add-on: before declaring "missing credentials,"
+            # probe User + Machine env-var scopes. On Windows the
+            # inheritance-trap is real — the var IS set persistently,
+            # but Python launched before the change. Augmenting the
+            # reason with scope-probe results tells the operator the
+            # right next step (restart the shell vs set the key).
+            scope_note = _augment_no_creds_reason(str(exc))
+            base = (
                 f"provider credentials not available: {exc}. Set the "
                 f"appropriate provider API key env var "
                 f"(ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY) "
                 f"and retry."
-            ) from exc
+            )
+            full_reason = base + ("\n\n" + scope_note if scope_note else "")
+            raise AiNoCredentialsError(full_reason) from exc
+
         raise AiProviderError(f"ai_router.route() failed: {exc}") from exc
 
     # Per memory feedback_ai_router_route_result_handling: dump the
@@ -515,6 +697,15 @@ def _resolve_titles_via_ai(
             f"could not serialize RouteResult ({type(result).__name__}): {exc}"
         ) from exc
 
+    # Round A fix #3: every AiBadOutputError carries the first 200
+    # chars of the model output so the operator can see WHAT the
+    # model returned. Snippet helper handles the missing/non-string
+    # cases too.
+    raw_content = result_payload.get("content")
+    snippet = (
+        raw_content[:200] if isinstance(raw_content, str) else repr(raw_content)
+    )
+
     if result_payload.get("truncated"):
         # Truncation means the model ran out of output tokens; the
         # response body is almost certainly an incomplete JSON
@@ -526,14 +717,14 @@ def _resolve_titles_via_ai(
             "RouteResult.truncated=True — the model output was cut "
             "off mid-response (max_output_tokens reached). Increase "
             "the limit for gemini-flash in router-config.yaml or "
-            "retry with a shorter spec."
+            f"retry with a shorter spec. First 200 chars: {snippet!r}"
         )
 
     content = result_payload.get("content")
     if not isinstance(content, str) or not content.strip():
         raise AiBadOutputError(
             "RouteResult.content is missing or empty; the model "
-            "returned no usable text."
+            f"returned no usable text. First 200 chars: {snippet!r}"
         )
 
     # Strip a possible Markdown code fence (``` … ```), which some
@@ -573,21 +764,28 @@ def _resolve_titles_via_ai(
 
     titles: Dict[int, str] = {}
     for i, record in enumerate(parsed, start=1):
+        # Round A fix #3: every per-entry AiBadOutputError carries the
+        # first 200 chars of the parsed text so the operator can see
+        # exactly which response shape was rejected.
         if not isinstance(record, dict):
             raise AiBadOutputError(
                 f"array entry {i} is {type(record).__name__}, "
-                f"expected an object with 'number' and 'title'."
+                f"expected an object with 'number' and 'title'. "
+                f"First 200 chars of output: {text[:200]!r}"
             )
         number = record.get("number")
         title = record.get("title")
         if not isinstance(number, int) or number != i:
             raise AiBadOutputError(
                 f"array entry {i} has number={number!r} (expected {i}). "
-                "The model's 'number' field must run 1..N in order."
+                f"The model's 'number' field must run 1..N in order. "
+                f"First 200 chars of output: {text[:200]!r}"
             )
         if not isinstance(title, str) or not title.strip():
             raise AiBadOutputError(
-                f"array entry {i} has title={title!r} (expected non-empty string)."
+                f"array entry {i} has title={title!r} (expected "
+                f"non-empty string). First 200 chars of output: "
+                f"{text[:200]!r}"
             )
         titles[number] = title.strip()
     return titles
@@ -758,6 +956,20 @@ def migrate_one_set(
                 set_dir=set_dir,
                 action=ACTION_FAILED_AI_BAD_OUTPUT,
                 reason=str(exc),
+                before=state,
+                error=str(exc),
+            )
+        except OSError as exc:
+            # Round B fix: an OSError reading spec.md is a LOCAL input
+            # failure, NOT an AI-output failure. Mapping it to
+            # ACTION_SKIPPED_MALFORMED preserves the operator's
+            # mental model: "your file is broken" stays separate from
+            # "the model answered badly." See Round B verifier finding
+            # 2026-05-17 for the rationale.
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_SKIPPED_MALFORMED,
+                reason=f"could not read spec.md for AI strategy: {exc}",
                 before=state,
                 error=str(exc),
             )

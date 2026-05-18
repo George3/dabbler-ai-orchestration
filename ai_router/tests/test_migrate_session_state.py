@@ -835,7 +835,9 @@ class TestAIStrategy:
         )
 
         def _route(content, task_type, **kw):
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+            # Canonical phrasing from ai_router/providers.py — the actual
+            # exception raised when ANTHROPIC_API_KEY etc. is missing.
+            raise RuntimeError("Missing environment variable ANTHROPIC_API_KEY for Anthropic")
 
         self._install_route_stub(monkeypatch, _route)
         before_disk = (set_dir / "session-state.json").read_text(encoding="utf-8")
@@ -845,6 +847,305 @@ class TestAIStrategy:
         # File on disk is unchanged.
         after_disk = (set_dir / "session-state.json").read_text(encoding="utf-8")
         assert before_disk == after_disk
+
+    def test_ai_strategy_renewing_creds_classified_as_provider_error(
+        self, tmp_path, monkeypatch
+    ):
+        """Round A fix #1: 'renewing credentials, please retry' is a
+        transient provider issue, NOT a missing-credentials error.
+        The narrowed classifier must NOT route this to no-creds."""
+        set_dir = tmp_path / "ai-renewing"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-renewing",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        def _route(content, task_type, **kw):
+            # The bare word "credentials" used to misroute this to
+            # AiNoCredentialsError under the over-broad matcher.
+            raise RuntimeError("renewing credentials, please retry")
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_PROVIDER_ERROR
+        assert "renewing" in r.reason.lower()
+
+    def test_ai_strategy_quota_with_apikey_mention_classified_as_provider(
+        self, tmp_path, monkeypatch
+    ):
+        """Round A fix #1: rate-limit/quota tokens take precedence over
+        credential tokens. 'API key X exceeded quota' is a transient
+        provider issue, not a missing-credential error."""
+        set_dir = tmp_path / "ai-quota"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-quota",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        def _route(content, task_type, **kw):
+            raise RuntimeError("API key sk-... exceeded quota for project Y")
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_PROVIDER_ERROR
+        assert "quota" in r.reason.lower()
+
+    def test_ai_strategy_module_unavailable_classified_as_provider_error(
+        self, tmp_path, monkeypatch
+    ):
+        """Round A fix #2: when `from ai_router import route` raises
+        ImportError, the failure kind is `provider-error` (operator
+        action: install ai-router), not `no-creds` (set an API key)."""
+        set_dir = tmp_path / "ai-unimportable"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-unimportable",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        # Stub `sys.modules['ai_router']` so the deferred-import line
+        # raises ImportError when the helper tries to pull in `route`.
+        import sys as _sys
+        import types as _types
+        broken = _types.ModuleType("ai_router")
+
+        # ModuleType with no `route` attribute -> ImportError when
+        # accessed via `from ai_router import route`.
+        monkeypatch.setitem(_sys.modules, "ai_router", broken)
+
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_PROVIDER_ERROR
+        assert "install" in r.reason.lower() or "not importable" in r.reason.lower()
+
+    def test_ai_strategy_truncated_response_includes_snippet(
+        self, tmp_path, monkeypatch
+    ):
+        """Round A fix #3: every content-driven AiBadOutputError reason
+        carries the first-200-char snippet of the model output."""
+        set_dir = tmp_path / "ai-trunc-snippet"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-trunc-snippet",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        marker = "DISTINCTIVE_TRUNCATED_BODY"
+
+        def _route(content, task_type, **kw):
+            return self._make_route_result(
+                f'[{{"number": 1, "title": "ok"}}, {{"number": 2, "title": "{marker}',
+                truncated=True,
+            )
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_BAD_OUTPUT
+        assert "truncated" in r.reason.lower()
+        assert marker in r.reason
+
+    def test_ai_strategy_per_entry_error_includes_snippet(
+        self, tmp_path, monkeypatch
+    ):
+        """Round A fix #3: per-entry shape errors also carry the
+        first-200-char output snippet for forensic context."""
+        set_dir = tmp_path / "ai-per-entry-snippet"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-per-entry-snippet",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        marker = "FAULTY_PER_ENTRY"
+
+        def _route(content, task_type, **kw):
+            # Wrong shape: title is empty for entry 2.
+            return self._make_route_result(
+                f'[{{"number": 1, "title": "{marker}"}}, {{"number": 2, "title": ""}}]'
+            )
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_BAD_OUTPUT
+        assert marker in r.reason
+
+    def test_ai_strategy_no_creds_reason_includes_scope_probe(
+        self, tmp_path, monkeypatch
+    ):
+        """When AiNoCredentialsError fires, the reason text must
+        include a scope-probe diagnostic so the operator knows whether
+        the env var is set in User/Machine scope but not inherited by
+        the Python process (the canonical Windows inheritance trap)."""
+        set_dir = tmp_path / "ai-scope-probe"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-scope-probe",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        # Stub the scope probe so the test is deterministic across
+        # Windows / Linux / CI — assume the var is set in User scope
+        # but not inherited by Process. The reason text should reflect
+        # this and instruct the operator to restart their shell.
+        import migrate_session_state as _mss
+
+        def _fake_probe(var_name):
+            if var_name == "ANTHROPIC_API_KEY":
+                return {"process": False, "user": True, "machine": False}
+            return {"process": False, "user": False, "machine": False}
+
+        monkeypatch.setattr(_mss, "_probe_env_var_scopes", _fake_probe)
+
+        def _route(content, task_type, **kw):
+            raise RuntimeError("Missing environment variable ANTHROPIC_API_KEY for Anthropic")
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_NO_CREDS
+        assert "User scope" in r.reason
+        assert "not inherited" in r.reason or "restart" in r.reason.lower()
+        # Negative control: the var name is echoed.
+        assert "ANTHROPIC_API_KEY" in r.reason
+
+    def test_ai_strategy_unreadable_spec_routes_to_malformed(
+        self, tmp_path, monkeypatch
+    ):
+        """Round B fix: an OSError reading spec.md is a LOCAL input
+        failure, NOT an AI-output failure. It must route to
+        ACTION_SKIPPED_MALFORMED (your file is broken) rather than
+        ACTION_FAILED_AI_BAD_OUTPUT (the model answered badly), since
+        the model is never even called when spec.md is unreadable."""
+        set_dir = tmp_path / "ai-unreadable-spec"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-unreadable-spec",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        # Replace spec.md's text-read with one that raises OSError.
+        # The path itself still exists (so is_file() is True), but
+        # read_text raises. Stubbing via monkeypatch on Path.read_text
+        # gives us deterministic behavior across platforms.
+        import pathlib
+        original_read_text = pathlib.Path.read_text
+
+        def _fail_read(self, *args, **kw):
+            if self.name == "spec.md":
+                raise OSError("permission denied (simulated)")
+            return original_read_text(self, *args, **kw)
+
+        monkeypatch.setattr(pathlib.Path, "read_text", _fail_read)
+
+        # Route would never be called in this path; stub anyway to
+        # catch any regression where the migrator forges ahead.
+        route_called = {"count": 0}
+
+        def _route(content, task_type, **kw):
+            route_called["count"] += 1
+            return self._make_route_result(
+                '[{"number": 1, "title": "x"}, {"number": 2, "title": "y"}]'
+            )
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_SKIPPED_MALFORMED
+        assert "spec.md" in r.reason
+        assert route_called["count"] == 0
+
+    def test_ai_strategy_no_creds_reason_when_unset_everywhere(
+        self, tmp_path, monkeypatch
+    ):
+        """If the env var is truly absent from all three scopes, the
+        scope-probe reason text says so explicitly — the operator's
+        next step is to set the key, not to restart their shell."""
+        set_dir = tmp_path / "ai-scope-absent"
+        _write_state(
+            set_dir,
+            {
+                "schemaVersion": 2,
+                "sessionSetName": "ai-scope-absent",
+                "currentSession": None,
+                "totalSessions": 2,
+                "status": "not-started",
+                "lifecycleState": None,
+                "completedSessions": [],
+            },
+            spec_n=2,
+        )
+
+        import migrate_session_state as _mss
+
+        monkeypatch.setattr(
+            _mss,
+            "_probe_env_var_scopes",
+            lambda var_name: {"process": False, "user": False, "machine": False},
+        )
+
+        def _route(content, task_type, **kw):
+            raise RuntimeError("Missing environment variable OPENAI_API_KEY for OpenAI")
+
+        self._install_route_stub(monkeypatch, _route)
+        r = migrate_one_set(str(set_dir), strategy=STRATEGY_AI, dry_run=True)
+        assert r.action == ACTION_FAILED_AI_NO_CREDS
+        assert "OPENAI_API_KEY" in r.reason
+        assert "not set in Process, User, or Machine" in r.reason
 
     def test_ai_strategy_unauthorized_classified_as_no_creds(
         self, tmp_path, monkeypatch
