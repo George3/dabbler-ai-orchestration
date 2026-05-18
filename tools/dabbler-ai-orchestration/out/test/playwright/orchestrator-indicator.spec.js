@@ -1,0 +1,498 @@
+"use strict";
+// Layer 3 rendering smoke for the orchestrator indicator gauges
+// (Set 029 Session 2).
+//
+// Strategy: redirect USERPROFILE (Windows) / HOME (mac+linux) to a per-
+// test tmpdir so the marker file the extension reads lives under our
+// control. Seed the marker, launch VS Code, open the activity bar, and
+// inspect the orchestrator indicator webview iframe.
+//
+// Webview content lives in a nested iframe rendered by VS Code; we
+// reach it via page.frameLocator and assert on the inner HTML's
+// rendered text + CSS class hooks. We deliberately don't pixel-diff —
+// gauge color is a function of the theme and isn't worth the maintenance.
+//
+// Scenarios:
+//   1. seed Opus current → flagship needle + solid fill + provider/model label
+//   2. seed Haiku current → low-tier needle position
+//   3. seed model=unknown confidence=low → "low confidence" tooltip phrasing
+//   4. seed effort.signalKind=last-observed → clock-icon + "(last /think Xm ago)"
+//   5. seed signalKind=configured-default → dashed-rim hook + DEFAULT pill
+//   6. seed updatedAt 9h ago → stale class on .gauges + "last updated 9h ago"
+//   7. empty (no marker) → "No signal — install hook" CTA
+//
+// The webview is registered as a non-tree view (`type: "webview"`) and
+// pinned above the Session Sets tree per audit D4 / Session 2 step 1.
+// We assert orchestrator-above-session-sets ordering via a DOM index
+// check on the side-bar viewlets.
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const test_1 = require("@playwright/test");
+const cp = __importStar(require("child_process"));
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const electronLaunch_1 = require("./electronLaunch");
+function seedMarker(fakeHome, marker) {
+    const dir = path.join(fakeHome, ".dabbler");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "current-orchestrator.json"), JSON.stringify(marker, null, 2) + "\n", "utf8");
+}
+function deleteMarker(fakeHome) {
+    const file = path.join(fakeHome, ".dabbler", "current-orchestrator.json");
+    if (fs.existsSync(file))
+        fs.unlinkSync(file);
+}
+function setHomeEnv(fakeHome, per) {
+    per.prevUserprofile = process.env.USERPROFILE;
+    per.prevHome = process.env.HOME;
+    process.env.USERPROFILE = fakeHome;
+    process.env.HOME = fakeHome;
+}
+function restoreHomeEnv(per) {
+    if (per.prevUserprofile === undefined) {
+        delete process.env.USERPROFILE;
+    }
+    else {
+        process.env.USERPROFILE = per.prevUserprofile;
+    }
+    if (per.prevHome === undefined) {
+        delete process.env.HOME;
+    }
+    else {
+        process.env.HOME = per.prevHome;
+    }
+}
+function makeWorkspace(per) {
+    // The extension activates on `workspaceContains:docs/session-sets` —
+    // we need at least a real session set so the activation actually
+    // fires under the existing electronLaunch harness. The orchestrator
+    // indicator view is registered unconditionally, so the seed set's
+    // contents don't matter for this smoke.
+    per.workspaceTmp = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-orchestrator");
+    const seed = (0, electronLaunch_1.makeSet)(per.workspaceTmp, "orchestrator-seed", 1);
+    return seed.repo_root;
+}
+async function openIndicatorFrame(launch) {
+    const page = launch.page;
+    // Click the activity bar icon to open the side bar.
+    const activityIcon = page.locator('.activitybar .action-label[aria-label*="Dabbler AI Orchestration"]');
+    await activityIcon.waitFor({ state: "visible", timeout: 30000 });
+    await activityIcon.click();
+    // VS Code's webview view layout (verified via diagnostic dump
+    // 2026-05-18 against VS Code 1.119): the outer `iframe.webview` host
+    // contains a service-worker bootstrap script that creates a
+    // *programmatic* child frame loading `vscode-webview://.../fake.html`
+    // — that child is where the WebviewView provider's HTML actually
+    // renders. The child has NO `<iframe>` element in the outer DOM
+    // because it's added at the browser level by the bootstrap, not by
+    // a DOM mutation. So `frameLocator("iframe.webview").frameLocator("iframe")`
+    // never resolves. The fix is to use the lower-level Frame API:
+    // grab the outer iframe's contentFrame, then pick the first
+    // childFrame (which is the fake.html one).
+    // Wait + retry loop because the child frame is added asynchronously.
+    const deadline = Date.now() + 30000;
+    let lastErr = null;
+    while (Date.now() < deadline) {
+        try {
+            const outerHandle = await page.locator("iframe.webview").first().elementHandle();
+            if (outerHandle) {
+                const outerFrame = await outerHandle.contentFrame();
+                if (outerFrame) {
+                    const children = outerFrame.childFrames();
+                    for (const child of children) {
+                        // Check the child for our .container element.
+                        try {
+                            await child.locator(".container").waitFor({ timeout: 1000 });
+                            return child;
+                        }
+                        catch {
+                            // not this one — fall through to the next child or retry
+                        }
+                    }
+                }
+            }
+        }
+        catch (err) {
+            lastErr = err;
+        }
+        await page.waitForTimeout(500);
+    }
+    throw new Error(`openIndicatorFrame timed out waiting for .container in any child frame of iframe.webview. ` +
+        `Last error: ${lastErr?.message ?? "none"}`);
+}
+async function teardown(per) {
+    if (per.launch) {
+        try {
+            await (0, electronLaunch_1.closeVSCode)(per.launch);
+        }
+        catch { /* best effort */ }
+    }
+    if (per.workspaceTmp) {
+        try {
+            (0, electronLaunch_1.cleanupTmpDir)(per.workspaceTmp);
+        }
+        catch { /* best effort */ }
+    }
+    if (per.fakeHome) {
+        try {
+            fs.rmSync(per.fakeHome, { recursive: true, force: true });
+        }
+        catch { /* best effort */ }
+    }
+    restoreHomeEnv(per);
+}
+// -----------------------------------------------------------------------
+// Scenario A: current Claude Opus → flagship gauge classes + label.
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders current Opus marker with flagship tier classes + label", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-A");
+        setHomeEnv(per.fakeHome, per);
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: new Date().toISOString(),
+            writer: "test",
+            signalKind: "current",
+            confidence: "high",
+            provider: "anthropic",
+            providerDisplayName: "Claude",
+            model: "claude-opus-4-7",
+            modelDisplayName: "Opus 4.7",
+            tier: "flagship",
+            effort: {
+                normalized: "medium",
+                native: "default",
+                thinking: false,
+                signalKind: "current",
+                confidence: "high",
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        await (0, test_1.expect)(frame.locator(".gauge-cell.tier-flagship.signal-current")).toBeVisible();
+        await (0, test_1.expect)(frame.getByText(/Claude\s+Opus 4\.7/)).toBeVisible();
+        // Stale stripe overlay should NOT be present on a fresh marker.
+        await (0, test_1.expect)(frame.locator(".gauges.stale")).toHaveCount(0);
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario B: low-tier Haiku marker → low-tier classes + Haiku label.
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders Haiku marker with low-tier classes", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-B");
+        setHomeEnv(per.fakeHome, per);
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: new Date().toISOString(),
+            writer: "test",
+            signalKind: "current",
+            confidence: "high",
+            provider: "anthropic",
+            providerDisplayName: "Claude",
+            model: "claude-haiku-4-5-20251001",
+            modelDisplayName: "Haiku 4.5",
+            tier: "low",
+            effort: {
+                normalized: "medium",
+                native: "default",
+                thinking: false,
+                signalKind: "current",
+                confidence: "high",
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        await (0, test_1.expect)(frame.locator(".gauge-cell.tier-low.signal-current")).toBeVisible();
+        await (0, test_1.expect)(frame.getByText(/Claude\s+Haiku 4\.5/)).toBeVisible();
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario C: low-confidence marker → tooltip phrasing reflects it.
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders confidence-low marker with explicit low-confidence tooltip", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-C");
+        setHomeEnv(per.fakeHome, per);
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: new Date().toISOString(),
+            writer: "claude-code-session-start-hook",
+            signalKind: "current",
+            confidence: "low",
+            provider: "anthropic",
+            providerDisplayName: "Claude",
+            model: "unknown",
+            modelDisplayName: "Claude (model unknown)",
+            tier: "unknown",
+            effort: {
+                normalized: "medium",
+                native: "default",
+                thinking: false,
+                signalKind: "current",
+                confidence: "low",
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        // The tooltip lives in the title attribute; assert via element selector.
+        const cell = frame.locator(".gauge-cell.tier-unknown.signal-current").first();
+        await (0, test_1.expect)(cell).toBeVisible();
+        const tip = await cell.getAttribute("title");
+        (0, test_1.expect)(tip || "").toContain("low confidence");
+        (0, test_1.expect)(tip || "").toContain("hook payload missing model");
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario D: effort.signalKind = last-observed → clock overlay + time-elapsed suffix.
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders last-observed effort with clock overlay and elapsed time suffix", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-D");
+        setHomeEnv(per.fakeHome, per);
+        const observed = new Date(Date.now() - 12 * 60 * 1000).toISOString(); // 12m ago
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: new Date().toISOString(),
+            writer: "test",
+            signalKind: "current",
+            confidence: "high",
+            provider: "anthropic",
+            providerDisplayName: "Claude",
+            model: "claude-opus-4-7",
+            modelDisplayName: "Opus 4.7",
+            tier: "flagship",
+            effort: {
+                normalized: "high",
+                native: "/think",
+                thinking: true,
+                signalKind: "last-observed",
+                confidence: "high",
+                observedAt: observed,
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        const effortCell = frame.locator(".gauge-cell.signal-last-observed").first();
+        await (0, test_1.expect)(effortCell).toBeVisible();
+        await (0, test_1.expect)(effortCell.locator(".clock-overlay")).toBeVisible();
+        await (0, test_1.expect)(frame.getByText(/last \/think 12m ago/)).toBeVisible();
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario E: signalKind=configured-default → dashed rim hook + DEFAULT pill.
+//             (Verifies stripes are NOT used for configured-default per
+//             REVISED 2026-05-18 audit decision — stripes are stale-only.)
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders configured-default marker with DEFAULT pill (no stripes)", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-E");
+        setHomeEnv(per.fakeHome, per);
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: new Date().toISOString(),
+            writer: "codex-config-watcher",
+            signalKind: "configured-default",
+            confidence: "medium",
+            provider: "openai",
+            providerDisplayName: "Codex",
+            model: "gpt-5-codex",
+            modelDisplayName: "gpt-5-codex",
+            tier: "flagship",
+            effort: {
+                normalized: "high",
+                native: "high",
+                thinking: false,
+                signalKind: "configured-default",
+                confidence: "medium",
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        await (0, test_1.expect)(frame.locator(".gauge-cell.signal-configured-default").first()).toBeVisible();
+        await (0, test_1.expect)(frame.locator(".default-pill")).toContainText("DEFAULT");
+        // Critical: this is configured-default — stripes overlay class
+        // must NOT be present on .gauges (stripes are stale-only).
+        await (0, test_1.expect)(frame.locator(".gauges.stale")).toHaveCount(0);
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario F: 9h-old marker → stale class + "last updated 9h ago".
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders stale state with diagonal-stripe class and last-updated annotation", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-F");
+        setHomeEnv(per.fakeHome, per);
+        const nineHoursAgo = new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString();
+        seedMarker(per.fakeHome, {
+            schemaVersion: 2,
+            updatedAt: nineHoursAgo,
+            writer: "test",
+            signalKind: "current",
+            confidence: "high",
+            provider: "anthropic",
+            providerDisplayName: "Claude",
+            model: "claude-opus-4-7",
+            modelDisplayName: "Opus 4.7",
+            tier: "flagship",
+            effort: {
+                normalized: "medium",
+                native: "default",
+                thinking: false,
+                signalKind: "current",
+                confidence: "high",
+            },
+            stalenessMaxSec: 28800,
+        });
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        await (0, test_1.expect)(frame.locator(".gauges.stale")).toBeVisible();
+        await (0, test_1.expect)(frame.getByText(/last updated 9h ago — stale/)).toBeVisible();
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario G: no marker → "No signal — install hook" CTA.
+// -----------------------------------------------------------------------
+(0, test_1.test)("renders empty-state CTA when marker file is absent", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-G");
+        setHomeEnv(per.fakeHome, per);
+        deleteMarker(per.fakeHome); // ensure absence
+        const workspace = makeWorkspace(per);
+        per.launch = await (0, electronLaunch_1.launchVSCode)(workspace);
+        const frame = await openIndicatorFrame(per.launch);
+        await (0, test_1.expect)(frame.locator(".empty-state")).toBeVisible();
+        await (0, test_1.expect)(frame.getByText(/No signal/)).toBeVisible();
+        await (0, test_1.expect)(frame.locator(".install-cta")).toContainText(/install hook/);
+    }
+    finally {
+        await teardown(per);
+    }
+});
+// -----------------------------------------------------------------------
+// Scenario H: helper-script multi-writer precedence (non-Electron).
+//             Tests the helper directly because the precedence skip is
+//             a marker-writer concern, not a rendering concern.
+// -----------------------------------------------------------------------
+(0, test_1.test)("helper script skips configured-default write when current signal exists", async () => {
+    const per = {};
+    try {
+        per.fakeHome = (0, electronLaunch_1.makeTmpDir)("dabbler-pw-fakehome-H");
+        const helper = path.join(__dirname, "..", "..", "..", "scripts", "write-orchestrator-marker.js");
+        (0, test_1.expect)(fs.existsSync(helper)).toBe(true);
+        function runHelper(modeArgs, payload) {
+            const result = cp.spawnSync(process.execPath, [helper, ...modeArgs], {
+                input: JSON.stringify(payload),
+                env: {
+                    ...process.env,
+                    USERPROFILE: per.fakeHome,
+                    HOME: per.fakeHome,
+                },
+                encoding: "utf8",
+            });
+            const logPath = path.join(per.fakeHome, ".dabbler", "orchestrator-writer.log");
+            const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+            return {
+                exit: result.status ?? -1,
+                logEntries: log.split("\n").filter((l) => l.trim().length > 0).length,
+            };
+        }
+        // Write a current Claude marker.
+        let r = runHelper(["--mode", "session-start"], {
+            hook_event_name: "SessionStart",
+            source: "startup",
+            model: "claude-opus-4-7",
+        });
+        (0, test_1.expect)(r.exit).toBe(0);
+        (0, test_1.expect)(r.logEntries).toBe(0);
+        // Try to write a configured-default Codex marker — should be skipped.
+        r = runHelper(["--mode", "configured-default", "--writer", "codex-config-watcher"], {
+            provider: "openai",
+            model: "gpt-5-codex",
+            effort: { normalized: "high", native: "high" },
+        });
+        (0, test_1.expect)(r.exit).toBe(0);
+        (0, test_1.expect)(r.logEntries).toBe(1);
+        // Marker should still be the Claude current signal.
+        const marker = JSON.parse(fs.readFileSync(path.join(per.fakeHome, ".dabbler", "current-orchestrator.json"), "utf8"));
+        (0, test_1.expect)(marker.signalKind).toBe("current");
+        (0, test_1.expect)(marker.model).toBe("claude-opus-4-7");
+    }
+    finally {
+        if (per.fakeHome) {
+            try {
+                fs.rmSync(per.fakeHome, { recursive: true, force: true });
+            }
+            catch { /* best effort */ }
+        }
+    }
+});
+//# sourceMappingURL=orchestrator-indicator.spec.js.map

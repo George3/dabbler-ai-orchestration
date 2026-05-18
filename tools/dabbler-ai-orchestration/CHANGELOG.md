@@ -5,6 +5,168 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.2] — 2026-05-18 (Set 029 Session 2 — orchestrator indicator gauges, Claude-only v1 preview)
+
+### Added — Set 029 Session 2 deliverables (Claude Code surface only)
+
+- **Orchestrator Indicator webview view.** New "Orchestrator" view
+  pinned above the Session Sets tree in the Dabbler AI Orchestration
+  view container. Renders two side-by-side semi-circle CSS gauges
+  driven by `~/.dabbler/current-orchestrator.json`:
+  - **Left gauge: Model.** Needle position encodes
+    tier-within-provider (low/mid/flagship → red/yellow/green per
+    Set 029 D5 — red=warning, green=preferred — inverts the
+    conventional "red=expensive" mapping because the operator's
+    stated failure mode is *forgetting to switch back up*, not
+    overspending).
+  - **Right gauge: Effort.** Five normalized levels (Low / Medium /
+    High / Extra-High / Max) plus a binary Thinking-on LED.
+- **Visual-treatment matrix per signalKind** (Set 029 audit
+  §"Visual treatment by signalKind" REVISED 2026-05-18):
+  - `current`: solid fill + solid rim + no badge
+  - `configured-default`: ~85% opacity + dashed rim + "DEFAULT" pill
+  - `last-observed`: hollow rim + filled needle + clock-icon overlay
+    + "(last /think Xm ago)" suffix
+  - `manual`: solid fill + operator-icon overlay
+  - **stale** (signal-agnostic, ≥`stalenessMaxSec` default 8h):
+    diagonal-stripe overlay at 50% opacity over whatever the
+    underlying treatment is. No install-CTA on stale (only on
+    missing marker, per audit Q6).
+- **Tooltip copy embeds confidence explicitly:** "live signal (high
+  confidence)", "live signal (low confidence — hook payload missing
+  model)", "configured default (medium confidence — does not track
+  runtime changes)", "last observed Xm ago via /think (high
+  confidence in detection, but may not reflect current message)",
+  "set manually (high confidence)".
+- **`Dabbler: Install Orchestrator Hook (Claude Code)` command.**
+  Idempotently adds `SessionStart` (matchers: startup / resume /
+  clear / compact) and `UserPromptSubmit` hooks to
+  `~/.claude/settings.json` that pipe the hook payload to
+  `scripts/write-orchestrator-marker.js`. The SessionStart hook
+  writes `signalKind: "current"` + Medium effort default; the
+  UserPromptSubmit hook detects `/think` / `/megathink` /
+  `/ultrathink` prefixes in the prompt and updates effort to
+  `last-observed`. Re-running the command upgrades the helper path
+  in place; foreign hooks the operator may have configured are
+  preserved verbatim.
+- **`Dabbler: Set Orchestrator Model & Effort` command (stub).**
+  Surfaces a "coming in the next release (Session 3 of Set 029)"
+  message with a one-click jump to the Claude installer. The full
+  MRU + multi-step + hotkey-bindable implementation lands in 0.14.3.
+- **`Dabbler: Open Orchestrator Writer Log` command.** Opens
+  `~/.dabbler/orchestrator-writer.log` for diagnosing skipped marker
+  writes (e.g., a Codex configured-default signal blocked by a fresh
+  Claude SessionStart per the multi-writer precedence policy).
+- **`scripts/write-orchestrator-marker.js` helper.** Multi-mode
+  marker writer:
+  - `--mode session-start` — full marker write with model + Medium
+    default effort. Confidence-low producer rule: if the payload's
+    `.model` is missing/null/unparseable, emits `confidence: "low"`
+    + `model: "unknown"` + `modelDisplayName: "Claude (model unknown)"`
+    so the tooltip can surface the low-confidence reason.
+  - `--mode user-prompt-submit` — preserves top-level signal, updates
+    only `effort.*` based on the detected `/think*` prefix. Bootstraps
+    a Medium-default Claude marker if none exists. Exits cleanly
+    (no write) on prompts without a `/think*` prefix.
+  - `--mode manual` — sets `signalKind: "manual"` + `confidence: "high"`.
+  - `--mode configured-default` — sets `signalKind: "configured-default"`
+    + `confidence: "medium"`. Used by Session 3's Codex watcher.
+  - `--force-override` — bypasses the precedence check (manual
+    quickpick uses this with operator confirmation).
+- **Multi-writer precedence** (Set 029 audit §"Multi-writer
+  precedence"): every writer reads existing marker, compares
+  signalKind precedence (`current` > `manual` > `last-observed` >
+  `configured-default`), re-reads immediately before the atomic
+  write+rename (to close the TOCTOU race window), and skips the
+  write if the proposed signal is weaker than a fresh existing
+  signal. Stale signals (>`stalenessMaxSec`) never block a fresh
+  write. Skipped writes are appended to
+  `~/.dabbler/orchestrator-writer.log` with `{timestamp, writer,
+  proposed, existing, reason}` for operator diagnostics.
+- **Windows-aware retry loop on atomic write** (Set 029 R5 REVISED
+  2026-05-18): 5 attempts total (initial + 4 retries) at 50 / 200 /
+  600 / 1200 ms backoff between attempts, ~2050 ms total ceiling.
+  Handles `PermissionError` / `EBUSY` contention with the VS Code
+  file watcher on `~/.dabbler/current-orchestrator.json`.
+- **Effort resets to Medium on every `SessionStart`** (Set 029 R7
+  pre-implementation verification PASSED 2026-05-18 via official
+  Claude Code hooks docs at https://code.claude.com/docs/en/hooks):
+  `/clear` fires `SessionStart` with `source: "clear"` AND
+  `/clear` is a fresh-session boundary (`/think*` is per-message,
+  not a persistent session setting). Both R7 conditions are TRUE,
+  so the SessionStart hook clobbers any existing `last-observed`
+  effort signal back to Medium across all four source values
+  (`startup`, `resume`, `clear`, `compact`).
+
+### Known limitations (Claude-only v1 preview)
+
+- **Starting model only.** The SessionStart hook fires on session
+  boundaries (startup / resume / clear / compact) — mid-session
+  `/model` changes are NOT auto-detected in v1 because the Claude
+  Code hook payload's `model` field only exists on `SessionStart`,
+  not on per-turn hooks. Use `Dabbler: Set Orchestrator Model &
+  Effort` as the recovery path when this happens (lands fully in
+  Session 3 of Set 029; stub in 0.14.2).
+- **Container height cannot be guaranteed.** Per audit S3, VS Code's
+  `contributes.views` schema has no `initialSize` property; ordering
+  and sizing are best-effort. The webview CSS sizes content to fit
+  within 100px, but if the operator has previously dragged the view
+  divider, VS Code restores that height. To reset, drag the divider
+  back. Content remains scrollable (`overflow: auto`) if compressed
+  below 100px.
+- **Non-Claude orchestrator surfaces (Codex, Gemini Code Assist,
+  GitHub Copilot) ship in 0.14.3** (Session 3 of Set 029). v1 marker
+  schema supports them, but the writers and config-file watchers
+  are not yet implemented. Operators using non-Claude surfaces will
+  see the "No signal — install hook" empty state until they manually
+  seed the marker file (or until 0.14.3 ships).
+- **Codex config.toml watcher and the universal manual-override
+  quickpick (MRU + hotkey-bindable args + force-override
+  confirmation) all ship together in 0.14.3.** The 0.14.2 stub for
+  `Dabbler: Set Orchestrator Model & Effort` surfaces an
+  informational dialog rather than a quickpick.
+### Mid-S2 sizing + responsive-wrap revision (operator feedback 2026-05-18)
+
+After seeing the rendered gauges in the Playwright diagnostic, the
+operator flagged two issues that were addressed in-session:
+
+- **Effort gauge "Medium" rendered with a too-short color arc.**
+  Medium's needle was at -120° (~1/3-filled arc) while the Model
+  gauge for Opus rendered at -30° (~5/6-filled arc) — a jarring
+  visual imbalance. Re-centered the 5-level effort scale so Medium
+  sits at the gauge center (-90°) with the other levels redistributed
+  around it: Low -150°, High -60°, Extra-High -35°, Max -15°. Medium
+  is now the "neutral half-fill" default that matches the design
+  intent (it's the lagging-signal-resistant fallback per Q1).
+- **Gauges + fonts bumped ~40-50% for legibility.** Gauge SVG width
+  70 → 100px (height 54px), gauge-cell font 10 → 14px, gauge-suffix
+  9 → 12px, last-updated 9 → 12px, empty-state 11 → 14px,
+  default-pill 8 → 10px, clock/operator overlays 11 → 14px, thinking
+  LED 7 → 10px. Container max-height bumped 100 → 150px to match.
+- **Responsive wrap added.** When the panel is below 260px wide, the
+  CSS grid switches from `1fr 1fr` to single-column so the second
+  gauge stacks below the first instead of being squished into an
+  unreadable sliver. Matches operator's stated workflow of
+  resizing side-bar panels regularly.
+
+### Implementation notes
+
+- **Spec drift correction (versioning).** Set 029 spec.md Session 2
+  step 8 directed a 0.13.17 → 0.13.18 bump, authored before Set 030
+  shipped its 0.14.x line. Current is 0.14.1; this release bumps
+  patch to 0.14.2. The spec-locked S3 → 0.14.0 and S4 → 0.14.1
+  progression shifts to S3 → 0.14.3 and S4 → 0.14.4 (or 0.15.0 if
+  the feature warrants a minor at publish).
+- **Playwright tests live at `src/test/playwright/`,** not the
+  prospective `tests/playwright/` the spec text mentioned. Aligned
+  to the existing `playwright.config.ts` `testDir`. Seven scenarios
+  added in `orchestrator-indicator.spec.ts`: current Opus, low-tier
+  Haiku, low-confidence tooltip, last-observed effort with clock
+  overlay + elapsed suffix, configured-default with DEFAULT pill
+  (and NO stripes — REVISED 2026-05-18 audit decision), 9h-stale
+  state, empty-state CTA, plus a non-Electron helper-precedence
+  smoke that runs the script directly.
+
 ## [0.14.1] — 2026-05-17 (GA hotfix — Linux build casing)
 
 ### Fixed

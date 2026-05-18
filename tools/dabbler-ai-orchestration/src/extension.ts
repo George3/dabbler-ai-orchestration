@@ -17,6 +17,10 @@ import { registerCostDashboardCommand } from "./dashboard/CostDashboard";
 import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
 import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
+import { OrchestratorIndicatorProvider } from "./providers/orchestratorIndicatorProvider";
+import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
+import { registerSetOrchestratorManualStub } from "./commands/setOrchestratorManualStub";
+import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -216,6 +220,29 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("registerMigrateSetCommand", () =>
     registerMigrateSetCommand(context, { refreshView: refreshAll }),
+  );
+
+  // Set 029 Session 2: orchestrator-indicator gauges. The webview view
+  // is registered against `dabblerOrchestratorIndicator` (declared in
+  // package.json as type:"webview" above the session-sets tree). Hook
+  // installer + manual-override stub + writer-log opener are siblings.
+  safeRegister("registerOrchestratorIndicatorView", () => {
+    const indicatorProvider = new OrchestratorIndicatorProvider(context.extensionUri);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        OrchestratorIndicatorProvider.viewType,
+        indicatorProvider,
+      ),
+    );
+  });
+  safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
+    registerInstallOrchestratorHookClaudeCodeCommand(context),
+  );
+  safeRegister("registerSetOrchestratorManualStub", () =>
+    registerSetOrchestratorManualStub(context),
+  );
+  safeRegister("registerOpenOrchestratorWriterLog", () =>
+    registerOpenOrchestratorWriterLog(context),
   );
 
   // Set 030 Session 5: flip scanState to "ready" once activation

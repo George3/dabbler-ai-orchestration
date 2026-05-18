@@ -1,0 +1,29 @@
+import * as vscode from "vscode";
+export declare class OrchestratorIndicatorProvider implements vscode.WebviewViewProvider {
+    private readonly extensionUri;
+    static readonly viewType = "dabblerOrchestratorIndicator";
+    private view;
+    private watcherDisposable;
+    private pollHandle;
+    private renderTimer;
+    constructor(extensionUri: vscode.Uri);
+    resolveWebviewView(webviewView: vscode.WebviewView, _context: vscode.WebviewViewResolveContext, _token: vscode.CancellationToken): void;
+    private setUpWatchers;
+    private tearDownWatchers;
+    private scheduleRender;
+    render(): void;
+    private computeState;
+    private renderHtml;
+    private renderEmpty;
+    private renderLoaded;
+    private renderGaugeSvg;
+    private tierToNeedleAngle;
+    private effortToNeedleAngle;
+    private effortColorBucket;
+    private effortDisplayName;
+    private modelTooltip;
+    private effortTooltip;
+    private fmtAge;
+    private escHtml;
+    private escAttr;
+}

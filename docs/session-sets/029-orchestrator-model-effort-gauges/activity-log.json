@@ -145,6 +145,159 @@
           "resultArtifact": "session-reviews/session-001/verify-result-round-c.json"
         }
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 0,
+      "stepKey": "session-002/boundary-write",
+      "dateTime": "2026-05-18T05:19:23-04:00",
+      "description": "Session 2 boundary write: ai_router.start_session flipped session-state.json to currentSession=2, status=in-progress, lifecycleState=work_in_progress, orchestrator=claude-code/anthropic/claude-opus-4-7/high. work_started event appended to session-events.jsonl. ai-assignment.md S1 actuals recorded ($0.845 routed vs. $0.10-$0.30 original estimate; overshoot is process-related — three verification rounds plus one Bucket-2 consensus call vs. the planned single-call shape; reflects two newly-saved process memories that changed verification shape mid-S1).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/preimplementation-verification",
+      "dateTime": "2026-05-18T05:25:00-04:00",
+      "description": "Pre-implementation verification per spec.md Session 2 steps 5 + 6 (factual question: does Claude /clear fire SessionStart, does /clear represent a fresh-session boundary semantically, does UserPromptSubmit expose message text). WebFetch against the official Claude Code hooks docs at https://code.claude.com/docs/en/hooks confirmed all three preconditions: (1) /clear fires SessionStart with source: \"clear\" (matcher table in the docs lists startup / resume / clear / compact as the four source values); (2) /think* are per-message thinking-budget escalations, not persistent session settings, so /clear is by definition a fresh-session boundary — R7 dual condition is TRUE; (3) UserPromptSubmit payload includes a `prompt` field with the full user-submitted text, so /think* / /megathink / /ultrathink prefix detection ships at full functionality without the Medium-only fallback. Design decision: SessionStart hook clobbers effort to Medium on ALL source values (startup/resume/clear/compact) — simpler than per-source branching and lagging-signal-resistant per the audit's design intent. Cost: $0.00 (WebFetch is unbilled).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/webview-registered",
+      "dateTime": "2026-05-18T05:30:00-04:00",
+      "description": "package.json updates: (a) registered dabblerOrchestratorIndicator as type:webview in views.dabblerSessionSetsContainer, ordered FIRST (above dabblerSessionSets). No initialSize per audit S3 — container height cannot be guaranteed. (b) Declared three new commands: dabbler.installOrchestratorHook.claudeCode, dabbler.setOrchestrator, dabbler.openOrchestratorWriterLog. (c) Dropped explicit activationEvents array (was [workspaceContains:docs/session-sets]) since modern VS Code engine auto-generates these from contributes — IDE diagnostic flagged the entry as redundant. View contribution + onView semantics handle activation automatically.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/marker-writer-helper-shipped",
+      "dateTime": "2026-05-18T05:35:00-04:00",
+      "description": "scripts/write-orchestrator-marker.js implemented (~390 LOC). Four invocation modes: --mode session-start | user-prompt-submit | manual | configured-default. Multi-writer precedence policy: reads existing marker, compares signalKind precedence (current > manual > last-observed > configured-default), re-reads immediately before atomic rename to close the TOCTOU race window, skips write if proposed signal is weaker than fresh existing signal, appends one JSON-lines entry to ~/.dabbler/orchestrator-writer.log on skips. Stale signals (age > stalenessMaxSec, default 28800s = 8h) never block fresh writes per audit policy. Confidence-low producer rule: emits confidence:low + model:unknown + modelDisplayName:\"Claude (model unknown)\" when SessionStart payload's .model is missing/null/unparseable. Atomic write via tmp + rename. Retry loop: 5 attempts (initial + 4) at 50/200/600/1200ms backoff (~2050ms total ceiling) for Windows file-watcher contention per audit S5 REVISED. user-prompt-submit mode: detects /think (high), /megathink (extra-high), /ultrathink (max) prefixes in payload.prompt; preserves top-level model signal and updates only effort.*; bootstraps a Medium-default Claude marker if none exists; exits cleanly (no write) on prompts without a /think* prefix. Smoke-tested directly via bash: six paths (current/Opus, /think effort merge, missing-model confidence-low, no-/think no-write, Codex skipped, manual force-override) all behave correctly; one log entry written for the configured-default skip.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/provider-implemented",
+      "dateTime": "2026-05-18T05:42:00-04:00",
+      "description": "src/providers/orchestratorIndicatorProvider.ts (~380 LOC) + media/orchestrator-indicator/indicator.css (~190 LOC) implemented. Provider is a vscode.WebviewViewProvider for viewType dabblerOrchestratorIndicator. Watcher: vscode.workspace.createFileSystemWatcher(RelativePattern(MARKER_DIR, current-orchestrator.json)) with 60s poll backstop and 50ms render debounce for Windows atomic-write coalescing. Renders two side-by-side SVG semi-circle gauges + thinking LED (hidden on providers without a native concept). Visual-treatment matrix per audit REVISED 2026-05-18: current=solid+solid rim, configured-default=85% opacity + dashed rim + DEFAULT pill, last-observed=hollow rim + filled needle + clock-icon overlay + (last /think Xm ago) suffix, manual=solid + operator-icon overlay. Stale state is signal-agnostic diagonal-stripe overlay at 50% opacity (NOT used for configured-default — stripes are stale-only). Tooltip copy embeds confidence explicitly per audit visual matrix. Last-updated annotation always visible. Empty state: solid grey gauges + \"No signal — install hook\" CTA that dispatches dabbler.installOrchestratorHook.claudeCode. HTML uses CSP nonce; webview message-passing for the install CTA + future setOrchestrator + writer-log shortcuts.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/claude-hook-installer-shipped",
+      "dateTime": "2026-05-18T05:48:00-04:00",
+      "description": "src/commands/installOrchestratorHookClaudeCode.ts (~170 LOC). Idempotent installer: locates existing dabbler entries by matcher + write-orchestrator-marker.js substring in command path and upgrades them in place; appends new entries if absent; preserves foreign hooks verbatim. Atomic write to ~/.claude/settings.json (tmp + rename). Per Set 029 audit Q5 locked design + the pre-implementation verification finding, installs SessionStart hooks with all four source matchers (startup/resume/clear/compact) plus one UserPromptSubmit hook without a matcher (fires on every prompt; the helper short-circuits non-/think* prompts at zero cost). Shows an information message on success with a one-click jump to settings.json. Stub commands also shipped: src/commands/setOrchestratorManualStub.ts (surfaces a 'coming in 0.14.3' dialog with one-click jump to the Claude installer until Session 3 lands the full quickpick), src/commands/openOrchestratorWriterLog.ts (opens ~/.dabbler/orchestrator-writer.log for diagnostics).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/extension-wired",
+      "dateTime": "2026-05-18T05:52:00-04:00",
+      "description": "src/extension.ts wired up: registered OrchestratorIndicatorProvider against viewType dabblerOrchestratorIndicator; registered three sibling commands via safeRegister blocks. esbuild + tsc --noEmit + tsc --outDir out all clean (EXIT=0). Unit suite (npm run test:unit): 376 passing, 2 failing; both failures (notificationsSection — rendering, configEditor-foundation — panel lifecycle) reproduce on a clean master without my changes (verified via git stash + re-run), so they're pre-existing flakes from Set 026/Set 030-era tests, not regressions from this session.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/playwright-smoke-authored",
+      "dateTime": "2026-05-18T05:58:00-04:00",
+      "description": "src/test/playwright/orchestrator-indicator.spec.ts authored with 8 scenarios: (A) current Opus marker → tier-flagship + signal-current classes + label; (B) Haiku marker → tier-low classes + label; (C) confidence-low marker → tooltip text 'low confidence' + 'hook payload missing model'; (D) effort.signalKind=last-observed → clock-overlay + 'last /think 12m ago' suffix; (E) configured-default → DEFAULT pill + NO stripes (stripes are stale-only per REVISED 2026-05-18 audit decision); (F) 9h-old marker → .gauges.stale class + 'last updated 9h ago — stale' annotation; (G) absent marker → empty-state CTA + 'install hook' link; (H) helper-script multi-writer precedence (non-Electron, runs the script directly via child_process). Scenario H ran and passed in 1.2s (npm run test:playwright -- --grep 'helper script skips'). Full Electron suite (7 launch-based scenarios) running in background — Playwright config has workers=1 because each scenario launches a real VS Code Electron instance and they can't share user-data-dirs.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7.5,
+      "stepKey": "session-002/playwright-iframe-fix",
+      "dateTime": "2026-05-18T06:30:00-04:00",
+      "description": "Layer 3 Playwright initial run: 7 of 7 Electron orchestrator scenarios timed out on the iframe selector iframe[title*=\"Orchestrator\"] (the spec assumption that VS Code titles its webview iframes by view name — which it does NOT). Two pre-existing treeView.spec.ts failures unrelated (Refresh-via-command-palette can't find quick-input widget; reproduces on clean master). Diagnostic spec confirmed: VS Code wraps webview views in iframe.webview with src=vscode-webview://... and NO title. The actual content iframe (vscode-webview://.../fake.html?id=...) is added PROGRAMMATICALLY by the outer iframe's service-worker bootstrap, so it has no <iframe> element in the outer DOM and Playwright's frameLocator chains can't see it. Fix: replaced openIndicatorFrame to use the lower-level Frame API — page.locator('iframe.webview').elementHandle() -> contentFrame() -> childFrames() — with a retry loop that probes each child frame for the .container element. Returns a Frame (not FrameLocator) but the .locator() API is shape-identical so the assertions didn't need changes. All 8 scenarios pass in 1.5 minutes after the fix.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7.7,
+      "stepKey": "session-002/operator-feedback-sizing-bump",
+      "dateTime": "2026-05-18T06:45:00-04:00",
+      "description": "Operator on-device feedback after seeing the rendered gauges: (1) effort gauge Medium rendered with too-short color arc (~1/3 fill at -120° vs. Model gauge flagship at -30° ~5/6 fill — jarring visual imbalance); (2) gauges + fonts need to be bigger; (3) gauges need to be responsive (wrap second gauge when panel narrow). Applied in-session: Medium effort needle re-centered from -120° to -90° (gauge midpoint, half-fill) with other levels redistributed (Low -150, High -60, Extra-High -35, Max -15). Gauge SVG dimensions 70x38 -> 100x54 (~43% bigger). Font sizes bumped ~40-50%: gauge-cell 10->14px, gauge-suffix 9->12px, last-updated 9->12px, empty-state 11->14px, default-pill 8->10px, overlays 11->14px, thinking LED 7->10px. Container max-height 100->150px. Responsive wrap: grid-template-columns flips from 1fr 1fr to 1fr at panel width <260px. The audit-locked '<=100px' D3 phrasing is now stale; updated provider header comment and CSS top-of-file comment to note the 2026-05-18 revision. Memory project_gauges_sizing_followup.md updated to reflect that this is now SHIPPED, not pending. CHANGELOG gains a 'Mid-S2 sizing + responsive-wrap revision' section. Re-ran Playwright suite — all 8 scenarios still green (assertions check CSS classes, not pixel dimensions).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 8,
+      "stepKey": "session-002/version-bumped-and-changelog",
+      "dateTime": "2026-05-18T06:02:00-04:00",
+      "description": "package.json version 0.14.1 → 0.14.2. Spec drift correction: spec.md Session 2 step 8 directed a 0.13.17 → 0.13.18 bump authored on 2026-05-17 before Set 030 shipped its 0.14.x line; corrected to patch-bump from the current 0.14.1. CHANGELOG.md gets a new [0.14.2] section under [Unreleased] documenting: webview view + visual-treatment matrix per signalKind; tooltip copy with confidence embedded; install command (idempotent SessionStart×4 source matchers + UserPromptSubmit); manual-override stub; writer-log opener; write-orchestrator-marker.js helper with all four modes + multi-writer precedence + retry loop + confidence-low producer; effort-reset on every SessionStart (R7 verified TRUE both conditions). Known limitations: starting-model-only (no runtime /model detection in v1), container height not guaranteed, non-Claude surfaces ship in 0.14.3, manual quickpick is a stub until 0.14.3. CLAUDE.md 'Extension versioning' section updated to v0.14.2 with the Claude-only v1 preview description and the 0.14.3 forward-pointer.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 9,
+      "stepKey": "session-002/round-a-verification",
+      "dateTime": "2026-05-18T07:00:00-04:00",
+      "description": "Round A verification (marker writer + CSS visual matrix, ~605 LOC bundle, split per memory feedback_split_large_verification_bundles to stay under the 700 LOC ceiling). Verifier: gpt-5-4. Verdict: not-ready, 3 must-fix items: (1) TOCTOU race in attemptWriteWithPrecedence — read-once-decide-write pattern leaves a race window; (2) UserPromptSubmit merge/bootstrap can clobber fresher top-level SessionStart markers because the merge atomicWrite bypasses precedence and writes a stale snapshot; (3) stale stripes were implemented as background-image on .gauge-svg which paints BEHIND the SVG content, not as a true overlay — also alpha was 18% vs. the audit's 50% target. Plus a should-fix: audit-summary.md and spec.md still say ≤100px despite the mid-S2 revision to 150px. All four addressed: (1) re-read-immediately-before-rename added in attemptWriteWithPrecedence with skip-on-stronger-fresh-marker + new log reason 'weaker-than-existing-on-reread'; (2) merge branch reworked to read latest snapshot just before tmp-write+rename (initial superseded the bootstrap); (3) stripes moved to .stale .gauge-cell::before pseudo-element at z-index 2 with 45% alpha; (4) superseding note added to both audit-summary.md and spec.md D3. Cost: $0.152.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 9255,
+          "outputTokens": 8607,
+          "costUsd": 0.1522425,
+          "resultArtifact": "session-reviews/session-002/verify-result-round-a.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 10,
+      "stepKey": "session-002/round-b-verification",
+      "dateTime": "2026-05-18T07:15:00-04:00",
+      "description": "Round B verification (provider + installer, ~565 LOC bundle). Verifier: gpt-5-4. Verdict: not-ready, 2 must-fix items: (1) renderLoaded effort suffix branches (default/manual) keyed off marker.signalKind (top-level model signal) instead of marker.effort.signalKind — a Codex configured-default session with /think* observation would render '(default)' on the effort gauge instead of the elapsed-time suffix; (2) gauge angle math in renderGaugeSvg used a `180 + needleAngleDeg` offset that inverted the y-axis, sending -90° DOWN instead of UP — all needle/fill endpoints were BELOW the visible viewBox. Plus a non-blocking follow-up: consider a parent-directory watcher so first creation of ~/.dabbler/current-orchestrator.json is picked up immediately. Both must-fix items addressed: (1) effort suffix branches now check marker.effort.signalKind; (2) removed the 180+ offset, use angle directly — SVG's y-down axis naturally inverts sin direction so cy + radius*sin(-90°) = cy - radius (top center) is correct. Also simplified largeArc to always 0 since upper-semicircle arcs are always ≤180°. Cost: $0.206.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 9590,
+          "outputTokens": 12159,
+          "costUsd": 0.20636,
+          "resultArtifact": "session-reviews/session-002/verify-result-round-b.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 11,
+      "stepKey": "session-002/round-c-confirmation",
+      "dateTime": "2026-05-18T07:30:00-04:00",
+      "description": "Round C confirmation pass: re-bundled the full post-fix marker writer + provider + CSS and asked the verifier to confirm each of the 5 must-fix items was actually fixed and no new bugs introduced. Verifier: gpt-5-4. Verdict: 4 of 5 fully resolved, 1 partially resolved — the user-prompt-submit branch's re-read happened BEFORE the tmp file write rather than immediately before rename, leaving a residual race window. Verifier also confirmed: (a) no new must-fix items introduced; (b) the largeArc=0 simplification renders correctly at needleAngleDeg=0 (180° diameter chord); (c) the bootstrap-discard-when-late-read-finds-marker pattern is correct including the parse-fail-corrupt edge case. Applied tightening: restructured user-prompt-submit branch so readExistingMarker happens inside the try block immediately before writeFileSync+renameSync. The residual window is now equivalent to attemptWriteWithPrecedence's residual window — minimal and acceptable. Smoke-tested both merge and bootstrap paths after the tightening. Per memory feedback_verifier_spiral_recruit_codex: the round-by-round finding count (3->2->1) is convergence, not spiral. No Round D needed. Cost: $0.220. Total S2 verification cost: $0.578 (A $0.152 + B $0.206 + C $0.220).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 13361,
+          "outputTokens": 12407,
+          "costUsd": 0.2195075,
+          "resultArtifact": "session-reviews/session-002/verify-result-round-c.json"
+        }
+      ]
     }
   ]
 }

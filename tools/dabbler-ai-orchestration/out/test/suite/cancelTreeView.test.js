@@ -39,7 +39,7 @@ const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const fileSystem_1 = require("../../utils/fileSystem");
-const sessionSetsProvider_1 = require("../../providers/sessionSetsProvider");
+const SessionSetsProvider_1 = require("../../providers/SessionSetsProvider");
 const cancelLifecycle_1 = require("../../utils/cancelLifecycle");
 function makeTmpDir() {
     return fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-cancel-tree-test-"));
@@ -159,7 +159,7 @@ suite("SessionSetsProvider — cancelled group", () => {
         if (ws.workspaceFolders === undefined) {
             ws.workspaceFolders = [{ uri: extensionUri, name: "stub", index: 0 }];
         }
-        const provider = new sessionSetsProvider_1.SessionSetsProvider(extensionUri);
+        const provider = new SessionSetsProvider_1.SessionSetsProvider(extensionUri);
         const fakeSets = setStates.map((state, i) => ({
             name: `set-${i}-${state}`,
             dir: `/tmp/${i}`,

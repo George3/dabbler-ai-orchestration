@@ -1,0 +1,272 @@
+/*
+ * Orchestrator Indicator gauges — semi-circle CSS gauges, two side-by-side.
+ *
+ * Visual-treatment matrix per Set 029 audit (audit-summary.md §"Visual
+ * treatment by signalKind", REVISED 2026-05-18):
+ *
+ *   current             → solid fill, solid rim, no badge
+ *   configured-default  → solid fill ~85% opacity, dashed rim, "DEFAULT" pill
+ *   last-observed       → hollow rim + filled needle + clock-icon overlay + time-elapsed suffix
+ *   manual              → solid fill + operator-icon overlay
+ *   stale (signal-agnostic) → diagonal-stripe overlay at 50% opacity over underlying treatment
+ *
+ * Height budget: ≤150px total visible content (operator-revised
+ * 2026-05-18 from the original ≤100px after seeing the rendered
+ * gauges in S2 — too small for legibility). VS Code's standard view
+ * header (~22px) sits above this. Container height cannot be
+ * guaranteed if the operator has resized; the outer scroll-wrapper
+ * enables vertical scroll as the fallback per audit S3.
+ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: transparent;
+}
+
+.container {
+  height: 100vh;
+  max-height: 150px;
+  overflow-y: auto;     /* per audit S3 — scrollable if compressed below 150px */
+  overflow-x: hidden;
+  padding: 6px 8px 4px 8px;
+}
+
+.gauges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+/* Responsive wrap: when the panel is narrow, stack the second gauge
+ * below the first instead of squishing both into one row.
+ * Threshold 260px reflects the smallest width at which two
+ * ~100px-wide gauges still fit side-by-side with sublabel text
+ * readable. Operator-flagged 2026-05-18.
+ */
+@media (max-width: 260px) {
+  .gauges {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gauge-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* Semi-circle gauge — a half-circle with a needle.
+ * Render order: arc background → colored fill arc (clipped to needle angle)
+ * → rim → needle → overlays. We use SVG inside .gauge-svg so the arc
+ * geometry is precise across DPI.
+ */
+.gauge-svg {
+  width: 100px;
+  height: 54px;          /* 2:1 aspect, semi-circle. ~43% bigger than v0.14.2-initial */
+  display: block;
+}
+
+.gauge-arc-bg {
+  fill: none;
+  stroke: var(--vscode-editorWidget-border, #444);
+  stroke-width: 7;
+  stroke-linecap: butt;
+}
+
+.gauge-arc-fill {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: butt;
+}
+
+.gauge-rim {
+  fill: none;
+  stroke: var(--vscode-foreground);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+
+.gauge-needle {
+  stroke: var(--vscode-foreground);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.gauge-needle-pivot {
+  fill: var(--vscode-foreground);
+}
+
+.gauge-sublabel {
+  margin-top: 2px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.gauge-suffix {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Tier color polarity (Set 029 D5): red=low/low-effort, green=flagship/max-effort */
+.tier-low      .gauge-arc-fill { stroke: #e06c75; }   /* red */
+.tier-mid      .gauge-arc-fill { stroke: #e5c07b; }   /* yellow */
+.tier-flagship .gauge-arc-fill { stroke: #98c379; }   /* green */
+.tier-unknown  .gauge-arc-fill { stroke: var(--vscode-disabledForeground, #888); }
+
+.effort-low        .gauge-arc-fill { stroke: #e06c75; }
+.effort-medium     .gauge-arc-fill { stroke: #d19a66; }   /* orange */
+.effort-high       .gauge-arc-fill { stroke: #e5c07b; }   /* yellow */
+.effort-extra-high .gauge-arc-fill { stroke: #b5cea8; }   /* light green */
+.effort-max        .gauge-arc-fill { stroke: #98c379; }   /* green */
+.effort-unknown    .gauge-arc-fill { stroke: var(--vscode-disabledForeground, #888); }
+
+/* signalKind treatments */
+.signal-current      .gauge-arc-fill { stroke-opacity: 1; }
+.signal-configured-default .gauge-arc-fill { stroke-opacity: 0.85; }
+.signal-configured-default .gauge-rim {
+  stroke-dasharray: 2 2;
+  stroke-opacity: 1;
+}
+.signal-last-observed .gauge-arc-fill {
+  stroke-opacity: 0;        /* hollow rim — no fill */
+}
+.signal-last-observed .gauge-rim {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+.signal-manual .gauge-arc-fill { stroke-opacity: 1; }
+
+/* Pill badge for configured-default */
+.default-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  margin-left: 4px;
+  border: 1px solid var(--vscode-foreground);
+  border-radius: 4px;
+  opacity: 0.8;
+  vertical-align: middle;
+}
+
+/* Clock-icon overlay for last-observed */
+.clock-overlay {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  font-size: 14px;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+/* Operator-icon overlay for manual */
+.operator-overlay {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  font-size: 14px;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+/* Thinking LED — a small dot right of the effort gauge */
+.thinking-led {
+  position: absolute;
+  top: 20px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--vscode-foreground);
+  background: transparent;
+  opacity: 0.5;
+}
+.thinking-led.on {
+  background: #98c379;
+  opacity: 1;
+  box-shadow: 0 0 3px #98c379;
+}
+.thinking-led.hidden { display: none; }
+
+/* Stale-state overlay — diagonal stripes painted ON TOP of the gauge
+ * artwork, not behind it (Round A verifier finding 2026-05-18: a
+ * background-image on .gauge-svg paints behind the SVG content and
+ * doesn't actually overlay the rendered strokes). Signal-agnostic
+ * per audit-summary §Q6 — overlays on top of whatever the underlying
+ * signalKind treatment is.
+ *
+ * Implementation: position the .gauge-cell as a positioning context;
+ * a ::before pseudo-element absolute-positioned over the SVG paints
+ * the diagonal stripes at higher opacity than the prior background-
+ * image approach (~45% vs. the audit's "50%" target).
+ */
+.stale .gauge-cell {
+  /* .gauge-cell is already position: relative; pseudo-element will
+   * overlay its bounding box, which is just slightly larger than the
+   * SVG itself. */
+}
+.stale .gauge-cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 54px;  /* matches .gauge-svg height — only stripe over the gauge, not the sublabel */
+  pointer-events: none;
+  z-index: 2;    /* SVG renders at default z-index 0; pseudo above */
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.45) 0px,
+    rgba(255, 255, 255, 0.45) 4px,
+    transparent 4px,
+    transparent 10px
+  );
+}
+
+/* Last-updated annotation under both gauges */
+.last-updated {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 2px;
+  text-align: center;
+}
+
+/* Empty state ("No signal — install hook") */
+.empty-state {
+  padding: 8px 6px 0 6px;
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: center;
+}
+.empty-state .grey-gauges {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  opacity: 0.45;
+  margin-bottom: 6px;
+}
+.empty-state .install-cta {
+  display: inline-block;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.empty-state .install-cta:hover { color: var(--vscode-textLink-activeForeground); }

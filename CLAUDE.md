@@ -39,11 +39,18 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.14.1** (Set 030 Session 5 — GA: session-state schema v3
-  + in-extension v2-migration UX + AI-strategy quickpick + activation
-  scanState loading sentinel. 0.14.1 hotfixes a Linux CI build casing
-  regression in the never-published 0.14.0 tag). Companion PyPI release:
-  `dabbler-ai-router` 0.4.0.
+- Current: **v0.14.2** (Set 029 Session 2 — Claude-only v1 preview of
+  the orchestrator-indicator gauges: a new "Orchestrator" webview view
+  pinned above the Session Sets tree showing model + effort gauges
+  driven by `~/.dabbler/current-orchestrator.json`, plus the Claude
+  Code `SessionStart` + `UserPromptSubmit` hook installer and the
+  shared `scripts/write-orchestrator-marker.js` helper with
+  multi-writer precedence and a Windows-aware retry loop. Non-Claude
+  surfaces — Codex auto-detect via `~/.codex/config.toml` watcher,
+  Gemini Code Assist manual-only, GitHub Copilot manual-only — and
+  the universal manual-override quickpick (MRU + hotkey-bindable
+  args + force-override confirmation) ship in 0.14.3 — Session 3 of
+  Set 029.) Companion PyPI release: `dabbler-ai-router` 0.4.0.
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`

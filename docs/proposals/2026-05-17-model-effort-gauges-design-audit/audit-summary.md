@@ -6,6 +6,18 @@
 verdicts. Five showstoppers identified and resolved with concrete
 mitigations. Spec and implementation plan updated accordingly.
 
+> **Post-implementation revision (2026-05-18, Set 029 Session 2 mid-S2):**
+> the audit-locked **"≤100px hard constraint" in D3** was relaxed by the
+> operator after seeing the rendered gauges on-device. New target budget:
+> **≤150px** content (~50% more headroom). Gauge SVG dimensions
+> 70×38 → 100×54 (~43% bigger); font sizes bumped ~40-50%; responsive
+> wrap added so the second gauge stacks below the first at panel widths
+> <260px. The "≤100px hard constraint" phrasing in this doc and in
+> spec.md D3 is superseded — the operator IS the one who set the
+> original constraint AND the one who relaxed it. See CHANGELOG
+> [0.14.2] §"Mid-S2 sizing + responsive-wrap revision" and memory
+> `gauges-sizing-followup` for the full mid-S2 revision detail.
+
 > **Process note.** The audit was conducted by manual paste-and-collect
 > rather than via `ai_router.route()`, per operator preference and
 > memory `feedback_ai_router_usage` (router reserved for end-of-session

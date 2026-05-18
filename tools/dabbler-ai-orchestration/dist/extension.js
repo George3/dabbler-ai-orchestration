@@ -510,7 +510,7 @@ var require_has_flag = __commonJS({
 var require_supports_color = __commonJS({
   "node_modules/supports-color/index.js"(exports2, module2) {
     "use strict";
-    var os2 = require("os");
+    var os5 = require("os");
     var tty = require("tty");
     var hasFlag = require_has_flag();
     var { env: env6 } = process;
@@ -558,7 +558,7 @@ var require_supports_color = __commonJS({
         return min;
       }
       if (process.platform === "win32") {
-        const osRelease = os2.release().split(".");
+        const osRelease = os5.release().split(".");
         if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
           return Number(osRelease[2]) >= 14931 ? 3 : 2;
         }
@@ -804,10 +804,10 @@ var require_src2 = __commonJS({
     var fs_1 = require("fs");
     var debug_1 = __importDefault(require_src());
     var log = debug_1.default("@kwsites/file-exists");
-    function check(path22, isFile, isDirectory) {
-      log(`checking %s`, path22);
+    function check(path25, isFile, isDirectory) {
+      log(`checking %s`, path25);
       try {
-        const stat = fs_1.statSync(path22);
+        const stat = fs_1.statSync(path25);
         if (stat.isFile() && isFile) {
           log(`[OK] path represents a file`);
           return true;
@@ -827,8 +827,8 @@ var require_src2 = __commonJS({
         throw e;
       }
     }
-    function exists2(path22, type = exports2.READABLE) {
-      return check(path22, (type & exports2.FILE) > 0, (type & exports2.FOLDER) > 0);
+    function exists2(path25, type = exports2.READABLE) {
+      return check(path25, (type & exports2.FILE) > 0, (type & exports2.FOLDER) > 0);
     }
     exports2.exists = exists2;
     exports2.FILE = 1;
@@ -970,17 +970,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path22) {
-      const ctrl = callVisitor(key, node, visitor, path22);
+    function visit_(key, node, visitor, path25) {
+      const ctrl = callVisitor(key, node, visitor, path25);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path22, ctrl);
-        return visit_(key, ctrl, visitor, path22);
+        replaceNode(key, path25, ctrl);
+        return visit_(key, ctrl, visitor, path25);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path22 = Object.freeze(path22.concat(node));
+          path25 = Object.freeze(path25.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = visit_(i2, node.items[i2], visitor, path22);
+            const ci = visit_(i2, node.items[i2], visitor, path25);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -991,13 +991,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path22 = Object.freeze(path22.concat(node));
-          const ck = visit_("key", node.key, visitor, path22);
+          path25 = Object.freeze(path25.concat(node));
+          const ck = visit_("key", node.key, visitor, path25);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path22);
+          const cv = visit_("value", node.value, visitor, path25);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -1018,17 +1018,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path22) {
-      const ctrl = await callVisitor(key, node, visitor, path22);
+    async function visitAsync_(key, node, visitor, path25) {
+      const ctrl = await callVisitor(key, node, visitor, path25);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path22, ctrl);
-        return visitAsync_(key, ctrl, visitor, path22);
+        replaceNode(key, path25, ctrl);
+        return visitAsync_(key, ctrl, visitor, path25);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path22 = Object.freeze(path22.concat(node));
+          path25 = Object.freeze(path25.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = await visitAsync_(i2, node.items[i2], visitor, path22);
+            const ci = await visitAsync_(i2, node.items[i2], visitor, path25);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -1039,13 +1039,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path22 = Object.freeze(path22.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path22);
+          path25 = Object.freeze(path25.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path25);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path22);
+          const cv = await visitAsync_("value", node.value, visitor, path25);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -1072,23 +1072,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path22) {
+    function callVisitor(key, node, visitor, path25) {
       if (typeof visitor === "function")
-        return visitor(key, node, path22);
+        return visitor(key, node, path25);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path22);
+        return visitor.Map?.(key, node, path25);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path22);
+        return visitor.Seq?.(key, node, path25);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path22);
+        return visitor.Pair?.(key, node, path25);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path22);
+        return visitor.Scalar?.(key, node, path25);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path22);
+        return visitor.Alias?.(key, node, path25);
       return void 0;
     }
-    function replaceNode(key, path22, node) {
-      const parent = path22[path22.length - 1];
+    function replaceNode(key, path25, node) {
+      const parent = path25[path25.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -1698,10 +1698,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path22, value) {
+    function collectionFromPath(schema, path25, value) {
       let v = value;
-      for (let i2 = path22.length - 1; i2 >= 0; --i2) {
-        const k2 = path22[i2];
+      for (let i2 = path25.length - 1; i2 >= 0; --i2) {
+        const k2 = path25[i2];
         if (typeof k2 === "number" && Number.isInteger(k2) && k2 >= 0) {
           const a = [];
           a[k2] = v;
@@ -1720,7 +1720,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path22) => path22 == null || typeof path22 === "object" && !!path22[Symbol.iterator]().next().done;
+    var isEmptyPath = (path25) => path25 == null || typeof path25 === "object" && !!path25[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -1750,11 +1750,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path22, value) {
-        if (isEmptyPath(path22))
+      addIn(path25, value) {
+        if (isEmptyPath(path25))
           this.add(value);
         else {
-          const [key, ...rest] = path22;
+          const [key, ...rest] = path25;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -1768,8 +1768,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path22) {
-        const [key, ...rest] = path22;
+      deleteIn(path25) {
+        const [key, ...rest] = path25;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -1783,8 +1783,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path22, keepScalar) {
-        const [key, ...rest] = path22;
+      getIn(path25, keepScalar) {
+        const [key, ...rest] = path25;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -1802,8 +1802,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path22) {
-        const [key, ...rest] = path22;
+      hasIn(path25) {
+        const [key, ...rest] = path25;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -1813,8 +1813,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path22, value) {
-        const [key, ...rest] = path22;
+      setIn(path25, value) {
+        const [key, ...rest] = path25;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -4329,9 +4329,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path22, value) {
+      addIn(path25, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path22, value);
+          this.contents.addIn(path25, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -4406,14 +4406,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path22) {
-        if (Collection.isEmptyPath(path22)) {
+      deleteIn(path25) {
+        if (Collection.isEmptyPath(path25)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path22) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path25) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -4428,10 +4428,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path22, keepScalar) {
-        if (Collection.isEmptyPath(path22))
+      getIn(path25, keepScalar) {
+        if (Collection.isEmptyPath(path25))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path22, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path25, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -4442,10 +4442,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path22) {
-        if (Collection.isEmptyPath(path22))
+      hasIn(path25) {
+        if (Collection.isEmptyPath(path25))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path22) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path25) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -4462,13 +4462,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path22, value) {
-        if (Collection.isEmptyPath(path22)) {
+      setIn(path25, value) {
+        if (Collection.isEmptyPath(path25)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path22), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path25), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path22, value);
+          this.contents.setIn(path25, value);
         }
       }
       /**
@@ -6424,9 +6424,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path22) => {
+    visit.itemAtPath = (cst, path25) => {
       let item = cst;
-      for (const [field, index] of path22) {
+      for (const [field, index] of path25) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -6435,23 +6435,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path22) => {
-      const parent = visit.itemAtPath(cst, path22.slice(0, -1));
-      const field = path22[path22.length - 1][0];
+    visit.parentCollection = (cst, path25) => {
+      const parent = visit.itemAtPath(cst, path25.slice(0, -1));
+      const field = path25[path25.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path22, item, visitor) {
-      let ctrl = visitor(item, path22);
+    function _visit(path25, item, visitor) {
+      let ctrl = visitor(item, path25);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i2 = 0; i2 < token.items.length; ++i2) {
-            const ci = _visit(Object.freeze(path22.concat([[field, i2]])), token.items[i2], visitor);
+            const ci = _visit(Object.freeze(path25.concat([[field, i2]])), token.items[i2], visitor);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -6462,10 +6462,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path22);
+            ctrl = ctrl(item, path25);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path22) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path25) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -7762,14 +7762,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs20 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs20, sep: [] });
+                map.items.push({ start, key: fs23, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs20);
+                this.stack.push(fs23);
               } else {
-                Object.assign(it, { key: fs20, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7897,13 +7897,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs20 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs20, sep: [] });
+                fc.items.push({ start: [], key: fs23, sep: [] });
               else if (it.sep)
-                this.stack.push(fs20);
+                this.stack.push(fs23);
               else
-                Object.assign(it, { key: fs20, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -11414,8 +11414,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path22) {
-      let input = path22;
+    function removeDotSegments(path25) {
+      let input = path25;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -11614,8 +11614,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path22, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path22 && path22 !== "/" ? path22 : void 0;
+        const [path25, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path25 && path25 !== "/" ? path25 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -14681,9 +14681,9 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode19 = __toESM(require("vscode"));
-var fs19 = __toESM(require("fs"));
-var path21 = __toESM(require("path"));
+var vscode23 = __toESM(require("vscode"));
+var fs22 = __toESM(require("fs"));
+var path24 = __toESM(require("path"));
 
 // src/providers/SessionSetsProvider.ts
 var vscode2 = __toESM(require("vscode"));
@@ -16896,8 +16896,8 @@ function toLinesWithContent(input = "", trimmed2 = true, separator = "\n") {
 function forEachLineWithContent(input, callback) {
   return toLinesWithContent(input, true).map((line) => callback(line));
 }
-function folderExists(path22) {
-  return (0, import_file_exists.exists)(path22, import_file_exists.FOLDER);
+function folderExists(path25) {
+  return (0, import_file_exists.exists)(path25, import_file_exists.FOLDER);
 }
 function append(target, item) {
   if (Array.isArray(target)) {
@@ -17135,27 +17135,27 @@ var init_simple_git_options = __esm({
     };
   }
 });
-function appendTaskOptions(options, commands18 = []) {
+function appendTaskOptions(options, commands22 = []) {
   if (!filterPlainObject(options)) {
-    return commands18;
+    return commands22;
   }
-  return Object.keys(options).reduce((commands22, key) => {
+  return Object.keys(options).reduce((commands23, key) => {
     const value = options[key];
     if (r(value)) {
-      commands22.push(value);
+      commands23.push(value);
     } else if (filterPrimitives(value, ["boolean"])) {
-      commands22.push(key + "=" + value);
+      commands23.push(key + "=" + value);
     } else if (Array.isArray(value)) {
       for (const v of value) {
         if (!filterPrimitives(v, ["string", "number"])) {
-          commands22.push(key + "=" + v);
+          commands23.push(key + "=" + v);
         }
       }
     } else {
-      commands22.push(key);
+      commands23.push(key);
     }
-    return commands22;
-  }, commands18);
+    return commands23;
+  }, commands22);
 }
 function getTrailingOptions(args, initialPrimitive = 0, objectOnly = false) {
   const command = [];
@@ -17285,29 +17285,29 @@ function checkIsRepoTask(action) {
     case "root":
       return checkIsRepoRootTask();
   }
-  const commands18 = ["rev-parse", "--is-inside-work-tree"];
+  const commands22 = ["rev-parse", "--is-inside-work-tree"];
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     onError,
     parser
   };
 }
 function checkIsRepoRootTask() {
-  const commands18 = ["rev-parse", "--git-dir"];
+  const commands22 = ["rev-parse", "--git-dir"];
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     onError,
-    parser(path22) {
-      return /^\.(git)?$/.test(path22.trim());
+    parser(path25) {
+      return /^\.(git)?$/.test(path25.trim());
     }
   };
 }
 function checkIsBareRepoTask() {
-  const commands18 = ["rev-parse", "--is-bare-repository"];
+  const commands22 = ["rev-parse", "--is-bare-repository"];
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     onError,
     parser
@@ -17397,18 +17397,18 @@ function configurationErrorTask(error) {
     }
   };
 }
-function straightThroughStringTask(commands18, trimmed2 = false) {
+function straightThroughStringTask(commands22, trimmed2 = false) {
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
       return trimmed2 ? String(text).trim() : text;
     }
   };
 }
-function straightThroughBufferTask(commands18) {
+function straightThroughBufferTask(commands22) {
   return {
-    commands: commands18,
+    commands: commands22,
     format: "buffer",
     parser(buffer) {
       return buffer;
@@ -17454,9 +17454,9 @@ function cleanWithOptionsTask(mode, customArgs) {
   return cleanTask(cleanMode, options);
 }
 function cleanTask(mode, customArgs) {
-  const commands18 = ["clean", `-${mode}`, ...customArgs];
+  const commands22 = ["clean", `-${mode}`, ...customArgs];
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
       return cleanSummaryParser(mode === "n", text);
@@ -17619,13 +17619,13 @@ function asConfigScope(scope, fallback) {
   return fallback;
 }
 function addConfigTask(key, value, append2, scope) {
-  const commands18 = ["config", `--${scope}`];
+  const commands22 = ["config", `--${scope}`];
   if (append2) {
-    commands18.push("--add");
+    commands22.push("--add");
   }
-  commands18.push(key, value);
+  commands22.push(key, value);
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
       return text;
@@ -17633,12 +17633,12 @@ function addConfigTask(key, value, append2, scope) {
   };
 }
 function getConfigTask(key, scope) {
-  const commands18 = ["config", "--null", "--show-origin", "--get-all", key];
+  const commands22 = ["config", "--null", "--show-origin", "--get-all", key];
   if (scope) {
-    commands18.splice(1, 0, `--${scope}`);
+    commands22.splice(1, 0, `--${scope}`);
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
       return configGetParser(text, key);
@@ -17646,12 +17646,12 @@ function getConfigTask(key, scope) {
   };
 }
 function listConfigTask(scope) {
-  const commands18 = ["config", "--list", "--show-origin", "--null"];
+  const commands22 = ["config", "--list", "--show-origin", "--null"];
   if (scope) {
-    commands18.push(`--${scope}`);
+    commands22.push(`--${scope}`);
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
       return configListParser(text);
@@ -17734,11 +17734,11 @@ function parseGrep(grep) {
   const paths = /* @__PURE__ */ new Set();
   const results = {};
   forEachLineWithContent(grep, (input) => {
-    const [path22, line, preview] = input.split(NULL);
-    paths.add(path22);
-    (results[path22] = results[path22] || []).push({
+    const [path25, line, preview] = input.split(NULL);
+    paths.add(path25);
+    (results[path25] = results[path25] || []).push({
       line: asNumber(line),
-      path: path22,
+      path: path25,
       preview
     });
   });
@@ -17763,10 +17763,10 @@ function grep_default() {
       if (typeof searchTerm === "string") {
         searchTerm = grepQueryBuilder().param(searchTerm);
       }
-      const commands18 = ["grep", "--null", "-n", "--full-name", ...options, ...searchTerm];
+      const commands22 = ["grep", "--null", "-n", "--full-name", ...options, ...searchTerm];
       return this._runTask(
         {
-          commands: commands18,
+          commands: commands22,
           format: "utf-8",
           parser(stdOut) {
             return parseGrep(stdOut);
@@ -17815,12 +17815,12 @@ __export2(reset_exports, {
   resetTask: () => resetTask
 });
 function resetTask(mode, customArgs) {
-  const commands18 = ["reset"];
+  const commands22 = ["reset"];
   if (isValidResetMode(mode)) {
-    commands18.push(`--${mode}`);
+    commands22.push(`--${mode}`);
   }
-  commands18.push(...customArgs);
-  return straightThroughStringTask(commands18);
+  commands22.push(...customArgs);
+  return straightThroughStringTask(commands22);
 }
 function getResetMode(mode) {
   if (isValidResetMode(mode)) {
@@ -17989,10 +17989,10 @@ var init_tasks_pending_queue = __esm({
     };
   }
 });
-function pluginContext(task, commands18) {
+function pluginContext(task, commands22) {
   return {
     method: first(task.commands) || "",
-    commands: commands18
+    commands: commands22
   };
 }
 function onErrorReceived(target, logger) {
@@ -18293,11 +18293,11 @@ var init_change_working_directory = __esm({
   }
 });
 function checkoutTask(args) {
-  const commands18 = ["checkout", ...args];
-  if (commands18[1] === "-b" && commands18.includes("-B")) {
-    commands18[1] = remove(commands18, "-B");
+  const commands22 = ["checkout", ...args];
+  if (commands22[1] === "-b" && commands22.includes("-B")) {
+    commands22[1] = remove(commands22, "-B");
   }
-  return straightThroughStringTask(commands18);
+  return straightThroughStringTask(commands22);
 }
 function checkout_default() {
   return {
@@ -18429,7 +18429,7 @@ var init_parse_commit = __esm({
   }
 });
 function commitTask(message, files, customArgs) {
-  const commands18 = [
+  const commands22 = [
     "-c",
     "core.abbrev=40",
     "commit",
@@ -18438,7 +18438,7 @@ function commitTask(message, files, customArgs) {
     ...customArgs
   ];
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser: parseCommitResult
   };
@@ -18490,11 +18490,11 @@ var init_first_commit = __esm({
   }
 });
 function hashObjectTask(filePath, write) {
-  const commands18 = ["hash-object", filePath];
+  const commands22 = ["hash-object", filePath];
   if (write) {
-    commands18.push("-w");
+    commands22.push("-w");
   }
-  return straightThroughStringTask(commands18, true);
+  return straightThroughStringTask(commands22, true);
 }
 var init_hash_object = __esm({
   "src/lib/tasks/hash-object.ts"() {
@@ -18502,14 +18502,14 @@ var init_hash_object = __esm({
     init_task();
   }
 });
-function parseInit(bare, path22, text) {
+function parseInit(bare, path25, text) {
   const response = String(text).trim();
   let result;
   if (result = initResponseRegex.exec(response)) {
-    return new InitSummary(bare, path22, false, result[1]);
+    return new InitSummary(bare, path25, false, result[1]);
   }
   if (result = reInitResponseRegex.exec(response)) {
-    return new InitSummary(bare, path22, true, result[1]);
+    return new InitSummary(bare, path25, true, result[1]);
   }
   let gitDir = "";
   const tokens = response.split(" ");
@@ -18520,7 +18520,7 @@ function parseInit(bare, path22, text) {
       break;
     }
   }
-  return new InitSummary(bare, path22, /^re/i.test(response), gitDir);
+  return new InitSummary(bare, path25, /^re/i.test(response), gitDir);
 }
 var InitSummary;
 var initResponseRegex;
@@ -18529,9 +18529,9 @@ var init_InitSummary = __esm({
   "src/lib/responses/InitSummary.ts"() {
     "use strict";
     InitSummary = class {
-      constructor(bare, path22, existing, gitDir) {
+      constructor(bare, path25, existing, gitDir) {
         this.bare = bare;
-        this.path = path22;
+        this.path = path25;
         this.existing = existing;
         this.gitDir = gitDir;
       }
@@ -18543,16 +18543,16 @@ var init_InitSummary = __esm({
 function hasBareCommand(command) {
   return command.includes(bareCommand);
 }
-function initTask(bare = false, path22, customArgs) {
-  const commands18 = ["init", ...customArgs];
-  if (bare && !hasBareCommand(commands18)) {
-    commands18.splice(1, 0, bareCommand);
+function initTask(bare = false, path25, customArgs) {
+  const commands22 = ["init", ...customArgs];
+  if (bare && !hasBareCommand(commands22)) {
+    commands22.splice(1, 0, bareCommand);
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(text) {
-      return parseInit(commands18.includes("--bare"), path22, text);
+      return parseInit(commands22.includes("--bare"), path25, text);
     }
   };
 }
@@ -18784,14 +18784,14 @@ __export2(diff_exports, {
 });
 function diffSummaryTask(customArgs) {
   let logFormat = logFormatFromCommand(customArgs);
-  const commands18 = ["diff"];
+  const commands22 = ["diff"];
   if (logFormat === "") {
     logFormat = "--stat";
-    commands18.push("--stat=4096");
+    commands22.push("--stat=4096");
   }
-  commands18.push(...customArgs);
-  return validateLogFormatConfig(commands18) || {
-    commands: commands18,
+  commands22.push(...customArgs);
+  return validateLogFormatConfig(commands22) || {
+    commands: commands22,
     format: "utf-8",
     parser: getDiffParser(logFormat)
   };
@@ -19309,18 +19309,18 @@ function pushTagsTask(ref = {}, customArgs) {
   return pushTask(ref, customArgs);
 }
 function pushTask(ref = {}, customArgs) {
-  const commands18 = ["push", ...customArgs];
+  const commands22 = ["push", ...customArgs];
   if (ref.branch) {
-    commands18.splice(1, 0, ref.branch);
+    commands22.splice(1, 0, ref.branch);
   }
   if (ref.remote) {
-    commands18.splice(1, 0, ref.remote);
+    commands22.splice(1, 0, ref.remote);
   }
-  remove(commands18, "-v");
-  append(commands18, "--verbose");
-  append(commands18, "--porcelain");
+  remove(commands22, "-v");
+  append(commands22, "--verbose");
+  append(commands22, "--porcelain");
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser: parsePushResult
   };
@@ -19335,19 +19335,19 @@ var init_push = __esm({
 function show_default() {
   return {
     showBuffer() {
-      const commands18 = ["show", ...getTrailingOptions(arguments, 1)];
-      if (!commands18.includes("--binary")) {
-        commands18.splice(1, 0, "--binary");
+      const commands22 = ["show", ...getTrailingOptions(arguments, 1)];
+      if (!commands22.includes("--binary")) {
+        commands22.splice(1, 0, "--binary");
       }
       return this._runTask(
-        straightThroughBufferTask(commands18),
+        straightThroughBufferTask(commands22),
         trailingFunctionArgument(arguments)
       );
     },
     show() {
-      const commands18 = ["show", ...getTrailingOptions(arguments, 1)];
+      const commands22 = ["show", ...getTrailingOptions(arguments, 1)];
       return this._runTask(
-        straightThroughStringTask(commands18),
+        straightThroughStringTask(commands22),
         trailingFunctionArgument(arguments)
       );
     }
@@ -19367,12 +19367,12 @@ var init_FileStatusSummary = __esm({
     "use strict";
     fromPathRegex = /^(.+)\0(.+)$/;
     FileStatusSummary = class {
-      constructor(path22, index, working_dir) {
-        this.path = path22;
+      constructor(path25, index, working_dir) {
+        this.path = path25;
         this.index = index;
         this.working_dir = working_dir;
         if (index === "R" || working_dir === "R") {
-          const detail = fromPathRegex.exec(path22) || [null, path22, path22];
+          const detail = fromPathRegex.exec(path25) || [null, path25, path25];
           this.from = detail[2] || "";
           this.path = detail[1] || "";
         }
@@ -19403,14 +19403,14 @@ function splitLine(result, lineStr) {
     default:
       return;
   }
-  function data(index, workingDir, path22) {
+  function data(index, workingDir, path25) {
     const raw = `${index}${workingDir}`;
     const handler = parsers6.get(raw);
     if (handler) {
-      handler(result, path22);
+      handler(result, path25);
     }
     if (raw !== "##" && raw !== "!!") {
-      result.files.push(new FileStatusSummary(path22, index, workingDir));
+      result.files.push(new FileStatusSummary(path25, index, workingDir));
     }
   }
 }
@@ -19557,7 +19557,7 @@ var init_StatusSummary = __esm({
   }
 });
 function statusTask(customArgs) {
-  const commands18 = [
+  const commands22 = [
     "status",
     "--porcelain",
     "-b",
@@ -19567,7 +19567,7 @@ function statusTask(customArgs) {
   ];
   return {
     format: "utf-8",
-    commands: commands18,
+    commands: commands22,
     parser(text) {
       return parseStatusSummary(text);
     }
@@ -19682,10 +19682,10 @@ var init_clone = __esm({
     init_task();
     init_utils();
     cloneTask = (repo, directory, customArgs) => {
-      const commands18 = ["clone", ...customArgs];
-      filterString(repo) && commands18.push(c(repo));
-      filterString(directory) && commands18.push(c(directory));
-      return straightThroughStringTask(commands18);
+      const commands22 = ["clone", ...customArgs];
+      filterString(repo) && commands22.push(c(repo));
+      filterString(directory) && commands22.push(c(directory));
+      return straightThroughStringTask(commands22);
     };
     cloneMirrorTask = (repo, directory, customArgs) => {
       append(customArgs, "--mirror");
@@ -19761,9 +19761,9 @@ var init_simple_git_api = __esm({
           next
         );
       }
-      hashObject(path22, write) {
+      hashObject(path25, write) {
         return this._runTask(
-          hashObjectTask(path22, write === true),
+          hashObjectTask(path25, write === true),
           trailingFunctionArgument(arguments)
         );
       }
@@ -20039,23 +20039,23 @@ __export2(branch_exports, {
   deleteBranchTask: () => deleteBranchTask,
   deleteBranchesTask: () => deleteBranchesTask
 });
-function containsDeleteBranchCommand(commands18) {
+function containsDeleteBranchCommand(commands22) {
   const deleteCommands = ["-d", "-D", "--delete"];
-  return commands18.some((command) => deleteCommands.includes(command));
+  return commands22.some((command) => deleteCommands.includes(command));
 }
 function branchTask(customArgs) {
   const isDelete = containsDeleteBranchCommand(customArgs);
   const isCurrentOnly = customArgs.includes("--show-current");
-  const commands18 = ["branch", ...customArgs];
-  if (commands18.length === 1) {
-    commands18.push("-a");
+  const commands22 = ["branch", ...customArgs];
+  if (commands22.length === 1) {
+    commands22.push("-a");
   }
-  if (!commands18.includes("-v")) {
-    commands18.splice(1, 0, "-v");
+  if (!commands22.includes("-v")) {
+    commands22.splice(1, 0, "-v");
   }
   return {
     format: "utf-8",
-    commands: commands18,
+    commands: commands22,
     parser(stdOut, stdErr) {
       if (isDelete) {
         return parseBranchDeletions(stdOut, stdErr).all[0];
@@ -20117,8 +20117,8 @@ var init_branch = __esm({
   }
 });
 function toPath(input) {
-  const path22 = input.trim().replace(/^["']|["']$/g, "");
-  return path22 && (0, import_node_path.normalize)(path22);
+  const path25 = input.trim().replace(/^["']|["']$/g, "");
+  return path25 && (0, import_node_path.normalize)(path25);
 }
 var parseCheckIgnore;
 var init_CheckIgnore = __esm({
@@ -20205,16 +20205,16 @@ function disallowedCommand(command) {
   return /^--upload-pack(=|$)/.test(command);
 }
 function fetchTask(remote, branch, customArgs) {
-  const commands18 = ["fetch", ...customArgs];
+  const commands22 = ["fetch", ...customArgs];
   if (remote && branch) {
-    commands18.push(remote, branch);
+    commands22.push(remote, branch);
   }
-  const banned = commands18.find(disallowedCommand);
+  const banned = commands22.find(disallowedCommand);
   if (banned) {
     return configurationErrorTask(`git.fetch: potential exploit argument blocked.`);
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser: parseFetchResult
   };
@@ -20264,12 +20264,12 @@ __export2(pull_exports, {
   pullTask: () => pullTask
 });
 function pullTask(remote, branch, customArgs) {
-  const commands18 = ["pull", ...customArgs];
+  const commands22 = ["pull", ...customArgs];
   if (remote && branch) {
-    commands18.splice(1, 0, remote, branch);
+    commands22.splice(1, 0, remote, branch);
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser(stdOut, stdErr) {
       return parsePullResult(stdOut, stdErr);
@@ -20335,29 +20335,29 @@ function addRemoteTask(remoteName, remoteRepo, customArgs) {
   return straightThroughStringTask(["remote", "add", ...customArgs, remoteName, remoteRepo]);
 }
 function getRemotesTask(verbose) {
-  const commands18 = ["remote"];
+  const commands22 = ["remote"];
   if (verbose) {
-    commands18.push("-v");
+    commands22.push("-v");
   }
   return {
-    commands: commands18,
+    commands: commands22,
     format: "utf-8",
     parser: verbose ? parseGetRemotesVerbose : parseGetRemotes
   };
 }
 function listRemotesTask(customArgs) {
-  const commands18 = [...customArgs];
-  if (commands18[0] !== "ls-remote") {
-    commands18.unshift("ls-remote");
+  const commands22 = [...customArgs];
+  if (commands22[0] !== "ls-remote") {
+    commands22.unshift("ls-remote");
   }
-  return straightThroughStringTask(commands18);
+  return straightThroughStringTask(commands22);
 }
 function remoteTask(customArgs) {
-  const commands18 = [...customArgs];
-  if (commands18[0] !== "remote") {
-    commands18.unshift("remote");
+  const commands22 = [...customArgs];
+  if (commands22[0] !== "remote") {
+    commands22.unshift("remote");
   }
-  return straightThroughStringTask(commands18);
+  return straightThroughStringTask(commands22);
 }
 function removeRemoteTask(remoteName) {
   return straightThroughStringTask(["remote", "remove", remoteName]);
@@ -20375,14 +20375,14 @@ __export2(stash_list_exports, {
 });
 function stashListTask(opt = {}, customArgs) {
   const options = parseLogOptions(opt);
-  const commands18 = ["stash", "list", ...options.commands, ...customArgs];
+  const commands22 = ["stash", "list", ...options.commands, ...customArgs];
   const parser4 = createListLogSummaryParser(
     options.splitter,
     options.fields,
-    logFormatFromCommand(commands18)
+    logFormatFromCommand(commands22)
   );
-  return validateLogFormatConfig(commands18) || {
-    commands: commands18,
+  return validateLogFormatConfig(commands22) || {
+    commands: commands22,
     format: "utf-8",
     parser: parser4
   };
@@ -20403,18 +20403,18 @@ __export2(sub_module_exports, {
   subModuleTask: () => subModuleTask,
   updateSubModuleTask: () => updateSubModuleTask
 });
-function addSubModuleTask(repo, path22) {
-  return subModuleTask(["add", repo, path22]);
+function addSubModuleTask(repo, path25) {
+  return subModuleTask(["add", repo, path25]);
 }
 function initSubModuleTask(customArgs) {
   return subModuleTask(["init", ...customArgs]);
 }
 function subModuleTask(customArgs) {
-  const commands18 = [...customArgs];
-  if (commands18[0] !== "submodule") {
-    commands18.unshift("submodule");
+  const commands22 = [...customArgs];
+  if (commands22[0] !== "submodule") {
+    commands22.unshift("submodule");
   }
-  return straightThroughStringTask(commands18);
+  return straightThroughStringTask(commands22);
 }
 function updateSubModuleTask(customArgs) {
   return subModuleTask(["update", ...customArgs]);
@@ -20699,9 +20699,9 @@ var require_git = __commonJS2({
     Git2.prototype.branchLocal = function(then) {
       return this._runTask(branchLocalTask2(), trailingFunctionArgument2(arguments));
     };
-    Git2.prototype.raw = function(commands18) {
-      const createRestCommands = !Array.isArray(commands18);
-      const command = [].slice.call(createRestCommands ? arguments : commands18, 0);
+    Git2.prototype.raw = function(commands22) {
+      const createRestCommands = !Array.isArray(commands22);
+      const command = [].slice.call(createRestCommands ? arguments : commands22, 0);
       for (let i2 = 0; i2 < command.length && createRestCommands; i2++) {
         if (!filterPrimitives2(command[i2])) {
           command.splice(i2, command.length - i2);
@@ -20718,8 +20718,8 @@ var require_git = __commonJS2({
       }
       return this._runTask(straightThroughStringTask2(command, this._trimmed), next);
     };
-    Git2.prototype.submoduleAdd = function(repo, path22, then) {
-      return this._runTask(addSubModuleTask2(repo, path22), trailingFunctionArgument2(arguments));
+    Git2.prototype.submoduleAdd = function(repo, path25, then) {
+      return this._runTask(addSubModuleTask2(repo, path25), trailingFunctionArgument2(arguments));
     };
     Git2.prototype.submoduleUpdate = function(args, then) {
       return this._runTask(
@@ -20836,9 +20836,9 @@ var require_git = __commonJS2({
       return this._runTask(task, trailingFunctionArgument2(arguments));
     };
     Git2.prototype.revparse = function() {
-      const commands18 = ["rev-parse", ...getTrailingOptions2(arguments, true)];
+      const commands22 = ["rev-parse", ...getTrailingOptions2(arguments, true)];
       return this._runTask(
-        straightThroughStringTask2(commands18, true),
+        straightThroughStringTask2(commands22, true),
         trailingFunctionArgument2(arguments)
       );
     };
@@ -22933,10 +22933,10 @@ function _checkLocalOverridesAllowlist(localOverrides, routerConfig, errors) {
 function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function getByPath(obj, path22) {
+function getByPath(obj, path25) {
   if (!obj)
     return void 0;
-  const parts = path22.split(".");
+  const parts = path25.split(".");
   let cur = obj;
   for (const p2 of parts) {
     if (cur === null || cur === void 0 || typeof cur !== "object")
@@ -23377,9 +23377,9 @@ function collectOverrideRows(localOverrides, state) {
   if (!localOverrides)
     return [];
   const rows = [];
-  walk(localOverrides, [], (path22, value) => {
-    const dotted = path22.join(".");
-    const sharedSource = pickSharedSource(path22[0]);
+  walk(localOverrides, [], (path25, value) => {
+    const dotted = path25.join(".");
+    const sharedSource = pickSharedSource(path25[0]);
     const sharedVal = sharedSource === "routerConfig" ? getByPath(state.routerConfig, dotted) : sharedSource === "budget" ? getByPath(state.budget, dotted) : void 0;
     rows.push({
       path: dotted,
@@ -23411,11 +23411,11 @@ function formatValue(v) {
 }
 function walk(obj, prefix, emit) {
   for (const [k2, v] of Object.entries(obj)) {
-    const path22 = [...prefix, k2];
+    const path25 = [...prefix, k2];
     if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-      walk(v, path22, emit);
+      walk(v, path25, emit);
     } else {
-      emit(path22, v);
+      emit(path25, v);
     }
   }
 }
@@ -23550,40 +23550,40 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
   }
   return result;
 }
-function applyOverridableField(routerConfigDoc, localOverridesDoc, path22, value, source, result) {
+function applyOverridableField(routerConfigDoc, localOverridesDoc, path25, value, source, result) {
   if (source === "local") {
-    if (setIfChanged(localOverridesDoc, path22, value)) {
+    if (setIfChanged(localOverridesDoc, path25, value)) {
       result.localOverridesChanged = true;
     }
-    deleteIfPresent(routerConfigDoc, path22, result, "routerConfigChanged");
+    deleteIfPresent(routerConfigDoc, path25, result, "routerConfigChanged");
   } else {
-    if (setIfChanged(routerConfigDoc, path22, value)) {
+    if (setIfChanged(routerConfigDoc, path25, value)) {
       result.routerConfigChanged = true;
     }
-    deleteIfPresent(localOverridesDoc, path22, result, "localOverridesChanged");
+    deleteIfPresent(localOverridesDoc, path25, result, "localOverridesChanged");
   }
 }
-function setIfChanged(doc, path22, value) {
-  const current = doc.getIn(path22);
+function setIfChanged(doc, path25, value) {
+  const current = doc.getIn(path25);
   if (current === value)
     return false;
-  doc.setIn(path22, value);
+  doc.setIn(path25, value);
   return true;
 }
-function deleteIfPresent(doc, path22, result, flag) {
-  if (doc.hasIn(path22)) {
-    doc.deleteIn(path22);
+function deleteIfPresent(doc, path25, result, flag) {
+  if (doc.hasIn(path25)) {
+    doc.deleteIn(path25);
     result[flag] = true;
   }
 }
-function pruneEmptyContainer(doc, path22, result, flag) {
-  if (!doc.hasIn(path22))
+function pruneEmptyContainer(doc, path25, result, flag) {
+  if (!doc.hasIn(path25))
     return;
-  const node = doc.getIn(path22);
+  const node = doc.getIn(path25);
   if (node && typeof node === "object" && "items" in node) {
     const items = node.items;
     if (Array.isArray(items) && items.length === 0) {
-      doc.deleteIn(path22);
+      doc.deleteIn(path25);
       result[flag] = true;
     }
   }
@@ -24901,28 +24901,499 @@ function registerScanAnnotationsForActiveSet(context) {
   );
 }
 
+// src/providers/orchestratorIndicatorProvider.ts
+var vscode19 = __toESM(require("vscode"));
+var fs19 = __toESM(require("fs"));
+var os2 = __toESM(require("os"));
+var path21 = __toESM(require("path"));
+var MARKER_DIR = path21.join(os2.homedir(), ".dabbler");
+var MARKER_PATH = path21.join(MARKER_DIR, "current-orchestrator.json");
+var DEFAULT_STALENESS_MAX_SEC = 28800;
+var POLL_BACKSTOP_MS = 6e4;
+var RENDER_DEBOUNCE_MS = 50;
+var OrchestratorIndicatorProvider = class {
+  constructor(extensionUri) {
+    this.extensionUri = extensionUri;
+  }
+  static {
+    this.viewType = "dabblerOrchestratorIndicator";
+  }
+  resolveWebviewView(webviewView, _context, _token) {
+    this.view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode19.Uri.joinPath(this.extensionUri, "media")]
+    };
+    webviewView.webview.onDidReceiveMessage((msg) => {
+      if (!msg || typeof msg !== "object")
+        return;
+      if (msg.command === "installHookClaudeCode") {
+        vscode19.commands.executeCommand("dabbler.installOrchestratorHook.claudeCode");
+      } else if (msg.command === "setOrchestrator") {
+        vscode19.commands.executeCommand("dabbler.setOrchestrator");
+      } else if (msg.command === "openWriterLog") {
+        vscode19.commands.executeCommand("dabbler.openOrchestratorWriterLog");
+      }
+    });
+    webviewView.onDidDispose(() => {
+      this.tearDownWatchers();
+      this.view = void 0;
+    });
+    this.setUpWatchers();
+    this.scheduleRender();
+  }
+  setUpWatchers() {
+    this.tearDownWatchers();
+    const pattern = new vscode19.RelativePattern(
+      vscode19.Uri.file(MARKER_DIR),
+      "current-orchestrator.json"
+    );
+    const watcher = vscode19.workspace.createFileSystemWatcher(pattern);
+    const trigger = () => this.scheduleRender();
+    watcher.onDidCreate(trigger);
+    watcher.onDidChange(trigger);
+    watcher.onDidDelete(trigger);
+    this.pollHandle = setInterval(trigger, POLL_BACKSTOP_MS);
+    this.watcherDisposable = watcher;
+  }
+  tearDownWatchers() {
+    this.watcherDisposable?.dispose();
+    this.watcherDisposable = void 0;
+    if (this.pollHandle) {
+      clearInterval(this.pollHandle);
+      this.pollHandle = void 0;
+    }
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+      this.renderTimer = void 0;
+    }
+  }
+  scheduleRender() {
+    if (this.renderTimer)
+      clearTimeout(this.renderTimer);
+    this.renderTimer = setTimeout(() => this.render(), RENDER_DEBOUNCE_MS);
+  }
+  render() {
+    if (!this.view)
+      return;
+    const state = this.computeState();
+    this.view.webview.html = this.renderHtml(state);
+  }
+  computeState() {
+    let raw;
+    try {
+      raw = fs19.readFileSync(MARKER_PATH, "utf8");
+    } catch {
+      return { kind: "empty" };
+    }
+    let marker;
+    try {
+      marker = JSON.parse(raw);
+    } catch {
+      return { kind: "empty" };
+    }
+    if (!marker || typeof marker !== "object" || !marker.signalKind) {
+      return { kind: "empty" };
+    }
+    const ageSec = (Date.now() - Date.parse(marker.updatedAt)) / 1e3;
+    const stalenessMaxSec = typeof marker.stalenessMaxSec === "number" ? marker.stalenessMaxSec : DEFAULT_STALENESS_MAX_SEC;
+    const stale = ageSec > stalenessMaxSec;
+    return { kind: "loaded", marker, stale, ageSec };
+  }
+  // ------- rendering helpers -------
+  renderHtml(state) {
+    const cssUri = this.view.webview.asWebviewUri(
+      vscode19.Uri.joinPath(this.extensionUri, "media", "orchestrator-indicator", "indicator.css")
+    );
+    const nonce = String(Math.floor(Math.random() * 1e16));
+    const csp = `default-src 'none'; style-src ${this.view.webview.cspSource}; script-src 'nonce-${nonce}';`;
+    const body = state.kind === "empty" ? this.renderEmpty() : this.renderLoaded(state.marker, state.stale, state.ageSec);
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="${csp}">
+  <link rel="stylesheet" href="${cssUri}">
+  <title>Orchestrator</title>
+</head>
+<body>
+  <div class="container">${body}</div>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    document.querySelectorAll('[data-command]').forEach((el) => {
+      el.addEventListener('click', () => {
+        vscode.postMessage({ command: el.getAttribute('data-command') });
+      });
+    });
+  </script>
+</body>
+</html>`;
+  }
+  renderEmpty() {
+    return `<div class="empty-state">
+  <div class="grey-gauges">
+    ${this.renderGaugeSvg("unknown", "current", 0)}
+    ${this.renderGaugeSvg("unknown", "current", 0)}
+  </div>
+  <span>No signal \u2014 </span><span class="install-cta" data-command="installHookClaudeCode">install hook</span>
+</div>`;
+  }
+  renderLoaded(marker, stale, ageSec) {
+    const modelClasses = [
+      "gauge-cell",
+      `tier-${marker.tier || "unknown"}`,
+      `signal-${marker.signalKind}`
+    ].join(" ");
+    const effortClasses = [
+      "gauge-cell",
+      `effort-${marker.effort.normalized || "unknown"}`,
+      `signal-${marker.effort.signalKind || "current"}`
+    ].join(" ");
+    const modelNeedle = this.tierToNeedleAngle(marker.tier);
+    const effortNeedle = this.effortToNeedleAngle(marker.effort.normalized);
+    const modelSuffix = marker.signalKind === "configured-default" ? ` <span class="default-pill">DEFAULT</span>` : "";
+    const effortSuffix = marker.effort.signalKind === "last-observed" && marker.effort.observedAt ? `<div class="gauge-suffix">(last ${marker.effort.native || "/think"} ${this.fmtAge(
+      (Date.now() - Date.parse(marker.effort.observedAt)) / 1e3
+    )} ago)</div>` : marker.effort.signalKind === "configured-default" ? `<div class="gauge-suffix">(default)</div>` : marker.effort.signalKind === "manual" ? `<div class="gauge-suffix">(manual)</div>` : "";
+    const modelOverlay = marker.signalKind === "last-observed" ? `<span class="clock-overlay" title="last observed signal">\u23F1</span>` : marker.signalKind === "manual" ? `<span class="operator-overlay" title="set manually">\u270B</span>` : "";
+    const effortOverlay = marker.effort.signalKind === "last-observed" ? `<span class="clock-overlay" title="last observed signal">\u23F1</span>` : marker.effort.signalKind === "manual" ? `<span class="operator-overlay" title="set manually">\u270B</span>` : "";
+    const modelTooltip = this.modelTooltip(marker);
+    const effortTooltip = this.effortTooltip(marker);
+    const thinkingHidden = marker.effort.thinking === void 0 ? "hidden" : "";
+    const thinkingOn = marker.effort.thinking ? "on" : "";
+    const staleClass = stale ? "stale" : "";
+    const staleAnnotation = stale ? `<div class="last-updated">last updated ${this.fmtAge(ageSec)} ago \u2014 stale</div>` : `<div class="last-updated">updated ${this.fmtAge(ageSec)} ago</div>`;
+    return `<div class="gauges ${staleClass}">
+  <div class="${modelClasses}" title="${this.escAttr(modelTooltip)}">
+    ${modelOverlay}
+    ${this.renderGaugeSvg(marker.tier, marker.signalKind, modelNeedle)}
+    <div class="gauge-sublabel">${this.escHtml(marker.providerDisplayName)} ${this.escHtml(marker.modelDisplayName)}${modelSuffix}</div>
+  </div>
+  <div class="${effortClasses}" title="${this.escAttr(effortTooltip)}">
+    ${effortOverlay}
+    ${this.renderGaugeSvg(this.effortColorBucket(marker.effort.normalized), marker.effort.signalKind, effortNeedle)}
+    <span class="thinking-led ${thinkingOn} ${thinkingHidden}" title="thinking ${marker.effort.thinking ? "on" : "off"}"></span>
+    <div class="gauge-sublabel">${this.escHtml(this.effortDisplayName(marker.effort.normalized))}</div>
+    ${effortSuffix}
+  </div>
+</div>
+${staleAnnotation}`;
+  }
+  renderGaugeSvg(tier, signalKind, needleAngleDeg) {
+    const cx = 35;
+    const cy = 35;
+    const radius = 28;
+    const arcBg = `M${cx - radius},${cy} A${radius},${radius} 0 0 1 ${cx + radius},${cy}`;
+    const fillAngleDeg = Math.max(-180, Math.min(0, needleAngleDeg));
+    const fillAngleRad = fillAngleDeg * Math.PI / 180;
+    const fillEndX = cx + radius * Math.cos(fillAngleRad);
+    const fillEndY = cy + radius * Math.sin(fillAngleRad);
+    const arcFill = `M${cx - radius},${cy} A${radius},${radius} 0 0 1 ${fillEndX.toFixed(2)},${fillEndY.toFixed(2)}`;
+    const needleAngleRad = needleAngleDeg * Math.PI / 180;
+    const needleLength = radius - 4;
+    const needleTipX = cx + needleLength * Math.cos(needleAngleRad);
+    const needleTipY = cy + needleLength * Math.sin(needleAngleRad);
+    return `<svg class="gauge-svg" viewBox="0 0 70 38" data-tier="${this.escAttr(tier)}" data-signal="${this.escAttr(signalKind)}">
+  <path class="gauge-arc-bg" d="${arcBg}" />
+  <path class="gauge-arc-fill" d="${arcFill}" />
+  <path class="gauge-rim" d="${arcBg}" />
+  <line class="gauge-needle" x1="${cx}" y1="${cy}" x2="${needleTipX.toFixed(2)}" y2="${needleTipY.toFixed(2)}" />
+  <circle class="gauge-needle-pivot" cx="${cx}" cy="${cy}" r="1.6" />
+</svg>`;
+  }
+  tierToNeedleAngle(tier) {
+    switch (tier) {
+      case "low":
+        return -150;
+      case "mid":
+        return -90;
+      case "flagship":
+        return -30;
+      case "unknown":
+        return -90;
+      default:
+        return -90;
+    }
+  }
+  effortToNeedleAngle(effort) {
+    switch (effort) {
+      case "low":
+        return -150;
+      case "medium":
+        return -90;
+      case "high":
+        return -60;
+      case "extra-high":
+        return -35;
+      case "max":
+        return -15;
+      default:
+        return -90;
+    }
+  }
+  effortColorBucket(effort) {
+    switch (effort) {
+      case "low":
+        return "low";
+      case "medium":
+        return "mid";
+      case "high":
+        return "mid";
+      case "extra-high":
+        return "flagship";
+      case "max":
+        return "flagship";
+      default:
+        return "unknown";
+    }
+  }
+  effortDisplayName(effort) {
+    switch (effort) {
+      case "low":
+        return "Low";
+      case "medium":
+        return "Medium";
+      case "high":
+        return "High";
+      case "extra-high":
+        return "Extra-High";
+      case "max":
+        return "Max";
+      default:
+        return "Unknown";
+    }
+  }
+  modelTooltip(marker) {
+    const conf = marker.confidence;
+    switch (marker.signalKind) {
+      case "current":
+        return conf === "low" ? "live signal (low confidence \u2014 hook payload missing model)" : `live signal (${conf} confidence)`;
+      case "configured-default":
+        return "configured default (medium confidence \u2014 does not track runtime changes)";
+      case "last-observed":
+        return "last observed via /think (high confidence in detection, but may not reflect current message)";
+      case "manual":
+        return "set manually (high confidence)";
+      default:
+        return "";
+    }
+  }
+  effortTooltip(marker) {
+    const eSig = marker.effort.signalKind;
+    if (eSig === "last-observed" && marker.effort.observedAt) {
+      const age = this.fmtAge((Date.now() - Date.parse(marker.effort.observedAt)) / 1e3);
+      return `last observed ${age} ago via ${marker.effort.native || "/think"} (high confidence in detection, but may not reflect current message)`;
+    }
+    if (eSig === "configured-default") {
+      return "configured default effort (medium confidence \u2014 does not track runtime changes)";
+    }
+    if (eSig === "manual") {
+      return "set manually (high confidence)";
+    }
+    return `effort: ${this.effortDisplayName(marker.effort.normalized)} (${marker.effort.confidence} confidence)`;
+  }
+  fmtAge(seconds) {
+    if (!isFinite(seconds) || seconds < 0)
+      return "?";
+    if (seconds < 60)
+      return `${Math.round(seconds)}s`;
+    if (seconds < 3600)
+      return `${Math.round(seconds / 60)}m`;
+    if (seconds < 86400)
+      return `${Math.round(seconds / 3600)}h`;
+    return `${Math.round(seconds / 86400)}d`;
+  }
+  escHtml(s) {
+    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  escAttr(s) {
+    return this.escHtml(s).replace(/"/g, "&quot;");
+  }
+};
+
+// src/commands/installOrchestratorHookClaudeCode.ts
+var vscode20 = __toESM(require("vscode"));
+var fs20 = __toESM(require("fs"));
+var os3 = __toESM(require("os"));
+var path22 = __toESM(require("path"));
+var HELPER_REL = path22.join("scripts", "write-orchestrator-marker.js");
+function helperPathAbs(extensionUri) {
+  return vscode20.Uri.joinPath(extensionUri, HELPER_REL).fsPath;
+}
+function buildHookCommand(helperAbsPath, mode) {
+  return `node "${helperAbsPath}" --mode ${mode}`;
+}
+function ensureMatcherEntry(entries, matcher, command) {
+  const list = Array.isArray(entries) ? entries.slice() : [];
+  for (let i2 = 0; i2 < list.length; i2++) {
+    const entry = list[i2];
+    const matcherMatches = (entry.matcher ?? void 0) === (matcher ?? void 0);
+    if (!matcherMatches)
+      continue;
+    if (!Array.isArray(entry.hooks))
+      continue;
+    let updated = false;
+    const newHooks = entry.hooks.map((h2) => {
+      if (h2.type === "command" && typeof h2.command === "string" && h2.command.includes("write-orchestrator-marker.js")) {
+        updated = true;
+        return { type: "command", command };
+      }
+      return h2;
+    });
+    if (updated) {
+      list[i2] = { ...entry, hooks: newHooks };
+      return list;
+    }
+  }
+  const newEntry = matcher !== void 0 ? { matcher, hooks: [{ type: "command", command }] } : { hooks: [{ type: "command", command }] };
+  list.push(newEntry);
+  return list;
+}
+function loadClaudeSettings() {
+  const settingsPath = path22.join(os3.homedir(), ".claude", "settings.json");
+  if (!fs20.existsSync(settingsPath)) {
+    return { settings: {}, path: settingsPath, exists: false };
+  }
+  const raw = fs20.readFileSync(settingsPath, "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `~/.claude/settings.json contains invalid JSON (${err.message}). Fix or back up the file, then re-run the install command.`
+    );
+  }
+  return { settings: parsed || {}, path: settingsPath, exists: true };
+}
+function writeClaudeSettings(settingsPath, settings) {
+  fs20.mkdirSync(path22.dirname(settingsPath), { recursive: true });
+  const text = JSON.stringify(settings, null, 2) + "\n";
+  const tmp = `${settingsPath}.tmp.${process.pid}.${Math.floor(Math.random() * 1e9)}`;
+  fs20.writeFileSync(tmp, text, { encoding: "utf8" });
+  fs20.renameSync(tmp, settingsPath);
+}
+async function installClaudeCodeOrchestratorHook(extensionUri) {
+  const helperAbs = helperPathAbs(extensionUri);
+  if (!fs20.existsSync(helperAbs)) {
+    vscode20.window.showErrorMessage(
+      `Cannot install hook: helper script not found at ${helperAbs}. Re-install the Dabbler AI Orchestration extension.`
+    );
+    return;
+  }
+  let loaded;
+  try {
+    loaded = loadClaudeSettings();
+  } catch (err) {
+    vscode20.window.showErrorMessage(err.message);
+    return;
+  }
+  const { settings, path: settingsPath, exists: exists2 } = loaded;
+  const sessionStartCmd = buildHookCommand(helperAbs, "session-start");
+  const userPromptSubmitCmd = buildHookCommand(helperAbs, "user-prompt-submit");
+  settings.hooks = settings.hooks || {};
+  for (const matcher of ["startup", "resume", "clear", "compact"]) {
+    settings.hooks.SessionStart = ensureMatcherEntry(
+      settings.hooks.SessionStart,
+      matcher,
+      sessionStartCmd
+    );
+  }
+  settings.hooks.UserPromptSubmit = ensureMatcherEntry(
+    settings.hooks.UserPromptSubmit,
+    void 0,
+    userPromptSubmitCmd
+  );
+  try {
+    writeClaudeSettings(settingsPath, settings);
+  } catch (err) {
+    vscode20.window.showErrorMessage(
+      `Failed to write ${settingsPath}: ${err.message}`
+    );
+    return;
+  }
+  const verbWasWord = exists2 ? "Updated" : "Created";
+  vscode20.window.showInformationMessage(
+    `${verbWasWord} ~/.claude/settings.json with Dabbler orchestrator hooks (SessionStart + UserPromptSubmit). Restart Claude Code or run /clear in an active session to populate the indicator.`,
+    "Open settings.json"
+  ).then((picked) => {
+    if (picked === "Open settings.json") {
+      vscode20.workspace.openTextDocument(settingsPath).then(
+        (doc) => vscode20.window.showTextDocument(doc),
+        () => void 0
+      );
+    }
+  });
+}
+function registerInstallOrchestratorHookClaudeCodeCommand(context) {
+  context.subscriptions.push(
+    vscode20.commands.registerCommand(
+      "dabbler.installOrchestratorHook.claudeCode",
+      () => installClaudeCodeOrchestratorHook(context.extensionUri)
+    )
+  );
+}
+
+// src/commands/setOrchestratorManualStub.ts
+var vscode21 = __toESM(require("vscode"));
+function registerSetOrchestratorManualStub(context) {
+  context.subscriptions.push(
+    vscode21.commands.registerCommand("dabbler.setOrchestrator", async () => {
+      const picked = await vscode21.window.showInformationMessage(
+        "Manual orchestrator override lands in the next release (Session 3 of Set 029). For now, install the Claude Code SessionStart hook to get live signal, or set the marker file by hand at ~/.dabbler/current-orchestrator.json.",
+        "Install Claude Code hook"
+      );
+      if (picked === "Install Claude Code hook") {
+        vscode21.commands.executeCommand(
+          "dabbler.installOrchestratorHook.claudeCode"
+        );
+      }
+    })
+  );
+}
+
+// src/commands/openOrchestratorWriterLog.ts
+var vscode22 = __toESM(require("vscode"));
+var fs21 = __toESM(require("fs"));
+var os4 = __toESM(require("os"));
+var path23 = __toESM(require("path"));
+function registerOpenOrchestratorWriterLog(context) {
+  context.subscriptions.push(
+    vscode22.commands.registerCommand("dabbler.openOrchestratorWriterLog", async () => {
+      const logPath = path23.join(os4.homedir(), ".dabbler", "orchestrator-writer.log");
+      if (!fs21.existsSync(logPath)) {
+        vscode22.window.showInformationMessage(
+          `No writer log yet \u2014 ${logPath} hasn't been touched. Logged entries appear when a marker write is skipped (e.g., a configured-default Codex signal blocked by a fresh Claude SessionStart).`
+        );
+        return;
+      }
+      const doc = await vscode22.workspace.openTextDocument(logPath);
+      await vscode22.window.showTextDocument(doc);
+    })
+  );
+}
+
 // src/extension.ts
-var SESSION_SETS_REL2 = path21.join("docs", "session-sets");
+var SESSION_SETS_REL2 = path24.join("docs", "session-sets");
 function evaluateSupportContextKeys(allSets) {
-  const cfg = vscode19.workspace.getConfiguration("dabblerSessionSets");
+  const cfg = vscode23.workspace.getConfiguration("dabblerSessionSets");
   const uatPref = cfg.get("uatSupport.enabled", "auto");
   const e2ePref = cfg.get("e2eSupport.enabled", "auto");
   const anyUat = allSets.some((s) => s.config?.requiresUAT);
   const anyE2e = allSets.some((s) => s.config?.requiresE2E);
   const uatActive = uatPref === "always" || uatPref === "auto" && anyUat;
   const e2eActive = e2ePref === "always" || e2ePref === "auto" && anyE2e;
-  vscode19.commands.executeCommand("setContext", "dabblerSessionSets.uatSupportActive", uatActive);
-  vscode19.commands.executeCommand("setContext", "dabblerSessionSets.e2eSupportActive", e2eActive);
+  vscode23.commands.executeCommand("setContext", "dabblerSessionSets.uatSupportActive", uatActive);
+  vscode23.commands.executeCommand("setContext", "dabblerSessionSets.e2eSupportActive", e2eActive);
 }
 function activate(context) {
-  if (!vscode19.workspace.workspaceFolders?.length)
+  if (!vscode23.workspace.workspaceFolders?.length)
     return;
   const scanState = new ScanState();
   context.subscriptions.push({ dispose: () => scanState.dispose() });
   scanState.setLoading();
   const provider = new SessionSetsProvider(context.extensionUri, scanState);
   context.subscriptions.push(
-    vscode19.window.registerTreeDataProvider("dabblerSessionSets", provider)
+    vscode23.window.registerTreeDataProvider("dabblerSessionSets", provider)
   );
   const evaluateContextKeys = () => {
     evaluateSupportContextKeys(provider._cache ?? readAllSessionSets());
@@ -24941,7 +25412,7 @@ function activate(context) {
     );
   }
   context.subscriptions.push(
-    vscode19.workspace.onDidChangeConfiguration((e) => {
+    vscode23.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("dabblerSessionSets.uatSupport.enabled") || e.affectsConfiguration("dabblerSessionSets.e2eSupport.enabled")) {
         evaluateContextKeys();
       }
@@ -24960,12 +25431,12 @@ function activate(context) {
     watcherSubs = [];
     boundRoots = want;
     for (const root of roots) {
-      const sessionSetsAbs = path21.join(root, SESSION_SETS_REL2);
-      const pattern = new vscode19.RelativePattern(
+      const sessionSetsAbs = path24.join(root, SESSION_SETS_REL2);
+      const pattern = new vscode23.RelativePattern(
         sessionSetsAbs,
         "**/{spec.md,session-state.json,session-events.jsonl,activity-log.json,change-log.md,CANCELLED.md,*-uat-checklist.json}"
       );
-      const watcher = vscode19.workspace.createFileSystemWatcher(pattern);
+      const watcher = vscode23.workspace.createFileSystemWatcher(pattern);
       const onEvent = () => provider.refresh();
       watcher.onDidCreate(onEvent);
       watcher.onDidDelete(onEvent);
@@ -24986,11 +25457,11 @@ function activate(context) {
       err
     );
   }
-  context.subscriptions.push(vscode19.workspace.onDidChangeWorkspaceFolders(refreshAll));
+  context.subscriptions.push(vscode23.workspace.onDidChangeWorkspaceFolders(refreshAll));
   const pollHandle = setInterval(refreshAll, 3e4);
   context.subscriptions.push({ dispose: () => clearInterval(pollHandle) });
   context.subscriptions.push(
-    vscode19.commands.registerCommand("dabblerSessionSets.refresh", refreshAll)
+    vscode23.commands.registerCommand("dabblerSessionSets.refresh", refreshAll)
   );
   const safeRegister = (name, fn) => {
     try {
@@ -25036,6 +25507,27 @@ function activate(context) {
     "registerMigrateSetCommand",
     () => registerMigrateSetCommand(context, { refreshView: refreshAll })
   );
+  safeRegister("registerOrchestratorIndicatorView", () => {
+    const indicatorProvider = new OrchestratorIndicatorProvider(context.extensionUri);
+    context.subscriptions.push(
+      vscode23.window.registerWebviewViewProvider(
+        OrchestratorIndicatorProvider.viewType,
+        indicatorProvider
+      )
+    );
+  });
+  safeRegister(
+    "registerInstallOrchestratorHookClaudeCode",
+    () => registerInstallOrchestratorHookClaudeCodeCommand(context)
+  );
+  safeRegister(
+    "registerSetOrchestratorManualStub",
+    () => registerSetOrchestratorManualStub(context)
+  );
+  safeRegister(
+    "registerOpenOrchestratorWriterLog",
+    () => registerOpenOrchestratorWriterLog(context)
+  );
   setImmediate(() => {
     scanState.setReady();
   });
@@ -25044,14 +25536,14 @@ function activate(context) {
     const roots = discoverRoots();
     const hasSessionSets = roots.some((r2) => {
       try {
-        return fs19.existsSync(path21.join(r2, SESSION_SETS_REL2));
+        return fs22.existsSync(path24.join(r2, SESSION_SETS_REL2));
       } catch {
         return false;
       }
     });
     if (!hasSessionSets) {
       context.workspaceState.update("hasSeenOnboarding", true);
-      vscode19.commands.executeCommand("dabbler.getStarted");
+      vscode23.commands.executeCommand("dabbler.getStarted");
     }
   }
 }

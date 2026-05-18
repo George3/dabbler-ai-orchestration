@@ -10,7 +10,7 @@
     {
       "number": 2,
       "title": "Core webview + Claude detection + hook installer",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 3,
@@ -23,18 +23,18 @@
       "status": "not-started"
     }
   ],
-  "currentSession": null,
+  "currentSession": 2,
   "totalSessions": 4,
   "completedSessions": [
     1
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-18T03:33:49.170960-04:00",
+  "startedAt": "2026-05-18T05:19:23.781667-04:00",
   "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": {
-    "engine": "claude",
+    "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "high"

@@ -43,6 +43,42 @@ Total Session 1: $0.25 – $0.80.
 - **Memory `feedback_split_large_verification_bundles`:** proposal
   doc will be ~400-500 LOC; well under the 700 LOC threshold.
 
+### Actuals (filled after the session)
+
+- **Orchestrator used:** Claude Code (Claude Opus 4.7 @ effort=high) — matches recommendation.
+- **Total routed cost: $0.845** ($0.264 Round A + $0.085 Bucket-2
+  consensus + $0.138 Round B + $0.358 Round C). Three verification
+  rounds plus one in-session consensus call; original estimate was
+  one verification call only ($0.10–$0.30). The overshoot reflects
+  two newly-saved process memories that changed the verification
+  shape mid-session: `feedback_prefer_ai_consensus_over_human_prompt`
+  (added the consensus class of call) and the multi-round-drift
+  pattern that surfaced previously-uninspected spec.md regions on
+  each round. All three rounds converged cleanly — no verifier
+  spiral. Cost was $0.845 against the operator's $5.00 NTE for
+  the set; comfortable headroom remains.
+- **Deviations from recommendation:** none on engine/model; cost
+  overshoot is process-related, not orchestrator-quality-related.
+- **Notes for next-session calibration:**
+  - Audit-then-implement sets that route a fresh design review at
+    the close of the audit session should budget for 2–3 verification
+    rounds, not 1, because pre-audit spec drift in un-bundled regions
+    only surfaces after the audit bundle gets verified. Future audit
+    sets: include the FULL spec.md in the verification bundle on the
+    final round to catch drift in regions not touched by the audit.
+  - Round C's higher cost ($0.358 vs. p50 $0.13) was driven by
+    gpt-5-4's 22k output tokens on a tight prompt. For verifier
+    bundles that ask for "find any remaining drift", expect higher
+    output token counts than typical session-verification calls.
+
+**Next-session orchestrator recommendation (Session 2):**
+Claude Code (Claude Opus 4.7 @ effort=high). Unchanged from the
+original recommendation — implementation work is pure Claude tokens
+(no routed calls except the end-of-session verifier), and the multi-
+file coherence demands of webview + helper script + hook installer +
+Playwright smoke remain Opus-class. Operator triggered S2 start at
+2026-05-18 with this orchestrator engaged.
+
 ---
 
 ## Session 2 of 4: Core webview + Claude detection + hook installer

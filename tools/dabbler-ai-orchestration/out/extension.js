@@ -38,7 +38,7 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const sessionSetsProvider_1 = require("./providers/sessionSetsProvider");
+const SessionSetsProvider_1 = require("./providers/SessionSetsProvider");
 const scanState_1 = require("./providers/scanState");
 const migrateSet_1 = require("./commands/migrateSet");
 const fileSystem_1 = require("./utils/fileSystem");
@@ -54,6 +54,10 @@ const CostDashboard_1 = require("./dashboard/CostDashboard");
 const ConfigEditorPanel_1 = require("./configEditor/ConfigEditorPanel");
 const flagDecisionForReview_1 = require("./commands/flagDecisionForReview");
 const scanAnnotationsForActiveSet_1 = require("./commands/scanAnnotationsForActiveSet");
+const orchestratorIndicatorProvider_1 = require("./providers/orchestratorIndicatorProvider");
+const installOrchestratorHookClaudeCode_1 = require("./commands/installOrchestratorHookClaudeCode");
+const setOrchestratorManualStub_1 = require("./commands/setOrchestratorManualStub");
+const openOrchestratorWriterLog_1 = require("./commands/openOrchestratorWriterLog");
 const SESSION_SETS_REL = path.join("docs", "session-sets");
 function evaluateSupportContextKeys(allSets) {
     const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
@@ -79,7 +83,7 @@ function activate(context) {
     const scanState = new scanState_1.ScanState();
     context.subscriptions.push({ dispose: () => scanState.dispose() });
     scanState.setLoading();
-    const provider = new sessionSetsProvider_1.SessionSetsProvider(context.extensionUri, scanState);
+    const provider = new SessionSetsProvider_1.SessionSetsProvider(context.extensionUri, scanState);
     context.subscriptions.push(vscode.window.registerTreeDataProvider("dabblerSessionSets", provider));
     const evaluateContextKeys = () => {
         evaluateSupportContextKeys(provider._cache ?? (0, fileSystem_1.readAllSessionSets)());
@@ -204,6 +208,17 @@ function activate(context) {
     safeRegister("registerFlagDecisionForReview", () => (0, flagDecisionForReview_1.registerFlagDecisionForReview)(context));
     safeRegister("registerScanAnnotationsForActiveSet", () => (0, scanAnnotationsForActiveSet_1.registerScanAnnotationsForActiveSet)(context));
     safeRegister("registerMigrateSetCommand", () => (0, migrateSet_1.registerMigrateSetCommand)(context, { refreshView: refreshAll }));
+    // Set 029 Session 2: orchestrator-indicator gauges. The webview view
+    // is registered against `dabblerOrchestratorIndicator` (declared in
+    // package.json as type:"webview" above the session-sets tree). Hook
+    // installer + manual-override stub + writer-log opener are siblings.
+    safeRegister("registerOrchestratorIndicatorView", () => {
+        const indicatorProvider = new orchestratorIndicatorProvider_1.OrchestratorIndicatorProvider(context.extensionUri);
+        context.subscriptions.push(vscode.window.registerWebviewViewProvider(orchestratorIndicatorProvider_1.OrchestratorIndicatorProvider.viewType, indicatorProvider));
+    });
+    safeRegister("registerInstallOrchestratorHookClaudeCode", () => (0, installOrchestratorHookClaudeCode_1.registerInstallOrchestratorHookClaudeCodeCommand)(context));
+    safeRegister("registerSetOrchestratorManualStub", () => (0, setOrchestratorManualStub_1.registerSetOrchestratorManualStub)(context));
+    safeRegister("registerOpenOrchestratorWriterLog", () => (0, openOrchestratorWriterLog_1.registerOpenOrchestratorWriterLog)(context));
     // Set 030 Session 5: flip scanState to "ready" once activation
     // finishes. `setImmediate` yields the event loop one tick so the
     // synchronous body of activate() returns first (VS Code measures
