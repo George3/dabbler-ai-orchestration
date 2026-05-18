@@ -1,35 +1,150 @@
 {
+  "sessionSetName": "029-orchestrator-model-effort-gauges",
+  "createdDate": "2026-05-17",
+  "totalSessions": 4,
   "entries": [
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 0,
-      "event": "set_created",
-      "message": "Set 029 initialized: orchestrator model + effort indicator gauges (4 sessions). Operator-initiated feature request. NTE budget pending operator confirmation; estimated $0.55-$1.55 routed spend across the set."
+      "sessionNumber": 0,
+      "stepNumber": 1,
+      "stepKey": "set-zero/scaffold",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Set 029 initialized: orchestrator model + effort indicator gauges (4 sessions). Operator-initiated feature request. NTE budget pending operator confirmation at set creation; estimated $0.55-$1.55 routed spend across the set (revised at S1 resume to $1.15-$1.75 actual+forecast).",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 1,
-      "event": "audit_proposal_drafted",
-      "message": "Session 1: design audit proposal authored at docs/proposals/2026-05-17-model-effort-gauges-design-audit/proposal.md (~340 LOC, self-contained, 6 open questions, JSON response format requested)."
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/proposal-drafted",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Session 1 step 1: design audit proposal authored at docs/proposals/2026-05-17-model-effort-gauges-design-audit/proposal.md (~400 LOC, self-contained, 6 open questions, JSON response format requested).",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 1,
-      "event": "audit_verdicts_received",
-      "message": "Session 1: cross-provider audit verdicts received from GPT-5.4 (comprehensive prose review with primary-doc citations) and Gemini Pro (freeform commentary covering Q5 + 2 escalations). Audit conducted by manual paste-and-collect, no router calls. Cost: $0.00."
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/audit-step-2-waived",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Session 1 step 2 WAIVED per memory feedback_ai_router_usage (router reserved for end-of-session verification). The originally-spec'd route_audit.py was not authored; the audit was conducted by manual paste-and-collect against GPT-5.4 + Gemini Pro at $0.00. Waiver re-confirmed by operator at 2026-05-18 session resume; recorded durably in spec.md Session 1 step 2.",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 1,
-      "event": "audit_synthesized",
-      "message": "Session 1: audit-summary.md authored synthesizing both verdicts. Five showstoppers resolved with mitigations (S1: Stop hook lacks model field -> use SessionStart; S2: /think* as live effort -> Medium default + last-observed treatment; S3: initialSize not a real VS Code property -> drop, use Playwright screenshot tests; S4: Stop timing lagging -> same fix as S1; S5: Windows atomic-write contention -> retry loop 50/150/400ms). Marker schema bumped to v2 with signalKind + confidence fields. Manual-override quickpick spec'd with MRU + hotkey-bindable args."
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/audit-verdicts-received",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Session 1 step 3: cross-provider audit verdicts received via manual paste-and-collect. GPT-5.4 returned a comprehensive prose review with primary-doc citations (covers all 6 open questions + 3 escalations + 4 showstoppers). Gemini Pro returned freeform commentary covering Q5 + 2 escalations (silent on Q1/Q2/Q3/Q4/Q6). Raw responses preserved at docs/proposals/2026-05-17-model-effort-gauges-design-audit/{gpt-5-4,gemini-pro}-result.json. Cost: $0.00.",
+      "status": "complete",
+      "routedApiCalls": []
     },
     {
-      "timestamp": "2026-05-17T00:00:00.000000-04:00",
-      "session": 1,
-      "event": "spec_updated_from_audit",
-      "message": "Session 1: spec.md Q1-Q6 marked RESOLVED with one-liner pointers to audit-summary.md sections. D8 (hook installer) rewritten to reflect Claude-only auto-detection in v1. Effort normalization table revised (Claude column: Medium default + last-observed for /think*). Session 2 steps rewritten (SessionStart hook not Stop; retry loop; visual-treatment matrix for 4 signalKind values; drop initialSize). Session 3 steps rewritten (Codex config.toml auto; Gemini/Copilot manual-only; quickpick MRU + hotkey args). Risks R5 (Windows write contention) and R6 (UserPromptSubmit payload uncertainty) added."
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/audit-synthesized",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Session 1 step 4: audit-summary.md authored synthesizing both verdicts. Q1-Q6 locked. Five showstoppers resolved with mitigations (S1: Stop hook lacks model field -> use SessionStart; S2: /think* as live effort -> Medium default + last-observed treatment; S3: initialSize not a real VS Code property -> drop, use Playwright screenshot tests; S4: Stop timing lagging -> same fix as S1; S5: Windows atomic-write contention -> retry loop). Marker schema bumped to v2 with signalKind + confidence fields. Manual-override quickpick spec'd with MRU + hotkey-bindable args.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/spec-updated-from-audit",
+      "dateTime": "2026-05-17T00:00:00-04:00",
+      "description": "Session 1 step 5: spec.md Q1-Q6 marked RESOLVED with one-liner pointers to audit-summary.md sections. D8 (hook installer) rewritten to reflect Claude-only auto-detection in v1. Effort normalization table revised (Claude column: Medium default + last-observed for /think*). Sessions 2 and 3 steps rewritten (SessionStart hook not Stop; retry loop; visual-treatment matrix for 4 signalKind values; drop initialSize). Risks R5 and R6 added.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/round-a-verification",
+      "dateTime": "2026-05-18T03:35:00-04:00",
+      "description": "Session 1 step 6 (Round A): session-verification call against the audit synthesis. Verifier: gpt-5-4. Verdict: REJECTED with 12 must-fix items (5 Bucket-1 doc-accuracy drift + 7 Bucket-2 design refinements). Cost: $0.264.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 14923,
+          "outputTokens": 15144,
+          "costUsd": 0.2644675,
+          "resultArtifact": "session-reviews/session-001/verify-result.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/bucket-2-consensus",
+      "dateTime": "2026-05-18T03:45:00-04:00",
+      "description": "Session 1 step 7 (NEW class — in-session consensus): the 7 Bucket-2 design refinements routed through cross-engine consensus call (gpt-5-4 + gemini-pro) per the new memory feedback_prefer_ai_consensus_over_human_prompt (saved this session from operator's direct directive). Both engines accepted the proposed direction on all seven items; gpt-5-4 added five tightening modifications (race-window re-read, attempt-count math, scrollable-not-horizontally wording, confidence-low producer rule, dual-condition /clear check) which were absorbed as strictly-improving refinements. Cost: $0.085 total ($0.080 gpt-5-4 + $0.004 gemini-pro).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 2606,
+          "outputTokens": 4915,
+          "costUsd": 0.08024,
+          "resultArtifact": "session-reviews/session-001/consensus-gpt-5-4.json"
+        },
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 2794,
+          "outputTokens": 83,
+          "costUsd": 0.0043225,
+          "resultArtifact": "session-reviews/session-001/consensus-gemini-pro.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/fixes-applied",
+      "dateTime": "2026-05-18T04:00:00-04:00",
+      "description": "Session 1 step 8: applied all 12 Round-A must-fix items + GPT's 5 consensus tightenings to audit-summary.md and spec.md. Major additions: multi-writer precedence policy (new section in audit-summary, updates to spec R4/Session 2 step 5/Session 3 step 1); revised visual-treatment matrix (stripes are stale-only, configured-default = dashed rim + DEFAULT pill, last-observed = hollow rim + clock-icon overlay + time-elapsed); retry ceiling bumped to 5 attempts/2050ms; confidence-low producer rule locked; /clear dual-condition verification gating; R7 added; container-height limitation documented; routing-notes section rewritten to reflect the manual-paste audit + new in-session consensus call class.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-001/round-b-verification",
+      "dateTime": "2026-05-18T04:15:00-04:00",
+      "description": "Session 1 step 9 (Round B): confirmation pass. All 12 Round-A must-fix items marked ADDRESSED; one new drift item surfaced — spec.md Goal-state section (lines 85-92, not in Round A's bundle) still contained pre-audit wording (>1h stale threshold, install CTA on stale, Claude=Stop hook). Fix applied verbatim from D8/Q6 locked decisions: 8h staleness, no-CTA-on-stale, SessionStart hook, Codex auto-watcher, Gemini/Copilot manual-only. Cost: $0.138.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 17043,
+          "outputTokens": 6333,
+          "costUsd": 0.1376025,
+          "resultArtifact": "session-reviews/session-001/verify-result-round-b.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-001/round-c-verification",
+      "dateTime": "2026-05-18T04:30:00-04:00",
+      "description": "Session 1 step 10 (Round C): Goal-state fix marked ADDRESSED; surfaced two more pre-audit drift items in previously-uninspected sections of spec.md ('per-surface hooks' wording understated D8's hook/shim/manual-writer mix; Session 3 'Creates' list still included installOrchestratorHookCodex.ts + '4 new commands' contradicting D8's 'Codex auto-watcher, no user-facing install'). Both fixed mechanically from D8 locked text. Per memory feedback_verifier_spiral_recruit_codex, did NOT chain a Round D — pattern was each round exposing different un-bundled regions of spec.md, not new design issues against the same content. Cost: $0.358 (higher than typical p50=$0.13 due to gpt-5-4 emitting 22k output tokens; flag for future bundle sizing).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 10660,
+          "outputTokens": 22077,
+          "costUsd": 0.357805,
+          "resultArtifact": "session-reviews/session-001/verify-result-round-c.json"
+        }
+      ]
     }
-  ],
-  "totalSessions": 4
+  ]
 }

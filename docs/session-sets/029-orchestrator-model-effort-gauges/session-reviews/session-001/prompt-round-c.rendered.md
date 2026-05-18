@@ -1,3 +1,56 @@
+# Round C verification — Set 029 Session 1
+
+## What changed since Round B
+
+Round B returned VERDICT: REJECTED with one specific new issue
+beyond the 12 Round-A must-fixes (which were all marked ADDRESSED):
+
+> `spec.md` Goal state still contains pre-audit behavior that
+> contradicts the locked design: it says stale is `>1h` and shows
+> the install CTA when stale, and it still says Claude uses a `Stop`
+> hook installer (`spec.md:85-92`). This conflicts with the updated
+> Q5/Q6/D8 decisions (8h stale threshold, stale ≠ no-signal CTA,
+> Claude uses `SessionStart`, Gemini/Copilot are manual-only, Codex
+> is watcher-based).
+
+The fix has been applied to `spec.md` "Goal state" section:
+- Stale threshold changed from `>1h` to `>stalenessMaxSec` (default
+  8h) per Q6.
+- "No signal — install hook" CTA now fires only on **missing**
+  marker file, not on stale; stale gets the diagonal-stripe overlay
+  per audit-locked Q6.
+- Installer description rewritten per D8: Claude=SessionStart;
+  Codex=auto via config.toml watcher (no installer); Gemini/Copilot=
+  manual-only command surfacing manual-override quickpick; universal
+  manual-override quickpick as fallback.
+
+## Round C ask
+
+The full updated `spec.md` is inlined below. Specifically answer:
+
+1. Is the Round-B Goal-state issue ADDRESSED in the updated spec.md?
+2. Does any OTHER section of spec.md still contain pre-audit drift
+   (any other reference to "Stop hook" outside of the audit
+   acknowledgment of why Stop was rejected; any other 1h stale
+   threshold; any other place where stale and missing are conflated;
+   any contradiction with the locked D1-D10 + Q1-Q6 decisions)?
+
+Be precise — cite line numbers for anything still drifted. Skip
+stylistic nits.
+
+Format response as:
+
+```
+Round-B-Goal-state: ADDRESSED | PARTIAL (…) | NOT ADDRESSED (…)
+Additional-drift: NONE | <bulleted list with line numbers>
+VERDICT: VERIFIED | REJECTED (<smallest concrete change to get to VERIFIED>)
+```
+
+
+---
+
+## Doc: spec.md (post-Round-B fix)
+
 # Orchestrator Model & Effort Indicator Gauges
 
 > **Purpose:** Add an always-on, ≤100px-tall webview pinned above the
@@ -83,9 +136,7 @@ has a new webview view, pinned above `dabblerSessionSets`, named
     next to the gauge). Color polarity: identical to the model gauge
     (red=low, green=max).
 - Updates within ≤500ms of an orchestrator model/effort change
-  (via filesystem watch on a marker file written by per-surface
-  hooks, config-watcher shims, and the manual-override quickpick —
-  only Claude actually installs a hook per audit-locked D8)
+  (via filesystem watch on a marker file written by per-surface hooks)
 - Shows a graceful **"No signal — install hook"** CTA when the marker
   file is **missing** (per audit-locked Q6).
 - Shows a **distinct stale state** when the marker exists but
@@ -541,28 +592,16 @@ manual-override quickpick with MRU + hotkey-bindable args.
 
 **Creates:**
 - `tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookGemini.ts`
-  (opens manual-override quickpick with `provider: "google"`
-  pre-selected — no actual hook installed)
+- `tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookCodex.ts`
 - `tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookCopilot.ts`
-  (opens manual-override quickpick with `provider: "github"`
-  pre-selected — no actual hook installed)
 - `tools/dabbler-ai-orchestration/src/commands/setOrchestratorManual.ts`
-  (universal manual-override quickpick)
-- `tools/dabbler-ai-orchestration/src/codex/configWatcher.ts`
-  (REVISED 2026-05-18 per audit Q3 / D8 / Round-C verifier finding:
-  Codex auto-detect is a config-watcher shim, NOT an installer
-  command. Activated automatically on extension start; no
-  user-facing installer command file)
 - (possibly) provider-specific shim scripts under
   `tools/dabbler-ai-orchestration/scripts/`
 
 **Touches:**
 - `tools/dabbler-ai-orchestration/src/providers/orchestratorIndicatorProvider.ts`
   (smarter empty-state CTA)
-- `tools/dabbler-ai-orchestration/package.json` (**3 new commands**
-  — installer-Gemini, installer-Copilot, setOrchestratorManual;
-  Codex auto-detection has no command, just a watcher activated
-  at extension start; REVISED 2026-05-18)
+- `tools/dabbler-ai-orchestration/package.json` (4 new commands, version)
 - `tools/dabbler-ai-orchestration/src/extension.ts`
 - `tools/dabbler-ai-orchestration/tests/playwright/orchestrator-indicator.spec.ts`
 - `tools/dabbler-ai-orchestration/CHANGELOG.md`
@@ -711,22 +750,14 @@ reflect the new feature; consumer repos pointed at it.
 - **Implementation work (S2, S3, S4):** pure Claude tokens, no
   router invocation.
 
-## Total estimated cost (REVISED 2026-05-18, actuals through S1)
+## Total estimated cost (REVISED 2026-05-18)
 
-- **Session 1 actual: ~$0.85** — Round A verification $0.264 +
-  cross-engine consensus (gpt-5-4 + gemini-pro) $0.085 + Round B
-  $0.138 + Round C $0.358. Round C cost was higher than typical
-  ($0.36 vs. p50 $0.13) because gpt-5-4 emitted 22k output tokens
-  on a tight prompt — note for future verifier-bundle sizing.
-  Three routed verification rounds were needed because each
-  successive bundle exposed previously-uninspected sections of
-  spec.md with pre-audit drift (Round B caught Goal-state region;
-  Round C caught Session 3 "Creates" leftover). All converged
-  cleanly — no verifier spiral per memory
-  `feedback_verifier_spiral_recruit_codex`.
+- **Session 1 actual: $0.345** (Round A verification $0.26 +
+  cross-engine consensus $0.085); plus forecast Round B ~$0.20 =
+  **~$0.55 inclusive of Round B**.
 - **Sessions 2–4 forecast: $0.30 – $0.90** (three session-end
   verifications; range based on memory `project_verification_cost_empirical`
   p50=$0.13, p95=$1.82).
-- **Total forecast: $1.15 – $1.75**, against the operator's
+- **Total forecast: $0.85 – $1.45**, against the operator's
   **$5.00 NTE ceiling** for the set (confirmed 2026-05-18 at S1
   resume time).

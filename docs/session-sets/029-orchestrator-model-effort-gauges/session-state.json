@@ -1,20 +1,11 @@
 {
   "schemaVersion": 3,
   "sessionSetName": "029-orchestrator-model-effort-gauges",
-  "currentSession": null,
-  "totalSessions": 4,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null,
-  "completedSessions": [],
   "sessions": [
     {
       "number": 1,
       "title": "Cross-provider design audit",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 2,
@@ -31,5 +22,19 @@
       "title": "Polish, README, marketplace publish",
       "status": "not-started"
     }
-  ]
+  ],
+  "currentSession": 1,
+  "totalSessions": 4,
+  "completedSessions": [],
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-18T03:33:49.170960-04:00",
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high"
+  }
 }
