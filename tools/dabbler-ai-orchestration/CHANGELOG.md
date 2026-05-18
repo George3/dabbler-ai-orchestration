@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Set 029 mid-set pivot (2026-05-18, spec-only — no shipped code change)
+
+Cross-provider audit reshaped Set 029 from 4 → 6 sessions. v0.14.2's
+identity model (single global `~/.dabbler/current-orchestrator.json`)
+will be retired in S3 (target 0.15.0) in favor of per-session-set
+markers under `<workspace>/docs/session-sets/<slug>/.dabbler/orchestrator.json`.
+The custom-tree pivot (replacing the native `dabblerSessionSets`
+TreeView with a webview-rendered accordion that embeds the gauges
+into each in-progress set's row) splits out to its own S4 with its
+own pre-session audit. Non-Claude provider detection (old S3)
+renumbers to S5; README + Marketplace publish (old S4) to S6.
+
+- Audit + decisions: [`docs/proposals/2026-05-18-custom-tree-pivot/`](../../docs/proposals/2026-05-18-custom-tree-pivot/)
+  (proposal.md, GPT-5.4 + Gemini Pro consensus, synthesis.md, s3-spec-delta.md)
+- Spec applied: [`docs/session-sets/029-orchestrator-model-effort-gauges/spec.md`](../../docs/session-sets/029-orchestrator-model-effort-gauges/spec.md)
+- Per-workspace-markers audit at [`docs/proposals/2026-05-18-per-workspace-orchestrator-markers/`](../../docs/proposals/2026-05-18-per-workspace-orchestrator-markers/)
+  is **superseded** by the custom-tree pivot — kept for reference only.
+- No code shipped this checkpoint; v0.14.2 still represents the
+  released-but-unpublished state.
+
 ## [0.14.2] — 2026-05-18 (Set 029 Session 2 — orchestrator indicator gauges, Claude-only v1 preview)
 
 ### Added — Set 029 Session 2 deliverables (Claude Code surface only)

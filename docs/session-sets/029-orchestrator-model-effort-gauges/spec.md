@@ -24,14 +24,15 @@ requiresE2E: true
 uatScope: none
 uatStyle: ad-hoc
 effort: high
-totalSessions: 4
+totalSessions: 6
 ```
 
 > **Rationale on `effort: high`:** the hard part isn't the gauge; it's
 > the cross-provider detection (Claude has hooks, others don't), and
 > verifying the design holds up across four orchestrator surfaces
 > before committing the implementation. The audit session (S1) plus
-> the multi-provider detection session (S3) are both Opus-class work.
+> the multi-provider detection session (S5, renumbered from S3 in the
+> 2026-05-18 custom-tree pivot) are both Opus-class work.
 >
 > **Rationale on `requiresE2E: true`:** the visual gauge is a Layer 3
 > Playwright Electron concern (rendered-text invariant: needle position
@@ -120,7 +121,7 @@ has a new webview view, pinned above `dabblerSessionSets`, named
 | D6 | Effort scale | **Five normalized levels** (Low / Medium / High / Extra-High / Max), mapping from provider-native scales as follows. Thinking on/off is a separate binary LED. |
 | D7 | Marker file | **`~/.dabbler/current-orchestrator.json`** (global, user-home, single canonical file). Multi-writer: each provider's hook/shim writes the same file. Schema in Session 1 audit deliverable. |
 | D8 | Hook installer | **Per-provider commands, but only Claude installs an actual hook** (per audit Q2/Q4/Q5): Claude = `SessionStart` hook in `~/.claude/settings.json` (NOT `Stop` — Stop has no `model` field per audit S1). Codex = `~/.codex/config.toml` watcher (no user-facing install; auto-activates). Gemini/Copilot = "installer" command opens the manual-override quickpick with provider preset (manual-only in v1). Universal manual-override (`Dabbler: Set Orchestrator Model & Effort`) supports MRU ordering + hotkey-bindable command args per audit E4. |
-| D9 | Set structure | **Single set, audit-then-implement.** 4 sessions: S1 design audit, S2 core webview + Claude path, S3 non-Claude detection, S4 polish + release. |
+| D9 | Set structure | **Single set, audit-then-implement.** 6 sessions (REVISED 2026-05-18 via custom-tree-pivot audit): S1 design audit, S2 core webview + Claude path, **S3 per-session-set identity** (new), **S4 custom-tree pivot** (new, gated by its own pre-session audit), S5 non-Claude detection (renumbered from old S3), S6 polish + release (renumbered from old S4). See [`docs/proposals/2026-05-18-custom-tree-pivot/`](../../proposals/2026-05-18-custom-tree-pivot/) for the audit and packaging decisions that drove the renumbering. |
 | D10 | Backwards compatibility | **No legacy behavior to preserve.** This is a net-new view. Empty/missing marker file = "No signal" empty state with install CTA. |
 
 ### Effort-level normalization table (locked)
@@ -213,8 +214,9 @@ mitigations now folded into the locked design:
 - **S5**: Windows atomic-write contention with file watcher →
   retry loop (**REVISED 2026-05-18**: 5 attempts = initial + 4
   retries at 50/200/600/1200ms backoff between attempts, ~2050ms
-  total ceiling) in all marker writers (Session 2 / Session 3
-  implementation). Shared helper also implements multi-writer
+  total ceiling) in all marker writers (Session 2 / Session 5
+  implementation; Session 5 renumbered from S3 in the 2026-05-18
+  custom-tree pivot). Shared helper also implements multi-writer
   precedence read-check-rewrite (see audit-summary §"Multi-writer
   precedence").
 
@@ -228,7 +230,7 @@ The audit introduced two new schema fields (`signalKind` and
 
 ## Sessions
 
-### Session 1 of 4: Cross-provider design audit
+### Session 1 of 6: Cross-provider design audit
 
 **Goal:** Lock the six open design questions (Q1–Q6) via a
 cross-provider verification call against the design proposal. Produce
@@ -297,7 +299,7 @@ p95=$1.82).
 
 ---
 
-### Session 2 of 4: Core webview + Claude detection + hook installer
+### Session 2 of 6: Core webview + Claude detection + hook installer
 
 **Goal:** Ship the gauge UI end-to-end for the Claude Code surface.
 The webview renders, the marker-file watcher fires, the Claude Code
@@ -371,7 +373,7 @@ placeholder.
    before atomic rename → skip write if proposed signal is weaker
    than fresh existing signal; log skipped writes to
    `~/.dabbler/orchestrator-writer.log`. ~30 LOC shared helper;
-   reused by Session 3 writers.
+   reused by Session 5 writers (renumbered from S3 in the 2026-05-18 custom-tree pivot).
    **Pre-implementation verification (NEW 2026-05-18):** verify
    whether Claude `/clear` (a) fires the `SessionStart` hook AND
    (b) resets effort to Medium semantically. The `SessionStart` hook
@@ -447,7 +449,7 @@ placeholder.
 - `CLAUDE.md` (brief note under "VS Code extension" pointing at the new view)
 
 **Ends with:** Claude Code path live; Playwright smoke passing locally;
-0.13.18 packaged but not yet published (publish in S4).
+0.13.18 packaged but not yet published (publish in S6, renumbered from S4 in the 2026-05-18 custom-tree pivot).
 
 **Progress keys:** `session-002/webview-registered`, `session-002/provider-implemented`,
 `session-002/marker-watcher-wired`, `session-002/claude-hook-installer-shipped`,
@@ -458,7 +460,243 @@ implementation work is all local Claude tokens).
 
 ---
 
-### Session 3 of 4: Non-Claude provider detection + manual override
+### Session 3 of 6: Per-session-set identity (NEW, REVISED 2026-05-18 via custom-tree-pivot audit)
+
+**Goal:** Move orchestrator-marker identity from per-workspace
+(`~/.dabbler/current-orchestrator.json`) to per-session-set
+(`<workspace>/docs/session-sets/<slug>/.dabbler/orchestrator.json`).
+Bump marker schema to v3 with `sessionSetSlug` as an integrity
+field. Extract a `SessionSetsModel` data layer from the existing
+`SessionSetsProvider` so the future custom tree (S4) and the
+current native tree share the same scan/bucket/sort logic.
+
+This session ships a **correctness fix**: the cross-window
+contamination bug (per memory `project_consumer_repos` — three
+parallel windows on three repos clobbering one global marker) is
+eliminated. No user-facing UI change beyond per-set marker
+resolution; the existing `WebviewView` orchestrator indicator
+continues to render. The renderer reads the per-set marker for
+the in-progress set in the current workspace; falls back to its
+empty-state CTA when no marker is resolvable.
+
+**Operator decisions encoded** (per
+[`docs/proposals/2026-05-18-custom-tree-pivot/synthesis.md`](../../proposals/2026-05-18-custom-tree-pivot/synthesis.md)):
+
+- **D1 (packaging):** Split per GPT-5.4 — identity-only S3,
+  custom-tree work to S4.
+- **D2 (ambiguity):** Fail closed per GPT-5.4 — skip the write
+  when multiple in-progress sets are resolvable; log to
+  `orchestrator-writer.log`. No Quick Pick / workspaceState
+  persistence in S3.
+- **D3 (orphan):** Implicit fail-closed for S3 — skip write when
+  no in-progress set is resolvable. No workspace-level orphan
+  marker created. Richer orphan UI defers to S4.
+
+**Steps:**
+
+1. **Marker schema v3.** Add top-level `sessionSetSlug` to the
+   marker JSON; bump `schemaVersion` to `3`. Reader validates
+   `sessionSetSlug` matches the host row's slug before rendering;
+   logs and falls back to empty state on mismatch. Document the v3
+   shape (either at `docs/orchestrator-marker-schema.md` as a new
+   file, or appended to `docs/session-state-schema.md` — pick
+   whichever fits the existing schema-doc convention).
+2. **Per-set marker path.** New writer path:
+   `<workspace>/docs/session-sets/<slug>/.dabbler/orchestrator.json`.
+   Add `docs/session-sets/*/.dabbler/` to the canonical
+   `.gitignore` template shipped by `scripts/init-workflow.py` (or
+   equivalent). **Auto-patch existing repos non-interactively on
+   next workspace init** (Gemini Pro must-fix). Idempotent;
+   harmless if already present.
+3. **Hook-to-set walk-up resolver.** In
+   `scripts/write-orchestrator-marker.js`, replace the hard-coded
+   global path with a walk-up that locates the workspace root,
+   reads `docs/session-sets/<slug>/session-state.json` for each
+   set, and returns the single set whose status is
+   `"in-progress"`. **Fail closed** (return null + log) when
+   zero or multiple in-progress sets are found, or when the
+   walk-up doesn't reach a `docs/session-sets/` directory at all.
+4. **Fail-closed posture.** On null resolution, the writer logs
+   the reason to `~/.dabbler/orchestrator-writer.log` and **does
+   not write a marker.** The renderer surfaces its existing
+   empty-state CTA. No workspace-level orphan marker is created
+   (keeps workspace identity out of the canonical model per D3 /
+   GPT-5.4 must-fix).
+5. **Reader path resolution.** The
+   `orchestratorIndicatorProvider` reader resolves the marker
+   path the same way the writer does. The provider's file-system
+   watcher binds to the resolved per-set path and re-binds when
+   the in-progress set changes (e.g., on close-out). Slug
+   validation gates render.
+6. **Multi-writer precedence — unchanged.** The existing
+   precedence policy (`current` > `manual` > `last-observed` >
+   `configured-default`) and the Windows-aware retry loop
+   (5 attempts at 50/200/600/1200ms) continue to apply, now
+   scoped to the per-set marker. Contention surface shrinks
+   substantially since each set has at most one Claude session
+   in flight at a time.
+7. **`SessionSetsModel` data-layer extraction** (mandatory per
+   both reviewers). Extract
+   `src/providers/SessionSetsModel.ts` from
+   `SessionSetsProvider.ts`: scan, bucket, sort, `progressText`,
+   `isCurrentSessionInFlight`, `iconUriFor`, `needsMigrationBadge`.
+   `SessionSetsProvider` becomes a thin shim that consumes
+   `SessionSetsModel`. Both the current native tree (S3 ship)
+   and the future custom tree (S4) consume the same model.
+   **Layer-2 tests** at
+   `src/test/suite/sessionSetsProvider.test.ts` repointed to
+   `SessionSetsModel` and continue to gate bucketing/sort
+   invariants.
+8. **Backward compatibility.** Pre-existing
+   `~/.dabbler/current-orchestrator.json` is silently ignored by
+   the new reader. Operators with the v0.14.2 Claude Code hook
+   installed must re-run `Dabbler: Install Orchestrator Hook
+   (Claude Code)` to pick up the new resolver logic (installer
+   is idempotent; helper-script path unchanged). Acceptable
+   because v0.14.2 has not shipped to Marketplace — no external
+   consumer is affected.
+9. **Playwright smoke updates.** Add scenarios:
+   - Two in-progress sets in one workspace → writer skips,
+     `orchestrator-writer.log` carries the ambiguity entry,
+     indicator shows empty-state CTA.
+   - Single in-progress set → writer writes to
+     `<set>/.dabbler/orchestrator.json`, indicator renders the
+     gauges.
+   - Schema-v3 marker with mismatched `sessionSetSlug` → reader
+     falls back to empty state and logs.
+   - `cwd` outside any `docs/session-sets/` directory → writer
+     skips, no orphan marker written.
+10. **Version bump:** 0.14.2 → **0.15.0** (minor — identity-model
+    change per Gemini + GPT-5.4 consensus on Q9).
+
+**Creates:**
+- `tools/dabbler-ai-orchestration/src/providers/SessionSetsModel.ts`
+  (data-layer extraction)
+- `docs/orchestrator-marker-schema.md` _(or appended section in
+  the session-state-schema doc)_ — documents the v3 marker
+  shape, the per-set path, the fail-closed posture, and the
+  walk-up resolver
+
+**Touches:**
+- `tools/dabbler-ai-orchestration/scripts/write-orchestrator-marker.js`
+  (walk-up resolver; per-set path; schema-v3 write; fail-closed
+  log line)
+- `tools/dabbler-ai-orchestration/src/providers/orchestratorIndicatorProvider.ts`
+  (per-set path resolution; re-bind watcher on in-progress-set
+  change; `sessionSetSlug` validation; existing empty-state CTA
+  surfaces on null resolution)
+- `tools/dabbler-ai-orchestration/src/providers/SessionSetsProvider.ts`
+  (collapse to thin shim over `SessionSetsModel`)
+- `tools/dabbler-ai-orchestration/src/test/suite/sessionSetsProvider.test.ts`
+  (repoint to `SessionSetsModel`)
+- `tools/dabbler-ai-orchestration/src/test/playwright/orchestrator-indicator.spec.ts`
+  (new fail-closed + slug-validation scenarios)
+- `tools/dabbler-ai-orchestration/package.json` (version → 0.15.0)
+- `tools/dabbler-ai-orchestration/CHANGELOG.md` (new
+  `[0.15.0]` section)
+- `scripts/init-workflow.py` _(or wherever the canonical
+  `.gitignore` template lives)_ — add
+  `docs/session-sets/*/.dabbler/` to the ignore pattern; apply
+  to existing repos on next `init`
+
+**Ends with:** Per-set markers are the canonical identity model.
+Three parallel windows on three repos render their own correct
+orchestrator state (cross-window contamination bug eliminated).
+The current native `TreeView` and `WebviewView` indicator continue
+to render — no UI rewrite yet. `SessionSetsModel` exists and is
+ready for the S4 custom tree to consume. 0.15.0 packaged, not
+yet published.
+
+**Progress keys:** `session-003/schema-v3-shipped`,
+`session-003/per-set-marker-path`, `session-003/walk-up-resolver`,
+`session-003/fail-closed-posture`, `session-003/sessionsetsmodel-extracted`,
+`session-003/layer2-tests-repointed`,
+`session-003/playwright-fail-closed-scenarios`,
+`session-003/gitignore-autopatch`, `session-003/version-bumped`
+
+**Estimated cost:** $0.10–$0.30 (single end-of-session
+verification; implementation is local Claude tokens).
+
+---
+
+### Session 4 of 6: Custom-tree pivot (NEW; high-level scaffold — gated by its own pre-session audit)
+
+**Goal:** Replace the native `dabblerSessionSets` `TreeView` with
+a webview-rendered custom tree (same view id, same view container).
+Lift the v0.14.2 orchestrator gauges into per-row accordions so
+the orchestrator UI is contextually anchored to the work being
+done. Retire the dedicated `dabblerOrchestratorIndicator` view.
+
+**Why a separate session, separate audit:** GPT-5.4's review of
+the custom-tree pivot proposal flagged that the reimplementation
+surface is larger than the cross-provider proposal scoped — 14
+row-context actions in `package.json`, plus loading-state,
+scan-state gating, `viewsWelcome` integration, and ARIA tree
+semantics. The split-into-its-own-session decision (D1) buys time
+to spec these properly. The pre-S4 audit will be informed by
+what S3 has shipped (the `SessionSetsModel` extraction gives the
+audit a concrete data-layer interface to design against). Author
+the S4 spec via the same audit-then-spec pattern (per memory
+`feedback_audit_then_spec_for_substantial_features`) closer to S4
+start.
+
+**High-level S4 deliverables (will be refined by the S4 audit):**
+
+- Re-register `dabblerSessionSets` as a `WebviewViewProvider`
+  (same view id, same view container). Re-target
+  `viewsWelcome` content through the webview's empty-state path.
+- Lift v0.14.2 gauge HTML/SVG/CSS from
+  `orchestratorIndicatorProvider.ts` into the new view's
+  accordion body. Retire the `dabblerOrchestratorIndicator` view
+  entry from `package.json` once the accordion body is proven.
+- Reimplement (must-fix per both reviewers, not deferrable): keyboard
+  nav, **all 14 row-context actions**, title-bar refresh,
+  `viewsWelcome` empty state, loading-state transition, ARIA
+  tree semantics (`role="tree"`, `role="treeitem"`,
+  `aria-expanded`), selection/focus styling.
+- Auto-expand on SessionStart hook fire (per the S3 marker
+  write); collapse on session close; honor manual collapse for
+  the **current session occurrence only** (GPT-5.4 refinement
+  on Q4 — key suppression to marker `updatedAt` / current
+  session number, not the set indefinitely).
+- Multi-window observation: both windows render the same per-set
+  marker (Gemini + GPT-5.4 concur this is a feature). Include a
+  freshness cue (`updated Xs ago`) so the operator can tell this
+  is shared live state (GPT-5.4 add).
+- Decide on Q3 (orphan-render shape) with the custom tree in
+  hand. At that point the choice between "recent activity
+  pseudo-section" (GPT-5.4 preferred) and just-leave-empty
+  becomes concrete.
+- Drag/drop and multi-select stay deferred — not used today,
+  not added.
+
+**Pre-session audit:**
+
+- Author S4-specific proposal at
+  `docs/proposals/2026-MM-DD-custom-tree-implementation/proposal.md`.
+- Route through GPT-5.4 (manual paste per established workaround
+  if API still 429-rate-limited) + Gemini Pro (via router).
+- Synthesize; resolve any new divergences with operator.
+- Apply spec delta to this section before S4 begins.
+- Estimated audit cost: $0.05–$0.20 (Gemini Pro via router;
+  GPT-5.4 manual = $0.00).
+
+**Estimated S4 implementation cost:** $0.10–$0.30 (single
+end-of-session verification; implementation is local Claude
+tokens; may need Round-B per memory
+`feedback_split_large_verification_bundles` if reimplementation
+bundle exceeds verifier window).
+
+**Progress keys:** _to be filled in by the S4 audit_; preliminary:
+`session-004/webview-tree-registered`, `session-004/accordion-body-lifted`,
+`session-004/indicator-view-retired`, `session-004/kbd-nav-shipped`,
+`session-004/context-menus-parity`, `session-004/aria-tree-shipped`,
+`session-004/loading-empty-state-parity`, `session-004/auto-expand-shipped`,
+`session-004/playwright-rewritten`
+
+---
+
+### Session 5 of 6: Non-Claude provider detection + manual override
 
 **Goal:** Add detection paths per the Session 1 audit's locked
 resolutions: Codex auto-detect via `~/.codex/config.toml` watcher
@@ -571,15 +809,15 @@ manual-override quickpick with MRU + hotkey-bindable args.
 where viable, manual override where not). Layer 3 smoke green for
 all four. 0.14.0 packaged but not published.
 
-**Progress keys:** `session-003/gemini-detection`, `session-003/codex-detection`,
-`session-003/copilot-detection`, `session-003/manual-override-shipped`,
-`session-003/smart-empty-state`, `session-003/playwright-smoke-all-four`
+**Progress keys:** `session-005/gemini-detection`, `session-005/codex-detection`,
+`session-005/copilot-detection`, `session-005/manual-override-shipped`,
+`session-005/smart-empty-state`, `session-005/playwright-smoke-all-four`
 
 **Estimated cost:** $0.10–$0.30.
 
 ---
 
-### Session 4 of 4: Polish, README, marketplace publish
+### Session 6 of 6: Polish, README, marketplace publish
 
 **Goal:** Final polish, README update with screenshot, version bump to
 0.14.1 if anything moves, publish to Marketplace.
@@ -619,9 +857,9 @@ all four. 0.14.0 packaged but not published.
 **Ends with:** Marketplace 0.14.0 (or 0.14.1) live; README and CLAUDE.md
 reflect the new feature; consumer repos pointed at it.
 
-**Progress keys:** `session-004/readme-updated`, `session-004/changelog-merged`,
-`session-004/claudemd-expanded`, `session-004/marketplace-published`,
-`session-004/consumer-repos-notified`
+**Progress keys:** `session-006/readme-updated`, `session-006/changelog-merged`,
+`session-006/claudemd-expanded`, `session-006/marketplace-published`,
+`session-006/consumer-repos-notified`
 
 **Estimated cost:** $0.05–$0.15.
 
@@ -646,16 +884,21 @@ reflect the new feature; consumer repos pointed at it.
 - **R3 — 100px is tight.** If audit reviewers prefer larger gauges
   for legibility, we may need to compromise: ≤100px content area
   (excluding VS Code's view header). Audit reviews this explicitly.
-- **R4 — Marker-file race conditions.** Multiple orchestrator
-  surfaces writing the same marker file could race. Mitigation:
-  atomic writes (write + rename) plus **multi-writer precedence**
-  (REVISED 2026-05-18 per audit-summary §"Multi-writer precedence"):
-  every writer reads the existing target, compares `signalKind`
-  precedence (`current` > `manual` > `last-observed` >
-  `configured-default`), re-reads immediately before the atomic
-  rename to close the TOCTOU race window, and skips the write if
-  the proposed signal is weaker than a fresh existing signal.
-  Skipped writes are logged to `~/.dabbler/orchestrator-writer.log`.
+- **R4 — Marker-file race conditions** (NARROWED SCOPE 2026-05-18
+  post-pivot — see S3). Multiple orchestrator surfaces writing the
+  same marker file could race. Mitigation: atomic writes (write +
+  rename) plus **multi-writer precedence** (REVISED 2026-05-18 per
+  audit-summary §"Multi-writer precedence"): every writer reads the
+  existing target, compares `signalKind` precedence (`current` >
+  `manual` > `last-observed` > `configured-default`), re-reads
+  immediately before the atomic rename to close the TOCTOU race
+  window, and skips the write if the proposed signal is weaker than
+  a fresh existing signal. Skipped writes are logged to
+  `~/.dabbler/orchestrator-writer.log`. **Post-pivot:** contention
+  surface shrinks substantially since each set has at most one
+  Claude session in flight at a time; the global-marker
+  cross-window race is eliminated by the identity model change in
+  S3, not by this mitigation.
 - **R5 — Windows atomic-write contention** (added per audit S5;
   REVISED 2026-05-18). Atomic write-and-rename on Windows 11
   intermittently throws `PermissionError` when the VS Code file
@@ -686,6 +929,26 @@ reflect the new feature; consumer repos pointed at it.
   `last-observed` is preserved across `/clear` and the asymmetry
   is documented in CHANGELOG. Operator has manual-override
   quickpick as universal reset.
+- **R8 — Wrong-set attachment** (added 2026-05-18 per custom-tree
+  pivot synthesis). If the S3 walk-up resolver picks the wrong
+  in-progress set (e.g., stale `session-state.json` lingers as
+  in-progress after a forgotten close-out), the operator sees
+  correct-looking orchestrator data attached to the wrong work.
+  Mitigation: the indicator's hover tooltip surfaces the resolved
+  set slug; the operator can spot the mismatch. The fail-closed
+  posture (skip write on ambiguous resolution) limits the
+  exposure window to the single-in-progress-but-stale case. S4
+  may add a small "attached to: <slug>" badge in the gauge frame
+  for at-a-glance verification.
+- **R9 — `.gitignore` auto-patch missed** (added 2026-05-18 per
+  custom-tree pivot synthesis). If a workspace's `.gitignore` is
+  not auto-patched (e.g., operator never re-runs `init`), per-set
+  markers under `docs/session-sets/*/.dabbler/` could be staged
+  for commit by mistake. Mitigation: the marker file's content is
+  bounded and harmless if committed; the auto-patch is
+  idempotent on subsequent inits; a one-line note in CHANGELOG
+  [0.15.0] flags it; S3 step 2 explicitly requires the
+  non-interactive auto-patch as a must-fix.
 
 ## Routing notes (REVISED 2026-05-18)
 
@@ -696,7 +959,7 @@ reflect the new feature; consumer repos pointed at it.
   Pro; raw responses preserved at
   `docs/proposals/2026-05-17-model-effort-gauges-design-audit/{gpt-5-4,gemini-pro}-result.json`.
   Cost: **$0.00**.
-- **Session-end verification (S1, S2, S3, S4):**
+- **Session-end verification (S1, S2, S3, S4, S5, S6):**
   `task_type='session-verification'`, single verifier (gpt-5-4)
   via `ai_router.query(...)`. S1 actually used three routed calls
   (Round A verification + cross-engine consensus on must-fix items +
@@ -707,26 +970,41 @@ reflect the new feature; consumer repos pointed at it.
   must-fix items are routed through GPT-5.4 + Gemini Pro for
   consensus before applying. This supersedes
   `feedback_ai_router_usage` for design-question consensus only;
-  implementation work in S2/S3/S4 still uses pure Claude tokens.
-- **Implementation work (S2, S3, S4):** pure Claude tokens, no
+  implementation work in S2/S3/S4/S5 still uses pure Claude tokens.
+- **Pre-session audit (S4 only, planned):** the custom-tree
+  session's pre-session audit (per
+  `feedback_audit_then_spec_for_substantial_features`) routes
+  through Gemini Pro via the router; GPT-5.4 via manual paste in
+  GitHub Copilot per
+  `feedback_split_large_verification_bundles`. Estimated
+  $0.05–$0.20 for the routed Gemini call.
+- **Implementation work (S2, S3, S4, S5):** pure Claude tokens, no
   router invocation.
 
-## Total estimated cost (REVISED 2026-05-18, actuals through S1)
+## Total estimated cost (REVISED 2026-05-18 custom-tree pivot, actuals through S2 + pivot audit)
 
 - **Session 1 actual: ~$0.85** — Round A verification $0.264 +
   cross-engine consensus (gpt-5-4 + gemini-pro) $0.085 + Round B
   $0.138 + Round C $0.358. Round C cost was higher than typical
   ($0.36 vs. p50 $0.13) because gpt-5-4 emitted 22k output tokens
-  on a tight prompt — note for future verifier-bundle sizing.
-  Three routed verification rounds were needed because each
-  successive bundle exposed previously-uninspected sections of
-  spec.md with pre-audit drift (Round B caught Goal-state region;
-  Round C caught Session 3 "Creates" leftover). All converged
-  cleanly — no verifier spiral per memory
+  on a tight prompt. Three routed verification rounds were needed
+  because each successive bundle exposed previously-uninspected
+  sections of spec.md with pre-audit drift. All converged cleanly
+  — no verifier spiral per memory
   `feedback_verifier_spiral_recruit_codex`.
-- **Sessions 2–4 forecast: $0.30 – $0.90** (three session-end
-  verifications; range based on memory `project_verification_cost_empirical`
-  p50=$0.13, p95=$1.82).
-- **Total forecast: $1.15 – $1.75**, against the operator's
+- **Session 2 actual: ~$0.58** — verification Rounds A + B + C
+  across the Claude-only orchestrator-indicator ship.
+- **Custom-tree pivot audit (mid-set, 2026-05-18): $0.022** —
+  Gemini Pro consensus call only (GPT-5.4 via manual paste in
+  GitHub Copilot = $0.00 per
+  `feedback_split_large_verification_bundles`). Authored
+  proposal + synthesis + S3 spec delta; replaced the obsolete
+  per-workspace-markers path.
+- **Sessions 3–6 forecast: $0.40 – $1.25** — S3 verification
+  $0.10–$0.30; S4 pre-session audit $0.05–$0.20; S4 verification
+  $0.10–$0.30; S5 verification $0.10–$0.30; S6 verification
+  $0.05–$0.15. Range based on memory
+  `project_verification_cost_empirical` (p50=$0.13, p95=$1.82).
+- **Total forecast: $1.85 – $2.70**, against the operator's
   **$5.00 NTE ceiling** for the set (confirmed 2026-05-18 at S1
-  resume time).
+  resume time). Comfortable headroom for Round-B verifications.

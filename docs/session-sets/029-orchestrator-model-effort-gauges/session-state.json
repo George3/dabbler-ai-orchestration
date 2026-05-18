@@ -14,17 +14,27 @@
     },
     {
       "number": 3,
-      "title": "Non-Claude provider detection + manual override",
+      "title": "Per-session-set identity",
       "status": "not-started"
     },
     {
       "number": 4,
+      "title": "Custom-tree pivot",
+      "status": "not-started"
+    },
+    {
+      "number": 5,
+      "title": "Non-Claude provider detection + manual override",
+      "status": "not-started"
+    },
+    {
+      "number": 6,
       "title": "Polish, README, marketplace publish",
       "status": "not-started"
     }
   ],
   "currentSession": null,
-  "totalSessions": 4,
+  "totalSessions": 6,
   "completedSessions": [
     1,
     2

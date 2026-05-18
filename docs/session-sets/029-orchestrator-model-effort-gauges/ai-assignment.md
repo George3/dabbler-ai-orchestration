@@ -8,7 +8,7 @@
 
 ---
 
-## Session 1 of 4: Cross-provider design audit
+## Session 1 of 6: Cross-provider design audit
 
 ### Recommended orchestrator
 
@@ -81,7 +81,7 @@ Playwright smoke remain Opus-class. Operator triggered S2 start at
 
 ---
 
-## Session 2 of 4: Core webview + Claude detection + hook installer
+## Session 2 of 6: Core webview + Claude detection + hook installer
 
 ### Recommended orchestrator
 
@@ -103,7 +103,61 @@ $0.10 – $0.30 (one session-verification call only).
 
 ---
 
-## Session 3 of 4: Non-Claude provider detection + manual override
+## Session 3 of 6: Per-session-set identity (NEW, REVISED 2026-05-18 custom-tree pivot)
+
+### Recommended orchestrator
+
+Claude Opus 4.7 @ effort=high. Architectural change to the
+identity model (per-set markers, schema v3, walk-up resolver, data-
+layer extraction). Touches the writer, reader, schema, tests, and
+init flow — multi-file coherence matters.
+
+### Rationale
+
+The cross-window contamination bug (per memory
+`project_consumer_repos`) is a real correctness defect. Per
+GPT-5.4's "fail closed" verdict (synthesis.md D2), the resolver
+must skip writes on ambiguity rather than guess. `SessionSetsModel`
+extraction sets up the S4 custom tree. None of this is editorial
+or boilerplate; Opus is right for the design judgment, the careful
+backward-compatibility handling, and the test rewrites.
+
+### Estimated routed cost
+
+$0.10 – $0.30 (one session-verification call only).
+
+---
+
+## Session 4 of 6: Custom-tree pivot (NEW, REVISED 2026-05-18 custom-tree pivot)
+
+### Recommended orchestrator
+
+Claude Opus 4.7 @ effort=high. Large reimplementation surface:
+GPT-5.4's review flagged 14 row-context actions, loading-state
+gating, `viewsWelcome` empty state, ARIA tree semantics — none
+deferrable. Webview message protocol + keyboard nav + focus
+management. Multi-file coherence at scale.
+
+### Rationale
+
+Per GPT-5.4: "the proposal currently smuggles in a second, much
+riskier decision: replacing a native VS Code tree with a custom
+webview tree that must replicate command menus, navigation,
+accessibility, and empty/loading semantics." That's exactly the
+multi-surface Opus-class work the model is best suited for. Per
+memory `feedback_split_large_verification_bundles`, if the
+end-of-session verification bundle exceeds 700 LOC, split into
+Round-A / Round-B.
+
+### Estimated routed cost
+
+$0.05 – $0.20 pre-session audit (Gemini Pro via router; GPT-5.4
+via manual paste = $0.00) + $0.10 – $0.30 session-verification.
+**Total S4 routed: $0.15 – $0.50.**
+
+---
+
+## Session 5 of 6: Non-Claude provider detection + manual override (renumbered from S3)
 
 ### Recommended orchestrator
 
@@ -113,7 +167,7 @@ introducing regressions in the Claude path from S2.
 
 ### Rationale
 
-S2 establishes the marker-file protocol; S3 adds three new
+S2 establishes the marker-file protocol; S5 adds three new
 writers (or three new "manual fallback" paths). The empty-state
 CTA logic that picks the right installer is the trickiest piece —
 detecting which orchestrator is *currently active* is fuzzy.
@@ -124,7 +178,7 @@ $0.10 – $0.30.
 
 ---
 
-## Session 4 of 4: Polish, README, marketplace publish
+## Session 6 of 6: Polish, README, marketplace publish (renumbered from S4)
 
 ### Recommended orchestrator
 
@@ -147,9 +201,14 @@ $0.05 – $0.15.
 
 ## Total set cost forecast
 
-$0.55 – $1.55 (sum across all four sessions). Comfortably within
-typical operator NTE thresholds; operator should confirm at start
-of Session 1 per memory `feedback_budget_question_scope`.
+**REVISED 2026-05-18 custom-tree pivot:** $1.85 – $2.70
+(actuals + forecast across the new 6-session shape). S1 actual
+$0.85 + S2 actual $0.58 + custom-tree pivot audit $0.022 +
+forecast $0.40 – $1.25 across S3 / S4 audit / S4-S5-S6
+verifications. Against the operator's $5.00 NTE for the set;
+comfortable headroom remains.
+
+Prior forecast (pre-pivot, 4 sessions): $0.55 – $1.55.
 
 ---
 

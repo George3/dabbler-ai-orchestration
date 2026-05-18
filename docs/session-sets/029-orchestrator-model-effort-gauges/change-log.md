@@ -1,9 +1,9 @@
 # Set 029: Orchestrator Model & Effort Indicator Gauges
 
-**Status:** In progress (2 of 4 sessions complete)
+**Status:** In progress (2 of 6 sessions complete; mid-set pivot 2026-05-18 reshaped 4 → 6 sessions)
 **Created:** 2026-05-17
-**Cost so far:** $1.423 (S1 $0.845 + S2 $0.578); forecast $0.30–$0.90
-remaining inclusive of S3 + S4 verification calls.
+**Cost so far:** $1.464 (S1 $0.845 + S2 $0.578 + mid-set custom-tree-pivot audit $0.022 Gemini Pro; GPT-5.4 via manual paste = $0.00).
+**Forecast remaining:** $0.40–$1.25 across S3 + S4 audit + S4/S5/S6 verifications.
 **NTE ceiling:** $5.00 (operator-confirmed 2026-05-18 at S1 resume).
 
 ---
@@ -155,11 +155,55 @@ After seeing the rendered gauges, the operator flagged: (a) the Medium effort ga
 
 Bundle splitting per memory `feedback_split_large_verification_bundles`: full set of code was ~1170 LOC, split into A (~605 LOC) and B (~565 LOC) to stay under the 700-LOC ceiling. Round C re-bundled the full post-fix versions of all three high-leverage files.
 
-## Session 3: (pending — non-Claude provider detection)
+## Mid-set pivot (2026-05-18) — custom-tree audit
+
+Post-S2 polish surfaced a structural issue: the v0.14.2
+`~/.dabbler/current-orchestrator.json` is a single global file. The
+operator's three-parallel-window workflow (per memory
+`project_consumer_repos`) means every window's SessionStart hook
+clobbers the same marker — the most-recently-started session wins,
+the others' gauges silently show wrong data.
+
+An initial fix path (per-workspace markers hashed by workspace
+folder path) was drafted at
+[`docs/proposals/2026-05-18-per-workspace-orchestrator-markers/`](../../proposals/2026-05-18-per-workspace-orchestrator-markers/)
+and reviewed by Gemini Pro + GPT-5.4 (manual paste). Mid-review
+the operator and I concluded the underlying issue is the **identity
+model**, not just the marker path. A second pivot proposal at
+[`docs/proposals/2026-05-18-custom-tree-pivot/`](../../proposals/2026-05-18-custom-tree-pivot/)
+re-routed the design through both reviewers.
+
+**Reviewer verdicts converged on 7 of 10 questions; diverged on
+3.** Operator decisions resolved the divergences (split S3 from
+custom-tree work; fail-closed on ambiguous resolution; no
+workspace orphan marker). Set 029 reshapes:
+
+| New session | Goal | Status |
+|---|---|---|
+| S3 | Per-session-set identity (marker schema v3, walk-up resolver, `SessionSetsModel` extraction) | pending |
+| S4 | Custom-tree pivot (webview-based Session Sets tree with embedded gauges) | pending, gated by own pre-session audit |
+| S5 | Non-Claude detection + manual override (renumbered from old S3, content unchanged) | pending |
+| S6 | Polish + README + Marketplace publish (renumbered from old S4, content unchanged) | pending |
+
+The pivot itself shipped no code; spec.md was updated to reflect
+the new structure. v0.14.2 stays the released-but-unpublished
+state of the extension until S3 ships 0.15.0.
+
+**Cost:** $0.022 (Gemini Pro consensus call; GPT-5.4 manual = $0.00).
+
+## Session 3: (pending — per-session-set identity)
 
 (populated at session close)
 
-## Session 4: (pending — polish + marketplace publish)
+## Session 4: (pending — custom-tree pivot; gated by own pre-session audit)
+
+(populated at session close)
+
+## Session 5: (pending — non-Claude provider detection)
+
+(populated at session close)
+
+## Session 6: (pending — polish + marketplace publish)
 
 (populated at session close)
 
@@ -167,4 +211,4 @@ Bundle splitting per memory `feedback_split_large_verification_bundles`: full se
 
 ## Final cost summary
 
-(populated after Session 4 close-out)
+(populated after Session 6 close-out)
