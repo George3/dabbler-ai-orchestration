@@ -405,27 +405,35 @@ export async function launchVSCode(workspacePath: string): Promise<LaunchedVSCod
 
 /**
  * Activate the Dabbler activity-bar view container and wait for the
- * Session Sets tree view to render. Returns the locator for the
- * tree role element so callers can chain treeitem queries off it.
+ * Session Sets webview tree to render. Returns a FrameLocator into
+ * the webview's inner content frame so callers can chain treeitem
+ * queries off it.
+ *
+ * Set 029 Session 4 pivot: the Session Sets view is now a webview
+ * (CustomSessionSetsView), not a native TreeDataProvider. VS Code
+ * wraps webview content in a two-level iframe stack: an outer
+ * sandboxing iframe and an inner content iframe. Both must be
+ * traversed before locating the `role="tree"` element rendered by
+ * the webview's client.js.
  */
-export async function openSessionSetsView(page: Page): Promise<import("@playwright/test").Locator> {
-  // The view container's aria-label comes from package.json
-  // `viewsContainers.activitybar[0].title` ("Dabbler AI Orchestration").
-  // VS Code renders both the action-icon `<a>` and a hidden
-  // badge `<div>` with the same aria-label — narrow to
-  // `.action-label` so we only match the clickable icon.
+export async function openSessionSetsView(
+  page: Page,
+): Promise<import("@playwright/test").FrameLocator> {
   const activityIcon = page.locator(
     '.activitybar .action-label[aria-label*="Dabbler AI Orchestration"]',
   );
   await activityIcon.waitFor({ state: "visible", timeout: 30_000 });
   await activityIcon.click();
-  // Once the side bar opens, the "Session Sets" view ID (from
-  // contributes.views[].id == "dabblerSessionSets", name == "Session Sets")
-  // becomes the section header. The tree element itself carries
-  // role="tree" and an aria-label derived from the view name.
-  const tree = page.locator('[role="tree"][aria-label*="Session Sets" i]');
-  await tree.waitFor({ state: "visible", timeout: 30_000 });
-  return tree;
+  // The webview shell lives inside `iframe.webview` (outer sandbox)
+  // → `iframe#active-frame` (inner content). The role="tree" element
+  // is rendered by client.js into <main id="root"> in the inner
+  // frame.
+  const outer = page.frameLocator('iframe.webview.ready');
+  const inner = outer.frameLocator('iframe');
+  // Wait for the tree to render (client.js has received the first
+  // rowsSnapshot or welcomeHtml fallback fired).
+  await inner.locator("#root").waitFor({ state: "attached", timeout: 30_000 });
+  return inner;
 }
 
 /**

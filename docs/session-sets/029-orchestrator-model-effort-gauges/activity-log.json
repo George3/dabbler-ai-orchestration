@@ -415,6 +415,69 @@
           "resultArtifact": "session-reviews/session-002/verify-result-round-c.json"
         }
       ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/pre-session-audit",
+      "dateTime": "2026-05-18T18:00:00-04:00",
+      "description": "Session 4 pre-session audit per memory feedback_audit_then_spec_for_substantial_features. Authored proposal.md (~400 LOC, 11 open questions Q1-Q11 + implementation surface + risks) at docs/proposals/2026-05-18-custom-tree-implementation/. Routed through Gemini Pro ($0.025) + GPT-5.4 (manual paste in GitHub Copilot, $0.00). Both reviewers ratified all 11 answers at proposed defaults — no operator divergences. GPT-5.4 added 8 must-fix tightening items (M1-M8: focusable-treeitem DOM, typed ActionRegistry, versioned monotonic message protocol, presentation-agnostic MarkerWatchService, mandatory escHtml(), Layer-2 unit coverage, tuple suppression key, indicator-action retirement gate); Gemini added 2 items (M9 Round-B planning, M10 type-ahead TODO). Synthesis + spec delta + spec.md update + extension CHANGELOG note + commit 9f87b0d.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "cross-provider-audit",
+          "inputTokens": 8419,
+          "outputTokens": 1426,
+          "costUsd": 0.02478375,
+          "resultArtifact": "../../../proposals/2026-05-18-custom-tree-implementation/consensus-gemini-pro.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/implementation",
+      "dateTime": "2026-05-18T18:30:00-04:00",
+      "description": "Session 4 implementation: custom-tree pivot per the 20-step locked spec. Created 12 files (CustomSessionSetsView + OrchestratorAccordion + MarkerWatchService + ActionRegistry + suppressionState + sessionSetsWebviewProtocol + media/session-sets-tree/{client.js, tree.css} + 3 Layer-2 unit tests + 1 Layer-3 Playwright spec). Modified 6 files (extension.ts + package.json with view-type flip + 14 view/item/context deletions + version 0.15.0 → 0.16.0 + 3 Playwright spec selector updates + electronLaunch FrameLocator return + extension CHANGELOG entry). Deleted 4 source files + the entire src/test/suite/e2e/ TreeView-only test directory (SessionSetsProvider 246 LOC + orchestratorIndicatorProvider 998 LOC + 2 Playwright specs 1016 LOC + cancelTreeView + e2e/ harness). Net ~+2654 LOC new, ~-2260 LOC deleted. TypeScript compile clean (npx tsc --noEmit no errors); npm run test:unit 369 passing (2 pre-existing failures unrelated to S4); 26 new tests across actionRegistry / suppressionState / markerWatchService all green.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/round-a-verification",
+      "dateTime": "2026-05-18T19:00:00-04:00",
+      "description": "Session 4 Round A verification — provider-layer + types bundle (OrchestratorAccordion + MarkerWatchService + ActionRegistry + suppressionState + sessionSetsWebviewProtocol, ~1100 LOC). Q1-Q7 covering M2/M3/M4/M5/M7 + R13 + R8 carry-forward. Verifier: gemini-pro. Verdict: SUGGEST (1) — Q1 flagged that describeMarker() calls Date.now() inline for the secondary effort-age suffix, making it not strictly deterministic. Triaged as optional follow-up (function is otherwise pure; the inline computation is for one display suffix only). Q2-Q7 all VERIFIED. Cost: $0.027.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 14245,
+          "outputTokens": 937,
+          "costUsd": 0.02717625,
+          "resultArtifact": "session-reviews/session-004/verify-result-round-a.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/round-b-verification",
+      "dateTime": "2026-05-18T19:15:00-04:00",
+      "description": "Session 4 Round B verification — integration bundle (CustomSessionSetsView + client.js + tree.css, ~1100 LOC). Q1-Q8 covering M1/M3/M6/M8 + R10/R11/R12 + suppression handshake + ambiguity banner + CSP. Verifier: gemini-pro. Verdict: VERIFIED across all 8 questions. No must-fix, no suggest items. The DOM structure fix (focusable <div role=\"treeitem\"> not button-wrapped accordion), ARIA tree semantics, monotonic version drop, command-dispatch allowlist, indicator-action parity, suppression handshake, ambiguity banner, and CSP/nonce hygiene all confirmed correct. Cost: $0.026. Total S4 verification: $0.053 (Round A $0.027 + Round B $0.026). Came in well under the spec's $0.20-$0.60 forecast.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 14844,
+          "outputTokens": 786,
+          "costUsd": 0.026415,
+          "resultArtifact": "session-reviews/session-004/verify-result-round-b.json"
+        }
+      ]
     }
   ]
 }

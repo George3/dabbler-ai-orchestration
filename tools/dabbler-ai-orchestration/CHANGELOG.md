@@ -5,6 +5,121 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-05-18 (Set 029 Session 4 — custom-tree pivot)
+
+### Changed — Session Sets view is now a webview-rendered custom tree (BREAKING within the v0.15.0 preview)
+
+- **`dabblerSessionSets` re-registered as a `WebviewViewProvider`.**
+  Replaces the native `TreeDataProvider`. Same view id, same view
+  container, same `viewsWelcome` declaration. The custom tree renders
+  ARIA-compliant bucket groups + treeitem rows (`role="tree"` /
+  `role="group"` / `role="treeitem"` / `aria-level` / `aria-expanded`
+  / `aria-selected`) and uses a roving tabindex for keyboard nav.
+- **Orchestrator gauges now live in per-row accordions.** The
+  v0.14.2/v0.15.0 dedicated `dabblerOrchestratorIndicator` view is
+  **retired**. The accordion body of the resolved in-progress set
+  carries the v0.15.0 gauge treatment verbatim (SVG semi-circle
+  gauges with IBM colorblind-safe palette, capacity bars,
+  inverted-band headers, mismatch detection, "updated Xs ago"
+  footer, stale stripe overlay, schema-v3 slug-mismatch fallback).
+- **Indicator-action parity preserved** (per S4 M8). The accordion
+  body retains Install Hook, Set Orchestrator, and Open Writer Log
+  buttons. The standalone commands (`dabbler.installOrchestratorHook.claudeCode`,
+  `dabbler.setOrchestrator`, `dabbler.openOrchestratorWriterLog`)
+  remain registered for direct invocation via the command palette.
+- **Row context menus moved to QuickPick** (per S4 Q6). The 14
+  `view/item/context` entries previously in `package.json` are
+  replaced by a typed `ActionRegistry` in TypeScript. Right-click,
+  `Shift+F10`, and Context Menu key all open the same QuickPick
+  populated from `ActionRegistry.applicableActions(set, supports)`.
+  UX divergence from a native context menu, accepted in v1 per
+  audit; v1.1 may revisit if feedback flags it.
+- **Multi-window observation** (per pivot synthesis): both VS Code
+  windows that have the same workspace open render the same per-set
+  marker. Freshness cue via the existing "updated Xs ago" footer
+  in the gauge body.
+- **Ambiguity banner** (per S4 Q8 = a+c): when the walk-up resolver
+  returns `multiple-in-progress-sets`, a banner above the In Progress
+  bucket says "Multiple in-progress sets — orchestrator info hidden.
+  Open writer log." S3's silent fail-close behavior preserved for
+  `no-in-progress-set` and `no-docs-session-sets`.
+
+### Added — file structure
+
+- `src/providers/CustomSessionSetsView.ts` (~500 LOC): the new
+  `WebviewViewProvider`. Owns lifecycle, message protocol, snapshot
+  serialization.
+- `src/providers/OrchestratorAccordion.ts` (~430 LOC, extracted):
+  pure render helpers — `renderGaugeSvg`, `describeMarker`,
+  `describeRecommendation`, mismatch helpers, `escHtml`, the visual-
+  treatment matrix. No `vscode.*` lifecycle / filesystem watcher
+  coupling.
+- `src/providers/MarkerWatchService.ts` (~395 LOC, extracted): the
+  marker reader, per-set marker watcher, state-watcher,
+  workspace-folder listener, polling backstop, slug validation.
+  Emits typed events; presentation-agnostic.
+- `src/providers/ActionRegistry.ts` (~80 LOC): the 14 row-action
+  registry with typed predicates. Single source of truth for action
+  applicability.
+- `src/providers/suppressionState.ts` (~60 LOC): tuple-keyed
+  (slug, marker.updatedAt) suppression reducer for the manual-
+  collapse "current occurrence only" behavior.
+- `src/types/sessionSetsWebviewProtocol.ts` (~130 LOC): typed
+  discriminated unions for host↔webview messages with monotonic
+  version field. Prevents stale-render races from out-of-order
+  watcher/polling events.
+- `media/session-sets-tree/client.js` (~280 LOC): webview-side
+  rendering, kbd nav, ARIA, contextmenu/Shift+F10/Context Menu key
+  dispatch, monotonic-version snapshot drop, defense-in-depth
+  HTML escaping.
+- `media/session-sets-tree/tree.css` (~270 LOC): tree shell styling
+  (bucket headers, row hover/focus/selection, accordion body) plus
+  the lifted v0.15.0 gauge CSS.
+
+### Added — test coverage
+
+- Layer-2 unit tests: `actionRegistry.test.ts`,
+  `suppressionState.test.ts`, `markerWatchService.test.ts`. Run via
+  `npm run test:unit`; complement the Layer-3 Playwright smoke.
+- Layer-3 Playwright: `session-sets-tree.spec.ts` replaces the
+  retired `treeView.spec.ts` + `orchestrator-indicator.spec.ts`.
+  Covers ARIA tree structure, bucket grouping, welcome panel,
+  HTML-escape XSS path, loading→ready transition.
+- `electronLaunch.openSessionSetsView` updated to return a
+  `FrameLocator` traversing the two-level webview iframe stack
+  (outer sandbox + inner content frame).
+
+### Removed
+
+- `src/providers/SessionSetsProvider.ts` (deleted; helpers were
+  already in `SessionSetsModel` after S3).
+- `src/providers/orchestratorIndicatorProvider.ts` (deleted; helpers
+  moved to `OrchestratorAccordion.ts` + `MarkerWatchService.ts`).
+- `src/test/playwright/treeView.spec.ts` + `orchestrator-indicator.spec.ts`
+  (logic ported to `session-sets-tree.spec.ts`).
+- `src/test/suite/cancelTreeView.test.ts` + `src/test/suite/e2e/`
+  (TreeView-specific @vscode/test-electron tests; mechanism is
+  obsolete with the pivot. Bucketing/sort invariants already
+  covered by `sessionSetsProvider.test.ts` repointed to
+  `SessionSetsModel` in S3).
+- `package.json` `dabblerOrchestratorIndicator` view entry and the
+  14 `view/item/context` rules (now driven by `ActionRegistry` per
+  S4 M2).
+
+### Risks (per S4 audit synthesis)
+
+- R10 (focus/a11y): top-tier risk per GPT-5.4. Mitigation: WAI-ARIA
+  tree pattern + Layer-3 kbd nav coverage.
+- R11 (QuickPick UX divergence): mid-tier. Mitigation: theme-aware,
+  keyboard-navigable; v1.1 custom HTML menu if needed.
+- R12 (invalid interactive nesting): mitigated by M1 DOM fix
+  (focusable container, not `<button>` wrapping accordion body).
+- R13 (XSS via marker payload): mitigated by mandatory `escHtml()`
+  on every dynamic webview interpolation + Layer-2/Layer-3 test
+  coverage.
+- R14 (message-ordering race): mitigated by monotonic version field
+  on every render message (webview drops out-of-order).
+
 ### S4 custom-tree implementation audit (mid-Set 029, 2026-05-18)
 
 - Authored S4 pre-session audit at

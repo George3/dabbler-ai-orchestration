@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { SessionSetsProvider } from "./providers/SessionSetsProvider";
+import { CustomSessionSetsView } from "./providers/CustomSessionSetsView";
+import { MarkerWatchService } from "./providers/MarkerWatchService";
 import { ScanState } from "./providers/scanState";
 import { registerMigrateSetCommand } from "./commands/migrateSet";
 import { discoverRoots, readAllSessionSets } from "./utils/fileSystem";
@@ -17,7 +18,6 @@ import { registerCostDashboardCommand } from "./dashboard/CostDashboard";
 import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
 import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
-import { OrchestratorIndicatorProvider } from "./providers/orchestratorIndicatorProvider";
 import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
 import { registerSetOrchestratorManualStub } from "./commands/setOrchestratorManualStub";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
@@ -54,19 +54,21 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: () => scanState.dispose() });
   scanState.setLoading();
 
-  const provider = new SessionSetsProvider(context.extensionUri, scanState);
+  // Set 029 Session 4: replaced the native TreeView with a custom
+  // webview tree. CustomSessionSetsView owns rendering, the
+  // accordion-body for the resolved in-progress set's orchestrator
+  // gauges, the typed message protocol with monotonic version, and
+  // the QuickPick-based row-context menu (per S4 audit Q6 = a).
+  const marker = new MarkerWatchService();
+  context.subscriptions.push({ dispose: () => marker.dispose() });
+  const provider = new CustomSessionSetsView(context, scanState, marker);
+  context.subscriptions.push({ dispose: () => provider.dispose() });
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("dabblerSessionSets", provider)
+    vscode.window.registerWebviewViewProvider(CustomSessionSetsView.viewType, provider),
   );
 
   const evaluateContextKeys = () => {
-    evaluateSupportContextKeys(provider._cache ?? readAllSessionSets());
-  };
-
-  const originalRefresh = provider.refresh.bind(provider);
-  provider.refresh = () => {
-    originalRefresh();
-    setImmediate(evaluateContextKeys);
+    evaluateSupportContextKeys(readAllSessionSets());
   };
   // v0.13.2: defensive — `evaluateContextKeys()` calls `readAllSessionSets()`
   // which iterates every session set's session-state.json. A single
@@ -144,6 +146,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshAll = () => {
     bindWatchers();
     provider.refresh();
+    setImmediate(evaluateContextKeys);
   };
 
   // Defensive: bindWatchers iterates roots and creates filesystem
@@ -222,19 +225,12 @@ export function activate(context: vscode.ExtensionContext): void {
     registerMigrateSetCommand(context, { refreshView: refreshAll }),
   );
 
-  // Set 029 Session 2: orchestrator-indicator gauges. The webview view
-  // is registered against `dabblerOrchestratorIndicator` (declared in
-  // package.json as type:"webview" above the session-sets tree). Hook
-  // installer + manual-override stub + writer-log opener are siblings.
-  safeRegister("registerOrchestratorIndicatorView", () => {
-    const indicatorProvider = new OrchestratorIndicatorProvider(context.extensionUri);
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(
-        OrchestratorIndicatorProvider.viewType,
-        indicatorProvider,
-      ),
-    );
-  });
+  // Set 029 Session 4: the dedicated dabblerOrchestratorIndicator view
+  // is retired in v0.16.0. The orchestrator gauges live in the
+  // CustomSessionSetsView accordion-body for the resolved in-progress
+  // set (registered above). Hook installer + manual-override stub +
+  // writer-log opener remain available as standalone commands; the
+  // accordion-body buttons dispatch them via postMessage.
   safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
     registerInstallOrchestratorHookClaudeCodeCommand(context),
   );

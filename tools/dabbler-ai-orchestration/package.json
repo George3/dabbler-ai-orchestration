@@ -2,7 +2,7 @@
   "name": "dabbler-ai-orchestration",
   "displayName": "Dabbler AI Orchestration",
   "description": "Project wizard, session-set explorer, cost dashboard, and adoption-bootstrap entry point for the Dabbler AI-led workflow.",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "publisher": "DarndestDabbler",
   "private": true,
   "engines": {
@@ -54,11 +54,6 @@
       "dabblerSessionSetsContainer": [
         {
           "type": "webview",
-          "id": "dabblerOrchestratorIndicator",
-          "name": "Orchestrator",
-          "contextualTitle": "Dabbler AI Orchestration"
-        },
-        {
           "id": "dabblerSessionSets",
           "name": "Session Sets",
           "contextualTitle": "Dabbler AI Orchestration"
@@ -261,78 +256,7 @@
           "group": "navigation@3"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "dabblerSessionSets.openSpec",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "1_open@1"
-        },
-        {
-          "command": "dabblerSessionSets.openActivityLog",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "1_open@2"
-        },
-        {
-          "command": "dabblerSessionSets.openChangeLog",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "1_open@3"
-        },
-        {
-          "command": "dabblerSessionSets.openAiAssignment",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "1_open@4"
-        },
-        {
-          "command": "dabblerSessionSets.openUatChecklist",
-          "when": "view == dabblerSessionSets && viewItem =~ /:uat($|:)/ && dabblerSessionSets.uatSupportActive",
-          "group": "1_open@5"
-        },
-        {
-          "command": "dabblerSessionSets.revealPlaywrightTests",
-          "when": "view == dabblerSessionSets && viewItem =~ /:e2e($|:)/ && dabblerSessionSets.e2eSupportActive",
-          "group": "1_open@6"
-        },
-        {
-          "command": "dabblerSessionSets.openSessionState",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "1_open@7"
-        },
-        {
-          "command": "dabblerSessionSets.openFolder",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "2_navigate@1"
-        },
-        {
-          "command": "dabblerSessionSets.copyStartCommand.default",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:(in-progress|not-started)/",
-          "group": "3_copy@1"
-        },
-        {
-          "command": "dabblerSessionSets.copyStartCommand.parallel",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:(in-progress|not-started)/",
-          "group": "3_copy@2"
-        },
-        {
-          "command": "dabblerSessionSets.copySlug",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:/",
-          "group": "4_copy_meta@1"
-        },
-        {
-          "command": "dabblerSessionSets.cancel",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:(in-progress|not-started|done)/",
-          "group": "9_lifecycle@1"
-        },
-        {
-          "command": "dabblerSessionSets.restore",
-          "when": "view == dabblerSessionSets && viewItem =~ /^sessionSet:cancelled/",
-          "group": "9_lifecycle@2"
-        },
-        {
-          "command": "dabblerSessionSets.migrate",
-          "when": "view == dabblerSessionSets && viewItem =~ /:needs-migration($|:)/",
-          "group": "8_migrate@1"
-        }
-      ]
+      "view/item/context": []
     },
     "configuration": {
       "title": "Dabbler AI Orchestration",

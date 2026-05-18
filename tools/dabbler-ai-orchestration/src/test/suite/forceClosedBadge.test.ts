@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { forceClosedBadge } from "../../providers/SessionSetsProvider";
+import { forceClosedBadge } from "../../providers/SessionSetsModel";
 import { LiveSession, SessionSet } from "../../types";
 
 // Set 9 Session 3 (D-2 hard-scoping of ``--force``): the [FORCED]

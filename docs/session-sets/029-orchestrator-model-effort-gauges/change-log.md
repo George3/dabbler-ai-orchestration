@@ -1,9 +1,9 @@
 # Set 029: Orchestrator Model & Effort Indicator Gauges
 
-**Status:** In progress (3 of 6 sessions complete; mid-set pivot 2026-05-18 reshaped 4 → 6 sessions)
+**Status:** In progress (4 of 6 sessions complete; mid-set pivot 2026-05-18 reshaped 4 → 6 sessions)
 **Created:** 2026-05-17
-**Cost so far:** $1.548 (S1 $0.845 + S2 $0.578 + mid-set custom-tree-pivot audit $0.022 Gemini Pro + S3 $0.085 Gemini Pro × 3 rounds; GPT-5.4 via manual paste = $0.00).
-**Forecast remaining:** $0.30–$1.00 across S4 audit + S4/S5/S6 verifications.
+**Cost so far:** $1.651 (S1 $0.845 + S2 $0.578 + mid-set custom-tree-pivot audit $0.022 Gemini Pro + S3 $0.085 Gemini Pro × 3 rounds + mid-set S4 implementation audit $0.025 Gemini Pro + S4 verification $0.053 Gemini Pro × 2 rounds; GPT-5.4 via manual paste = $0.00).
+**Forecast remaining:** $0.15–$0.45 across S5/S6 verifications.
 **NTE ceiling:** $5.00 (operator-confirmed 2026-05-18 at S1 resume).
 
 ---
@@ -320,9 +320,136 @@ provider + tests + CHANGELOG, ~95k chars), and Round C (post-fix
 reader only, ~46k chars). Verifier pinned to `gemini-pro` after the
 two gpt-5-4 429s. Cost came in well under the $0.10–$0.30 forecast.
 
-## Session 4: (pending — custom-tree pivot; gated by own pre-session audit)
+## Session 4: custom-tree pivot (COMPLETE 2026-05-18)
 
-(populated at session close)
+**Verdict:** VERIFIED after two routed verification rounds (Gemini
+Pro). Round A returned SUGGEST (1) on a minor `describeMarker`
+purity item (calls `Date.now()` for the secondary effort-age
+suffix); triaged as optional follow-up since the function is
+otherwise pure and the integration round (B) was clean. Round B
+returned VERIFIED on all 8 questions covering DOM structure / ARIA
+semantics / monotonic version drop / command-dispatch allowlist /
+indicator-action parity / suppression handshake / ambiguity banner
+/ CSP & nonce hygiene.
+
+**Deliverables (v0.16.0 packaged, not yet published):**
+
+- `dabblerSessionSets` re-registered as a `WebviewViewProvider`.
+  Native `TreeDataProvider` retired. Same view id, same view
+  container, same `viewsWelcome` declaration.
+- `dabblerOrchestratorIndicator` view retired in the same release.
+  Gauges anchored in per-row accordions on the resolved in-progress
+  set (per S4 Q11 = a; M8 indicator-action parity gate satisfied).
+- ARIA-compliant tree: `role="tree"` / `role="group"` /
+  `role="treeitem"` / `aria-level` / `aria-expanded` / `aria-selected`
+  with roving tabindex and full WAI-ARIA 1.2 single-select tree
+  kbd nav (↑/↓/Home/End/←/→/Enter/Space/Shift+F10/ContextMenu).
+- Typed `ActionRegistry` replaces the 14 deleted
+  `view/item/context` declarative rules from package.json (per S4 M2).
+  Right-click + Shift+F10 + Context Menu key all open the same
+  QuickPick from `ActionRegistry.applicableActions(set, supports)`.
+- Per-set marker handling unchanged from S3 (walk-up resolver,
+  fail-closed posture, multi-writer precedence, schema-v3 slug
+  integrity check). On `multiple-in-progress-sets`, an ambiguity
+  banner surfaces above the In Progress bucket with a link to the
+  writer log (per S4 Q8 = a+c).
+- Suppression state persisted in `workspaceState` under
+  `dabbler.sessionSets.suppressedExpand`, keyed on
+  `(slug, marker.updatedAt)` tuple per S4 M7 — manual collapse
+  suppresses for the current occurrence only; the next SessionStart
+  writes a fresh marker with a new updatedAt that naturally lifts
+  the suppression.
+- Versioned monotonic message protocol per S4 M3 — the webview
+  client drops any render message with `version < currentVersion`
+  to prevent stale watcher/polling repaints over fresh state.
+- Defense-in-depth HTML escaping on every dynamic webview
+  interpolation per S4 M5 — `escHtml()` host-side in
+  `OrchestratorAccordion.ts`, repeated webview-side in
+  `client.js` for the row name + description + welcome content.
+
+**File changes:**
+
+- **Created** (12 files):
+  - `src/providers/CustomSessionSetsView.ts` (498 LOC)
+  - `src/providers/OrchestratorAccordion.ts` (431 LOC, lifted from
+    the retired indicator provider's render helpers)
+  - `src/providers/MarkerWatchService.ts` (395 LOC, lifted from
+    the retired indicator provider's lifecycle / watchers)
+  - `src/providers/ActionRegistry.ts` (79 LOC)
+  - `src/providers/suppressionState.ts` (61 LOC)
+  - `src/types/sessionSetsWebviewProtocol.ts` (130 LOC)
+  - `media/session-sets-tree/client.js` (~290 LOC)
+  - `media/session-sets-tree/tree.css` (~280 LOC)
+  - `src/test/suite/actionRegistry.test.ts` (~135 LOC)
+  - `src/test/suite/suppressionState.test.ts` (~95 LOC)
+  - `src/test/suite/markerWatchService.test.ts` (~95 LOC)
+  - `src/test/playwright/session-sets-tree.spec.ts` (~165 LOC)
+- **Modified** (6 files):
+  - `src/extension.ts` (register `CustomSessionSetsView`; remove
+    `SessionSetsProvider` + `OrchestratorIndicatorProvider`)
+  - `package.json` (view type → webview; delete indicator view
+    entry + 14 `view/item/context` entries; version 0.15.0 →
+    0.16.0)
+  - `src/test/suite/forceClosedBadge.test.ts` (repoint import to
+    `SessionSetsModel`)
+  - `src/test/playwright/loading-state.spec.ts` (webview iframe
+    selector)
+  - `src/test/playwright/migration-cta.spec.ts` (FrameLocator type
+    + webview iframe path)
+  - `src/test/playwright/electronLaunch.ts`
+    (`openSessionSetsView` returns a FrameLocator into the
+    two-level webview iframe stack)
+  - `tools/dabbler-ai-orchestration/CHANGELOG.md` (`[0.16.0]` entry)
+- **Deleted** (4 source files + entire `src/test/suite/e2e/`
+  directory):
+  - `src/providers/SessionSetsProvider.ts` (246 LOC)
+  - `src/providers/orchestratorIndicatorProvider.ts` (998 LOC)
+  - `src/test/playwright/orchestrator-indicator.spec.ts` (751 LOC)
+  - `src/test/playwright/treeView.spec.ts` (265 LOC)
+  - `src/test/suite/cancelTreeView.test.ts` + `src/test/suite/e2e/`
+    (TreeView-specific @vscode/test-electron tests — mechanism
+    obsolete with pivot; bucketing/sort invariants covered by
+    `sessionSetsProvider.test.ts` already repointed to
+    `SessionSetsModel` in S3).
+
+**Net code:** ~+2654 LOC new code, ~-2260 LOC deleted, leaving the
+extension surface ~+400 LOC overall with substantially better
+separation of concerns (3 focused provider files where 1 998-LOC
+file existed, plus the dedicated ActionRegistry + suppressionState +
+typed protocol modules that didn't exist before).
+
+**Layer-2 unit-test results:**
+
+`npm run test:unit` — **369 passing, 2 pre-existing failures**
+(`configEditor-foundation` ViewColumn stub gap,
+`notificationsSection` HTML assertion — both predate S4). S4's 26
+new tests all green.
+
+**TypeScript compile:**
+
+`npx tsc --noEmit` — clean. No errors, no warnings.
+
+**Cost:**
+
+- Pre-session audit (mid-set, captured earlier): $0.025 Gemini Pro
+- Round A verification: $0.027 Gemini Pro
+- Round B verification: $0.026 Gemini Pro
+- **Session 4 total: $0.078** — well under the $0.20–$0.60 spec
+  forecast. Two rounds converged cleanly without must-fix items
+  triggering a Round C.
+
+**Open follow-ups (not S4 ship blockers):**
+
+1. `describeMarker` `Date.now()` purity (Round A SUGGEST) — pass
+   `effortAgeSec` into the function instead of computing inline.
+   ~10 LOC; suggested for hygiene PR or S5/S6 fold-in.
+2. Type-ahead search in the tree (Gemini M10 from S4 audit) —
+   deferred to v1.1; `// TODO:` marker in `client.js` already
+   placed.
+3. Inline overflow button for row actions (GPT-5.4 Q6 rec) —
+   optional v1.1 if right-click-only discovery cost materializes.
+4. Visual freshness cue beyond "updated Xs ago" — defer until
+   cross-window confusion surfaces in real use.
 
 ## Session 5: (pending — non-Claude provider detection)
 
