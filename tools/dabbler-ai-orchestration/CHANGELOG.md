@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### S4 custom-tree implementation audit (mid-Set 029, 2026-05-18)
+
+- Authored S4 pre-session audit at
+  [`docs/proposals/2026-05-18-custom-tree-implementation/`](../../docs/proposals/2026-05-18-custom-tree-implementation/)
+  per memory `feedback_audit_then_spec_for_substantial_features`.
+- Cross-engine consensus: Gemini Pro (router, $0.025) + GPT-5.4
+  (manual paste in GitHub Copilot, $0.00) — both reviewers ratified
+  all 11 implementation-shape questions (Q1–Q11) at proposed defaults.
+- GPT-5.4 added 8 must-fix tightening items: focusable-treeitem DOM
+  (not `<button>`-wrapped), typed `ActionRegistry`, versioned
+  monotonic message protocol, presentation-agnostic
+  `MarkerWatchService`, mandatory `escHtml()` on dynamic webview
+  text, Layer-2 unit coverage for new logic, exact suppression-key
+  tuple shape, and indicator-view retirement gated on action parity.
+- Gemini added: Round-B verification pre-planned (single-round
+  forecast was unrealistic for ~1500 LOC of new code); type-ahead
+  search marked as v1.1 TODO.
+- Spec.md Section 4 of 6 rewritten as 20-step implementation plan;
+  Risks section grew by 5 (R10–R14: focus/a11y top-tier, QuickPick
+  UX mid-tier, invalid interactive nesting, XSS via marker payload,
+  message-ordering race); Total estimated cost section updated.
+- No code changes shipped; mid-set audit only. Implementation runs
+  as Session 4 ship under v0.16.0.
+
 ## [0.15.0] — 2026-05-18 (Set 029 Session 3 — per-session-set identity)
 
 ### Changed — orchestrator-marker identity model (BREAKING within the v0.14.2 preview)

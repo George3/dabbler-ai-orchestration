@@ -619,80 +619,335 @@ verification; implementation is local Claude tokens).
 
 ---
 
-### Session 4 of 6: Custom-tree pivot (NEW; high-level scaffold — gated by its own pre-session audit)
+### Session 4 of 6: Custom-tree pivot (REVISED 2026-05-18 via custom-tree-implementation audit)
 
-**Goal:** Replace the native `dabblerSessionSets` `TreeView` with
-a webview-rendered custom tree (same view id, same view container).
-Lift the v0.14.2 orchestrator gauges into per-row accordions so
-the orchestrator UI is contextually anchored to the work being
-done. Retire the dedicated `dabblerOrchestratorIndicator` view.
+**Goal:** Replace the native `dabblerSessionSets` `TreeView` with a
+webview-rendered custom tree (same view id, same view container).
+Lift the v0.14.2 orchestrator gauges into per-row accordions on
+in-progress rows so the orchestrator UI is contextually anchored
+to the work it describes. Retire the dedicated
+`dabblerOrchestratorIndicator` view in the same session. The S3
+per-set markers + walk-up resolver + `SessionSetsModel` data layer
+carry forward unchanged.
 
-**Why a separate session, separate audit:** GPT-5.4's review of
-the custom-tree pivot proposal flagged that the reimplementation
-surface is larger than the cross-provider proposal scoped — 14
-row-context actions in `package.json`, plus loading-state,
-scan-state gating, `viewsWelcome` integration, and ARIA tree
-semantics. The split-into-its-own-session decision (D1) buys time
-to spec these properly. The pre-S4 audit will be informed by
-what S3 has shipped (the `SessionSetsModel` extraction gives the
-audit a concrete data-layer interface to design against). Author
-the S4 spec via the same audit-then-spec pattern (per memory
-`feedback_audit_then_spec_for_substantial_features`) closer to S4
-start.
+**Operator decisions encoded** (per
+[`docs/proposals/2026-05-18-custom-tree-implementation/synthesis.md`](../../proposals/2026-05-18-custom-tree-implementation/synthesis.md),
+three-way agreement: operator + Gemini Pro + GPT-5.4):
 
-**High-level S4 deliverables (will be refined by the S4 audit):**
+- **Q1–Q11 all locked at proposed defaults** — see synthesis.md table
+  for the full grid; no reviewer divergences on the answer set.
+- **M1–M10 tightening items** (mostly from GPT-5.4) — absorbed into
+  the step list below.
+- **Five new risks added to spec (R10–R14)**: focus/a11y (top-tier),
+  QuickPick UX divergence (mid-tier), invalid interactive nesting,
+  XSS via marker payload, message-ordering race. See Risks section.
+- **Cost forecast bumped** from $0.10–$0.30 to **$0.20–$0.60** with
+  Round-B verification pre-planned per memory
+  `feedback_split_large_verification_bundles`.
 
-- Re-register `dabblerSessionSets` as a `WebviewViewProvider`
-  (same view id, same view container). Re-target
-  `viewsWelcome` content through the webview's empty-state path.
-- Lift v0.14.2 gauge HTML/SVG/CSS from
-  `orchestratorIndicatorProvider.ts` into the new view's
-  accordion body. Retire the `dabblerOrchestratorIndicator` view
-  entry from `package.json` once the accordion body is proven.
-- Reimplement (must-fix per both reviewers, not deferrable): keyboard
-  nav, **all 14 row-context actions**, title-bar refresh,
-  `viewsWelcome` empty state, loading-state transition, ARIA
-  tree semantics (`role="tree"`, `role="treeitem"`,
-  `aria-expanded`), selection/focus styling.
-- Auto-expand on SessionStart hook fire (per the S3 marker
-  write); collapse on session close; honor manual collapse for
-  the **current session occurrence only** (GPT-5.4 refinement
-  on Q4 — key suppression to marker `updatedAt` / current
-  session number, not the set indefinitely).
-- Multi-window observation: both windows render the same per-set
-  marker (Gemini + GPT-5.4 concur this is a feature). Include a
-  freshness cue (`updated Xs ago`) so the operator can tell this
-  is shared live state (GPT-5.4 add).
-- Decide on Q3 (orphan-render shape) with the custom tree in
-  hand. At that point the choice between "recent activity
-  pseudo-section" (GPT-5.4 preferred) and just-leave-empty
-  becomes concrete.
-- Drag/drop and multi-select stay deferred — not used today,
-  not added.
+**Steps:**
 
-**Pre-session audit:**
+1. **Re-register `dabblerSessionSets` as `WebviewViewProvider`.**
+   Same view id, same view container, same name "Session Sets".
+   Flip `type` in `package.json` from native tree (default) to
+   `"webview"`. Container icon, ordering, `contextualTitle`,
+   `viewsWelcome` declaration all preserved. Delete the
+   `dabblerOrchestratorIndicator` view entry in the same
+   package.json edit (per M8: gated on accordion-body preserving
+   install-hook + set-orchestrator + open-writer-log buttons).
 
-- Author S4-specific proposal at
-  `docs/proposals/2026-MM-DD-custom-tree-implementation/proposal.md`.
-- Route through GPT-5.4 (manual paste per established workaround
-  if API still 429-rate-limited) + Gemini Pro (via router).
-- Synthesize; resolve any new divergences with operator.
-- Apply spec delta to this section before S4 begins.
-- Estimated audit cost: $0.05–$0.20 (Gemini Pro via router;
-  GPT-5.4 manual = $0.00).
+2. **DOM structure (per M1 — invalid-nesting fix).** Do NOT use
+   `<button role="treeitem">` wrapping the accordion body. Use
+   focusable container with separate header control:
+   ```html
+   <div role="tree" aria-label="Session Sets">
+     <div role="group" aria-label="In Progress (1)">
+       <div role="treeitem" tabindex="-1" aria-level="1" aria-expanded="true"
+            aria-selected="false" data-slug="029-...">
+         <div class="row-header" role="presentation">
+           <span class="icon">…</span>
+           <span class="name">029-…</span>
+           <span class="description">3/6 · session 4 in flight · 2026-05-18</span>
+         </div>
+         <div class="accordion-body" role="region" aria-label="Orchestrator">
+           <!-- lifted gauge HTML; may contain buttons safely -->
+         </div>
+       </div>
+     </div>
+   </div>
+   ```
+   Roving `tabindex` (or `aria-activedescendant`) tracks the focused
+   row. Accordion-body buttons (install-hook, set-orchestrator,
+   open-writer-log) are NOT nested inside an interactive treeitem
+   button — they're inside a `role="region"`, which is valid.
 
-**Estimated S4 implementation cost:** $0.10–$0.30 (single
-end-of-session verification; implementation is local Claude
-tokens; may need Round-B per memory
-`feedback_split_large_verification_bundles` if reimplementation
-bundle exceeds verifier window).
+3. **ARIA tree semantics (WAI-ARIA 1.2 single-select tree pattern).**
+   Required for v1:
+   - `role="tree"` on container; `role="group"` on bucket;
+     `role="treeitem"` on each row; `role="region"` on accordion body.
+   - `aria-level`, `aria-expanded` (only on expandable rows —
+     non-in-progress rows omit it per M3's "no inert chevron"),
+     `aria-selected` on focused row.
+   - Roving `tabindex` (single tabstop into the tree; arrow keys
+     move focus within).
+   - Keyboard: ↑/↓ sibling, ←/→ collapse/expand (or parent/first-
+     child), Enter/Space activate (= `openSpec` for v1 per M3's
+     primary-activation rule), Home/End first/last, `Shift+F10` +
+     Context Menu key open the action QuickPick on the focused row.
+   - Tab from inside expanded accordion exits cleanly to next
+     focusable element outside the tree (no focus traps).
+   - `// TODO: type-ahead search (deferred to v1.1)` comment in the
+     kbd handler per Gemini M10.
 
-**Progress keys:** _to be filled in by the S4 audit_; preliminary:
-`session-004/webview-tree-registered`, `session-004/accordion-body-lifted`,
-`session-004/indicator-view-retired`, `session-004/kbd-nav-shipped`,
-`session-004/context-menus-parity`, `session-004/aria-tree-shipped`,
-`session-004/loading-empty-state-parity`, `session-004/auto-expand-shipped`,
-`session-004/playwright-rewritten`
+4. **Three-file extraction (per Q1 + M4).**
+   - `src/providers/OrchestratorAccordion.ts` (~400 LOC, new): pure
+     render functions lifted from `orchestratorIndicatorProvider.ts`
+     — `renderGaugeSvg`, `describeMarker`, `describeRecommendation`,
+     `tierRank`, `effortRank`, `fmtAgeStandalone`,
+     `providerHasExtraCapacity`, mismatch helpers, `escHtml`, the
+     visual-treatment matrix. **No `vscode.*` lifecycle calls; no
+     filesystem watchers.** Just deterministic string-in → HTML-out.
+   - `src/providers/MarkerWatchService.ts` (~150 LOC, new): the
+     marker reader, the `session-state.json` watcher, the
+     workspace-folder listener, the polling backstop. **Emits typed
+     events / state**, not HTML or webview commands. Disposable;
+     injected into the view provider as a dependency. Unit-testable
+     in isolation (which today's mixed provider is not).
+   - `src/providers/CustomSessionSetsView.ts` (~500 LOC, new): the
+     `WebviewViewProvider`. Owns lifecycle (resolveWebviewView,
+     dispose), consumes `SessionSetsModel` + `MarkerWatchService` +
+     `OrchestratorAccordion`, serializes render snapshots, posts
+     messages to the webview, receives webview messages and
+     dispatches via `ActionRegistry` + `vscode.commands.executeCommand`.
+   - **Delete** `src/providers/SessionSetsProvider.ts` (no re-export
+     shell — per M4). Test files that imported helpers from it
+     repoint to `SessionSetsModel`.
+   - **Delete** `src/providers/orchestratorIndicatorProvider.ts`
+     (no re-export shell — per M4). Its render helpers are now in
+     `OrchestratorAccordion.ts`; its lifecycle is now in
+     `MarkerWatchService.ts` + `CustomSessionSetsView.ts`.
+
+5. **`ActionRegistry` (per M2).** New
+   `src/providers/ActionRegistry.ts` (~150 LOC). One typed module
+   with the 14 row-actions, each as `{ id, label, when: (set:
+   SessionSet, supports: { uat, e2e }) => boolean }`. The same
+   predicates drive (a) the right-click QuickPick, (b) `Shift+F10`
+   / Context Menu key, (c) any future inline overflow button.
+   Replaces the lost `view/item/context` declarative rules in
+   `package.json` — those entries are **deleted** from package.json
+   in this session.
+
+6. **Webview client script (per M6 — separate from view provider).**
+   New `media/session-sets-tree/client.js` (~200 LOC). Owns kbd
+   navigation, selection-state bookkeeping, contextmenu event
+   capture, postMessage to the host. Keeping this OUT of
+   `CustomSessionSetsView.ts` (which runs in the extension host) is
+   a hard rule — host file stays focused on lifecycle + message
+   protocol; client.js stays focused on user interaction.
+   Cross-script type safety via the shared protocol module (step 7).
+
+7. **Typed message protocol with monotonic version (per M3).** New
+   `src/types/sessionSetsWebviewProtocol.ts` (~100 LOC).
+   Discriminated unions for `HostToWebview` and `WebviewToHost`
+   messages; every render message carries a monotonic
+   `version: number` field. Webview client.js drops any render
+   message with `version < currentVersion`. Snapshot-style payloads
+   for row list; narrow event messages for UI-only state (focus
+   moved, accordion toggled). Eliminates the message-ordering race
+   when watcher events + polling backstop + manual refresh race.
+
+8. **Suppression-state persistence (per Q2 + M7).** `workspaceState`
+   key shape: `dabbler.sessionSets.suppressedExpand`, value =
+   `Record<string, string>` mapping `slug` → `marker.updatedAt` of
+   the suppressed occurrence. A row is suppressed iff
+   `state[slug] === currentMarker.updatedAt`. Manual re-expand
+   (click chevron) clears `state[slug]`. Prune: on every persist,
+   drop entries whose slug is no longer in any bucket's set list.
+   Reducer logic in `src/providers/suppressionState.ts` (small file,
+   ~50 LOC, fully unit-tested per M6).
+
+9. **HTML escaping (per M5).** Every dynamic string interpolation
+   into webview HTML goes through `escHtml()` (lifted from
+   `orchestratorIndicatorProvider.ts` into `OrchestratorAccordion.ts`).
+   Includes: set names, descriptions, recommendation text, marker
+   `model` / `modelDisplayName` / `effort.native`, ai-assignment
+   recommendation, "updated Xs ago" formatted strings. Layer-2 test:
+   set name with `<script>` content renders escaped, not executed.
+
+10. **`viewsWelcome` empty state.** Preserve the `viewsWelcome`
+    declaration in `package.json` (operator-discoverable). Extension
+    host parses the contents string at activation, passes to webview
+    as initial render state; webview renders as HTML with `command:`
+    links intact (webview supports `command:` href natively when
+    `enableCommandUris: true`).
+
+11. **Loading-state UX.** When `scanState == loading`, webview
+    renders centered `<div>` "Setting up your project…" with subtext
+    "scanning session sets…". Identical text to today's loading
+    sentinel. Host posts `{ type: "scanStateChanged", state:
+    "loading"|"ready", version }` on every transition.
+
+12. **Orphan handling (per Q8 = a+c).** S3's silent fail-close
+    behavior preserved: when the resolver returns
+    `{ reason: "no-in-progress-set" | "no-docs-session-sets" }`, no
+    marker is written, no accordion is rendered. Add: when
+    `{ reason: "multiple-in-progress-sets" }`, render a banner above
+    the In Progress bucket: `"Multiple in-progress sets —
+    orchestrator info hidden. [Open writer log]"`. Banner is
+    visually distinct from ordinary empty-state copy (lighter
+    background, info-icon prefix).
+
+13. **Indicator-action parity (per M8 — ship blocker for
+    retirement).** Before `dabblerOrchestratorIndicator` view entry
+    is deleted, the accordion body MUST preserve:
+    - **Install hook button** (CTA when no marker): fires
+      `dabbler.installOrchestratorHook.claudeCode`.
+    - **Set orchestrator button** (CTA when fresh marker /
+      always-available action): fires `dabbler.setOrchestrator`.
+    - **Open writer log button** (footer link): fires
+      `dabbler.openOrchestratorWriterLog`.
+    All three buttons fire via the same `postMessage` →
+    `vscode.commands.executeCommand` plumbing as the context-menu
+    actions.
+
+14. **Title-bar actions preserved.** `view/title` entries in
+    `package.json` (refresh, showCostDashboard, getStarted) work
+    identically for webview and tree views. No code change.
+
+15. **Layer-2 unit coverage (per M6).** New unit-test files:
+    - `src/test/suite/actionRegistry.test.ts` (~100 LOC): every
+      action × every state combination × uat/e2e gating.
+    - `src/test/suite/suppressionState.test.ts` (~50 LOC): tuple-key
+      reducer, manual-reexpand clearing, pruning.
+    - `src/test/suite/markerWatchService.test.ts` (~100 LOC):
+      state-transition emission (scan / marker-changed /
+      workspace-folder-changed); subscription lifecycle.
+
+16. **Layer-3 Playwright rewrite.** New
+    `src/test/playwright/session-sets-tree.spec.ts` (~500 LOC).
+    Scenarios:
+    - Bucket grouping + sort order (port from `treeView.spec.ts`).
+    - Accordion auto-expand on SessionStart marker write;
+      auto-collapse on session close.
+    - Manual collapse suppresses auto-expand for current occurrence
+      only (write fresh marker → suppression released).
+    - Right-click on row opens QuickPick with applicable actions
+      only (assert against `ActionRegistry` expectations).
+    - `Shift+F10` and Context Menu key open same QuickPick.
+    - Kbd nav: ↑/↓/Home/End/Enter/Space behavior; focus stays on
+      row when accordion collapsed; Tab exits tree cleanly.
+    - Multiple-in-progress-sets banner renders with link to writer log.
+    - `viewsWelcome` empty state renders with command links functional.
+    - Loading-state sentinel → ready transition swaps cleanly.
+    - All gauge scenarios from `orchestrator-indicator.spec.ts`:
+      signalKind matrix (current/configured-default/last-observed/
+      manual), confidence-low rendering, mismatch badge, stale state,
+      schema-v3 slug mismatch fallback.
+    - HTML escape: set name with `<script>` renders as text.
+    - Indicator-action parity: install-hook + set-orchestrator +
+      open-writer-log buttons fire correct commands.
+    - Theme parity: light + dark theme screenshots of an in-progress
+      row with expanded accordion.
+
+17. **Selector updates on other Playwright specs.**
+    `src/test/playwright/loading-state.spec.ts` and
+    `src/test/playwright/migration-cta.spec.ts` selectors change
+    from native-tree `[role=treeitem]` / `[aria-label]` patterns to
+    webview-side `[data-slug]` / `[role=treeitem]` patterns
+    (overlap intentional — ARIA role survives). Logic unchanged;
+    assertion strings updated.
+
+18. **Delete superseded files.**
+    - `src/providers/SessionSetsProvider.ts` (deleted; tests
+      repointed to `SessionSetsModel`).
+    - `src/providers/orchestratorIndicatorProvider.ts` (deleted;
+      helpers moved to `OrchestratorAccordion.ts`, lifecycle moved
+      to `MarkerWatchService.ts`).
+    - `src/test/playwright/orchestrator-indicator.spec.ts` (deleted;
+      logic ported to `session-sets-tree.spec.ts`).
+    - `src/test/playwright/treeView.spec.ts` (deleted; logic ported
+      to `session-sets-tree.spec.ts`).
+    - Package.json `view/item/context` entries (all 14 — actions now
+      fired by `ActionRegistry` via QuickPick).
+    - Package.json `dabblerOrchestratorIndicator` view entry.
+
+19. **Version bump:** 0.15.0 → **0.16.0** (minor — architectural
+    change: TreeView → WebviewView).
+
+20. **CHANGELOG.** New `[0.16.0]` entry describing the pivot.
+    Cross-link to `proposal.md` + `synthesis.md`. Notes:
+    indicator-view retired in same release (no parallel surfaces);
+    QuickPick replaces native context menu (UX divergence,
+    theme-aware); `view/item/context` removed from package.json
+    (`ActionRegistry` is the new authority).
+
+**Creates:**
+
+- `tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts`
+- `tools/dabbler-ai-orchestration/src/providers/OrchestratorAccordion.ts`
+- `tools/dabbler-ai-orchestration/src/providers/MarkerWatchService.ts`
+- `tools/dabbler-ai-orchestration/src/providers/ActionRegistry.ts`
+- `tools/dabbler-ai-orchestration/src/providers/suppressionState.ts`
+- `tools/dabbler-ai-orchestration/src/types/sessionSetsWebviewProtocol.ts`
+- `tools/dabbler-ai-orchestration/media/session-sets-tree/client.js`
+- `tools/dabbler-ai-orchestration/media/session-sets-tree/tree.css`
+- `tools/dabbler-ai-orchestration/src/test/suite/actionRegistry.test.ts`
+- `tools/dabbler-ai-orchestration/src/test/suite/suppressionState.test.ts`
+- `tools/dabbler-ai-orchestration/src/test/suite/markerWatchService.test.ts`
+- `tools/dabbler-ai-orchestration/src/test/playwright/session-sets-tree.spec.ts`
+
+**Touches:**
+
+- `tools/dabbler-ai-orchestration/package.json` (flip view type to
+  webview; delete indicator view entry; delete 14 `view/item/context`
+  entries; preserve `view/title`, `viewsWelcome`, commands,
+  configuration; version bump)
+- `tools/dabbler-ai-orchestration/src/extension.ts` (register
+  `CustomSessionSetsView`; remove `SessionSetsProvider` +
+  `OrchestratorIndicatorProvider` registrations)
+- `tools/dabbler-ai-orchestration/src/test/playwright/loading-state.spec.ts`
+  (selector updates)
+- `tools/dabbler-ai-orchestration/src/test/playwright/migration-cta.spec.ts`
+  (selector updates)
+- `tools/dabbler-ai-orchestration/src/test/suite/sessionSetsProvider.test.ts`
+  (repoint imports from deleted `SessionSetsProvider` to `SessionSetsModel`)
+- `tools/dabbler-ai-orchestration/CHANGELOG.md` ([0.16.0] entry)
+
+**Deletes:**
+
+- `tools/dabbler-ai-orchestration/src/providers/SessionSetsProvider.ts`
+- `tools/dabbler-ai-orchestration/src/providers/orchestratorIndicatorProvider.ts`
+- `tools/dabbler-ai-orchestration/src/test/playwright/orchestrator-indicator.spec.ts`
+- `tools/dabbler-ai-orchestration/src/test/playwright/treeView.spec.ts`
+
+**Ends with:** Custom tree shipped in v0.16.0. Single unified
+webview surface; `dabblerOrchestratorIndicator` retired same
+release. Gauges anchored in-row for in-progress sets. 14
+row-actions fired via `ActionRegistry` + QuickPick. WAI-ARIA 1.2
+single-select tree pattern with roving tabindex. Versioned
+monotonic message protocol prevents stale-render races. All
+dynamic text HTML-escaped. Layer-2 unit coverage for
+`ActionRegistry`, suppression-state reducer, `MarkerWatchService`.
+Layer-3 Playwright rewrite covers kbd nav, context menu, ARIA,
+indicator-action parity, theme parity, schema-v3 slug validation.
+0.16.0 packaged, not yet published (publish in S6).
+
+**Progress keys:** `session-004/view-pivot-shipped`,
+`session-004/dom-structure-correct`, `session-004/aria-tree-compliant`,
+`session-004/three-file-extraction-done`, `session-004/action-registry-shipped`,
+`session-004/client-script-extracted`, `session-004/versioned-protocol-shipped`,
+`session-004/suppression-reducer-tested`, `session-004/html-escape-everywhere`,
+`session-004/viewswelcome-parity`, `session-004/loading-state-parity`,
+`session-004/orphan-banner-shipped`, `session-004/indicator-action-parity`,
+`session-004/layer2-unit-coverage`, `session-004/playwright-rewrite-green`,
+`session-004/selector-updates-applied`, `session-004/superseded-files-deleted`,
+`session-004/version-bumped`
+
+**Estimated cost (REVISED per audit synthesis):** **$0.20–$0.60**
+with Round-B pre-planned per memory
+`feedback_split_large_verification_bundles`. Round-A verifies the
+implementation bundle (~1500 LOC pre-split into sub-bundles per the
+same memory if >700 LOC per slice); Round-B verifies fixes applied.
 
 ---
 
@@ -949,6 +1204,60 @@ reflect the new feature; consumer repos pointed at it.
   idempotent on subsequent inits; a one-line note in CHANGELOG
   [0.15.0] flags it; S3 step 2 explicitly requires the
   non-interactive auto-patch as a must-fix.
+- **R10 — Webview focus / tab-order regression** (added 2026-05-18
+  per S4 custom-tree implementation audit; GPT-5.4 flagged as
+  top-tier: "the easiest way for a custom tree to feel broken").
+  Native `TreeView` handles focus/blur, tab order, and ARIA
+  selection automatically. The S4 webview must reproduce all of
+  this manually. A regression — focus lost on collapse, Tab
+  trapping inside an expanded accordion, focused row losing
+  visual highlight — is highly visible to any operator using
+  keyboard nav. Mitigation: WAI-ARIA 1.2 single-select tree
+  pattern with roving `tabindex` per S4 step 3; Layer-3 Playwright
+  kbd-nav coverage explicit (↑/↓/Home/End/Enter/Space/Tab
+  in-and-out scenarios); ship-blocker per M8 — `dabblerOrchestratorIndicator`
+  view does not retire until kbd/focus parity verified.
+- **R11 — QuickPick context-menu UX divergence** (added 2026-05-18
+  per S4 custom-tree implementation audit; GPT-5.4 sized as
+  mid-tier: "acceptable v1 fidelity loss"). VS Code's native
+  right-click context menu has different chrome from a QuickPick
+  fired from the host (cmd-palette styling vs. native menu
+  styling). Operator-visible change for the 14 row-actions.
+  Mitigation: QuickPick is theme-aware and keyboard-navigable;
+  same predicates from `ActionRegistry` drive right-click +
+  `Shift+F10` + Context Menu key, so all three entrypoints feel
+  consistent; v1.1 fallback is a custom HTML menu if feedback
+  flags the divergence as material.
+- **R12 — Invalid interactive nesting / focus trap** (added
+  2026-05-18 per S4 audit GPT-5.4 M1). The naive DOM (a
+  `<button role="treeitem">` wrapping a `<div role="region">`
+  containing more buttons) is invalid HTML and bad a11y —
+  interactive content inside an interactive button. Mitigation:
+  M1 fixes the DOM per S4 step 2 (focusable `<div
+  role="treeitem">` container with separate header control;
+  accordion body sits outside the treeitem tabstop in
+  `role="region"`); Layer-3 Playwright kbd nav covers focus
+  traversal in/out of expanded accordion.
+- **R13 — Webview XSS via marker payload** (added 2026-05-18 per
+  S4 audit GPT-5.4 M5). Set names, descriptions, recommendation
+  text, marker `model` / `effort.native` / `modelDisplayName`,
+  and ai-assignment text all flow from JSON files into webview
+  HTML. Without escaping, a `<` in a set name (or, in the worst
+  case, an attacker-controlled marker payload) corrupts the
+  rendered tree or executes script. Mitigation: M5 mandates
+  `escHtml()` on every dynamic interpolation per S4 step 9;
+  Layer-2 + Layer-3 tests cover injection-attempt payloads.
+- **R14 — Message-ordering race** (added 2026-05-18 per S4 audit
+  GPT-5.4 M3). Watcher events / polling backstop ticks / scan
+  refreshes / manual refresh can race in the host; stale
+  messages can repaint over fresh state in the webview. Without
+  monotonic snapshots, the operator can see (e.g.) a freshly-
+  closed session's gauge reappear because a delayed polling tick
+  delivered a stale render after the close-out paint.
+  Mitigation: M3 (monotonic `version` field on every render
+  message; webview client.js drops out-of-order) per S4 step 7;
+  Layer-2 tests on the reducer verify stale-version drop
+  behavior.
 
 ## Routing notes (REVISED 2026-05-18)
 
@@ -981,7 +1290,7 @@ reflect the new feature; consumer repos pointed at it.
 - **Implementation work (S2, S3, S4, S5):** pure Claude tokens, no
   router invocation.
 
-## Total estimated cost (REVISED 2026-05-18 custom-tree pivot, actuals through S2 + pivot audit)
+## Total estimated cost (REVISED 2026-05-18 S4 custom-tree implementation audit, actuals through S3 + both mid-set audits)
 
 - **Session 1 actual: ~$0.85** — Round A verification $0.264 +
   cross-engine consensus (gpt-5-4 + gemini-pro) $0.085 + Round B
@@ -1000,11 +1309,24 @@ reflect the new feature; consumer repos pointed at it.
   `feedback_split_large_verification_bundles`). Authored
   proposal + synthesis + S3 spec delta; replaced the obsolete
   per-workspace-markers path.
-- **Sessions 3–6 forecast: $0.40 – $1.25** — S3 verification
-  $0.10–$0.30; S4 pre-session audit $0.05–$0.20; S4 verification
-  $0.10–$0.30; S5 verification $0.10–$0.30; S6 verification
-  $0.05–$0.15. Range based on memory
-  `project_verification_cost_empirical` (p50=$0.13, p95=$1.82).
-- **Total forecast: $1.85 – $2.70**, against the operator's
-  **$5.00 NTE ceiling** for the set (confirmed 2026-05-18 at S1
+- **Session 3 actual: ~$0.085** — Gemini Pro × 3 rounds for
+  verification; GPT-5.4 via manual paste = $0.00. Implementation
+  was pure Claude tokens.
+- **Custom-tree implementation audit (mid-set, 2026-05-18): $0.025**
+  — Gemini Pro consensus call only (GPT-5.4 via manual paste =
+  $0.00). Authored proposal + synthesis + S4 spec delta; locked
+  Q1–Q11 at proposed defaults with no operator divergences; M1–M10
+  tightening absorbed into spec. **Total mid-set audit spend: $0.047**.
+- **Session 4 forecast: $0.20–$0.60** (REVISED 2026-05-18 per S4
+  audit GPT cost note + Gemini M9). Round-A verifies the
+  implementation bundle (~1500 LOC, pre-split into sub-bundles per
+  `feedback_split_large_verification_bundles` if any slice >700 LOC);
+  Round-B verifies fixes applied. Pre-planning Round-B explicitly
+  rather than pretending the first pass will certainly be the last.
+- **Session 5 forecast: $0.10–$0.30** (unchanged).
+- **Session 6 forecast: $0.05–$0.15** (unchanged).
+- **Total Set 029 forecast remainder (post-S3): $0.375 – $1.075**
+  (was $0.30–$1.00 pre-S4-audit).
+- **Cumulative end of Set 029: $1.95 – $2.65** against the
+  operator's **$5.00 NTE ceiling** (confirmed 2026-05-18 at S1
   resume time). Comfortable headroom for Round-B verifications.
