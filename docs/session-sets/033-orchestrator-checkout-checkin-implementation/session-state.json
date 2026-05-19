@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "033-orchestrator-checkout-checkin-implementation",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "State machine in session-state.json + start_session refactor (placeholder)",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "Marker retirement + resolver refactor + banner removal (placeholder)",
+      "status": "not-started"
+    },
+    {
+      "number": 3,
+      "title": "UI rename + ActionRegistry + Command Palette release action (placeholder)",
+      "status": "not-started"
+    },
+    {
+      "number": 4,
+      "title": "Playwright tests for multi-set + check-out conflict (placeholder)",
+      "status": "not-started"
+    },
+    {
+      "number": 5,
+      "title": "Queueing / polling feature (placeholder)",
+      "status": "not-started"
+    },
+    {
+      "number": 6,
+      "title": "Cross-tier check-in + cross-repo notifications + PyPI release (placeholder)",
+      "status": "not-started"
+    }
+  ],
+  "currentSession": null,
+  "totalSessions": 6,
+  "completedSessions": [],
+  "status": "not-started",
+  "lifecycleState": "work_in_progress",
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null
+}

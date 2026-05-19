@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "034-session-set-explorer-styling-iteration",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "HTML-preview rounds 3-N + land styling",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "README screenshot + version bump + Marketplace re-publish",
+      "status": "not-started"
+    }
+  ],
+  "currentSession": null,
+  "totalSessions": 2,
+  "completedSessions": [],
+  "status": "not-started",
+  "lifecycleState": "work_in_progress",
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null
+}

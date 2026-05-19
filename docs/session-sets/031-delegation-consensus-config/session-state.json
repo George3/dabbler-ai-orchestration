@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "031-delegation-consensus-config",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Schema acceptance + journal format + workflow doc",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "Per-agent pointers + PyPI release + cross-repo notification + close-out",
+      "status": "not-started"
+    }
+  ],
+  "currentSession": null,
+  "totalSessions": 2,
+  "completedSessions": [],
+  "status": "not-started",
+  "lifecycleState": "work_in_progress",
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null
+}

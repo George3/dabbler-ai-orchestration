@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "032-orchestrator-checkout-checkin-audit",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Resolve Highs + open questions via cross-engine consensus",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "Draft Set 033 implementation spec + close-out",
+      "status": "not-started"
+    }
+  ],
+  "currentSession": null,
+  "totalSessions": 2,
+  "completedSessions": [],
+  "status": "not-started",
+  "lifecycleState": "work_in_progress",
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null
+}

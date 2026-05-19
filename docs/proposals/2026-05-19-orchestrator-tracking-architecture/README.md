@@ -5,7 +5,15 @@
 > remain to resolve in the audit-then-spec cycle of the follow-on
 > session set.
 >
-> **Consuming session set (planned):** `030-orchestrator-checkout-checkin`
+> **Consuming session sets (planned, two-set audit-then-spec per
+> `feedback_audit_then_spec_for_substantial_features`):**
+> `032-orchestrator-checkout-checkin-audit` (resolves the 3 Highs +
+> 2 open questions; produces the implementation spec) →
+> `033-orchestrator-checkout-checkin-implementation` (executes it).
+> Numbering bumped from the originally-planned `030-...` after
+> `030-session-state-v3-sessions-ledger` was rediscovered as the
+> existing 030 slot (complete since 2026-05-17) and
+> `031-delegation-consensus-config` took the next slot.
 > (NOT YET CREATED). The session set's audit cycle reads this directory
 > as input and produces the implementable spec.
 
@@ -124,14 +132,14 @@ sequencing: ship v0.17.x as polish-only. Specifically:
   out of the accordion body to Command Palette + right-click context
   menu — addresses GPT R2 Q4 must-fix without architecture commitment
 - Banner stays (its removal is coupled to the resolver refactor that
-  belongs to Set 030)
+  belongs to Sets 032 + 033)
 - README + CHANGELOG + CLAUDE.md updates
 - Marketplace publish (operator-gated)
 
-## What ships in Set 030
+## What ships across Sets 032 + 033
 
-The audit cycle resolves H1 / H2 / H3 / OQ1 / OQ2, then produces a
-spec.md that implements:
+Set 032's audit cycle resolves H1 / H2 / H3 / OQ1 / OQ2, then
+produces Set 033's implementation spec.md. Together they ship:
 
 - Check-out / check-in state machine in `session-state.json`
 - `start_session` becomes the canonical writer (refuses on conflict
