@@ -25,8 +25,36 @@ import argparse
 import sys
 from pathlib import Path
 
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+# ruamel.yaml is imported lazily via _require_ruamel() so that
+# `import ai_router.migrate_router_config` succeeds in environments
+# that don't have it installed (e.g., a fresh `pip install
+# dabbler-ai-router` without the [migration] extras). Users who
+# actually invoke the migrator get a clear remediation message; users
+# who never touch it pay nothing. The `from __future__ import
+# annotations` above means the YAML / CommentedMap type annotations
+# below are strings at runtime and don't require the names to resolve
+# at module-load time.
+YAML = None  # type: ignore[assignment]
+CommentedMap = None  # type: ignore[assignment]
+
+
+def _require_ruamel() -> None:
+    """Lazy-import ruamel.yaml; emit a clear remediation on failure."""
+    global YAML, CommentedMap
+    if YAML is not None:
+        return
+    try:
+        from ruamel.yaml import YAML as _YAML
+        from ruamel.yaml.comments import CommentedMap as _CommentedMap
+    except ImportError:
+        print(
+            "ERROR: migrate_router_config requires ruamel.yaml. "
+            "Install with:  pip install 'dabbler-ai-router[migration]'",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    YAML = _YAML
+    CommentedMap = _CommentedMap
 
 
 _THIS_DIR = Path(__file__).parent
@@ -171,6 +199,7 @@ def migrate(
     budget_path: Path | None = None,
 ) -> None:
     """Run idempotent migration on both files."""
+    _require_ruamel()
     yaml_inst = _make_yaml()
 
     rc_path = router_config_path or (_THIS_DIR / "router-config.yaml")

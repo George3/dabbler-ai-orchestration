@@ -5,6 +5,44 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-05-19
+
+### Fixed
+
+- **`ruamel.yaml` packaging gap (pre-existing since Set 026 Session 3).**
+  `ai_router/migrate_router_config.py` has imported `ruamel.yaml`
+  at module load time since commit `fc2d117` (2026-05-12), but the
+  dep was never declared in `pyproject.toml`. A fresh
+  `pip install dabbler-ai-router` would `ModuleNotFoundError` on any
+  attempt to `import ai_router.migrate_router_config` (including the
+  three `test_migrate_router_config_*` test modules at collection
+  time, and the supported `python -m ai_router.migrate_router_config`
+  CLI invocation). 0.5.1 fixes both surfaces:
+  - `migrate_router_config.py` now imports `ruamel.yaml` lazily via
+    `_require_ruamel()`, called at the top of `migrate()`. The
+    module itself imports cleanly without `ruamel.yaml` installed;
+    users who actually invoke the migrator without the dep get a
+    clear remediation message pointing at the `[migration]` extras
+    group below.
+  - `pyproject.toml` declares a new
+    `[project.optional-dependencies].migration = ["ruamel.yaml>=0.17"]`
+    extras group (install via `pip install dabbler-ai-router[migration]`).
+    The `[tests]` group also picks up `ruamel.yaml>=0.17` so the
+    test suite works on a clean `pip install -e .[tests]`.
+
+### Release notes
+
+- **Bug-only patch release.** No new features, no schema changes —
+  the `decision_consensus` V1 schema from 0.5.0 ships unchanged.
+- **Backwards compatibility.** The lazy-import refactor preserves the
+  module's public API (`migrate()`, `main()`); only the import-time
+  side-effects change. No consumer code calling
+  `from ai_router.migrate_router_config import migrate` is affected.
+- **Why this didn't fix 0.4.0 retroactively.** PyPI doesn't allow
+  re-uploading the same version. `0.4.0` (and earlier) ship the
+  pre-existing bug; users on those versions can either upgrade to
+  0.5.1 or `pip install ruamel.yaml` manually as a workaround.
+
 ## [0.5.0] — 2026-05-19
 
 ### Added — Set 031 deliverables

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dabbler-ai-router"
-version = "0.5.0"
+version = "0.5.1"
 description = "Multi-provider model routing, prompt templates, session state, and metrics for the Dabbler AI-led-workflow."
 readme = "README.md"
 license = "MIT"
@@ -33,6 +33,17 @@ dependencies = [
 tests = [
     "pytest>=7.0",
     "jsonschema>=4.0.0",
+    "ruamel.yaml>=0.17",
+]
+# Optional extras for users who run `python -m ai_router.migrate_router_config`
+# on their own `router-config.yaml` / `budget.yaml`. The migrator preserves
+# YAML comments via ruamel.yaml's AST round-trip; without ruamel installed,
+# the migrator prints a clear remediation pointing operators at this extras
+# group. The schema-migration code path is the only thing in the package
+# that requires this dep, so it stays opt-in (PyPI users who never touch
+# the migrator pay nothing).
+migration = [
+    "ruamel.yaml>=0.17",
 ]
 
 [project.urls]
