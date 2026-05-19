@@ -20,3 +20,11 @@ tools/dabbler-ai-orchestration/test-results/
 # root `.gitignore` still avoid committing marker files; this entry
 # is the workspace-root belt-and-suspenders.
 docs/session-sets/*/.dabbler/
+# Set 031 (delegation.decision_consensus V1). The per-decision
+# JSONL journal (ai_router/consensus-decisions.jsonl) stays
+# committed — same precedent as router-metrics.jsonl — so the
+# audit trail survives across conversations. The disk-heavy
+# full-payload sibling directory (Markdown, one file per call) is
+# default-on and explicitly opt-outable via
+# delegation.decision_consensus.journal_full_payloads_dir: null.
+ai_router/consensus-decisions/

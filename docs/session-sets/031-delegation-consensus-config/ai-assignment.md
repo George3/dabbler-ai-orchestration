@@ -72,7 +72,19 @@ forecast leaves ample headroom for Session 2's smaller diff.
 
 ## Session 2 of 2: Per-agent pointers + PyPI release + cross-repo notification + close-out
 
-### Recommended orchestrator
+### Actual orchestrator (operator-confirmed at S2 start, 2026-05-19)
+
+Claude Opus 4.7 @ effort=high. The S1 disposition recommended Sonnet
+4.6 @ medium for this mechanical-wiring session; at S2 start the
+operator was offered three choices (relaunch as Sonnet-medium, proceed
+as Opus-high, proceed as Opus-medium) and selected **Opus 4.7 @
+high**. Reason: no context-switch friction; reasoning headroom kept
+available in case the PyPI release surfaces anything unexpected
+(R4 in the spec's risks list). The S1-shipped Critical fix
+(missing-`provider`-key bypass in engine validation) is already in
+place, so the choice does not signal residual S1 risk.
+
+### Original recommendation (S1 disposition, unchanged)
 
 Claude Sonnet 4.6 @ effort=medium **or** Claude Opus 4.7 @
 effort=medium. The work is mechanical: three identical pointer lines,

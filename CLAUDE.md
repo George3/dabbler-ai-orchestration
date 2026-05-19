@@ -211,3 +211,13 @@ paragraph that points at the canonical close-out reference:
   reconciler behavior).
 `close_session --help` echoes Section 2 of `close-out.md`; the doc
 is the single source of truth.
+
+### Decision-time consensus (pointer)
+
+When you hit an in-session design / architecture / process question
+that has more than one plausible answer, route it through cross-
+provider consensus *before* falling back to `AskUserQuestion`. The
+opt-in (`delegation.decision_consensus.enabled`), category gates,
+journal format, and the human-only vs consensus-eligible split are
+documented in `docs/ai-led-session-workflow.md` → **Decision-time
+consensus**.

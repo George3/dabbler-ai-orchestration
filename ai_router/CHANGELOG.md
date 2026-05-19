@@ -5,6 +5,88 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-19
+
+### Added — Set 031 deliverables
+
+- **`delegation.decision_consensus` config sub-block** in
+  `ai_router/router-config.yaml`. Opt-in (default `enabled: false`,
+  every existing repo unchanged) routing of in-session design /
+  architecture / process decisions through cross-provider consensus
+  *before* falling back to `AskUserQuestion`. V1 default categories
+  are the four mechanical, high-convergence ones
+  (`refactor-placement`, `file-layout`, `scoping`,
+  `spec-clarification`); V1.5 adds `testing-strategy` + `api-surface`;
+  V2 adds `design` + `architecture` once convergence on the narrower
+  set has been observed. `unresolved_action` (`ask_user` |
+  `proceed_with_orchestrator_judgment`) controls the fallback when
+  the consult engines do not agree. `engines` is independent of
+  `verification.preferred_pairings` — the two roles (verify vs.
+  consult) may want different model pairings.
+- **Schema validation in the config loader.** `_validate_decision_consensus`
+  is invoked at the `load_config` boundary and rejects: invalid engine
+  strings (`provider:model` parse + cross-check against the configured
+  `models:` table, with model entries that omit `provider` rejected per
+  the S1 Round-A finding), unrecognized category slugs (whitelist
+  covers V1 + V1.5 + V2), bad `unresolved_action` enum values, and
+  non-writable `journal_path` / `journal_full_payloads_dir` values.
+  Unknown sub-keys are tolerated with a one-time warning per load,
+  matching the existing config loader's forward-compatibility posture.
+- **`ai_router/consensus_journal.py`** — JSONL writer for the
+  per-decision audit trail. `ConsensusRecord` dataclass + atomic
+  append (`append_record`: POSIX append + flush + best-effort fsync),
+  `compute_question_hash` (sha256:-prefixed digest over
+  question + category + ISO timestamp), `write_full_payload`
+  (Markdown sibling file via temp+rename, one file per call,
+  named `<ISO timestamp>-<hash>.md`), and a one-shot
+  `write_consensus_record` convenience that combines the two. Input
+  validation via `validate_record_inputs` (enum guards for category
+  + unresolved_action).
+- **AJV schema mirror** in
+  `tools/dabbler-ai-orchestration/src/configEditor/schemaValidator.ts`
+  so the visual config editor accepts the new sub-block alongside the
+  Python loader — keeps the two implementations in parity.
+- **`docs/ai-led-session-workflow.md` → "Decision-time consensus"
+  section** documents the 6-step decision tree, the human-only vs
+  consensus-eligible category split (table format), the journal
+  record schema, the opt-in path, and three explicit limits-of-
+  consensus guardrails.
+- **Per-agent instruction-file pointers.** `CLAUDE.md`, `AGENTS.md`,
+  and `GEMINI.md` each gained a byte-identical "Decision-time
+  consensus (pointer)" section directing the orchestrator to the
+  new workflow doc section.
+- **33 new tests** (17 schema + 16 journal). Full `ai_router` suite
+  was 599 passed before Set 031; now 633 passed + 1 skipped.
+
+### Changed
+
+- **`.gitignore`** now excludes `ai_router/consensus-decisions/` (the
+  full-payload Markdown sibling directory, default-on but
+  disk-heavy). The journal JSONL itself (`ai_router/consensus-decisions.jsonl`)
+  stays committed, following the `router-metrics.jsonl` precedent so
+  cross-conversation continuity for the audit summary is preserved.
+
+### Release notes
+
+- **`0.5.0` ships the V1 schema only.** The orchestrator-side wiring
+  (the code that actually invokes `route(task_type='decision-consensus')`
+  on hitting a consensus-eligible decision, synthesizes the
+  recommendation, and routes the journal write) is not in this
+  release — that lands in a follow-on session set. `enabled: true`
+  in a consumer repo's `router-config.yaml` does not change behavior
+  until the orchestrator-side wiring ships. The default is opt-out so
+  this asymmetry is invisible to every existing consumer.
+- **Backwards compatibility:** an existing `router-config.yaml` with no
+  `decision_consensus` block continues to load and behave exactly as
+  before. The schema is purely additive.
+- **Consumer-repo notification.** As an operator-gated step alongside
+  this release, `dabbler-access-harvester`, `dabbler-platform`, and
+  `dabbler-homehealthcare-accessdb` CLAUDE.md files each get a one-liner
+  pointer to the new workflow section. Those edits live outside this
+  repo's working tree; consumers can adopt the feature without them by
+  setting `delegation.decision_consensus.enabled: true` in their own
+  `router-config.yaml` once the orchestrator-side wiring ships.
+
 ## [0.4.0] — 2026-05-17 (GA)
 
 ### Added — Session 5 deliverables
