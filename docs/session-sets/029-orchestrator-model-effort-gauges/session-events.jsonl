@@ -22,3 +22,6 @@
 {"timestamp": "2026-05-19T00:30:20.516847Z", "session_number": 5, "event_type": "work_started"}
 {"timestamp": "2026-05-19T05:56:54.362453Z", "session_number": 5, "event_type": "closeout_requested", "force": false, "manual_verify": false}
 {"timestamp": "2026-05-19T05:56:54.731295Z", "session_number": 5, "event_type": "closeout_succeeded", "method": "api"}
+{"timestamp": "2026-05-19T06:53:19.657746Z", "session_number": 6, "event_type": "work_started"}
+{"timestamp": "2026-05-19T15:48:12.898765Z", "session_number": 6, "event_type": "closeout_requested", "force": false, "manual_verify": false}
+{"timestamp": "2026-05-19T15:48:13.327843Z", "session_number": 6, "event_type": "closeout_failed", "failed_checks": ["working_tree_clean"]}

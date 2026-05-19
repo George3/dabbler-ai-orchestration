@@ -30,10 +30,10 @@
     {
       "number": 6,
       "title": "Polish, README, marketplace publish",
-      "status": "not-started"
+      "status": "in-progress"
     }
   ],
-  "currentSession": null,
+  "currentSession": 6,
   "totalSessions": 6,
   "completedSessions": [
     1,
@@ -44,13 +44,13 @@
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-18T20:30:20.516847-04:00",
+  "startedAt": "2026-05-19T02:53:19.657746-04:00",
   "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": {
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
-    "effort": "high"
+    "effort": "medium"
   }
 }
