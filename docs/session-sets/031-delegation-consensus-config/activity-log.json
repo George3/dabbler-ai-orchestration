@@ -84,6 +84,134 @@
       "description": "Round-A Critical finding addressed: a model entry in config['models'] missing a 'provider' key would silently pass `_validate_decision_consensus`'s engine-mismatch check because the comparison short-circuited on empty model_provider. Fixed by adding an explicit `if not model_provider: raise` guard between the unknown-model and mismatch checks in ai_router/config.py. Regression test `test_engine_provider_missing_in_model_rejected` added to test_decision_consensus_schema.py. Full ai_router suite re-run: 33/33 of the new tests pass.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/agent-pointers-added",
+      "dateTime": "2026-05-19T17:42:00-04:00",
+      "description": "Byte-identical 'Decision-time consensus (pointer)' section added to CLAUDE.md, AGENTS.md, and GEMINI.md in this repo. Diff-verified identical across all three files via grep -A 8. Inserts after the existing 'Delegation Discipline (pointer)' section in AGENTS.md and GEMINI.md, and after the 'Close-out and outsource-last' section in CLAUDE.md (which lacks a Delegation Discipline pointer per existing divergence).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/changelog-entry-added",
+      "dateTime": "2026-05-19T17:47:00-04:00",
+      "description": "ai_router/CHANGELOG.md 0.5.0 entry added between [Unreleased] and [0.4.0]. Covers the full Set 031 deliverable surface: decision_consensus schema (with V1/V1.5/V2 category split rationale), _validate_decision_consensus boundary, consensus_journal.py module (ConsensusRecord + compute_question_hash + append_record + write_full_payload + write_consensus_record + validate_record_inputs), AJV schema mirror, workflow doc section, per-agent pointers, .gitignore update, and 33 new tests (633 passed + 1 skipped vs 599 pre-set). Release notes section explicitly notes the orchestrator-side wiring is NOT in 0.5.0 (follow-on set).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/version-bumped",
+      "dateTime": "2026-05-19T17:49:00-04:00",
+      "description": "pyproject.toml version 0.4.0 -> 0.5.0. Matching ai_router/__init__.py __version__ bump (kept in sync; the release workflow's tag-vs-pyproject check requires both agree on the canonical PEP 440 form).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/gitignore-updated",
+      "dateTime": "2026-05-19T17:50:00-04:00",
+      "description": ".gitignore: added ai_router/consensus-decisions/ to exclude the default-on but disk-heavy full-payload sibling directory. The JSONL journal itself (ai_router/consensus-decisions.jsonl) is NOT gitignored - by design, follows the router-metrics.jsonl precedent so the audit trail survives across conversations. Inline comment documents the distinction.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/sanity-check-pytest",
+      "dateTime": "2026-05-19T17:54:00-04:00",
+      "description": "Pre-verifier pytest sanity-check: 633 passed + 1 skipped (same as S1 disposition reported). Pre-existing test-collection gap surfaced - three test modules import migrate_router_config.py which depends on ruamel.yaml but the dep is not in pyproject.toml. The local .venv had lost the install since S1 close; ad-hoc `pip install ruamel.yaml` unblocked collection. Out-of-scope: packaging fix deferred to a future set (Set 031 is the schema set, not the packaging set).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/round-a-verification",
+      "dateTime": "2026-05-19T18:00:00-04:00",
+      "description": "Round-A end-of-session verification: ai_router.query(model='gemini-pro', task_type='session-verification', content=bundle). Bundle: git diff HEAD --no-color across S2 files (CHANGELOG, version files, gitignore, pointer blocks, ai-assignment) + the workflow-doc target snippet (for pointer-target check). Per memory feedback_ai_router_route_result_handling - RouteResult dumped via dataclasses.asdict + json.dumps before attribute access. Response flagged ONE Major: the CHANGELOG 'Consumer-repo notification' bullet used past tense ('each got a one-liner...') which over-claims at release time when the cross-repo writes are operator-gated AFTER PyPI publish. Cost $0.008.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "task_type": "session-verification",
+          "cost_usd": 0.00748875,
+          "verdict": "ISSUES_FOUND",
+          "issues_critical": 0,
+          "issues_major": 1,
+          "issues_minor": 0
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/round-a-finding-applied",
+      "dateTime": "2026-05-19T18:02:00-04:00",
+      "description": "Round-A Major finding addressed: CHANGELOG 'Consumer-repo notification' bullet rephrased from past-tense ('each got a one-liner...at the same time as this release') to a release-time-accurate form ('As an operator-gated step alongside this release, ... CLAUDE.md files each get a one-liner pointer ... Those edits live outside this repo's working tree; consumers can adopt the feature without them by setting delegation.decision_consensus.enabled: true in their own router-config.yaml once the orchestrator-side wiring ships'). Removes the past-tense over-claim and explicitly notes consumer adoption does not require those edits.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 8,
+      "stepKey": "session-002/round-b-verification",
+      "dateTime": "2026-05-19T18:06:00-04:00",
+      "description": "Round-B verification confirming the Round-A fix. Same script, ROUND=2 env var (initially failed because $env:ROUND=2 PowerShell syntax was passed to bash - $0.009 wasted on a re-run that ran as Round-A again; corrected to bash syntax ROUND=2 cmd for the actual Round-B). Round-B verdict: APPROVE. 'The CHANGELOG.md Consumer-repo notification bullet has been successfully rephrased ... accurately reflects that the cross-repo writes are an operator-gated, post-release action. The original concern is resolved.' Cost $0.007 (productive Round-B) + $0.009 (wasted env-var re-run). Total S2 verifier spend $0.024; Set 031 cumulative spend $0.044.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "task_type": "session-verification",
+          "cost_usd": 0.006843749999999999,
+          "verdict": "VERIFIED",
+          "issues_critical": 0,
+          "issues_major": 0,
+          "issues_minor": 0
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 9,
+      "stepKey": "session-002/build-wheel-locally",
+      "dateTime": "2026-05-19T18:10:00-04:00",
+      "description": "python -m build produced dist/dabbler_ai_router-0.5.0-py3-none-any.whl + dist/dabbler_ai_router-0.5.0.tar.gz. Wheel inspection confirmed: includes ai_router/consensus_journal.py, includes the updated ai_router/router-config.yaml, metadata Version: 0.5.0. Pre-release smoke check for what would land on PyPI.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 10,
+      "stepKey": "session-002/pypi-released",
+      "dateTime": "2026-05-19T18:05:00-04:00",
+      "description": "Release path was the documented tag-driven OIDC trusted-publishing flow at .github/workflows/release.yml (per docs/planning/release-process.md) - NOT twine. The S2 spec said `python -m build && twine upload`; operator confirmed the OIDC path at the release-path decision point. Sequence: commit ebe4de2 (S2 implementation + release-readiness), push origin master, tag v0.5.0, push tag. GitHub Actions workflow 26128035426 ran classify (3s) + build (13s) + publish-to-PyPI (16s, gated on the `pypi` environment approval, which the operator granted in the GitHub UI). PyPI live at https://pypi.org/project/dabbler-ai-router/0.5.0/ (verified via pypi.org/pypi/dabbler-ai-router/json -> Latest: 0.5.0).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 11,
+      "stepKey": "session-002/cross-repo-pointers-added",
+      "dateTime": "2026-05-19T18:08:00-04:00",
+      "description": "Byte-identical 'Decision-time consensus (pointer)' block added to dabbler-platform/CLAUDE.md and dabbler-access-harvester/CLAUDE.md, after each repo's existing 'Delegation Discipline (pointer)' section. Diff-verified byte-identical against this repo's CLAUDE.md via diff. healthcare-accessdb SKIPPED per operator decision: it's Lightweight tier and has no local docs/ai-led-session-workflow.md for the pointer to resolve against; the CHANGELOG note 'consumer adoption doesn't require those edits' covers the Lightweight case. Cross-repo edits left UNCOMMITTED in those working trees per operator's selection at the cross-repo-writes decision point ('I write all three; you commit/push' - operator handles commits in those repos on their own timeline).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 12,
+      "stepKey": "session-002/change-log-generated",
+      "dateTime": "2026-05-19T18:18:00-04:00",
+      "description": "Final-session change-log.md generated at docs/session-sets/031-delegation-consensus-config/change-log.md per the project_final_session_changelog_pre_close memory (close-out gate check_change_log_fresh requires it to pre-exist). Aggregates Sessions 1 + 2 into a single narrative: context, S1 narrative (open questions + 6-item shipped list + Round-A Critical fix), S2 narrative (6-item shipped list + Round-A Major fix + out-of-scope disclosures), end-state assertions, what does NOT ship in 0.5.0 (orchestrator-side wiring deferred), notable artifacts (PyPI URL, workflow run URL, design proposal, verifier reviews).",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }
