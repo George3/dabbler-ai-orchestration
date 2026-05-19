@@ -5,7 +5,7 @@
     {
       "number": 1,
       "title": "Schema acceptance + journal format + workflow doc",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 2,
@@ -13,9 +13,11 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 1,
+  "currentSession": null,
   "totalSessions": 2,
-  "completedSessions": [],
+  "completedSessions": [
+    1
+  ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
   "startedAt": "2026-05-19T16:58:16.917361-04:00",
