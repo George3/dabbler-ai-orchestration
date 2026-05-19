@@ -10,18 +10,19 @@
     {
       "number": 2,
       "title": "Per-agent pointers + PyPI release + cross-repo notification + close-out",
-      "status": "in-progress"
+      "status": "complete"
     }
   ],
-  "currentSession": 2,
+  "currentSession": null,
   "totalSessions": 2,
   "completedSessions": [
-    1
+    1,
+    2
   ],
-  "status": "in-progress",
-  "lifecycleState": "work_in_progress",
+  "status": "complete",
+  "lifecycleState": "closed",
   "startedAt": "2026-05-19T17:40:48.402941-04:00",
-  "completedAt": null,
+  "completedAt": "2026-05-19T18:12:28.340885-04:00",
   "verificationVerdict": null,
   "orchestrator": {
     "engine": "claude",
