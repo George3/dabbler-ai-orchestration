@@ -5,6 +5,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-05-19 (Set 029 Session 6 — UI affordance polish)
+
+Polish pass before the Marketplace publish of the multi-provider work
+shipped in 0.17.0. No new features; one user-visible UI change and one
+hygiene cleanup. The check-out / check-in architecture migration that
+came up during this session's HTML-preview iteration is deferred to a
+follow-on session set (`030-orchestrator-checkout-checkin`) under
+proper audit-then-spec discipline; pre-audit artifacts are preserved at
+[`docs/proposals/2026-05-19-orchestrator-tracking-architecture/`](../../docs/proposals/2026-05-19-orchestrator-tracking-architecture/).
+
+### Changed
+
+- **`Set Orchestrator Model & Effort…` and `Open Orchestrator Writer Log`
+  relegated** from the accordion-body buttons to the **right-click
+  context menu** (on in-progress / always rows respectively) and the
+  **Command Palette** (already registered). The accordion body is no
+  longer cluttered with two buttons that don't directly affect the
+  surrounding gauges, addressing the affordance-clarity feedback
+  surfaced during the Session 6 HTML-preview iteration (and confirmed
+  by the cross-provider consensus call run mid-session — GPT-5.4 round
+  2 Q4 must-fix: "do not leave a prominently visible button with a
+  label that implies stronger behavior than it actually has"). Both
+  commands remain available via Command Palette under the "Dabbler"
+  category and via right-click on the session-set row. `ActionRegistry`
+  now has 16 row actions (was 14 — `dabbler.setOrchestrator` in group
+  501 surfaces only on in-progress rows; `dabbler.openOrchestratorWriterLog`
+  in group 502 is always available as a diagnostic).
+- **`readCurrentMarkerForWorkspace` converted to `async`/`fs.promises`.**
+  Tightens up Session 5's deferred Round-B Gemini SUGGEST: the
+  force-override pre-check no longer blocks the extension host event
+  loop on its session-state.json walk. Caller
+  (`maybeConfirmForceOverride`) was already async; the await chain is
+  well-contained. Signature is unchanged from an external perspective —
+  the function isn't exported.
+
+### Removed
+
+- **Dead CSS.** The `.acc-actions` and `.acc-action` rules in
+  [`tree.css`](media/session-sets-tree/tree.css) are removed alongside
+  the HTML that produced them. The S4 M8 "indicator-action parity"
+  rule retires with them — the right-click context menu subsumes that
+  affordance.
+
+### Deferred (not in 0.17.1; will land in `030-orchestrator-checkout-checkin`)
+
+- **Check-out / check-in state machine** replacing today's multi-
+  writer precedence model. Cross-provider consensus run during this
+  session (Gemini Pro round 1 + GPT-5.4 rounds 1 & 2) endorsed the
+  direction; the implementation requires resolving three High items
+  before lock-in (writer authority, single source of truth, hard-vs-
+  advisory framing) per the audit-input README at
+  [`docs/proposals/2026-05-19-orchestrator-tracking-architecture/README.md`](../../docs/proposals/2026-05-19-orchestrator-tracking-architecture/README.md).
+- **Multi-in-progress rendering.** Coupled to the resolver refactor
+  required by the migration; ships in the same set.
+- **Ambiguity banner removal.** Same — its removal is coupled to the
+  resolver refactor that ships in the migration set.
+- **`pushMru` MRU file race fix** from S5 Round-B SUGGEST #1. Analysis
+  found the proposed promise-chain mutex would target a race that
+  doesn't exist in the current sync code (the in-process race claim
+  was for the *async* version of the function; cross-process races on
+  the file need file-level locking, which the proposed fix doesn't
+  provide). Folded into the Set 030 module rewrite where the surface
+  changes anyway.
+
 ## [0.17.0] — 2026-05-19 (Set 029 Session 5 — multi-provider feature-complete)
 
 ### Added — Non-Claude orchestrator detection and manual override

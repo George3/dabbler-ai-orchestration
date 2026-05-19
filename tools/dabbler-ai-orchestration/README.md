@@ -116,6 +116,21 @@ Sign-up links and a full prerequisites checklist live in the
 
 ## Other features
 
+- **Orchestrator indicator on in-progress rows.** Every in-progress
+  session set's row expands to an accordion-body with two side-by-side
+  gauges — the model tier (low / mid / flagship, IBM colorblind-safe
+  palette) and the current effort (low / medium / high / extra-high /
+  max). The gauges read a per-set marker (`<workspace>/docs/session-
+  sets/<slug>/.dabbler/orchestrator.json`) populated automatically by
+  the Claude Code `SessionStart` hook (run **`Dabbler: Install
+  Orchestrator Hook (Claude Code)`** once per workspace) and the Codex
+  `~/.codex/config.toml` watcher. Right-click any in-progress row to
+  open **Set Orchestrator Model & Effort…** (universal manual override
+  for Gemini Code Assist + GitHub Copilot, or any time you want to
+  declare what's running) or **Open Orchestrator Writer Log**
+  (diagnostic — appended when multi-writer precedence skips a write).
+  Both are also reachable via the Command Palette under the **Dabbler**
+  category.
 - **Visual config editor** (`Dabbler: Open Dabbler Config Editor`) —
   edit `router-config.yaml`, `budget.yaml`, and the gitignored
   `local-overrides.yaml` through a six-section panel without touching

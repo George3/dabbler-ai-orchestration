@@ -570,6 +570,105 @@
           "resultArtifact": "session-reviews/session-005/verify-result-round-b.json"
         }
       ]
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 1,
+      "stepKey": "session-006/html-preview-rounds-1-and-2",
+      "dateTime": "2026-05-19T02:55:00-04:00",
+      "description": "Session 6 step 0 — built standalone HTML preview at docs/proposals/2026-05-19-explorer-styling/preview.html with 8 scenarios x 2 themes mirroring v0.17.0 webview output. Round 1 reviewed by operator with 9 feedback items + Q-1 (drop company prefix) added on Q9 (multi-set rendering). Round 2 (JS-templated rewrite) addressed items 1, 4, 5, 6, 7, 8 of that feedback: dropped 'Anthropic/Google/OpenAI' prefix from sublabels, wired real SVG icons from media/, dropped per-row chevrons, 33% tighter spacing, collapsible Not Started + Complete buckets (In Progress always expanded), row-name wraps with hanging indent, resizable panes via CSS resize:horizontal. Items 2 (Set Orchestrator + Writer Log architecture) and 9 (multi-set rendering) deferred to consensus call. Iteration deferred post-Set-030 per operator decision (item 1 in this turn's first reply).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 2,
+      "stepKey": "session-006/architecture-consensus-r1",
+      "dateTime": "2026-05-19T03:10:00-04:00",
+      "description": "Mid-session cross-provider consensus call on orchestrator-tracking architecture (operator-authorized override of feedback_ai_router_usage end-of-session restriction). Proposal authored at docs/proposals/2026-05-19-orchestrator-tracking-architecture/proposal.md (multi-writer precedence vs check-out/check-in, 6 questions). Gemini Pro Round 1 returned 'migrate to check-out/check-in' across Q1-Q3, hybrid (relegate buttons) on Q4-Q5, 'remove banner + render gauges per set in v0.17.x' on Q6. GPT-5.4 hit 429 x2 on automated routing.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "cross-provider-audit",
+          "inputTokens": 3537,
+          "outputTokens": 1079,
+          "costUsd": 0.01521125,
+          "resultArtifact": "../../docs/proposals/2026-05-19-orchestrator-tracking-architecture/consensus-gemini-pro.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 3,
+      "stepKey": "session-006/architecture-consensus-r1-and-r2-gpt-manual-paste",
+      "dateTime": "2026-05-19T03:30:00-04:00",
+      "description": "GPT-5.4 Round 1 + Round 2 verdicts collected via manual paste per feedback_split_large_verification_bundles (after OpenAI 429 x2 on routed attempts; $0.00 routed cost). Round 1: 'not approved' with 3 highs (banner removal alone hides resolver symptom; check-out 'simplification' is unscoped lease+history+conflict UI; close_session not universal across Lightweight tier) + 2 open questions. Operator pushed back with clarifications: within-set sequential by design; between-session != mid-session; Lightweight tier doesn't excuse skipping the lock; queueing/polling as a positive feature. proposal-addendum.md authored capturing operator clarifications + sketching concrete 2-state model + multi-set rendering framing. GPT-5.4 Round 2 progressed from 'not approved' to 'credible follow-on direction, but not yet fully specified' — 3 new must-resolve items + 2 open questions for the follow-on audit cycle. Effective consensus: ship v0.17.1 polish-only, open Set 030 for architecture migration with proper audit-then-spec discipline.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 4,
+      "stepKey": "session-006/scaffold-set-030-audit-inputs",
+      "dateTime": "2026-05-19T03:45:00-04:00",
+      "description": "Scaffolded Set 030 audit-input pointer at docs/proposals/2026-05-19-orchestrator-tracking-architecture/README.md. Captures the full decision trail (status quo, operator discomfort, check-out/check-in proposal, operator clarifications, both engines' R1+R2 verdicts) and the must-resolve items for the follow-on audit cycle (H1 writer authority, H2 single source of truth, H3 hard-vs-advisory framing, OQ1 field merge, OQ2 events-as-aliases). Does NOT scaffold the session-set folder itself — that's the audit cycle's job at the start of Set 030.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 5,
+      "stepKey": "session-006/relegate-buttons-to-action-registry",
+      "dateTime": "2026-05-19T04:00:00-04:00",
+      "description": "Relegated dabbler.setOrchestrator + dabbler.openOrchestratorWriterLog from accordion-body buttons to ActionRegistry row-context-menu entries (group 501 + 502). setOrchestrator surfaces only on in-progress rows; writer log always available. Removed acc-actions HTML from renderAccordionEmpty + renderAccordionLoaded in OrchestratorAccordion.ts. Updated actionRegistry.test.ts: 14-action set assertion -> 16 + new applicability test (in-progress: yes; not-started/complete/cancelled: no for setOrchestrator; all four states for writer log). Compile clean; tests 398 passing, 2 pre-existing failures unrelated.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 6,
+      "stepKey": "session-006/dead-css-removed",
+      "dateTime": "2026-05-19T04:10:00-04:00",
+      "description": "Removed dead .acc-actions + .acc-action CSS rules from media/session-sets-tree/tree.css. Adjacent .acc-link rule (still in use by the smart empty-state CTA) preserved. Replaced with a comment pointing at this session's relegate decision so future maintainers find the context.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 7,
+      "stepKey": "session-006/s5-suggest-items-folded",
+      "dateTime": "2026-05-19T04:15:00-04:00",
+      "description": "S5 Round-B Gemini SUGGEST items: applied #2 (readCurrentMarkerForWorkspace converted from sync fs to fs.promises + await; caller already async); SKIPPED #1 (pushMru race) with documented analysis — the proposed promise-chain mutex targets a race that doesn't exist in the current sync code (JS event loop single-threaded; fs.writeFileSync atomic). Cross-process races on the file need file-level locking which the proposed fix doesn't provide. Folded into Set 030 module rewrite where the surface changes anyway.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 8,
+      "stepKey": "session-006/changelog-version-bump",
+      "dateTime": "2026-05-19T04:20:00-04:00",
+      "description": "CHANGELOG.md [0.17.1] entry added describing the relegate + async refactor + deferred items. Version bump 0.17.0 -> 0.17.1 in package.json + package-lock.json. CLAUDE.md extension-versioning subsection extended with v0.17.1 walk + Set 030 pointer. Extension README.md gained an Orchestrator-indicator bullet under Other features (no screenshot — deferred per operator decision).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 9,
+      "stepKey": "session-006/round-a-verification",
+      "dateTime": "2026-05-19T04:30:00-04:00",
+      "description": "End-of-session verification. Verifier: gemini-pro (S3/S4/S5 pin). Q1-Q5 all VERIFIED (ActionRegistry correctness, OrchestratorAccordion HTML cleanup, dead-CSS removal, readCurrentMarkerForWorkspace async correctness, test correctness). Q6: SUGGEST .gitattributes for LF/CRLF consistency — environment-wide change deferred to operator, not a ship blocker. No must-fix; no Round B needed.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 5958,
+          "outputTokens": 459,
+          "costUsd": 0.0120375,
+          "resultArtifact": "session-reviews/session-006/verify-result-round-a.json"
+        }
+      ]
     }
   ]
 }

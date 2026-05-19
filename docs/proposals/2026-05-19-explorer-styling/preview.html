@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Session Set Explorer — styling preview (round 2)</title>
+<!--
+  Round 2 (2026-05-19) changes:
+    - Drops "Anthropic" / "Google" / "OpenAI" prefix in sublabels and model
+      descriptions; succinct "Claude Opus 4.7", "Gemini 2.5 Pro",
+      "Codex (GPT-5)", "Copilot (Sonnet 4.6)" instead.
+    - Uses the real icon SVGs from tools/dabbler-ai-orchestration/media/
+      (in-progress.svg, not-started.svg, done.svg, cancelled.svg) instead of
+      the CSS pseudo-element fallback.
+    - Drops the per-row chevron entirely. Collapse moves to the BUCKET level:
+        - "In Progress" — always expanded, no chevron.
+        - "Not Started" — collapsible (default collapsed), bucket chevron.
+        - "Complete" — collapsible (default collapsed), bucket chevron.
+    - 33% tighter line-spacing throughout the row + accordion + model-section
+      stacks so more sets fit before scrolling.
+    - .row-name wraps with a hanging indent that keeps the icon outdented;
+      .row-description follows inline and wraps with the name.
+    - .acc-actions ("Set Orchestrator…" and "Writer Log" buttons) are hidden
+      in this preview — the consensus call running in parallel is what
+      decides whether to rename them, move them to right-click context
+      menu, or eliminate them. Re-introduction (or final elimination) is a
+      round-3 concern.
+    - Each pane is browser-resizable (CSS resize: horizontal). Drag the
+      bottom-right corner of any pane to see the container-query collapse
+      (gauges stack one-per-column at <=260px) and the row-name wrap.
+
+  Layout:
+    - Each scenario is a section; within it, two panes are shown side-by-side
+      simulating VS Code dark and light themes.
+    - Rendering is via the small client-side templating script at the bottom
+      (renderTree). Edit a state object and the matched scenario reflows.
+
+  Open path (Windows):
+    file:///C:/Users/denmi/source/repos/dabbler-ai-orchestration/docs/proposals/2026-05-19-explorer-styling/preview.html
+-->
+<link rel="stylesheet" href="../../../tools/dabbler-ai-orchestration/media/session-sets-tree/tree.css" />
+<style>
+  /* ============================================================
+     Round 2 spacing + structural overrides.
+     Applied AFTER tree.css so they win the cascade. These are
+     PREVIEW-ONLY until the styling converges; once it does, the
+     deltas land in tree.css (and structural changes in
+     OrchestratorAccordion.ts + client.js).
+     ============================================================ */
+
+  /* Tree shell tighter */
+  .tree { padding: 1px 0; }
+  .bucket { margin-bottom: 2px; }
+
+  /* Bucket header: now optionally collapsible. The In Progress bucket
+     stays uncollapsed (no chevron). Not Started + Complete each get a
+     chevron and start collapsed by default. */
+  .bucket-header {
+    padding: 3px 10px 1px 10px;
+    font-size: 10.5px;
+    user-select: none;
+  }
+  .bucket-header[data-collapsible="true"] {
+    cursor: pointer;
+  }
+  .bucket-header[data-collapsible="true"]:hover {
+    background: var(--vscode-list-hoverBackground, rgba(127,127,127,0.10));
+  }
+  .bucket-chevron {
+    display: inline-block;
+    width: 12px;
+    margin-right: 2px;
+    opacity: 0.7;
+    font-size: 11px;
+  }
+  .bucket-chevron-spacer {
+    display: inline-block;
+    width: 14px;
+    flex-shrink: 0;
+  }
+  .bucket[aria-expanded="false"] .bucket-body { display: none; }
+
+  /* Rows: no per-row chevron. The icon sits flush-left and the
+     row-text cell carries the name + description with wrap +
+     hanging indent. */
+  .row-header {
+    padding: 2px 8px 2px 8px;
+    gap: 5px;
+    font-size: 12.5px;
+    line-height: 1.35;
+    align-items: flex-start;       /* allow the text cell to wrap and grow */
+  }
+  .row-icon {
+    width: 14px;
+    height: 14px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  .row-icon img {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .row-text {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;                  /* permit shrink in flex */
+  }
+  .row-name {
+    display: inline;
+    font-weight: 500;
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    max-width: none;
+  }
+  .row-description {
+    display: inline;
+    margin-left: 6px;
+    font-size: 11.5px;
+    opacity: 0.7;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  /* Accordion body: tighter padding. */
+  .accordion-body {
+    padding: 3px 8px 5px 22px;
+  }
+  .gauges { gap: 6px; }
+  .gauge-cell { font-size: 13px; line-height: 1.15; }
+  .gauge-sublabel { margin-top: 1px; font-size: 11.5px; }
+  .last-updated { font-size: 11px; margin-top: 1px; }
+  .model-sections { margin-top: 3px; }
+  .model-section + .model-section { margin-top: 4px; }
+  .model-section-header {
+    font-size: 10px;
+    padding: 1px 6px;
+    margin: 0 -8px 2px -8px;
+  }
+  .model-section-text { font-size: 11.5px; line-height: 1.35; }
+  .acc-empty .grey-gauges { margin-bottom: 2px; }
+  .acc-empty-cta { font-size: 11.5px; }
+
+  /* Hide the accordion-body action buttons (Set Orchestrator + Writer
+     Log) for the round-2 preview while the consensus call decides
+     their fate. Re-introduction or final elimination is round 3. */
+  .acc-actions { display: none; }
+
+  /* ============================================================
+     Preview page chrome (not part of the webview).
+     ============================================================ */
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0c0c0c;
+    color: #ccc;
+  }
+  .page {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+  .page h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+    color: #eee;
+  }
+  .page .lede {
+    font-size: 13px;
+    color: #888;
+    margin: 0 0 24px;
+    max-width: 880px;
+    line-height: 1.6;
+  }
+  .scenario { margin: 28px 0; }
+  .scenario h2 {
+    font-size: 15px;
+    margin: 0 0 4px;
+    color: #ddd;
+    font-weight: 600;
+  }
+  .scenario .note {
+    font-size: 12px;
+    color: #888;
+    margin: 0 0 10px;
+    line-height: 1.5;
+    max-width: 880px;
+  }
+  .panes {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    gap: 16px;
+    align-items: start;
+  }
+  .pane {
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .pane-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    background: #1a1a1a;
+    color: #888;
+    border-bottom: 1px solid #2a2a2a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .pane-header .hint {
+    font-size: 10px;
+    opacity: 0.65;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  /* Resizable pane (operator-requested in round 2 to verify wrap +
+     container-query behavior). Drag the bottom-right corner of any
+     pane to shrink it; the gauge container query collapses the
+     side-by-side gauges to one column at <=260px. */
+  .pane-body {
+    padding: 8px 0;
+    min-height: 80px;
+    width: 320px;                  /* initial width — drag to resize */
+    resize: horizontal;
+    overflow: auto;
+    min-width: 200px;
+    max-width: 600px;
+  }
+
+  /* Theme shims for the standalone preview — these provide the VS Code
+     CSS variables tree.css references. */
+  .pane-body.vscode-dark {
+    background: #1e1e1e;
+    color: #cccccc;
+    --vscode-font-family: 'Segoe UI', sans-serif;
+    --vscode-font-size: 13px;
+    --vscode-foreground: #cccccc;
+    --vscode-editor-background: #1e1e1e;
+    --vscode-disabledForeground: #888;
+    --vscode-editorWidget-border: #454545;
+    --vscode-focusBorder: #007fd4;
+    --vscode-textLink-foreground: #3794ff;
+    --vscode-textLink-activeForeground: #4da7ff;
+    --vscode-list-hoverBackground: rgba(127,127,127,0.10);
+    --vscode-list-focusBackground: rgba(127,127,127,0.10);
+    --vscode-button-secondaryBackground: #3a3d41;
+    --vscode-button-secondaryForeground: #ffffff;
+    --vscode-button-secondaryHoverBackground: #45494e;
+    --vscode-button-border: transparent;
+    --vscode-contrastBorder: transparent;
+    --vscode-inputValidation-infoBackground: rgba(100,143,255,0.14);
+    --vscode-inputValidation-infoBorder: #648FFF;
+  }
+  .pane-body.vscode-light {
+    background: #ffffff;
+    color: #1f1f1f;
+    --vscode-font-family: 'Segoe UI', sans-serif;
+    --vscode-font-size: 13px;
+    --vscode-foreground: #1f1f1f;
+    --vscode-editor-background: #ffffff;
+    --vscode-disabledForeground: #707070;
+    --vscode-editorWidget-border: #c8c8c8;
+    --vscode-focusBorder: #0090f1;
+    --vscode-textLink-foreground: #006ab1;
+    --vscode-textLink-activeForeground: #004e85;
+    --vscode-list-hoverBackground: rgba(0,0,0,0.05);
+    --vscode-list-focusBackground: rgba(0,0,0,0.05);
+    --vscode-button-secondaryBackground: #e8e8e8;
+    --vscode-button-secondaryForeground: #1f1f1f;
+    --vscode-button-secondaryHoverBackground: #d8d8d8;
+    --vscode-button-border: transparent;
+    --vscode-contrastBorder: transparent;
+    --vscode-inputValidation-infoBackground: rgba(0,106,177,0.10);
+    --vscode-inputValidation-infoBorder: #006ab1;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Session Set Explorer — styling preview (round 2)</h1>
+<p class="lede">
+  Round 2 applies the round-1 feedback that is independent of the
+  orchestrator-tracking architecture decision (consensus call in flight
+  with GPT-5.4 + Gemini Pro). Changes: dropped company prefix, real SVG
+  icons, no per-row chevrons, ~33% tighter spacing, row-name wraps with
+  hanging indent, In Progress always expanded / Not Started + Complete
+  collapsible at the bucket level, Set Orchestrator + Writer Log buttons
+  hidden pending the consensus verdict. <strong>Drag the bottom-right
+  corner of any pane</strong> to verify wrap + container-query collapse.
+</p>
+
+<div id="scenarios"></div>
+
+</div>
+
+<!-- ============================================================
+     Templating script. Defines per-scenario state objects and renders
+     the tree DOM into a pane-body. Geometry mirrors
+     OrchestratorAccordion.ts (renderGaugeSvg, renderAccordionLoaded,
+     renderAccordionEmpty); enables future rounds to iterate on a
+     single template.
+     ============================================================ -->
+<script>
+(function () {
+  const ICON_BASE = "../../../tools/dabbler-ai-orchestration/media/";
+  const ICONS = {
+    "in-progress": ICON_BASE + "in-progress.svg",
+    "not-started": ICON_BASE + "not-started.svg",
+    "done":        ICON_BASE + "done.svg",
+    "cancelled":   ICON_BASE + "cancelled.svg",
+  };
+
+  // ---- Geometry helpers (mirror OrchestratorAccordion.ts) ----
+  function tierToNeedleAngle(t) {
+    return ({ low: -150, mid: -90, flagship: -30, unknown: -90 })[t] ?? -90;
+  }
+  function effortToNeedleAngle(e) {
+    return ({ low: -150, medium: -90, high: -60, "extra-high": -35, max: -15 })[e] ?? -90;
+  }
+  function effortColorBucket(e) {
+    return ({ low: "low", medium: "mid", high: "mid", "extra-high": "flagship", max: "flagship" })[e] ?? "unknown";
+  }
+  function effortDisplayName(e) {
+    return ({ low: "Low", medium: "Medium", high: "High", "extra-high": "Extra-High", max: "Max" })[e] ?? "Unknown";
+  }
+  function gaugeSvg(tier, signal, deg) {
+    const cx = 35, cy = 35, r = 28, nLen = r - 4;
+    const fillDeg = Math.max(-180, Math.min(0, deg));
+    const fillRad = (fillDeg * Math.PI) / 180;
+    const fx = (cx + r * Math.cos(fillRad)).toFixed(2);
+    const fy = (cy + r * Math.sin(fillRad)).toFixed(2);
+    const nRad = (deg * Math.PI) / 180;
+    const nx = (cx + nLen * Math.cos(nRad)).toFixed(2);
+    const ny = (cy + nLen * Math.sin(nRad)).toFixed(2);
+    return `<svg class="gauge-svg" viewBox="0 0 70 38" data-tier="${tier}" data-signal="${signal}">
+      <path class="gauge-arc-bg" d="M7,35 A28,28 0 0 1 63,35" />
+      <path class="gauge-arc-fill" d="M7,35 A28,28 0 0 1 ${fx},${fy}" />
+      <path class="gauge-rim" d="M7,35 A28,28 0 0 1 63,35" />
+      <line class="gauge-needle" x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" />
+      <circle class="gauge-needle-pivot" cx="${cx}" cy="${cy}" r="1.6" />
+    </svg>`;
+  }
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ---- Accordion body renderers ----
+  function renderAccordionLoaded(marker) {
+    const tier = marker.tier || "unknown";
+    const effort = marker.effort.normalized;
+    const modelCls = `gauge-cell tier-${tier} signal-${marker.signalKind}`;
+    const effortCls = `gauge-cell effort-${effort} signal-${marker.effort.signalKind || marker.signalKind}`;
+    const modelOverlay = marker.signalKind === "last-observed"
+      ? `<span class="clock-overlay" title="last observed signal">⏱</span>` : "";
+    const effortOverlay = (marker.effort.signalKind || marker.signalKind) === "last-observed"
+      ? `<span class="clock-overlay" title="last observed signal">⏱</span>` : "";
+    const staleCls = marker.stale ? "stale" : "";
+    const updated = marker.stale
+      ? `<div class="last-updated">last updated ${marker.ageLabel} ago — stale</div>`
+      : `<div class="last-updated">updated ${marker.ageLabel} ago</div>`;
+    const actualHdr = marker.mismatch
+      ? `<div class="model-section-header">Actual Model</div>` : "";
+    const actualSection = `<div class="model-section">${actualHdr}
+      <div class="model-section-text">${escHtml(marker.actualText)}</div>
+    </div>`;
+    const suggestedSection = marker.mismatch
+      ? `<div class="model-section model-section-suggested" title="${escHtml(marker.mismatch.reason)}">
+           <div class="model-section-header">Suggested</div>
+           <div class="model-section-text">${escHtml(marker.mismatch.text)}</div>
+         </div>`
+      : "";
+    return `<div class="gauges ${staleCls}">
+      <div class="${modelCls}" title="${escHtml(marker.modelTip || "")}">
+        <div class="gauge-svg-wrap">
+          ${gaugeSvg(tier, marker.signalKind, tierToNeedleAngle(tier))}
+          ${modelOverlay}
+        </div>
+        <div class="gauge-sublabel">${escHtml(marker.modelSublabel)}</div>
+      </div>
+      <div class="${effortCls}" title="${escHtml(marker.effortTip || "")}">
+        <div class="gauge-svg-wrap">
+          ${gaugeSvg(effortColorBucket(effort), marker.effort.signalKind || marker.signalKind, effortToNeedleAngle(effort))}
+          ${effortOverlay}
+        </div>
+        <div class="gauge-sublabel">${escHtml(effortDisplayName(effort))}</div>
+      </div>
+    </div>
+    ${updated}
+    <div class="model-sections">${actualSection}${suggestedSection}</div>
+    <div class="acc-actions">
+      <button class="acc-action" type="button">Set Orchestrator…</button>
+      <button class="acc-action" type="button">Writer Log</button>
+    </div>`;
+  }
+
+  function renderAccordionEmpty(cta) {
+    const greyGauge = `<div class="gauge-svg-wrap">${gaugeSvg("unknown", "current", 0)}</div>`;
+    return `<div class="acc-empty">
+      <div class="grey-gauges">${greyGauge}${greyGauge}</div>
+      <div class="acc-empty-cta">
+        <span>No signal — </span>
+        <button class="acc-link" type="button">${escHtml(cta || "install Claude Code hook")}</button>
+      </div>
+      <div class="acc-actions">
+        <button class="acc-action" type="button">Set Orchestrator…</button>
+        <button class="acc-action" type="button">Writer Log</button>
+      </div>
+    </div>`;
+  }
+
+  // ---- Row + bucket renderers ----
+  function renderRow(row) {
+    const iconUrl = ICONS[row.iconKey] || "";
+    let body = "";
+    if (row.accordion) {
+      if (row.accordion.kind === "loaded") {
+        body = `<div class="accordion-body" role="region" aria-label="Orchestrator">${renderAccordionLoaded(row.accordion.marker)}</div>`;
+      } else {
+        body = `<div class="accordion-body" role="region" aria-label="Orchestrator">${renderAccordionEmpty(row.accordion.cta)}</div>`;
+      }
+    }
+    return `<div role="treeitem" tabindex="-1" aria-level="2" class="row row-${row.state}">
+      <div class="row-header" role="presentation">
+        <span class="row-icon" aria-hidden="true"><img src="${iconUrl}" alt="" /></span>
+        <span class="row-text">
+          <span class="row-name">${escHtml(row.name)}</span>
+          <span class="row-description">${escHtml(row.description)}</span>
+        </span>
+      </div>
+      ${body}
+    </div>`;
+  }
+
+  function renderBucket(b, scenarioKey) {
+    const collapsible = b.key !== "in-progress";
+    const expanded = !collapsible || b.openByDefault === true;
+    const chevron = collapsible
+      ? `<span class="bucket-chevron">${expanded ? "▾" : "▸"}</span>`
+      : "";
+    const collapsibleAttr = collapsible ? ' data-collapsible="true"' : "";
+    const ariaExpanded = collapsible ? ` aria-expanded="${expanded}"` : "";
+    const ariaCtrlId = `body-${scenarioKey}-${b.key}`;
+    const rows = b.rows.map(renderRow).join("");
+    return `<div role="group" class="bucket"${ariaExpanded}>
+      <div class="bucket-header"${collapsibleAttr}${collapsible ? ` aria-controls="${ariaCtrlId}"` : ""}>
+        ${chevron}${escHtml(b.label)}  (${b.rows.length})
+      </div>
+      <div class="bucket-body" id="${ariaCtrlId}">${rows}</div>
+    </div>`;
+  }
+
+  function renderTree(scenarioKey, snapshot, theme) {
+    const themeCls = theme === "light" ? "vscode-light" : "vscode-dark";
+    const banner = snapshot.banner
+      ? `<div class="ambiguity-banner" role="status">
+          <span class="ambiguity-icon" aria-hidden="true">ℹ</span>${escHtml(snapshot.banner)}
+        </div>` : "";
+    return `<div class="pane">
+      <div class="pane-header"><span>${theme === "light" ? "Light" : "Dark"}</span><span class="hint">drag corner to resize ↗</span></div>
+      <div class="pane-body ${themeCls}">${banner}<div role="tree" aria-label="Session Sets" class="tree">${
+        snapshot.buckets.map((b) => renderBucket(b, scenarioKey + "-" + theme)).join("")
+      }</div></div>
+    </div>`;
+  }
+
+  function wireBucketToggles() {
+    document.querySelectorAll(".bucket-header[data-collapsible='true']").forEach((hdr) => {
+      hdr.addEventListener("click", () => {
+        const bucket = hdr.parentElement;
+        const expanded = bucket.getAttribute("aria-expanded") === "true";
+        const next = !expanded;
+        bucket.setAttribute("aria-expanded", String(next));
+        const chev = hdr.querySelector(".bucket-chevron");
+        if (chev) chev.textContent = next ? "▾" : "▸";
+      });
+    });
+  }
+
+  // ---- Scenario data ----
+  // Each scenario has a `snapshot` object that's rendered for both
+  // themes. Edit a scenario here and round-3 iteration is one place.
+
+  const SCENARIOS = [
+    {
+      key: "s1",
+      title: "1. In-progress with a current marker (Claude Opus 4.7 / High, thinking on)",
+      note: "Live signal — the happy path. Tier=flagship, effort=high, full-strength fills, solid rim. No Suggested row because ai-assignment matched.",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "029-orchestrator-model-effort-gauges",
+            description: "5 / 6 — in flight",
+            accordion: { kind: "loaded", marker: {
+              tier: "flagship", signalKind: "current",
+              effort: { normalized: "high", signalKind: "current" },
+              modelSublabel: "Claude Opus 4.7",
+              actualText: "Claude Opus 4.7, high effort, thinking on (last /think_hard 2m ago)",
+              ageLabel: "12s", stale: false, mismatch: null,
+              modelTip: "live signal (high confidence)",
+              effortTip: "effort: High (high confidence)",
+            } },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s2",
+      title: "2. Configured-default Codex marker (dashed rim, medium confidence)",
+      note: "From the S5 Codex auto-detect watcher reading ~/.codex/config.toml. signalKind=configured-default dashes the rim and drops fill opacity to 0.85.",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "041-codex-pilot",
+            description: "2 / 4 — in flight",
+            accordion: { kind: "loaded", marker: {
+              tier: "flagship", signalKind: "configured-default",
+              effort: { normalized: "medium", signalKind: "configured-default" },
+              modelSublabel: "Codex (GPT-5)",
+              actualText: "Codex GPT-5 (configured default), medium effort",
+              ageLabel: "14m", stale: false, mismatch: null,
+            } },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s3",
+      title: "3. Last-observed + stale (clock overlay, diagonal-stripe overlay)",
+      note: "Claude effort signal last observed via /think_harder 11h ago — signalKind=last-observed adds the ⏱ overlay; age > 8h adds the diagonal stripes and flips the footer to 'last updated … ago — stale'.",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "030-uat-checklist-rebuild-and-orchestrator-instrumentation",
+            description: "3 / 5 — in flight",
+            accordion: { kind: "loaded", marker: {
+              tier: "flagship", signalKind: "last-observed",
+              effort: { normalized: "extra-high", signalKind: "last-observed" },
+              modelSublabel: "Claude Sonnet 4.6",
+              actualText: "Claude Sonnet 4.6, extra-high effort, thinking on (last /think_harder 11h ago)",
+              ageLabel: "11h", stale: true, mismatch: null,
+            } },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s4",
+      title: "4. Mismatch — actual ≠ ai-assignment.md recommendation",
+      note: "Operator switched to Haiku for cost reasons but the session's ai-assignment.md recommended Opus. Actual section gains its header; Suggested section appears below with italic body + tooltip-bearing wrapper.",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "031-cheap-pass",
+            description: "1 / 3 — in flight",
+            accordion: { kind: "loaded", marker: {
+              tier: "low", signalKind: "manual",
+              effort: { normalized: "low", signalKind: "manual" },
+              modelSublabel: "Claude Haiku 4.5",
+              actualText: "Claude Haiku 4.5, low effort, thinking off",
+              ageLabel: "31s", stale: false,
+              mismatch: {
+                text: "Claude Opus 4.7, high effort",
+                reason: "Current orchestrator differs from 031-cheap-pass Session 2 recommendation. model: actual \"Claude Haiku 4.5\", recommended \"Claude Opus 4.7\"; effort: actual \"low\", recommended \"high\". This may be intentional — the Suggested row surfaces the recommendation; you decide.",
+              },
+            } },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s5",
+      title: "5. In-progress with no marker — smart CTA picks Codex (S5)",
+      note: "No marker exists on disk yet. Grey-gauges placeholder at 0.45 opacity. Smart-CTA fallback detected Codex CLI locally and pivoted the installer link.",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "042-fresh-start",
+            description: "0 / 4 — in flight",
+            accordion: { kind: "empty", cta: "set up Codex" },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s6",
+      title: "6. Force-override aftermath — manual Gemini 2.5 Pro (Max effort)",
+      note: "Operator used the manual override quickpick to switch to Gemini Pro at Max effort. signalKind=manual, high confidence; effort=max → warmest IBM tone (#FFB000).",
+      snapshot: {
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [{
+            state: "in-progress",
+            iconKey: "in-progress",
+            name: "032-gemini-trial",
+            description: "1 / 2 — in flight",
+            accordion: { kind: "loaded", marker: {
+              tier: "flagship", signalKind: "manual",
+              effort: { normalized: "max", signalKind: "manual" },
+              modelSublabel: "Gemini 2.5 Pro",
+              actualText: "Gemini 2.5 Pro, max effort, thinking on",
+              ageLabel: "4s", stale: false, mismatch: null,
+            } },
+          }],
+        }],
+      },
+    },
+    {
+      key: "s7",
+      title: "7. Multi-bucket layout — In Progress / Not Started / Complete",
+      note: "Full tree as a fresh load would render it. In Progress always expanded; Not Started + Complete collapsed by default (click their headers to expand). Drag the pane corner narrow enough and the gauges collapse to one column; drag wider to spread back to two.",
+      snapshot: {
+        buckets: [
+          {
+            key: "in-progress", label: "In Progress",
+            rows: [{
+              state: "in-progress",
+              iconKey: "in-progress",
+              name: "029-orchestrator-model-effort-gauges",
+              description: "5 / 6 — in flight",
+              accordion: { kind: "loaded", marker: {
+                tier: "flagship", signalKind: "current",
+                effort: { normalized: "high", signalKind: "current" },
+                modelSublabel: "Claude Opus 4.7",
+                actualText: "Claude Opus 4.7, high effort, thinking on",
+                ageLabel: "12s", stale: false, mismatch: null,
+              } },
+            }],
+          },
+          {
+            key: "not-started", label: "Not Started",
+            rows: [
+              { state: "not-started", iconKey: "not-started", name: "030-delegation-consensus", description: "0 / 4" },
+              { state: "not-started", iconKey: "not-started", name: "031-cheap-pass", description: "0 / 3" },
+            ],
+          },
+          {
+            key: "complete", label: "Complete",
+            rows: [
+              { state: "complete", iconKey: "done", name: "028-ci-and-orchestrator-e2e", description: "3 / 3" },
+              { state: "complete", iconKey: "done", name: "027-marker-watch-service", description: "5 / 5" },
+              { state: "complete", iconKey: "done", name: "026-uniform-state-file", description: "4 / 4" },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      key: "s8",
+      title: "8. Two in-progress sets — banner today, both gauges if Q6 says remove (parallel)",
+      note: "Today (v0.17.0) the resolver fails closed: shows the banner, hides accordions. Below is what tomorrow looks like IF the consensus call answers Q6 = render-both (pending verdict). For now, this scenario shows the v0.17.0 behavior; we re-render once the consensus comes back.",
+      snapshot: {
+        banner: " Multiple in-progress sets — orchestrator info hidden. (029-orchestrator-model-effort-gauges, 030-delegation-consensus)",
+        buckets: [{
+          key: "in-progress", label: "In Progress",
+          rows: [
+            { state: "in-progress", iconKey: "in-progress", name: "029-orchestrator-model-effort-gauges", description: "5 / 6 — in flight" },
+            { state: "in-progress", iconKey: "in-progress", name: "030-delegation-consensus", description: "1 / 4 — in flight" },
+          ],
+        }],
+      },
+    },
+  ];
+
+  // ---- Render all scenarios ----
+  const root = document.getElementById("scenarios");
+  for (const s of SCENARIOS) {
+    const section = document.createElement("section");
+    section.className = "scenario";
+    section.innerHTML = `
+      <h2>${escHtml(s.title)}</h2>
+      <p class="note">${s.note}</p>
+      <div class="panes">
+        ${renderTree(s.key, s.snapshot, "dark")}
+        ${renderTree(s.key, s.snapshot, "light")}
+      </div>`;
+    root.appendChild(section);
+  }
+  wireBucketToggles();
+})();
+</script>
+</body>
+</html>

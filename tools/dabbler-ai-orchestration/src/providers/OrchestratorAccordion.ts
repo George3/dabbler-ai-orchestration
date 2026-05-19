@@ -341,6 +341,12 @@ export function renderAccordionEmpty(cta?: EmptyCta | null): string {
     effectiveCta.args !== undefined
       ? ` data-command-args="${escAttr(JSON.stringify(effectiveCta.args))}"`
       : "";
+  // Set 029 Session 6: the Set Orchestrator + Writer Log row-action
+  // buttons relegated out of the accordion body to Command Palette +
+  // right-click context menu (per consensus call 2026-05-19, GPT-5.4
+  // round-2 Q4 must-fix). The empty-state still renders the smart-CTA
+  // link to install/declare orchestrator support, but no longer
+  // duplicates the row-action affordances.
   return `<div class="acc-empty">
   <div class="grey-gauges">
     <div class="gauge-svg-wrap">${renderGaugeSvg("unknown", "current", 0)}</div>
@@ -349,10 +355,6 @@ export function renderAccordionEmpty(cta?: EmptyCta | null): string {
   <div class="acc-empty-cta">
     <span>No signal — </span>
     <button class="acc-link" type="button" data-command="${escAttr(effectiveCta.commandId)}"${argsAttr}>${escHtml(effectiveCta.label)}</button>
-  </div>
-  <div class="acc-actions">
-    <button class="acc-action" type="button" data-command="dabbler.setOrchestrator">Set Orchestrator…</button>
-    <button class="acc-action" type="button" data-command="dabbler.openOrchestratorWriterLog">Writer Log</button>
   </div>
 </div>`;
 }
@@ -418,15 +420,11 @@ export function renderAccordionLoaded(
     : "";
   const modelSections = `<div class="model-sections">${actualSection}${suggestedSection}</div>`;
 
-  // Per S4 M8 (indicator-action parity): the Set Orchestrator and
-  // Writer Log buttons stay available even when a marker is loaded.
-  // They live below the model-sections so the gauges remain the
-  // visual focus.
-  const actionsRow = `<div class="acc-actions">
-    <button class="acc-action" type="button" data-command="dabbler.setOrchestrator">Set Orchestrator…</button>
-    <button class="acc-action" type="button" data-command="dabbler.openOrchestratorWriterLog">Writer Log</button>
-  </div>`;
-
+  // Set 029 Session 6: the Set Orchestrator + Writer Log buttons
+  // relegated out of the accordion body to Command Palette +
+  // right-click context menu (per consensus call 2026-05-19, GPT-5.4
+  // round-2 Q4 must-fix). The S4 M8 indicator-action parity rule no
+  // longer applies — the row-action affordance subsumes it.
   return `<div class="gauges ${staleClass}">
   <div class="${modelClasses}" title="${escAttr(modelTip)}">
     <div class="gauge-svg-wrap">
@@ -444,8 +442,7 @@ export function renderAccordionLoaded(
   </div>
 </div>
 ${staleAnnotation}
-${modelSections}
-${actionsRow}`;
+${modelSections}`;
 }
 
 // Top-level dispatcher: state-in, HTML-out. Caller decides whether

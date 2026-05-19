@@ -44,7 +44,8 @@ const needsMigration = (s: SessionSet): boolean => s.needsMigration;
 
 // Ordered list — `group` controls QuickPick / context-menu sort.
 // Anything in group 1xx is "open", 2xx is "navigate", 3xx is "copy
-// command", 4xx is "copy meta", 8xx is "migrate", 9xx is "lifecycle".
+// command", 4xx is "copy meta", 5xx is "orchestrator", 8xx is
+// "migrate", 9xx is "lifecycle".
 export const ROW_ACTIONS: RowAction[] = [
   { id: "dabblerSessionSets.openSpec",          label: "Open Spec",                          group: 101, when: () => true },
   { id: "dabblerSessionSets.openActivityLog",   label: "Open Activity Log",                  group: 102, when: () => true },
@@ -61,6 +62,13 @@ export const ROW_ACTIONS: RowAction[] = [
   { id: "dabblerSessionSets.copyStartCommand.parallel", label: "Copy: Start next parallel session", group: 302,
     when: (s) => inFlightLike(s) },
   { id: "dabblerSessionSets.copySlug",          label: "Copy: Slug only",                    group: 401, when: () => true },
+  // Orchestrator group — relegated from the accordion-body buttons in
+  // Set 029 Session 6. The Set Orchestrator quickpick targets the
+  // walk-up-resolved in-progress set, so only surface it on in-progress
+  // rows. The writer-log is global diagnostic — always available.
+  { id: "dabbler.setOrchestrator",              label: "Set Orchestrator Model & Effort…", group: 501,
+    when: (s) => s.state === "in-progress" },
+  { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log",       group: 502, when: () => true },
   { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",               group: 801, when: needsMigration },
   { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",                 group: 901,
     when: (s) => cancellable(s) },

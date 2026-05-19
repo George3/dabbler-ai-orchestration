@@ -579,11 +579,164 @@ new tests all green.
    treatment is in place, but the pill/operator-icon polish belongs
    in the S6 HTML-preview iteration.
 
-## Session 6: (pending — polish + marketplace publish)
+## Session 6: UI affordance polish + Set 030 audit-input scaffolding (v0.17.1)
 
-## Session 6: (pending — polish + marketplace publish)
+**Goal:** finalize Session 5's multi-provider work for Marketplace
+publish via polish + README + CHANGELOG + CLAUDE.md updates. The
+session expanded mid-flight to include a cross-provider consensus
+call on the orchestrator-tracking architecture, which deferred the
+architecture migration to a follow-on session set
+(`030-orchestrator-checkout-checkin`) and reduced this session's
+ship scope to UI affordance polish only.
 
-(populated at session close)
+### What shipped (source changes)
+
+**Relegate `dabbler.setOrchestrator` + `dabbler.openOrchestratorWriterLog`
+from accordion-body buttons to right-click context menu +
+Command Palette.** Per the cross-provider consensus call run
+mid-session (GPT-5.4 round 2 Q4 must-fix: "do not leave a
+prominently visible button with a label that implies stronger
+behavior than it actually has"). The accordion body is no longer
+cluttered with two buttons that don't directly affect the
+surrounding gauges. Both commands remain available via Command
+Palette under the "Dabbler" category. `ActionRegistry` now has 16
+row actions (was 14): `dabbler.setOrchestrator` at group 501
+surfaces only on in-progress rows; `dabbler.openOrchestratorWriterLog`
+at group 502 is always available as a diagnostic. Source files
+touched: `src/providers/ActionRegistry.ts`,
+`src/providers/OrchestratorAccordion.ts` (removed `acc-actions` HTML
+from both `renderAccordionEmpty` and `renderAccordionLoaded`),
+`media/session-sets-tree/tree.css` (removed dead `.acc-actions` +
+`.acc-action` rules), `src/test/suite/actionRegistry.test.ts`
+(updated 14→16 + new applicability test).
+
+**`readCurrentMarkerForWorkspace` async refactor** per S5 Round-B
+Gemini SUGGEST #2. Converted from sync `fs.statSync` /
+`fs.readdirSync` / `fs.readFileSync` to `fs.promises.*` + `await`.
+Caller (`maybeConfirmForceOverride`) was already async; the await
+chain is well-contained. Function is non-exported so no public
+surface change. Source: `src/commands/setOrchestratorManual.ts`.
+
+**Documentation rolls forward.** `CHANGELOG.md` v0.17.1 entry,
+`package.json` + `package-lock.json` version bump 0.17.0 → 0.17.1,
+`CLAUDE.md` extension-versioning subsection extended with the
+v0.17.1 walk + Set 030 pointer, extension `README.md` Other-features
+bullet added describing the orchestrator indicator + the right-click
+affordance.
+
+### What did NOT ship (deferred)
+
+**Check-out / check-in architecture migration.** Mid-session
+consensus call (Gemini Pro round 1 + GPT-5.4 rounds 1 & 2 via
+manual paste after OpenAI 429 ×2) endorsed the direction but
+surfaced three High items + two open questions that warrant a full
+audit-then-spec cycle. Pre-audit artifacts preserved at
+`docs/proposals/2026-05-19-orchestrator-tracking-architecture/`:
+`proposal.md`, `proposal-addendum.md`, `consensus-gemini-pro.{txt,
+json}`, `consensus-gpt-5-4.txt` (round 1), `consensus-gpt-5-4-round-2.txt`,
+plus a `README.md` capturing the decision trail + must-resolve items
+for the follow-on set's audit cycle.
+
+**Multi-set rendering** and **ambiguity-banner removal** are coupled
+to the resolver refactor required by the architecture migration —
+they ship together in the follow-on set, not piecemeal.
+
+**HTML-preview styling iteration** (spec Step 0). Operator decision
+mid-session: defer to post-Set-030 when multi-set rendering is real
+and the iteration can include actual two-in-progress scenarios.
+Round 1 + 2 of the preview are preserved at
+`docs/proposals/2026-05-19-explorer-styling/preview.html` as
+historical reference.
+
+**`pushMru` MRU file race fix** from S5 Round-B SUGGEST #1. Analysis
+found the proposed promise-chain mutex would target a race that
+doesn't exist in the current sync code (the in-process race claim
+was for the *async* version of the function; cross-process races on
+the file need file-level locking, which the proposed fix doesn't
+provide). Folded into the Set 030 module rewrite where the surface
+changes anyway.
+
+**Cross-repo notification one-liners** (spec Step 5). v0.17.1
+doesn't materially change consumer-repo workflows — the buttons
+moved but remain accessible. The cross-repo notifications wait for
+the Set 030 architecture migration which DOES materially change
+workflow (check-in becomes mandatory on close, multi-orchestrator
+queueing surfaces).
+
+**README screenshot.** Operator decision: defer the screenshot to
+post-Set-030 so the screenshot can capture multi-in-progress
+rendering. Bullet added without screenshot for v0.17.1.
+
+### Round A verification
+
+`session-reviews/session-006/verify-result-round-a.{txt,json}`.
+Verifier: gemini-pro (S3/S4/S5 pin). Coverage:
+
+- Q1 ActionRegistry correctness — **VERIFIED** (when predicates
+  correct, group-5xx ordering deterministic, test updates match)
+- Q2 OrchestratorAccordion HTML cleanup — **VERIFIED** (acc-actions
+  cleanly removed from both states; surrounding HTML still valid;
+  acc-link + model-sections preserved)
+- Q3 Dead-CSS removal in tree.css — **VERIFIED** (acc-actions +
+  acc-action removed cleanly; adjacent acc-link rule preserved)
+- Q4 readCurrentMarkerForWorkspace async correctness — **VERIFIED**
+  (sync→async conversion correct; control flow preserved; caller
+  awaits)
+- Q5 Test correctness — **VERIFIED** (16-action assertion correct;
+  new applicability test covers the state matrix)
+- Q6 Anything else risky — **SUGGEST** (`.gitattributes` for LF/CRLF
+  consistency; environment-wide change deferred to operator
+  decision, not a ship blocker)
+
+No must-fix items; no Round B needed.
+
+### Layer-2 unit-test results
+
+`npm run test:unit` — **398 passing, 2 pre-existing failures**
+(`configEditor-foundation` ViewColumn stub gap,
+`notificationsSection` HTML assertion — both predate S6). The new
+ActionRegistry test passes. Compile is clean.
+
+### Cost
+
+- Architecture-decision consensus call: $0.015 (Gemini Pro round 1)
+  + $0.000 (GPT-5.4 rounds 1 & 2 via manual paste after 429 ×2)
+- Round A verification: $0.012 (Gemini Pro)
+- **Session 6 total: $0.027** — well within the $0.05–$0.15 spec
+  forecast (S6 was the cheapest session in Set 029).
+
+### Open follow-ups (queued, not blockers)
+
+1. **Set 030 audit cycle** opens against the artifacts at
+   `docs/proposals/2026-05-19-orchestrator-tracking-architecture/`.
+   Three Highs + two open questions captured in that directory's
+   README.md as must-resolve items.
+2. **`.gitattributes`** with `* text=auto eol=lf` for LF/CRLF
+   consistency (gemini-pro Round-A SUGGEST). Environment-wide change;
+   operator decides separately.
+3. **README + repo-root screenshot** refresh post-Set-030 when
+   multi-set rendering ships.
+
+---
+
+## Final cost summary
+
+| Session | Forecast | Actual | Notes |
+|---|---|---|---|
+| S1 (design audit) | $0.30–$0.80 | ~$0.85 | 3 verification rounds — successive bundles surfaced pre-audit drift, all converged |
+| Custom-tree pivot mid-set audit | — | $0.022 | Gemini Pro consensus; GPT manual paste $0.00 |
+| S2 (Claude-only ship) | $0.20–$0.60 | ~$0.58 | Rounds A+B+C |
+| Custom-tree impl mid-set audit | — | $0.025 | Gemini Pro consensus; GPT manual paste $0.00 |
+| S3 (per-set identity) | $0.05–$0.20 | $0.085 | Gemini-only ×3 rounds |
+| S4 (custom-tree pivot) | $0.20–$0.60 | $0.078 | Two rounds, no Round C needed |
+| S5 (multi-provider) | $0.10–$0.30 | $0.035 | Two rounds, no must-fix |
+| S6 (UI polish) | $0.05–$0.15 | $0.027 | Architecture-consensus + verification |
+| **Set 029 total** | **$1.15–$1.75** (revised at S1 resume) | **~$1.70** | At the top of the revised range; architecture-consensus mid-session pushed S6 up but stayed under cap |
+
+The architecture-consensus call ($0.015 routed + $0.000 manual paste)
+was a one-time mid-session spend that produced the audit-input
+artifacts for Set 030, avoiding a separate audit-only session set
+with its own router spend. Net positive on cost discipline.
 
 ---
 

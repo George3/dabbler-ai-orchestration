@@ -44,7 +44,7 @@ function ids(set: SessionSet, supports: ActionSupports): string[] {
 }
 
 suite("ActionRegistry", () => {
-  test("ROW_ACTIONS exposes exactly the 14 actions S3 had in package.json view/item/context", () => {
+  test("ROW_ACTIONS exposes the 14 S3 actions plus the 2 orchestrator actions S6 relegated from the accordion body", () => {
     const expected = new Set([
       "dabblerSessionSets.openSpec",
       "dabblerSessionSets.openActivityLog",
@@ -57,13 +57,37 @@ suite("ActionRegistry", () => {
       "dabblerSessionSets.copyStartCommand.default",
       "dabblerSessionSets.copyStartCommand.parallel",
       "dabblerSessionSets.copySlug",
+      // Set 029 Session 6 — relegated from accordion body to right-click + Command Palette
+      "dabbler.setOrchestrator",
+      "dabbler.openOrchestratorWriterLog",
       "dabblerSessionSets.migrate",
       "dabblerSessionSets.cancel",
       "dabblerSessionSets.restore",
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 14);
+    assert.strictEqual(ROW_ACTIONS.length, 16);
+  });
+
+  test("setOrchestrator appears only on in-progress rows; openOrchestratorWriterLog always available", () => {
+    for (const st of ["in-progress"] as SessionState[]) {
+      assert.ok(
+        ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.setOrchestrator"),
+        `setOrchestrator missing for ${st}`,
+      );
+    }
+    for (const st of ["not-started", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        !ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.setOrchestrator"),
+        `setOrchestrator leaked onto ${st}`,
+      );
+    }
+    for (const st of ["in-progress", "not-started", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.openOrchestratorWriterLog"),
+        `openOrchestratorWriterLog missing for ${st}`,
+      );
+    }
   });
 
   test("always-available actions appear for any state when supports are full", () => {

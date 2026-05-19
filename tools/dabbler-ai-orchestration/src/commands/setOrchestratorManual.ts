@@ -174,26 +174,28 @@ function helperPathAbs(extensionUri: vscode.Uri): string {
   return vscode.Uri.joinPath(extensionUri, HELPER_REL).fsPath;
 }
 
-function readCurrentMarkerForWorkspace(workspaceCwd: string): {
+// Set 029 Session 6 — converted from sync fs to fs.promises per S5
+// Round-B Gemini SUGGEST #2. The walk + reads no longer block the
+// extension host event loop. Caller (maybeConfirmForceOverride) is
+// already async, so the await chain is well-contained.
+async function readCurrentMarkerForWorkspace(workspaceCwd: string): Promise<{
   exists: boolean;
   writer: string | null;
   signalKind: string | null;
   ageSec: number | null;
-} {
-  // Walk-up to find the per-set marker. We replicate the helper's
-  // walk-up logic here just enough to read the current signalKind +
-  // writer for the force-override prompt. Returns exists=false if no
-  // in-progress set is resolvable.
+}> {
+  const empty = { exists: false, writer: null, signalKind: null, ageSec: null };
   let current = path.resolve(workspaceCwd);
   while (true) {
     const candidate = path.join(current, "docs", "session-sets");
     let entries: fs.Dirent[] | null = null;
     try {
-      if (fs.statSync(candidate).isDirectory()) {
-        entries = fs.readdirSync(candidate, { withFileTypes: true });
+      const st = await fs.promises.stat(candidate);
+      if (st.isDirectory()) {
+        entries = await fs.promises.readdir(candidate, { withFileTypes: true });
       }
     } catch {
-      // not a dir; fall through
+      // not a dir; fall through to parent walk
     }
     if (entries) {
       const inProgress: string[] = [];
@@ -201,18 +203,17 @@ function readCurrentMarkerForWorkspace(workspaceCwd: string): {
         if (!entry.isDirectory()) continue;
         const statePath = path.join(candidate, entry.name, "session-state.json");
         try {
-          const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+          const raw = await fs.promises.readFile(statePath, "utf8");
+          const state = JSON.parse(raw);
           if (state && state.status === "in-progress") inProgress.push(entry.name);
         } catch {
-          // skip
+          // skip — unreadable / missing / invalid JSON
         }
       }
-      if (inProgress.length !== 1) {
-        return { exists: false, writer: null, signalKind: null, ageSec: null };
-      }
+      if (inProgress.length !== 1) return empty;
       const markerPath = path.join(candidate, inProgress[0], ".dabbler", "orchestrator.json");
       try {
-        const raw = fs.readFileSync(markerPath, "utf8");
+        const raw = await fs.promises.readFile(markerPath, "utf8");
         const marker = JSON.parse(raw);
         const ageSec = marker.updatedAt
           ? (Date.now() - Date.parse(marker.updatedAt)) / 1000
@@ -224,13 +225,11 @@ function readCurrentMarkerForWorkspace(workspaceCwd: string): {
           ageSec,
         };
       } catch {
-        return { exists: false, writer: null, signalKind: null, ageSec: null };
+        return empty;
       }
     }
     const parent = path.dirname(current);
-    if (parent === current) {
-      return { exists: false, writer: null, signalKind: null, ageSec: null };
-    }
+    if (parent === current) return empty;
     current = parent;
   }
 }
@@ -360,7 +359,7 @@ function buildKeybindingSnippet(tuple: OrchestratorTuple): string {
 async function maybeConfirmForceOverride(
   workspaceCwd: string,
 ): Promise<{ proceed: boolean; force: boolean }> {
-  const existing = readCurrentMarkerForWorkspace(workspaceCwd);
+  const existing = await readCurrentMarkerForWorkspace(workspaceCwd);
   if (!existing.exists) return { proceed: true, force: false };
   // Only the strongest signal class needs a confirmation; the helper
   // already silently accepts equal-or-stronger overrides without

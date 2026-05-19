@@ -184,27 +184,13 @@ body.vscode-light, body.vscode-high-contrast-light {
   container-type: inline-size;
 }
 
-/* Action buttons inside the accordion (install-hook / set-orchestrator
- * / writer-log per S4 M8 indicator-action parity). */
-.acc-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.acc-action {
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder, transparent));
-  border-radius: 2px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.acc-action:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-}
+/* The .acc-actions wrapper + .acc-action buttons were retired in Set
+ * 029 Session 6. Set Orchestrator and Writer Log moved to the
+ * right-click context menu + Command Palette per the consensus call
+ * 2026-05-19 (GPT-5.4 round 2, Q4 must-fix: do not leave a prominently
+ * visible button with a label that implies stronger behavior than it
+ * actually has). The S4 M8 indicator-action parity rule retires with
+ * it — row-action affordances subsume it. */
 .acc-link {
   background: none;
   border: none;

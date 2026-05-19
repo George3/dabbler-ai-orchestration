@@ -39,9 +39,9 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.17.0** (Set 029 Session 5 — multi-provider
-  feature-complete; pre-marketplace, awaiting Session 6 polish +
-  HTML-preview styling iteration). The version walk through Set 029:
+- Current: **v0.17.1** (Set 029 Session 6 — UI affordance polish +
+  pre-publish artifact preservation; Marketplace publish gated on
+  operator confirmation). The version walk through Set 029:
   - **0.14.2** (S2) — Claude-only Orchestrator webview, marker
     helper + hook installer.
   - **0.15.x** (S3) — per-session-set identity (schema v3,
@@ -60,6 +60,20 @@ is a required duplicate — `vsce package` expects the file alongside
     empty-state CTA that picks the install/preset link based on
     locally-installed orchestrators + MRU preference. Session 2 stub
     retired. Companion PyPI release: `dabbler-ai-router` 0.4.0.
+  - **0.17.1** (S6) — `Set Orchestrator…` and `Open Orchestrator
+    Writer Log` relegated from the accordion-body buttons to the
+    right-click context menu (on in-progress rows / always
+    respectively) + Command Palette (already registered) per the
+    cross-provider consensus call run mid-session. The accordion
+    body is no longer cluttered with two buttons that don't directly
+    affect the surrounding gauges. The check-out / check-in
+    architecture migration that came up during this session is
+    deferred to a follow-on session set
+    (`030-orchestrator-checkout-checkin`) under proper audit-then-
+    spec discipline; pre-audit artifacts preserved at
+    `docs/proposals/2026-05-19-orchestrator-tracking-architecture/`.
+    Hygiene: `readCurrentMarkerForWorkspace` converted from sync to
+    async `fs.promises`.
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`
