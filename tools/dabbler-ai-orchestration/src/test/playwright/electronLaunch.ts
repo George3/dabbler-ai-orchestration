@@ -238,6 +238,50 @@ export function cancelSet(h: FixtureHandle): void {
   runHarness(["cancel", ..._handleArgs(h), "--reason", "playwright cancel scenario"]);
 }
 
+/**
+ * Set 029 Session 5 — seed a per-set orchestrator marker file so
+ * Layer-3 smokes can verify the painted-on-screen treatment for a
+ * given signalKind without driving the marker writer through hooks.
+ *
+ * The marker shape matches v3 (see `scripts/write-orchestrator-marker.js`).
+ * Defaults produce a generic Codex configured-default marker; callers
+ * override for the manual/current/last-observed variants.
+ */
+export function seedOrchestratorMarker(
+  h: FixtureHandle,
+  overrides: Partial<Record<string, unknown>> = {},
+): void {
+  const markerDir = path.join(h.set_dir, ".dabbler");
+  fs.mkdirSync(markerDir, { recursive: true });
+  const base = {
+    schemaVersion: 3,
+    sessionSetSlug: path.basename(h.set_dir),
+    updatedAt: new Date().toISOString(),
+    writer: "playwright-seed",
+    signalKind: "configured-default",
+    confidence: "medium",
+    provider: "openai",
+    providerDisplayName: "Codex",
+    model: "gpt-5",
+    modelDisplayName: "GPT-5",
+    tier: "flagship",
+    effort: {
+      normalized: "medium",
+      native: "medium",
+      thinking: true,
+      signalKind: "configured-default",
+      confidence: "medium",
+    },
+    stalenessMaxSec: 28800,
+  };
+  const marker = { ...base, ...overrides };
+  fs.writeFileSync(
+    path.join(markerDir, "orchestrator.json"),
+    JSON.stringify(marker, null, 2) + "\n",
+    "utf8",
+  );
+}
+
 export function makeAdditionalSet(
   base: FixtureHandle,
   newSlug: string,

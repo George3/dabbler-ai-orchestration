@@ -1075,10 +1075,25 @@ all four. 0.14.0 packaged but not published.
 ### Session 6 of 6: Polish, README, marketplace publish
 
 **Goal:** Final polish, README update with screenshot, version bump to
-0.14.1 if anything moves, publish to Marketplace.
+0.17.x if anything moves, publish to Marketplace. **Includes an
+explicit HTML-preview iteration cycle for the Session Set Explorer
+styling** (operator request 2026-05-19 mid-S5, mirroring the
+v0.14.2 gauge-styling iteration that ran for ~11 rounds).
 
 **Steps:**
 
+0. **HTML-preview iteration cycle for the Session Set Explorer.**
+   Build a standalone HTML preview at
+   `docs/proposals/<date>-explorer-styling/preview.html` that
+   renders representative explorer states (in-progress with marker
+   loaded, in-progress with empty/no-marker decorated by the
+   Session 5 smart CTA, multi-bucket layout with grouping, mismatch
+   suggested-section visible, stale annotation, force-override
+   prompt aftermath, etc.) using the same CSS/SVG fragments the
+   webview emits. Iterate on operator on-device screenshots. Land
+   styling changes back into `OrchestratorAccordion.ts` +
+   `media/session-sets-tree/client.css` after each round. Do NOT
+   ship 0.17.x/0.18.x to Marketplace until the iteration converges.
 1. **README screenshot + section.** Add a "Orchestrator Indicator"
    section to the extension README (and the repo-root README if it
    has a screenshot reel). PNG screenshot at

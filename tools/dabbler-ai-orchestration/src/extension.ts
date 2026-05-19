@@ -19,8 +19,11 @@ import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
 import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
 import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
-import { registerSetOrchestratorManualStub } from "./commands/setOrchestratorManualStub";
+import { registerInstallOrchestratorHookGeminiCommand } from "./commands/installOrchestratorHookGemini";
+import { registerInstallOrchestratorHookCopilotCommand } from "./commands/installOrchestratorHookCopilot";
+import { registerSetOrchestratorManual } from "./commands/setOrchestratorManual";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
+import { activateCodexConfigWatcher } from "./codex/configWatcher";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -231,15 +234,30 @@ export function activate(context: vscode.ExtensionContext): void {
   // set (registered above). Hook installer + manual-override stub +
   // writer-log opener remain available as standalone commands; the
   // accordion-body buttons dispatch them via postMessage.
+  //
+  // Set 029 Session 5: full multi-provider surface — Codex auto-detect
+  // via config-watcher (no command), Gemini + Copilot manual-only
+  // shim commands that delegate to the universal manual-override
+  // quickpick. Manual stub from S2 is retired in favor of the real
+  // implementation.
   safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
     registerInstallOrchestratorHookClaudeCodeCommand(context),
   );
-  safeRegister("registerSetOrchestratorManualStub", () =>
-    registerSetOrchestratorManualStub(context),
+  safeRegister("registerInstallOrchestratorHookGemini", () =>
+    registerInstallOrchestratorHookGeminiCommand(context),
+  );
+  safeRegister("registerInstallOrchestratorHookCopilot", () =>
+    registerInstallOrchestratorHookCopilotCommand(context),
+  );
+  safeRegister("registerSetOrchestratorManual", () =>
+    registerSetOrchestratorManual(context),
   );
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),
   );
+  safeRegister("activateCodexConfigWatcher", () => {
+    context.subscriptions.push(activateCodexConfigWatcher(context));
+  });
 
   // Set 030 Session 5: flip scanState to "ready" once activation
   // finishes. `setImmediate` yields the event loop one tick so the

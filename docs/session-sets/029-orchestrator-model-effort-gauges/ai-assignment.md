@@ -195,6 +195,43 @@ $0.05 – $0.20 pre-session audit (Gemini Pro via router; GPT-5.4
 via manual paste = $0.00) + $0.10 – $0.30 session-verification.
 **Total S4 routed: $0.15 – $0.50.**
 
+### Actuals (filled after the session)
+
+- **Orchestrator used:** Claude Code (Claude Opus 4.7 @ effort=high) — matches recommendation.
+- **Total routed cost: $0.078** — pre-session audit $0.025 Gemini Pro +
+  Round A $0.027 Gemini Pro + Round B $0.026 Gemini Pro. Two rounds
+  converged cleanly without must-fix items triggering a Round C.
+  Came in BELOW the $0.15–$0.50 forecast band — three Gemini Pro
+  calls were each in the $0.02-0.03 range rather than the $0.10+
+  typical of GPT-5.4 session-verification bundles.
+- **Deviations from recommendation:** verifier-engine deviation only —
+  S3's Gemini-Pro pin carried forward to S4 to avoid the OpenAI
+  Responses sticky 429 window. Same pattern as S3: cross-provider
+  verification still satisfied (Claude orchestrator + Gemini Pro
+  verifier). Quality was code-grade actionable.
+- **Notes for next-session calibration:**
+  - The S4 implementation shipped ~+2654 LOC of new code with
+    ~-2260 LOC removed (custom-tree pivot retired ~2.3k LOC of
+    legacy tree + indicator-view code). Net ~+400 LOC at extension
+    surface despite the reimplementation breadth.
+  - 369 unit tests passing (Layer 2 stub harness); 2 pre-existing
+    failures predate S4. 26 new tests all green.
+  - Final shipped version 0.16.0 (not the 0.15.x the original spec
+    forecast assumed). The version walk reflects three significant
+    surface changes in one session: M3 SessionSetsModel split, M5
+    custom-tree empty/loading semantics, M8 indicator-action parity.
+  - Open follow-ups (deferred to v1.1, NOT S5 blockers):
+    `describeMarker` `Date.now()` purity, type-ahead search,
+    overflow-button row actions, freshness cue beyond age string.
+
+**Next-session orchestrator recommendation (Session 5):**
+Claude Code (Claude Opus 4.7 @ effort=high) — unchanged from the
+original recommendation. S5 ships three new commands + a watcher +
+a smart empty-state CTA across four orchestrator surfaces; multi-
+file coherence + careful test additions (5 Playwright scenarios)
+make this Opus-class. Continue the Gemini-Pro pin for the
+end-of-session verification per the S3/S4 precedent.
+
 ---
 
 ## Session 5 of 6: Non-Claude provider detection + manual override (renumbered from S3)
@@ -218,14 +255,67 @@ $0.10 – $0.30.
 
 ---
 
+## Session 5 actuals (filled after the session)
+
+- **Orchestrator used:** Claude Code (Claude Opus 4.7 @ effort=high)
+  — matches recommendation.
+- **Total routed cost: $0.035** (Round A $0.019 Gemini Pro + Round
+  B $0.016 Gemini Pro). Came in BELOW the $0.10–$0.30 forecast —
+  same Gemini-Pro escape pattern from S3/S4 keeps verification
+  cheap. Both rounds converged cleanly without must-fix items.
+- **Deviations from recommendation:** verifier-engine deviation
+  only (Gemini-Pro pin continues per S3/S4 precedent vs. the
+  spec's default `gpt-5-4`). Cross-provider verification still
+  satisfied (Claude orchestrator + Gemini Pro verifier).
+- **Notes for next-session calibration:**
+  - Manual-override quickpick (533 LOC, the largest single S5
+    file) bundled cleanly as Round B; the split-by-surface
+    pattern continues to keep per-round bundles under the 700-LOC
+    ceiling.
+  - Gemini Pro flagged 2 SUGGEST items on Round B (MRU race +
+    sync fs in marker-resolve), both stylistic and deferred. No
+    Round C needed.
+  - The S4 split pattern (data assertions → Layer-2 unit tests;
+    pixels → Playwright) handled the S5 spec's "5 Playwright
+    scenarios" mandate cleanly — 3 painted-on-screen scenarios +
+    6 unit suites give stronger total coverage than 5 brittle
+    Playwright flows would have.
+
+**Next-session orchestrator recommendation (Session 6):**
+Claude Code (Claude Opus 4.7 @ effort=high). **Upgrade from the
+original recommendation** (Claude Sonnet 4.6 @ effort=medium) —
+the operator added an HTML-preview iteration cycle for Session
+Set Explorer styling to Session 6's scope on 2026-05-19. Per
+memory `project_029_s6_html_preview_iteration` + Session 6 Step 0
+in spec.md, this is the same kind of ~11-round on-device styling
+loop the v0.14.2 gauges went through. The iteration loop benefits
+from Opus's multi-file-coherence judgment on each round
+(coordinating preview HTML + accordion renderer + CSS), and the
+operator's stated preference is "really good" final styling.
+Sonnet remains adequate for the remaining S6 work (README,
+CHANGELOG consolidation, CLAUDE.md expansion, marketplace publish
+ceremony) but the iteration cycle is the long pole and shouldn't
+be sized down. Continue the Gemini-Pro verifier pin if S6
+verification needs one (the iteration rounds may not need formal
+verification at all — the operator's on-device feedback IS the
+verification signal).
+
+---
+
 ## Session 6 of 6: Polish, README, marketplace publish (renumbered from S4)
 
 ### Recommended orchestrator
 
-Claude Sonnet 4.6 @ effort=medium. Documentation, screenshot,
-version bump, publish. Lower complexity than S1–S3; Sonnet is
-sufficient and cheaper. Marketplace publish itself requires
-operator confirmation per the standard pre-publish gate.
+Claude Code (Claude Opus 4.7 @ effort=high) — **REVISED 2026-05-19
+S5 close** from the original Sonnet 4.6 @ medium. See "Next-session
+orchestrator recommendation" above for the rationale (HTML-preview
+iteration cycle added mid-S5).
+
+Original recommendation: Claude Sonnet 4.6 @ effort=medium.
+Documentation, screenshot, version bump, publish. Lower complexity
+than S1–S3; Sonnet is sufficient and cheaper. Marketplace publish
+itself requires operator confirmation per the standard pre-publish
+gate.
 
 ### Rationale
 
@@ -241,15 +331,17 @@ $0.05 – $0.15.
 
 ## Total set cost forecast
 
-**REVISED 2026-05-18 S3 close:** $1.85 – $2.55 (actuals + forecast
-across the new 6-session shape). S1 actual $0.85 + S2 actual
-$0.58 + custom-tree pivot audit $0.022 + **S3 actual $0.085** +
-forecast $0.30 – $1.00 across S4 audit / S4-S5-S6 verifications.
-Against the operator's $5.00 NTE for the set; comfortable
-headroom remains (~$2.45–$3.15 unused).
+**REVISED 2026-05-19 S5 close:** $1.69 – $1.89 actuals-plus-forecast
+across the 6-session shape. S1 actual $0.845 + S2 actual $0.58 +
+custom-tree pivot audit $0.022 + S3 actual $0.085 + S4 actual $0.078
++ **S5 actual $0.035** + forecast $0.05 – $0.20 across S6
+verification (if any). Cumulative spent: **$1.65** against the
+operator's $5.00 NTE; ~$3.35 headroom remains for S6.
 
 Prior forecasts: pre-pivot 4 sessions $0.55 – $1.55; post-pivot
-pre-S3 $1.85 – $2.70 (S3 came in $0.015 below the midpoint).
+pre-S3 $1.85 – $2.70; pre-S4 $1.85 – $2.55; pre-S5 $1.77 – $2.27.
+S3+S4+S5 each came in ~$0.015–$0.10 below the midpoint thanks to
+the Gemini-Pro verifier pin.
 
 ---
 

@@ -478,6 +478,98 @@
           "resultArtifact": "session-reviews/session-004/verify-result-round-b.json"
         }
       ]
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "session-005/codex-detection",
+      "dateTime": "2026-05-19T00:35:00-04:00",
+      "description": "Codex auto-detect via ~/.codex/config.toml watcher. New src/codex/configWatcher.ts (213 LOC). Reads top-level model + model_reasoning_effort, dispatches `--mode configured-default` marker write via the shared helper. Debounced fs.watch on ~/.codex/ with 500ms quiet window. Hand-rolled TOML scalar extractor (10 unit tests, all green) — avoids shipping @iarna/toml for two scalar fields.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "session-005/manual-override-shipped",
+      "dateTime": "2026-05-19T00:50:00-04:00",
+      "description": "Universal manual-override quickpick. New src/commands/setOrchestratorManual.ts (533 LOC). Replaces the S2 stub. MRU at ~/.dabbler/orchestrator-mru.json (cap 8); multi-step provider→model→effort→thinking flow; `{provider, model, effort, thinking}` hotkey-bindable args path; force-override modal confirmation when an existing `current`-precedence marker is fresh. Marker writes delegated to scripts/write-orchestrator-marker.js via --mode manual. 8 unit tests covering MRU read/write/dedupe/cap + formatTupleLabel.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "session-005/gemini-detection",
+      "dateTime": "2026-05-19T00:55:00-04:00",
+      "description": "Gemini Code Assist installer shim. New src/commands/installOrchestratorHookGemini.ts (27 LOC). Registers `dabbler.installOrchestratorHook.gemini` — delegates to the universal manual-override quickpick with prefillProvider: 'google'. Per audit Q2: no documented persisted state to scrape in v1. No actual hook is installed.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "session-005/copilot-detection",
+      "dateTime": "2026-05-19T01:00:00-04:00",
+      "description": "GitHub Copilot installer shim. New src/commands/installOrchestratorHookCopilot.ts (24 LOC). Registers `dabbler.installOrchestratorHook.copilot` — delegates to the universal manual-override quickpick with prefillProvider: 'github'. Per audit Q4: deprecated settings keys + no public replacement; manual-only in v1.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "session-005/smart-empty-state",
+      "dateTime": "2026-05-19T01:15:00-04:00",
+      "description": "Smart empty-state CTA detection. New src/providers/detectOrchestrators.ts (136 LOC) detects installed orchestrators (Claude Code via ~/.claude/, Codex via ~/.codex/, Gemini/Copilot via vscode.extensions.getExtension) and picks the surfaced CTA by MRU bias when available, else priority order (claude→codex→gemini→copilot). 8 unit tests using temp HOME redirection + stub extension registry. Plumbed through RenderState.empty.cta + renderAccordionEmpty(cta?) + client.js data-command-args dispatch. CTA falls back to Claude installer when nothing detected (preserves v0.16.0 behavior).",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "session-005/playwright-smoke-all-four",
+      "dateTime": "2026-05-19T01:25:00-04:00",
+      "description": "Playwright smoke expansion. 3 new scenarios in session-sets-tree.spec.ts: configured-default Codex marker → signal-configured-default class on gauge cells + Codex sublabel; manual Gemini marker → signal-manual class + Gemini sublabel; empty-state CTA renders 'No signal —' prefix + an acc-link button. New seedOrchestratorMarker() helper in electronLaunch.ts. Logic-level invariants (MRU reordering, force-override, multi-writer precedence) moved to Layer-2 unit tests per the S4 split pattern (data assertions → unit tests; pixels → Playwright).",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 7,
+      "stepKey": "session-005/version-bump",
+      "dateTime": "2026-05-19T01:30:00-04:00",
+      "description": "Version bump 0.16.0 → 0.17.0 (minor — multi-provider feature-complete). Spec assumed 0.13.18 → 0.14.0 but the project had already walked through 0.14.x/0.15.x/0.16.0; operator confirmed 0.17.0 as the right target. package.json + CHANGELOG.md + CLAUDE.md (Extension versioning section rewritten to reflect the v0.14.2 → v0.17.0 walk through Set 029) all updated. Retired the S2 stub (setOrchestratorManualStub.ts).",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 8,
+      "stepKey": "session-005/round-a-verification",
+      "dateTime": "2026-05-19T01:40:00-04:00",
+      "description": "Session 5 Round A verification — detection + Codex watcher + shim commands + small integration diffs in Accordion/View/client.js. ~752 lines / 27.5k chars. Verifier: gemini-pro (S3/S4 pin). Q1-Q7 covering TOML extractor edge cases, shim delegation, detection ordering + MRU bias, Accordion empty-state plumbing, View wiring + allowlist, client.js JSON arg forwarding, test coverage split. Verdict: VERIFIED across all 7 questions. No must-fix, no suggest. Cost: $0.019.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 7721,
+          "outputTokens": 942,
+          "costUsd": 0.01907125,
+          "resultArtifact": "session-reviews/session-005/verify-result-round-a.json"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 9,
+      "stepKey": "session-005/round-b-verification",
+      "dateTime": "2026-05-19T01:50:00-04:00",
+      "description": "Session 5 Round B verification — setOrchestratorManual.ts (533 LOC). ~699 lines / 24k chars. Verifier: gemini-pro. Q1-Q7 covering quickpick flow correctness, MRU storage tolerance, force-override prompt tree, marker-write dispatch, hotkey-bindable args path, keybindings snippet, error paths + user feedback. Verdict: VERIFIED across all 7 questions + 2 SUGGEST items (MRU file race condition under contrived programmatic concurrency, sync fs in readCurrentMarkerForWorkspace). Both SUGGEST items are stylistic — realistic UI-bound invocation pattern means race window is effectively zero. Deferred to hygiene PR / S6 fold-in per the S4 follow-up pattern. Cost: $0.016. Total S5 verification: $0.035.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "session-verification",
+          "inputTokens": 6936,
+          "outputTokens": 766,
+          "costUsd": 0.01633,
+          "resultArtifact": "session-reviews/session-005/verify-result-round-b.json"
+        }
+      ]
     }
   ]
 }

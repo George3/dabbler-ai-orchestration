@@ -39,18 +39,27 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.14.2** (Set 029 Session 2 — Claude-only v1 preview of
-  the orchestrator-indicator gauges: a new "Orchestrator" webview view
-  pinned above the Session Sets tree showing model + effort gauges
-  driven by `~/.dabbler/current-orchestrator.json`, plus the Claude
-  Code `SessionStart` + `UserPromptSubmit` hook installer and the
-  shared `scripts/write-orchestrator-marker.js` helper with
-  multi-writer precedence and a Windows-aware retry loop. Non-Claude
-  surfaces — Codex auto-detect via `~/.codex/config.toml` watcher,
-  Gemini Code Assist manual-only, GitHub Copilot manual-only — and
-  the universal manual-override quickpick (MRU + hotkey-bindable
-  args + force-override confirmation) ship in 0.14.3 — Session 3 of
-  Set 029.) Companion PyPI release: `dabbler-ai-router` 0.4.0.
+- Current: **v0.17.0** (Set 029 Session 5 — multi-provider
+  feature-complete; pre-marketplace, awaiting Session 6 polish +
+  HTML-preview styling iteration). The version walk through Set 029:
+  - **0.14.2** (S2) — Claude-only Orchestrator webview, marker
+    helper + hook installer.
+  - **0.15.x** (S3) — per-session-set identity (schema v3,
+    `<workspace>/docs/session-sets/<slug>/.dabbler/orchestrator.json`),
+    walk-up resolver with fail-closed posture on ambiguity.
+  - **0.16.0** (S4) — Session Sets view rewired as a webview
+    custom tree; dedicated orchestrator-indicator view retired in
+    favor of per-row accordions.
+  - **0.17.0** (S5) — Codex auto-detect via `~/.codex/config.toml`
+    watcher (configured-default signal, medium confidence,
+    debounced); universal manual-override quickpick
+    (`dabbler.setOrchestrator`) with MRU at `~/.dabbler/orchestrator-mru.json`,
+    multi-step provider→model→effort→thinking flow, hotkey-bindable
+    args, force-override confirmation; Gemini + Copilot manual-only
+    installer shims (no auto-detect path documented); smart
+    empty-state CTA that picks the install/preset link based on
+    locally-installed orchestrators + MRU preference. Session 2 stub
+    retired. Companion PyPI release: `dabbler-ai-router` 0.4.0.
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`

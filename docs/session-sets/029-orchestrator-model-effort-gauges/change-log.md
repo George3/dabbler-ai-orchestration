@@ -1,10 +1,10 @@
 # Set 029: Orchestrator Model & Effort Indicator Gauges
 
-**Status:** In progress (4 of 6 sessions complete; mid-set pivot 2026-05-18 reshaped 4 → 6 sessions)
+**Status:** In progress (5 of 6 sessions complete; mid-set pivot 2026-05-18 reshaped 4 → 6 sessions)
 **Created:** 2026-05-17
-**Cost so far:** $1.651 (S1 $0.845 + S2 $0.578 + mid-set custom-tree-pivot audit $0.022 Gemini Pro + S3 $0.085 Gemini Pro × 3 rounds + mid-set S4 implementation audit $0.025 Gemini Pro + S4 verification $0.053 Gemini Pro × 2 rounds; GPT-5.4 via manual paste = $0.00).
-**Forecast remaining:** $0.15–$0.45 across S5/S6 verifications.
-**NTE ceiling:** $5.00 (operator-confirmed 2026-05-18 at S1 resume).
+**Cost so far:** $1.686 (S1 $0.845 + S2 $0.578 + mid-set custom-tree-pivot audit $0.022 Gemini Pro + S3 $0.085 Gemini Pro × 3 rounds + mid-set S4 implementation audit $0.025 Gemini Pro + S4 verification $0.053 Gemini Pro × 2 rounds + S5 verification $0.035 Gemini Pro × 2 rounds; GPT-5.4 via manual paste = $0.00).
+**Forecast remaining:** $0.05–$0.20 across S6 verification.
+**NTE ceiling:** $5.00 (operator-confirmed 2026-05-18 at S1 resume); ~$3.31 headroom remains.
 
 ---
 
@@ -451,9 +451,135 @@ new tests all green.
 4. Visual freshness cue beyond "updated Xs ago" — defer until
    cross-window confusion surfaces in real use.
 
-## Session 5: (pending — non-Claude provider detection)
+## Session 5: Non-Claude provider detection + manual override (v0.17.0)
 
-(populated at session close)
+**Goal:** Add detection paths for non-Claude orchestrators per the
+locked S1 audit resolutions. Codex auto-detect via config-watcher;
+Gemini Code Assist + GitHub Copilot manual-only (no documented
+persisted state); universal manual-override quickpick with MRU,
+multi-step flow, hotkey args, force-override confirmation; smart
+empty-state CTA that picks the install/preset link based on what's
+actually installed locally.
+
+**Creates:**
+
+- `tools/dabbler-ai-orchestration/src/codex/configWatcher.ts` (213 LOC)
+  — Codex `~/.codex/config.toml` watcher. Parses top-level `model` and
+  `model_reasoning_effort`, dispatches a `configured-default`
+  (medium-confidence) marker write via the shared helper. Debounces
+  filesystem events to one dispatch per 500 ms quiet window.
+- `tools/dabbler-ai-orchestration/src/commands/setOrchestratorManual.ts`
+  (533 LOC) — universal manual-override quickpick implementation.
+  Replaces the S2 stub. MRU at `~/.dabbler/orchestrator-mru.json`
+  (cap 8); multi-step provider→model→effort→thinking flow;
+  hotkey-bindable `{provider, model, effort, thinking}` args;
+  force-override modal confirmation when an existing `current`-
+  precedence marker is fresh; delegates marker writes to the shared
+  helper via `--mode manual`.
+- `tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookGemini.ts`
+  (27 LOC) — opens the manual-override quickpick with
+  `prefillProvider: "google"`. No actual hook installed.
+- `tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookCopilot.ts`
+  (24 LOC) — same shape with `prefillProvider: "github"`.
+- `tools/dabbler-ai-orchestration/src/providers/detectOrchestrators.ts`
+  (136 LOC) — smart empty-state CTA helper. Detects installed
+  orchestrators (Claude Code via `~/.claude/`, Codex via
+  `~/.codex/`, Gemini Code Assist + GitHub Copilot via
+  `vscode.extensions.getExtension`). Picks the surfaced CTA by MRU
+  bias when available, else priority order.
+- `src/test/suite/codexConfigParser.test.ts` (10 tests) — TOML
+  extractor.
+- `src/test/suite/setOrchestratorManual.test.ts` (8 tests) — MRU
+  read/write/dedupe/cap + formatTupleLabel.
+- `src/test/suite/detectOrchestrators.test.ts` (8 tests) —
+  detection priority + MRU-bias + CTA selection.
+
+**Touches:**
+
+- `tools/dabbler-ai-orchestration/src/providers/OrchestratorAccordion.ts`
+  — `RenderState.empty` variant carries optional `cta: EmptyCta`.
+  `renderAccordionEmpty(cta?)` substitutes the passed CTA's command
+  ID + label into the "No signal — <label>" link. Falls back to the
+  Claude installer when no CTA passed (preserves v0.16.0 behavior).
+- `tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts`
+  — Allowlist expanded with `dabbler.installOrchestratorHook.gemini`
+  and `.copilot`. `scheduleRender()` computes the CTA via
+  `pickEmptyStateCta()` when the resolved set's marker is empty and
+  passes it into the render state.
+- `tools/dabbler-ai-orchestration/src/extension.ts` — registers
+  three new commands (Gemini installer-shim, Copilot installer-shim,
+  real manual-override) and activates the Codex config-watcher at
+  extension start. Retires the S2 stub registration.
+- `tools/dabbler-ai-orchestration/media/session-sets-tree/client.js`
+  — `[data-command]` click handler reads optional
+  `data-command-args` attribute, JSON-parses to an array, forwards
+  as the `executeCommand` postMessage `args` field. JSON parse
+  errors fall back to `args: undefined`.
+- `tools/dabbler-ai-orchestration/src/test/vscode-stub.js` —
+  Added `vscode.extensions.getExtension` with a mutable
+  `__installedExtensions` set so detection unit tests can simulate
+  presence/absence. Also added `vscode.env.clipboard.writeText`.
+- `tools/dabbler-ai-orchestration/src/test/playwright/electronLaunch.ts`
+  — `seedOrchestratorMarker(handle, overrides)` helper writes a
+  per-set marker JSON for visual-state Playwright tests.
+- `tools/dabbler-ai-orchestration/src/test/playwright/session-sets-tree.spec.ts`
+  — 3 new scenarios: configured-default Codex visual
+  (`signal-configured-default` class), manual Gemini visual
+  (`signal-manual` class), empty-state CTA fallback ("No signal —"
+  + `acc-link` button).
+- `tools/dabbler-ai-orchestration/package.json` — 2 new command
+  contributes (Gemini installer-shim, Copilot installer-shim);
+  version 0.16.0 → 0.17.0.
+- `tools/dabbler-ai-orchestration/CHANGELOG.md` — full 0.17.0 entry.
+- `CLAUDE.md` — Extension versioning section rewritten to reflect
+  the v0.14.2 → v0.17.0 walk through Set 029.
+
+**Retired:**
+
+- `tools/dabbler-ai-orchestration/src/commands/setOrchestratorManualStub.ts`
+  (32 LOC) — S2 placeholder superseded by the real implementation.
+
+**Net code:** ~+1,290 LOC additions, ~-44 LOC deletions.
+
+**Layer-2 unit-test results:**
+
+`npm run test:unit` — **397 passing, 2 pre-existing failures**
+(`configEditor-foundation` ViewColumn stub gap,
+`notificationsSection` HTML assertion — both predate S4). S5's 21
+new tests all green.
+
+**TypeScript compile:**
+
+`npx tsc --noEmit` — clean. No errors, no warnings.
+
+**Cost:**
+
+- Round A verification: $0.019 Gemini Pro
+- Round B verification: $0.016 Gemini Pro
+- **Session 5 total: $0.035** — well under the $0.10–$0.30 spec
+  forecast. Both rounds converged cleanly without must-fix items.
+
+**Open follow-ups (not S5 ship blockers):**
+
+1. MRU file race condition (Round B SUGGEST) — `pushMru` is a
+   read-modify-write without serialization. Realistic UI-bound
+   concurrency window is essentially zero. Revisit if programmatic
+   callers are ever wired.
+2. Sync fs in `readCurrentMarkerForWorkspace` (Round B SUGGEST) —
+   refactor to `fs/promises` if/when the helper grows a callable
+   API. Not a hot path.
+3. **S6 scope addition (operator request 2026-05-19 mid-S5):**
+   HTML-preview iteration cycle for Session Set Explorer styling.
+   Mirrors the v0.14.2 gauge-styling iteration that ran for ~11
+   rounds. Captured as Step 0 in spec.md S6; memory
+   `project_029_s6_html_preview_iteration` records the rationale.
+4. New visual treatments the S5 spec mentioned (DEFAULT pill badge
+   for configured-default, operator-icon overlay for manual) — the
+   marker emits the right `signalKind` and the existing dashed-rim
+   treatment is in place, but the pill/operator-icon polish belongs
+   in the S6 HTML-preview iteration.
+
+## Session 6: (pending — polish + marketplace publish)
 
 ## Session 6: (pending — polish + marketplace publish)
 

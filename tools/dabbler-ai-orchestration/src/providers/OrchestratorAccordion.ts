@@ -48,8 +48,19 @@ export interface Mismatch {
   reason: string;
 }
 
+export interface EmptyCta {
+  commandId: string;
+  // Short verb fragment for the "No signal — <label>" link
+  // (e.g., "install Claude Code hook", "set up Codex", "set Gemini").
+  label: string;
+  // Optional command args (e.g., `{prefillProvider: "google"}` for the
+  // Gemini shim). Plumbed through the webview's data-command-args
+  // attribute and JSON.parsed at dispatch time.
+  args?: unknown;
+}
+
 export type RenderState =
-  | { kind: "empty" }
+  | { kind: "empty"; cta?: EmptyCta | null }
   | { kind: "loaded"; marker: OrchestratorMarker; stale: boolean; ageSec: number; mismatch: Mismatch | null };
 
 export const DEFAULT_STALENESS_MAX_SEC = 28800; // 8h
@@ -311,7 +322,25 @@ export function effortTooltip(marker: OrchestratorMarker): string {
 // Buttons fire via `data-command` attributes; the webview client.js
 // captures clicks and posts `{ type: "executeCommand", commandId }` to
 // the host. The host dispatches via vscode.commands.executeCommand.
-export function renderAccordionEmpty(): string {
+//
+// Session 5 (smart CTA): the "install hook" link's target is no longer
+// hardcoded to Claude. The caller passes an optional `cta` based on
+// what's actually installed locally (Claude Code, Codex CLI, Gemini
+// Code Assist extension, GitHub Copilot extension) and the operator's
+// MRU. If `cta` is null/undefined we fall back to the v0.16.0 behavior
+// (link to the Claude Code installer) so existing callers and the
+// empty-workspace case keep working unchanged.
+const DEFAULT_CTA: EmptyCta = {
+  commandId: "dabbler.installOrchestratorHook.claudeCode",
+  label: "install Claude Code hook",
+};
+
+export function renderAccordionEmpty(cta?: EmptyCta | null): string {
+  const effectiveCta = cta || DEFAULT_CTA;
+  const argsAttr =
+    effectiveCta.args !== undefined
+      ? ` data-command-args="${escAttr(JSON.stringify(effectiveCta.args))}"`
+      : "";
   return `<div class="acc-empty">
   <div class="grey-gauges">
     <div class="gauge-svg-wrap">${renderGaugeSvg("unknown", "current", 0)}</div>
@@ -319,7 +348,7 @@ export function renderAccordionEmpty(): string {
   </div>
   <div class="acc-empty-cta">
     <span>No signal — </span>
-    <button class="acc-link" type="button" data-command="dabbler.installOrchestratorHook.claudeCode">install hook</button>
+    <button class="acc-link" type="button" data-command="${escAttr(effectiveCta.commandId)}"${argsAttr}>${escHtml(effectiveCta.label)}</button>
   </div>
   <div class="acc-actions">
     <button class="acc-action" type="button" data-command="dabbler.setOrchestrator">Set Orchestrator…</button>
@@ -425,7 +454,7 @@ ${actionsRow}`;
 // the row IS expanded and the body needs HTML.
 export function renderAccordionBody(state: RenderState): string {
   if (state.kind === "empty") {
-    return renderAccordionEmpty();
+    return renderAccordionEmpty(state.cta ?? null);
   }
   return renderAccordionLoaded(state.marker, state.stale, state.ageSec, state.mismatch);
 }

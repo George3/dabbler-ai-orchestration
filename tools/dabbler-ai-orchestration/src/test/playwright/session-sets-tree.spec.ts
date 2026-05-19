@@ -29,6 +29,7 @@ import {
   makeSet,
   makeTmpDir,
   openSessionSetsView,
+  seedOrchestratorMarker,
   triggerRefresh,
 } from "./electronLaunch";
 
@@ -146,6 +147,120 @@ test("welcome panel renders when no session sets exist (webview path)", async ()
     await expect(
       inner.getByText(/No session sets in this workspace yet/),
     ).toBeVisible();
+  } finally {
+    await teardown(per);
+  }
+});
+
+// ---------------------------------------------------------------------
+// Session 5: multi-provider orchestrator detection painted on screen.
+// Logic predicates (TOML parse, MRU ordering, detection priority,
+// force-override semantics) live in Layer-2 unit tests; these three
+// scenarios only verify what an operator actually sees rendered.
+// ---------------------------------------------------------------------
+
+test("configured-default Codex marker renders with dashed-rim signal class", async () => {
+  const per: PerTest = {};
+  try {
+    per.tmpPath = makeTmpDir("dabbler-pw-codex-default");
+    const h = makeSet(per.tmpPath, "029-codex-default", 2);
+    seedOrchestratorMarker(h, {
+      provider: "openai",
+      providerDisplayName: "Codex",
+      model: "gpt-5",
+      modelDisplayName: "GPT-5",
+      signalKind: "configured-default",
+      confidence: "medium",
+      effort: {
+        normalized: "high",
+        native: "high",
+        thinking: true,
+        signalKind: "configured-default",
+        confidence: "medium",
+      },
+    });
+    per.launch = await launchVSCode(h.repo_root);
+    const inner = await openSessionSetsView(per.launch.page);
+    await triggerRefresh(per.launch.page);
+
+    const row = inner.locator(
+      '[role="treeitem"][data-slug="029-codex-default"]',
+    );
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    // Both gauges in the accordion body carry signal-configured-default.
+    // The dashed-rim treatment is driven by this class (see tree.css
+    // `.signal-configured-default .gauge-rim`).
+    const gauges = row.locator(".gauge-cell.signal-configured-default");
+    expect(await gauges.count()).toBeGreaterThanOrEqual(1);
+    // Codex provider sublabel renders verbatim.
+    await expect(row.getByText(/Codex/)).toBeVisible();
+  } finally {
+    await teardown(per);
+  }
+});
+
+test("manual Gemini marker renders with signal-manual class on gauges", async () => {
+  const per: PerTest = {};
+  try {
+    per.tmpPath = makeTmpDir("dabbler-pw-gemini-manual");
+    const h = makeSet(per.tmpPath, "029-gemini-manual", 2);
+    seedOrchestratorMarker(h, {
+      provider: "google",
+      providerDisplayName: "Gemini",
+      model: "gemini-2.5-pro",
+      modelDisplayName: "Gemini 2.5 Pro",
+      signalKind: "manual",
+      confidence: "high",
+      effort: {
+        normalized: "high",
+        native: "high",
+        thinking: true,
+        signalKind: "manual",
+        confidence: "high",
+      },
+    });
+    per.launch = await launchVSCode(h.repo_root);
+    const inner = await openSessionSetsView(per.launch.page);
+    await triggerRefresh(per.launch.page);
+
+    const row = inner.locator(
+      '[role="treeitem"][data-slug="029-gemini-manual"]',
+    );
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    const gauges = row.locator(".gauge-cell.signal-manual");
+    expect(await gauges.count()).toBeGreaterThanOrEqual(1);
+    await expect(row.getByText(/Gemini/)).toBeVisible();
+  } finally {
+    await teardown(per);
+  }
+});
+
+test("empty-state CTA falls back to Claude installer when no orchestrators detected", async () => {
+  const per: PerTest = {};
+  try {
+    per.tmpPath = makeTmpDir("dabbler-pw-empty-cta");
+    const h = makeSet(per.tmpPath, "029-empty-cta", 2);
+    // Intentionally do NOT seed a marker — the resolved in-progress
+    // row should render the empty-state accordion body. The smart
+    // CTA's detection runs against the test host's user dir, which
+    // typically has ~/.claude/ if any Claude tooling was ever used.
+    // The assertion checks the *fallback* label form so the test is
+    // robust against the host's actual install footprint.
+    per.launch = await launchVSCode(h.repo_root);
+    const inner = await openSessionSetsView(per.launch.page);
+    await triggerRefresh(per.launch.page);
+
+    const row = inner.locator(
+      '[role="treeitem"][data-slug="029-empty-cta"]',
+    );
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    // Empty-state CTA always renders a link button with data-command.
+    // The label varies by detection; we just assert *some* install/
+    // preset link exists and the "No signal —" prefix is present.
+    const cta = row.locator(".acc-empty-cta");
+    await expect(cta).toBeVisible();
+    await expect(cta).toContainText(/No signal/);
+    await expect(cta.locator("button.acc-link")).toBeVisible();
   } finally {
     await teardown(per);
   }

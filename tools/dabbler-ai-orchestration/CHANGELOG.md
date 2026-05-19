@@ -5,6 +5,81 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-05-19 (Set 029 Session 5 — multi-provider feature-complete)
+
+### Added — Non-Claude orchestrator detection and manual override
+
+- **Codex auto-detect via `~/.codex/config.toml` watcher.** Activated
+  at extension start. Reads top-level `model` and `model_reasoning_effort`
+  fields from Codex's TOML config, then writes a `configured-default`
+  marker (medium confidence) via the shared
+  `scripts/write-orchestrator-marker.js` helper. Honors the existing
+  multi-writer precedence rules — a fresh `current`/`manual`/
+  `last-observed` Claude or manual signal blocks the
+  `configured-default` write so a Codex config change can't stomp a
+  live session signal. The watcher debounces filesystem events to a
+  single dispatch per 500 ms quiet window.
+- **Universal manual-override quickpick (`dabbler.setOrchestrator`).**
+  Replaces the Session 2 stub. Three flows in one command:
+  - **MRU tuples** at the top — operator's recent
+    `<provider> + <model> + <effort> + <thinking>` combinations,
+    most-recent first, stored at `~/.dabbler/orchestrator-mru.json`
+    (capped at 8 entries).
+  - **"(set new combination…)"** triggers a multi-step picker flow
+    (provider → model → effort → thinking on/off).
+  - **"(copy keybindings.json snippet for current selection)"** —
+    copies a `keybindings.json` fragment pre-filled with the
+    most-recent tuple so the operator can hotkey-bind a
+    one-keystroke "back to my preferred orchestrator" preset.
+  Hotkey-bindable: callers can invoke `dabbler.setOrchestrator` with
+  `{ provider, model, effort, thinking }` args to apply directly,
+  bypassing the picker. **Force-override semantics:** if the helper
+  detects a fresh `current`-precedence marker from another writer,
+  the quickpick shows a modal "Override existing live signal from
+  <writer>?" confirmation before proceeding; on accept it passes
+  `--force-override` to the helper.
+- **Gemini Code Assist installer shim (`dabbler.installOrchestratorHook.gemini`).**
+  Per audit Q2 — Gemini Code Assist exposes no documented persisted
+  state we can scrape. The command opens the manual-override
+  quickpick with `provider: "google"` pre-filled. No actual hook is
+  installed; the writer marker carries `signalKind: "manual"`,
+  `confidence: "high"`.
+- **GitHub Copilot installer shim (`dabbler.installOrchestratorHook.copilot`).**
+  Per audit Q4 — Copilot's old chat-model settings keys were
+  deprecated and have no current public replacement. Same shape as
+  the Gemini shim, with `provider: "github"` pre-filled.
+- **Smart empty-state CTA.** The "No signal — install hook" link in
+  the accordion-body empty state is no longer hardcoded to Claude.
+  The webview detects which orchestrators are installed locally
+  (Claude Code via `~/.claude/`, Codex via `~/.codex/`, Gemini Code
+  Assist + GitHub Copilot via the VS Code extension registry) and
+  surfaces the right installer/preset command. If multiple are
+  detected, the operator's MRU ordering wins (most-recent provider
+  surfaces first); otherwise priority order is Claude → Codex →
+  Gemini → Copilot. Falls back to the Claude installer link when
+  nothing is detected.
+- **`data-command-args` support in the webview client.** Optional
+  JSON-encoded args attribute on accordion buttons gets parsed and
+  forwarded through `executeCommand` postMessages so the smart CTA
+  can pass `{ prefillProvider }` to `dabbler.setOrchestrator`.
+
+### Changed
+
+- **Webview command allowlist expanded** to include the Gemini and
+  Copilot installer-shim command IDs alongside the Claude installer,
+  manual-override, and writer-log openers.
+- **`renderAccordionEmpty()` signature** now accepts an optional
+  `EmptyCta` to drive the install-link target. Existing callers
+  passing no argument fall back to the v0.16.0 Claude-installer
+  default; the only in-tree caller (`renderAccordionBody`) is updated
+  to plumb the detection result through.
+
+### Removed
+
+- **Session 2 manual-override stub** (`setOrchestratorManualStub.ts`)
+  is deleted. The `dabbler.setOrchestrator` command ID stays stable —
+  only the implementation changes.
+
 ## [0.16.0] — 2026-05-18 (Set 029 Session 4 — custom-tree pivot)
 
 ### Changed — Session Sets view is now a webview-rendered custom tree (BREAKING within the v0.15.0 preview)

@@ -288,13 +288,30 @@
       });
     });
 
-    // Buttons inside accordion / banner with data-command.
+    // Buttons inside accordion / banner with data-command. Optional
+    // data-command-args is a JSON-encoded array of args appended to
+    // the executeCommand call (Session 5 — used by the smart CTA to
+    // pass `prefillProvider` to dabbler.setOrchestrator).
     Array.from(root.querySelectorAll('[data-command]')).forEach(function (btn) {
       btn.addEventListener("click", function (ev) {
         ev.stopPropagation();
         const commandId = btn.getAttribute("data-command");
         if (!commandId) return;
-        vscode.postMessage({ type: "executeCommand", commandId: commandId });
+        const argsAttr = btn.getAttribute("data-command-args");
+        let args;
+        if (argsAttr) {
+          try {
+            const parsed = JSON.parse(argsAttr);
+            args = Array.isArray(parsed) ? parsed : undefined;
+          } catch (_e) {
+            args = undefined;
+          }
+        }
+        vscode.postMessage({
+          type: "executeCommand",
+          commandId: commandId,
+          args: args,
+        });
       });
     });
   }

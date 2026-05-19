@@ -41,6 +41,7 @@ import {
   renderAccordionBody,
   RenderState,
 } from "./OrchestratorAccordion";
+import { pickEmptyStateCta } from "./detectOrchestrators";
 import {
   applicableActions,
   ActionSupports,
@@ -83,8 +84,10 @@ const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
   "dabblerSessionSets.migrate",
   "dabblerSessionSets.cancel",
   "dabblerSessionSets.restore",
-  // 3 indicator-action buttons (per S4 M8 indicator-action parity)
+  // Indicator-action buttons (Session 4 + Session 5 multi-provider)
   "dabbler.installOrchestratorHook.claudeCode",
+  "dabbler.installOrchestratorHook.gemini",
+  "dabbler.installOrchestratorHook.copilot",
   "dabbler.setOrchestrator",
   "dabbler.openOrchestratorWriterLog",
 ]);
@@ -290,9 +293,19 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     }
 
     const snap: MarkerSnapshot = this.marker.snapshot();
+    // When the resolved set has no marker yet, decorate the empty state
+    // with a CTA pointing at the best-installed orchestrator. The check
+    // is cheap (a few fs.statSync calls + vscode.extensions.getExtension)
+    // so we run it per snapshot rather than caching — extensions can
+    // be installed/uninstalled at runtime.
+    let renderState = snap.state;
+    if (renderState.kind === "empty" && snap.resolution.kind === "resolved") {
+      const cta = pickEmptyStateCta();
+      renderState = { kind: "empty", cta };
+    }
     const inputs: RowResolutionInputs = {
       resolution: snap.resolution,
-      state: snap.state,
+      state: renderState,
     };
 
     const payload: SnapshotPayload = {

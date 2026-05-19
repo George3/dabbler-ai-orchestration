@@ -114,6 +114,20 @@ const vscodeStub = {
     registerCommand: () => ({ dispose: () => {} }),
     executeCommand: async () => undefined,
   },
+  extensions: {
+    // Set 029 Session 5 — detectOrchestrators imports vscode.extensions
+    // at module load. Tests that want to simulate a present/absent
+    // extension can mutate `__installedExtensions` before requiring
+    // the module under test; the default empty set models "no
+    // orchestrator extensions installed".
+    __installedExtensions: new Set(),
+    getExtension(id) {
+      return this.__installedExtensions.has(id) ? { id } : undefined;
+    },
+  },
+  env: {
+    clipboard: { writeText: async () => undefined },
+  },
 };
 
 const originalResolve = Module._resolveFilename;

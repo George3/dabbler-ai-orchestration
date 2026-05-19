@@ -25,7 +25,7 @@
     {
       "number": 5,
       "title": "Non-Claude provider detection + manual override",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 6,
@@ -33,7 +33,7 @@
       "status": "not-started"
     }
   ],
-  "currentSession": null,
+  "currentSession": 5,
   "totalSessions": 6,
   "completedSessions": [
     1,
@@ -43,7 +43,7 @@
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-18T17:54:55.563886-04:00",
+  "startedAt": "2026-05-18T20:30:20.516847-04:00",
   "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": {
