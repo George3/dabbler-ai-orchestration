@@ -1,0 +1,30 @@
+{
+  "status": "completed",
+  "summary": "Set 031 Session 1: Schema acceptance + journal helper + workflow doc for delegation.decision_consensus V1. Three Q&A items confirmed at session start (Q1 implementation in this repo, Q2 narrow V1 categories, Q3 committed JSONL + gitignored payloads dir); answers recorded in ai-assignment.md. Shipped: ai_router/router-config.yaml `decision_consensus` sub-block (default enabled:false, 4 V1 categories, gpt-5-4+gemini-pro default engines); ai_router/config.py `_validate_decision_consensus` invoked at load_config boundary (engine 'provider:model' parse + cross-check against models: table, V1+V1.5+V2 category whitelist, unresolved_action enum, path-type guards, forward-compat tolerance for unknown sub-keys); ai_router/consensus_journal.py new module with ConsensusRecord dataclass + compute_question_hash (sha256:-prefix) + append_record (POSIX append + flush + best-effort fsync) + write_full_payload (temp+rename Markdown sibling) + write_consensus_record one-shot + validate_record_inputs enum guard; tools/dabbler-ai-orchestration/src/configEditor/schemaValidator.ts AJV mirror of the new schema with category enum + engine pattern; docs/ai-led-session-workflow.md new top-level 'Decision-time consensus' section (6-step decision tree, V1 vs human-only category examples table, journal-format example record, opt-in path, three explicit limits-of-consensus guardrails). Tests: 33 new (17 schema + 16 journal); full ai_router suite 633 passed + 1 skipped (was 599 at Set 030 close, +33 new + 1 regression from Round-A finding). Round-A verification: gemini-pro $0.020 of $5 NTE; one Critical finding (model entries with missing 'provider' key would silently bypass engine-mismatch check) addressed in ai_router/config.py with regression test test_engine_provider_missing_in_model_rejected. Cumulative Set 031 cost: $0.020 of $5.00 NTE.",
+  "files_changed": [
+    "ai_router/config.py",
+    "ai_router/consensus_journal.py",
+    "ai_router/router-config.yaml",
+    "ai_router/tests/test_consensus_journal.py",
+    "ai_router/tests/test_decision_consensus_schema.py",
+    "docs/ai-led-session-workflow.md",
+    "docs/session-sets/031-delegation-consensus-config/ai-assignment.md",
+    "docs/session-sets/031-delegation-consensus-config/disposition.json",
+    "docs/session-sets/031-delegation-consensus-config/session-events.jsonl",
+    "docs/session-sets/031-delegation-consensus-config/session-state.json",
+    "tools/dabbler-ai-orchestration/src/configEditor/schemaValidator.ts"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "effort": "medium",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Session 2 is the mechanical wiring + release session: three identical agent-instruction-file pointer lines, CHANGELOG entry, pyproject version bump 0.4.0->0.5.0, PyPI release script invocation, three consumer-repo CLAUDE.md notification one-liners, .gitignore entry for ai_router/consensus-decisions/, end-of-session verification, final-session change-log.md generation, and close_session. Sonnet at medium effort handles this size of identical-byte cross-file work cheaper than Opus while maintaining the keep-in-sync discipline. Operator may upgrade to Opus 4.7 if Round-A in S1 had flagged anything substantial; the single Critical finding was scoped to one file and has been resolved here, so Sonnet is the right pick."
+    }
+  },
+  "blockers": []
+}
