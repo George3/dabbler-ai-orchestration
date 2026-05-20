@@ -262,7 +262,106 @@ the cleanest path is:
   within the set, or a separate slice — to be sized during audit).
 - All tiers (Lightweight + Full) check in at session close.
 
-## Questions for round 2
+## 9. Audit resolution (Set 032 Session 1, 2026-05-19)
+
+> **Status:** the round-2 framing below is HISTORICAL. The five items
+> GPT-5.4 round 2 raised (H1, H2, H3, OQ1, OQ2) are RESOLVED via the
+> audit-then-spec cycle of Set 032. GPT-5.4 also raised a sixth item
+> in the audit pass (H4 — holder identity key), which is also
+> resolved. All six verdicts below drive Set 033's implementation
+> spec.
+>
+> **Audit artifacts** (in this directory):
+> - `audit-resolution-request.md` — the packet sent to both engines
+> - `audit-resolution-gemini-pro.{txt,json}` — Gemini Pro verdict on the 5 originals
+> - `audit-resolution-gpt-5-4.txt` — GPT-5.4 verdict on the 5 originals + H4 raised
+> - `audit-resolution-h4-request.md` — H4 follow-up packet
+> - `audit-resolution-h4-gemini-pro.{txt,json}` — Gemini Pro verdict on H4 (refined → engine + provider)
+
+### Locked verdicts
+
+**H1 — Writer authority: ROUTER-ONLY WRITES; hooks become invokers.**
+Full-tier check-out state is mutated only at the existing session
+boundaries (`start_session.py`, `close_session.py`). Hooks (Claude
+`SessionStart`, Codex config-toml watcher) detect the boundary
+signal and INVOKE the canonical writer; they do not write the
+lifecycle field directly. Invocation is non-blocking; failure
+surfaces a user-visible toast, not a silent retry. *Cross-provider:
+both engines confirmed.*
+
+**H2 — Single source of truth: `session-state.json` is canonical;
+`.dabbler/orchestrator.json` is RETIRED.** Set 033 removes the
+per-set marker file and the `MarkerWatchService` precedence logic.
+The tree-provider and any other reader consumes `session-state.json`
+directly per in-progress set. *Cross-provider: both engines
+confirmed; "derived UI cache" alternative explicitly rejected
+because cache invalidation adds complexity for no payoff at the
+current read cost.*
+
+**H3 — Hard coordination, not advisory.** `start_session` REFUSES
+to write when the existing `orchestrator` block names a different
+holder (per H4's equality rule). The refusal must surface a clear
+error message naming (a) the current holder (engine + provider)
+and (b) the two release paths (`--force` flag, "Release Check-Out"
+Command Palette action). Explicit operator overrides: (a)
+`start_session --force`; (b) Command Palette "Release Check-Out"
+action; (c) conflict prompt in the queueing/polling flow. The §5
+sentence "No data is at stake — the marker is purely advisory" is
+RETRACTED — coordination state IS at stake (write authority for
+the next session-state mutation). *Cross-provider: both engines
+confirmed.*
+
+**H4 — Holder identity key: `engine + provider` composite.**
+NEW item raised by GPT-5.4 during the audit pass. The conflict-
+equality predicate compares the `engine` AND `provider` fields of
+the `orchestrator` block. Other fields (`model`, `effort`) are
+mutable holder-state and may be updated in place by the holder
+during the session without triggering a conflict. *Cross-provider:
+GPT raised + permitted any stable subset; Gemini Pro refined to
+`engine + provider` over pre-audit's `engine`-only on
+future-proofing grounds (Claude-via-Anthropic vs.
+Claude-via-Bedrock); operator adjudicated 2026-05-19 = lock the
+composite.*
+
+**OQ1 — Field merge: MERGE into existing `orchestrator` block.**
+Schema delta is +2 nested fields under `orchestrator`:
+`checkedOutAt` (ISO timestamp, set on transition to
+`status: in-progress`) and `lastActivityAt` (ISO timestamp, bumped
+on same-orchestrator re-attach / `/think*` effort-change / other
+in-state updates). No new top-level fields. `orchestrator` is
+null when `status != in-progress`. *Cross-provider: both engines
+confirmed.*
+
+**OQ2 — Events: ALIASES, not new types.** `work_checked_out` and
+`work_checked_in` are documentation/terminology aliases for the
+existing `work_started` / `closeout_succeeded` events in
+`session-events.jsonl`. No schema change to the ledger. The
+lifecycle derivation in `session_events.py` is unchanged. Set 033
+updates `docs/session-state-schema.md` + `ai_router/docs/close-out.md`
+to adopt the new terminology. *Cross-provider: both engines
+confirmed.*
+
+### Cost record for the audit
+
+- Gemini Pro audit-resolution call: $0.008
+- GPT-5.4 audit-resolution call: $0.000 (429 → manual paste,
+  matching the pre-audit pattern)
+- Gemini Pro H4 follow-up call: $0.004
+- **Total Set 032 Session 1 routed spend: ~$0.012**
+
+### What's open
+
+Nothing. The audit closes with 6/6 items locked. Set 032 Session 2
+drafts the Set 033 implementation spec using these verdicts as the
+backbone.
+
+---
+
+## Round-2 questions (HISTORICAL — superseded by §9)
+
+> The block below is the original round-2 framing GPT-5.4 answered
+> on 2026-05-19. It is preserved for historical context; the
+> resolutions live in §9 above.
 
 For each engine: re-evaluate your round-1 verdict on Q1–Q6 with §1–§7
 above as additional context. Specifically:

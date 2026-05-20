@@ -1,21 +1,21 @@
-# Orchestrator-tracking architecture — pre-audit artifacts
+# Orchestrator-tracking architecture — pre-audit + audit artifacts
 
-> **Status as of 2026-05-19:** Pre-audit. Direction agreed across the
-> operator + GPT-5.4 + Gemini Pro. Three Highs + two open questions
-> remain to resolve in the audit-then-spec cycle of the follow-on
-> session set.
+> **Status as of 2026-05-19 (audit resolved):** Direction agreed
+> across the operator + GPT-5.4 + Gemini Pro since the pre-audit
+> rounds. **All six design items resolved via Set 032 Session 1.**
+> Set 033's implementation spec is authored from these verdicts in
+> Set 032 Session 2.
 >
-> **Consuming session sets (planned, two-set audit-then-spec per
+> **Consuming session sets (two-set audit-then-spec per
 > `feedback_audit_then_spec_for_substantial_features`):**
-> `032-orchestrator-checkout-checkin-audit` (resolves the 3 Highs +
-> 2 open questions; produces the implementation spec) →
-> `033-orchestrator-checkout-checkin-implementation` (executes it).
-> Numbering bumped from the originally-planned `030-...` after
-> `030-session-state-v3-sessions-ledger` was rediscovered as the
-> existing 030 slot (complete since 2026-05-17) and
+> `032-orchestrator-checkout-checkin-audit` — Session 1 (audit
+> resolution, complete 2026-05-19) + Session 2 (drafts Set 033's
+> implementation spec) → `033-orchestrator-checkout-checkin-
+> implementation` (executes the authored spec; placeholder spec
+> currently). Numbering bumped from the originally-planned `030-...`
+> after `030-session-state-v3-sessions-ledger` was rediscovered as
+> the existing 030 slot (complete since 2026-05-17) and
 > `031-delegation-consensus-config` took the next slot.
-> (NOT YET CREATED). The session set's audit cycle reads this directory
-> as input and produces the implementable spec.
 
 ## What's here
 
@@ -26,7 +26,14 @@
 | [`consensus-gemini-pro.txt`](consensus-gemini-pro.txt) / `.json` | Gemini Pro round 1 verdict (against `proposal.md`) | Final |
 | [`consensus-gpt-5-4.txt`](consensus-gpt-5-4.txt) | GPT-5.4 round 1 verdict (manual paste) | Final |
 | [`consensus-gpt-5-4-round-2.txt`](consensus-gpt-5-4-round-2.txt) | GPT-5.4 round 2 verdict (against `proposal-addendum.md`, manual paste) | Final |
-| `route_consensus.py` / `route_gemini_only.py` / `route_gpt_only.py` | Routing scripts (Gemini ran; GPT hit 429 twice → manual paste) | Historical |
+| `route_consensus.py` / `route_gemini_only.py` / `route_gpt_only.py` | Round-1/2 routing scripts (Gemini ran; GPT hit 429 twice → manual paste) | Historical |
+| [`audit-resolution-request.md`](audit-resolution-request.md) | Set 032 S1 audit packet (5 items: H1, H2, H3, OQ1, OQ2) | Final |
+| [`audit-resolution-gemini-pro.txt`](audit-resolution-gemini-pro.txt) / `.json` | Gemini Pro audit verdict — all 5 confirmed | Final |
+| [`audit-resolution-gpt-5-4.txt`](audit-resolution-gpt-5-4.txt) | GPT-5.4 audit verdict — 5/5 confirmed + raised H4 | Final |
+| [`audit-resolution-paste-for-gpt-5-4.md`](audit-resolution-paste-for-gpt-5-4.md) | Paste-ready packet (manual GPT paste; 429 fallback) | Historical |
+| [`audit-resolution-h4-request.md`](audit-resolution-h4-request.md) | H4 follow-up packet (holder identity key) | Final |
+| [`audit-resolution-h4-gemini-pro.txt`](audit-resolution-h4-gemini-pro.txt) / `.json` | Gemini Pro H4 verdict — refined → `engine + provider` | Final |
+| `route_audit_resolution.py` / `route_h4_gemini.py` | Set 032 S1 routing scripts | Historical |
 
 ## How we got here
 
@@ -64,55 +71,63 @@
      consensus iteration — the must-resolve items are the audit's
      job, not another quick consensus pass.
 
-## Must-resolve in the audit-then-spec cycle of the follow-on set
+## Audit resolution — Set 032 Session 1 (2026-05-19)
 
-These are GPT-5.4 round 2's three Highs + two open questions. They
-are not yet decided; the audit cycle should produce specific design
-verdicts on each.
+All six items below are **RESOLVED**. Set 033 implementation spec
+authoring uses these verdicts as the backbone. Full reasoning and
+cross-provider verdict trail live in
+[`proposal-addendum.md`](proposal-addendum.md) §9.
 
-### High issues
+### High issues — resolved
 
-**H1 — Writer authority.** In Full tier, the existing close-out
-contract names exactly two router-driven boundary writes
-(`start_session.py` / `close_session.py`). The check-out architecture
-must NOT introduce additional writers of the canonical lifecycle
-field. Hooks (Claude `SessionStart`, Codex config-toml watcher)
-should DETECT changes and INVOKE the canonical writers, never write
-the lifecycle field directly. Recommended verdict: **router-only
-writes; hooks become invokers.**
+**H1 — Writer authority. RESOLVED: router-only writes; hooks become
+invokers.** Full-tier check-out state is mutated only by the existing
+boundary CLIs (`start_session.py`, `close_session.py`). Hooks
+detect + invoke; they do not race the writer. *Cross-provider: both
+engines confirmed.*
 
-**H2 — Single source of truth.** The addendum oscillates between
-`session-state.json` (existing lifecycle authority) and
-`<workspace>/docs/session-sets/<slug>/.dabbler/orchestrator.json`
-(per-set marker introduced in Set 029 S3) as the home for check-out
-state. Pick one. Recommended verdict: **`session-state.json` is
-canonical; the `.dabbler/orchestrator.json` marker either becomes
-derived UI cache or is retired.**
+**H2 — Single source of truth. RESOLVED: `session-state.json` is
+canonical; `.dabbler/orchestrator.json` is RETIRED.** Set 033 removes
+the per-set marker file and `MarkerWatchService`'s precedence logic.
+The "derived UI cache" alternative was explicitly rejected (cache
+invalidation adds complexity for no payoff at trivial read cost).
+*Cross-provider: both engines confirmed.*
 
-**H3 — Hard coordination vs. advisory.** The addendum frames check-
-out as both a hard lock (prevents concurrent AI work) and an
-advisory marker (no data at stake; override anytime). These are
-materially different failure models. Pick one — override, auto-
-release, and audit semantics depend on it. Recommended verdict:
-**hard coordination at write time** (`start_session` refuses to write
-when held by a different orchestrator); **explicit operator override
-is the safety valve**, not the default-allow.
+**H3 — Hard coordination vs. advisory. RESOLVED: hard coordination
+at write time + explicit operator override safety valve.**
+`start_session` refuses to write when a different holder owns the
+check-out (per H4's equality rule). The refusal error must name
+the current holder (engine + provider) and the available release
+paths (`--force`, "Release Check-Out") so the operator can act on
+it without consulting docs. Overrides: `--force` flag, Command
+Palette "Release Check-Out", queueing/polling conflict prompt.
+The addendum's earlier "purely advisory" framing is retracted.
+*Cross-provider: both engines confirmed.*
 
-### Open questions
+**H4 — Holder identity key. RESOLVED: `engine + provider` composite.**
+(NEW item raised by GPT-5.4 during the audit pass.) Conflict-
+equality compares `engine` AND `provider` fields; `model` and
+`effort` are mutable holder-state and excluded from identity.
+*Cross-provider: Gemini Pro refined to composite key over pre-audit's
+engine-only on future-proofing grounds; GPT permitted any stable
+subset; operator adjudicated 2026-05-19 = lock the composite.*
 
-**OQ1 — Field merge.** How does proposed `checkedOut` / `checkedOutBy`
-relate to the existing top-level `orchestrator` field in
-`docs/session-state-schema.md`? Recommended verdict: **they MERGE.**
-The existing `orchestrator: { engine, provider, model, effort }`
-already carries identity. Augmentations needed: `checkedOutAt`
-timestamp and `lastActivityAt`. `currentSession` already covers the
-session number.
+### Open questions — resolved
 
-**OQ2 — Events as new types or aliases.** Are `work_checked_out` /
-`work_checked_in` new ledger event types or aliases for the existing
-`work_started` / `closeout_succeeded`? Recommended verdict:
-**aliases.** No new event types needed; check-out semantics are
-derived from the existing event progression.
+**OQ1 — Field merge. RESOLVED: MERGE into existing `orchestrator`
+block.** Schema delta is +2 nested fields under `orchestrator`:
+`checkedOutAt` (ISO timestamp, set on transition to
+`status: in-progress`) and `lastActivityAt` (ISO timestamp, bumped
+on in-state updates). `orchestrator` is null between sessions.
+*Cross-provider: both engines confirmed.*
+
+**OQ2 — Events as new types or aliases. RESOLVED: ALIASES.**
+`work_checked_out` / `work_checked_in` are documentation
+terminology aliases for the existing `work_started` /
+`closeout_succeeded` events; no schema change to the ledger.
+Documentation updates land in `docs/session-state-schema.md` +
+`ai_router/docs/close-out.md`. *Cross-provider: both engines
+confirmed.*
 
 ## Cost record
 
@@ -120,7 +135,10 @@ derived from the existing event progression.
 - GPT-5.4 round 1: $0.000 (429 twice; recovered via manual paste)
 - GPT-5.4 round 2: $0.000 (manual paste, no router involvement)
 - Gemini Pro round 2: not run (consensus frozen 2026-05-19)
-- **Total architectural-decision spend: $0.015**
+- Set 032 S1 audit Gemini Pro: $0.008 (5-item packet)
+- Set 032 S1 audit GPT-5.4: $0.000 (429 → manual paste)
+- Set 032 S1 H4 follow-up Gemini Pro: $0.004
+- **Total architectural-decision spend: ~$0.027**
 
 ## What ships in Session 6 v0.17.x (NO architecture migration)
 
@@ -138,8 +156,10 @@ sequencing: ship v0.17.x as polish-only. Specifically:
 
 ## What ships across Sets 032 + 033
 
-Set 032's audit cycle resolves H1 / H2 / H3 / OQ1 / OQ2, then
-produces Set 033's implementation spec.md. Together they ship:
+Set 032's audit cycle resolved H1 / H2 / H3 / H4 / OQ1 / OQ2 in
+Session 1 (this document). Session 2 produces Set 033's
+implementation spec.md from those verdicts. Together Sets 032 + 033
+ship:
 
 - Check-out / check-in state machine in `session-state.json`
 - `start_session` becomes the canonical writer (refuses on conflict
