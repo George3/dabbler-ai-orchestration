@@ -15,6 +15,15 @@
   ],
   "verification_method": "api",
   "verification_message_ids": [],
-  "next_orchestrator": null,
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Session 2 is the reader-side migration: retire the .dabbler/orchestrator.json per-set marker (H2), replace resolveActiveSet() with listInProgressSets(), refactor CustomSessionSetsView to render N in-progress sets, and remove the single-active-set banner. The work is TypeScript reader refactoring against the canonical session-state.json authority that Session 1 just established, plus Layer-2 test rewrites. Same model + effort holds: high-effort is right because the spec lists S2 as the largest structural reader-side change, with R2 (reader refactor breaks tree rendering) explicitly flagged."
+    }
+  },
   "blockers": []
 }
