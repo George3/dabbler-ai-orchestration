@@ -1,21 +1,23 @@
 # Orchestrator-tracking architecture — pre-audit + audit artifacts
 
-> **Status as of 2026-05-19 (audit resolved):** Direction agreed
-> across the operator + GPT-5.4 + Gemini Pro since the pre-audit
-> rounds. **All six design items resolved via Set 032 Session 1.**
-> Set 033's implementation spec is authored from these verdicts in
-> Set 032 Session 2.
+> **Status as of 2026-05-19 (audit-then-spec cycle complete):**
+> Direction agreed across the operator + GPT-5.4 + Gemini Pro since
+> the pre-audit rounds. **All six design items resolved via Set 032
+> Session 1.** **Set 033's implementation spec authored + cross-
+> reviewed in Set 032 Session 2** — see
+> [`docs/session-sets/033-orchestrator-checkout-checkin-implementation/spec.md`](../../session-sets/033-orchestrator-checkout-checkin-implementation/spec.md).
 >
 > **Consuming session sets (two-set audit-then-spec per
 > `feedback_audit_then_spec_for_substantial_features`):**
 > `032-orchestrator-checkout-checkin-audit` — Session 1 (audit
-> resolution, complete 2026-05-19) + Session 2 (drafts Set 033's
-> implementation spec) → `033-orchestrator-checkout-checkin-
-> implementation` (executes the authored spec; placeholder spec
-> currently). Numbering bumped from the originally-planned `030-...`
-> after `030-session-state-v3-sessions-ledger` was rediscovered as
-> the existing 030 slot (complete since 2026-05-17) and
-> `031-delegation-consensus-config` took the next slot.
+> resolution, complete 2026-05-19) + Session 2 (Set 033 spec
+> authored + cross-reviewed, complete 2026-05-19) → `033-
+> orchestrator-checkout-checkin-implementation` (6-session
+> implementation spec READY to execute). Numbering bumped from the
+> originally-planned `030-...` after `030-session-state-v3-sessions-
+> ledger` was rediscovered as the existing 030 slot (complete since
+> 2026-05-17) and `031-delegation-consensus-config` took the next
+> slot.
 
 ## What's here
 
@@ -34,6 +36,13 @@
 | [`audit-resolution-h4-request.md`](audit-resolution-h4-request.md) | H4 follow-up packet (holder identity key) | Final |
 | [`audit-resolution-h4-gemini-pro.txt`](audit-resolution-h4-gemini-pro.txt) / `.json` | Gemini Pro H4 verdict — refined → `engine + provider` | Final |
 | `route_audit_resolution.py` / `route_h4_gemini.py` | Set 032 S1 routing scripts | Historical |
+
+> **Set 032 Session 2 artifacts** (cross-provider review of the
+> drafted Set 033 spec) live alongside the session set at
+> [`docs/session-sets/032-orchestrator-checkout-checkin-audit/`](../../session-sets/032-orchestrator-checkout-checkin-audit/):
+> `spec-review-request.md` (the review packet), `spec-review-gemini-pro.{txt,json}`
+> (Gemini Pro's approve-with-suggestions verdict), and `route_spec_review.py`
+> (routing script).
 
 ## How we got here
 
@@ -138,7 +147,9 @@ confirmed.*
 - Set 032 S1 audit Gemini Pro: $0.008 (5-item packet)
 - Set 032 S1 audit GPT-5.4: $0.000 (429 → manual paste)
 - Set 032 S1 H4 follow-up Gemini Pro: $0.004
-- **Total architectural-decision spend: ~$0.027**
+- Set 032 S1 verification (Round A + Round B Gemini Pro): $0.032
+- Set 032 S2 spec cross-review (Gemini Pro): $0.020
+- **Total architectural-decision spend: ~$0.079** (rounded)
 
 ## What ships in Session 6 v0.17.x (NO architecture migration)
 
@@ -157,9 +168,10 @@ sequencing: ship v0.17.x as polish-only. Specifically:
 ## What ships across Sets 032 + 033
 
 Set 032's audit cycle resolved H1 / H2 / H3 / H4 / OQ1 / OQ2 in
-Session 1 (this document). Session 2 produces Set 033's
-implementation spec.md from those verdicts. Together Sets 032 + 033
-ship:
+Session 1 (this document) and authored + cross-reviewed Set 033's
+implementation spec.md in Session 2 — see
+[`docs/session-sets/033-orchestrator-checkout-checkin-implementation/spec.md`](../../session-sets/033-orchestrator-checkout-checkin-implementation/spec.md).
+Together Sets 032 + 033 ship:
 
 - Check-out / check-in state machine in `session-state.json`
 - `start_session` becomes the canonical writer (refuses on conflict

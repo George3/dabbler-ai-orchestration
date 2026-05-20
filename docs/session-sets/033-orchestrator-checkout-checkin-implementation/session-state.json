@@ -4,32 +4,32 @@
   "sessions": [
     {
       "number": 1,
-      "title": "State machine in session-state.json + start_session refactor (placeholder)",
+      "title": "State machine in session-state.json + start_session refactor",
       "status": "not-started"
     },
     {
       "number": 2,
-      "title": "Marker retirement + resolver refactor + banner removal (placeholder)",
+      "title": "Marker retirement + resolver refactor + banner removal",
       "status": "not-started"
     },
     {
       "number": 3,
-      "title": "UI rename + ActionRegistry + Command Palette release action (placeholder)",
+      "title": "UI rename + ActionRegistry + Command Palette release action",
       "status": "not-started"
     },
     {
       "number": 4,
-      "title": "Playwright tests for multi-set + check-out conflict (placeholder)",
+      "title": "Playwright tests for multi-set rendering + check-out conflict",
       "status": "not-started"
     },
     {
       "number": 5,
-      "title": "Queueing / polling feature (placeholder)",
+      "title": "Queueing / polling feature",
       "status": "not-started"
     },
     {
       "number": 6,
-      "title": "Cross-tier check-in + cross-repo notifications + PyPI release (placeholder)",
+      "title": "Close-out parity + docs + cross-repo notifications + PyPI release",
       "status": "not-started"
     }
   ],
