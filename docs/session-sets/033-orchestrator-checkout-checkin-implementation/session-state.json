@@ -10,7 +10,7 @@
     {
       "number": 2,
       "title": "Marker retirement + resolver refactor + banner removal",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 3,
@@ -33,10 +33,11 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 2,
+  "currentSession": null,
   "totalSessions": 6,
   "completedSessions": [
-    1
+    1,
+    2
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
