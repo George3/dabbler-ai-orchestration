@@ -308,6 +308,105 @@
       "description": "Operator opted to skip routed Round A verification for Session 4 ('Continue without the router for now.'). Coverage rationale: the 4 passing Playwright scenarios assert against subprocess-driven start_session calls + Electron-rendered DOM — both are observable end-to-end without a verifier. The 2 skipped scenarios have explicit FIXMEs naming the root cause (pre-existing S2 reader bug; Playwright palette brittleness), so a verifier wouldn't be reading them as 'broken' anyway. No router cost this session.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "session-005/detection-event-contract-defined",
+      "dateTime": "2026-05-20T05:40:00-04:00",
+      "description": "Designed the structured-event contract as a per-conflict sentinel file at ~/.dabbler/checkout-conflicts/<ISO>-<source>-<slug>.json (schemaVersion: 1). Schema fields cover the spec's four named surface-contract keys (heldByEngine, heldByProvider, sessionSetPath, checkedOutAt) plus the would-be holder identity + model + effort + sessionNumber + heldByModel — everything the retry/force paths need to invoke start_session for the would-be holder without re-resolving from session-state.json. One file per conflict means fs.watch on the directory maps 1:1 to events; the consumer reads, deletes (idempotent on race), then dispatches handleConflict. Chose this over an in-process EventEmitter because the Claude SessionStart invoker runs OUT-of-process (Node subprocess spawned by Claude's hook chain), so a file-based sentinel is the only sub-process-safe channel. Codex configWatcher (which IS in-process) uses the same file-based path for symmetry — single consumer, single contract, single test surface.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "session-005/poll-service-implemented",
+      "dateTime": "2026-05-20T06:10:00-04:00",
+      "description": "Authored src/providers/CheckoutPollService.ts (~310 lines). State machine: start() ensures ~/.dabbler/checkout-conflicts/ exists, scans for stale records left by prior extension lifetimes, and registers fs.watch on the directory; processFile() reads + deletes + dispatches; handleConflict() shows the three-action prompt (Poll for release / Force override / Dismiss); beginPolling() registers fs.watch on the held set's session-state.json with a 5s debounce (POLL_DEBOUNCE_MS=5000) and an immediate tryRetry to catch the slot already free at click time; forceOverride() spawns start_session --force; disposePoll() cleans watcher + timers + in-flight key. In-flight de-dup via a Set<string> keyed on pollKey(record) short-circuits duplicate sentinels for the same (slug, would-be holder) pair (e.g., the Codex watcher firing repeatedly on config.toml saves). Test seams (CheckoutPollServiceOpts.showInformationMessage + spawnStartSession) enable Layer-2 coverage without launching VS Code. Exports: parseConflictRecord, isSlotFreeForHolder, pollKey, conflictDirPath, POLL_PROMPT_* constants.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "session-005/h4-identity-check-wired",
+      "dateTime": "2026-05-20T06:15:00-04:00",
+      "description": "isSlotFreeForHolder(orchestrator, wouldBeEngine, wouldBeProvider) returns true iff the orchestrator block is null OR its (engine, provider) composite matches the would-be holder — the H4 identity gate. A third orchestrator joining mid-poll (different engine, different provider, or same engine + different provider) is NOT slot-free; the poll keeps waiting. Layer-2 covers all four branches: null + matching + third-engine + same-engine-different-provider (the latter is the subtler case where H4's composite distinguishes claude+anthropic from a hypothetical claude+aws-bedrock).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "session-005/claude-invoker-emits-sentinel",
+      "dateTime": "2026-05-20T06:25:00-04:00",
+      "description": "Refactored scripts/claude-session-start-invoker.js to emit a conflict record when spawnSync returns exit 4 (EXIT_CHECKOUT_CONFLICT). New emitConflictRecord() writes JSON to ~/.dabbler/checkout-conflicts/<ISO-stamp>-claude-<slug>.json, populating the held-by identity from resolution.state.orchestrator (engine + provider + model + checkedOutAt) and the would-be holder identity from the invoker's own engine/provider/model/effort. Best-effort: mkdir + writeFile failures are swallowed because the existing stderr-log path remains as a fallback. Existing stderr-log behavior preserved verbatim — operators reading Claude Code's hook log see the same message they did before, plus the new sentinel surfaces a polling prompt inside VS Code.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "session-005/codex-watcher-emits-sentinel",
+      "dateTime": "2026-05-20T06:30:00-04:00",
+      "description": "Refactored src/codex/configWatcher.ts: extended resolveSingleInProgressSet's return type with slug + existingHolder.model + existingHolder.checkedOutAt (sentinel-record fields). Added emitConflictRecord() helper mirroring the Claude invoker's. Wired a child.on('exit') handler on the dispatchCheckOut spawn (previously stdio: ignore + no exit handler — fire-and-forget) so the watcher captures exit code; on EXIT_CHECKOUT_CONFLICT (4), writes a sentinel naming codex+openai as the would-be holder. The fire-on-every-config-edit watcher is rate-limited by the existing same-holder short-circuit + 500ms debounce, and the CheckoutPollService's in-flight de-dup means even rapid-fire sentinels for the same (slug, codex+openai) pair show one prompt.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "session-005/timeout-setting-added",
+      "dateTime": "2026-05-20T06:35:00-04:00",
+      "description": "Added dabblerSessionSets.checkoutPollTimeoutMinutes to package.json contributes.configuration (type: number, default: 30, min: 1, max: 1440). Default matches the spec's '30 minutes without resolution → auto-abort + one-time toast'. timeoutMinutesResolver in extension.ts reads cfg.get<number>('checkoutPollTimeoutMinutes', DEFAULT_TIMEOUT_MINUTES) on each beginPolling() call (not cached) so a setting change takes effect without a restart; clamps to [1, 1440] defensively.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 7,
+      "stepKey": "session-005/extension-wired",
+      "dateTime": "2026-05-20T06:40:00-04:00",
+      "description": "src/extension.ts: imported CheckoutPollService + DEFAULT_TIMEOUT_MINUTES from providers/CheckoutPollService. Added safeRegister('CheckoutPollService', ...) at the end of the registration chain. Constructor passes a pythonPathResolver mirroring the resolution chain in checkOutOrchestrator.ts / configWatcher.ts (explicit setting → folder/workspace/global precedence; absolute / workspace-relative / bare-on-PATH cases) and a timeoutMinutesResolver that reads the new setting. start() is called immediately; the service push is registered via context.subscriptions for activate-deactivate cleanup. safeRegister wraps the call so a constructor throw doesn't kill the rest of activation.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 8,
+      "stepKey": "session-005/layer2-tests-green",
+      "dateTime": "2026-05-20T06:55:00-04:00",
+      "description": "Authored src/test/suite/checkoutPollService.test.ts with 25 tests across 8 suites: (1) parseConflictRecord — 7 tests covering complete record, invalid JSON, schemaVersion mismatch, missing required field, unknown source, null-tolerant optional fields, null sessionNumber; (2) isSlotFreeForHolder H4 identity gate — 5 tests covering null orchestrator, undefined orchestrator, matching pair (same-holder), third-engine, same-engine-different-provider; (3) pollKey — 2 tests; (4) handleConflict dispatch — 3 tests covering Dismiss (no spawn), Force (spawn --force), in-flight de-dup (second handleConflict short-circuits without re-prompting); (5) beginPolling state machine — 4 tests covering immediate-retry-on-slot-free, no-spawn-when-held-by-third, session-number arg presence/absence, dispose() halts watchers + clears state; (6) processFile ingest — 2 tests covering happy-path consume+dispatch + malformed-JSON drop; (7) conflictDirPath; (8) prompt-action constants. All 25 pass via npm run test:unit (Mocha + vscode-stub). Full suite: 446 pass + 2 pre-existing failures (configEditor-foundation + notificationsSection, unchanged from S2/S3/S4).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 9,
+      "stepKey": "session-005/layer3-polling-scenario-green",
+      "dateTime": "2026-05-20T07:10:00-04:00",
+      "description": "Authored src/test/playwright/checkout-polling.spec.ts. PASSING scenario: 'CheckoutPollService consumes a pre-existing conflict sentinel on activation' — scaffolds a session set, sets HOME + USERPROFILE to a tmpdir-scoped override, drops a conflict sentinel at <homeOverride>/.dabbler/checkout-conflicts/test-sentinel.json, launches VS Code, opens the Session Sets view (triggering extension activation → safeRegister → CheckoutPollService.start() → directory scan), waits up to 15s for the sentinel file to be deleted by the service. Asserts deletion AND that the session-state.json's orchestrator block is unchanged (consume surfaces a prompt; it does NOT silently force-override). Runtime: 12.6s on Windows + Playwright _electron.launch. Hit one debug iteration: npx playwright test invoked directly doesn't run the compile step (only `npm run test:playwright` chains compile + tsc --outDir out + playwright); after running `npm run compile` manually the test passes deterministically. Documented in inline comments. SKIPPED scenario with FIXME: 'second orchestrator polls, holder closes, second orchestrator auto-attaches' — the full happy path requires clicking the 'Poll for release' button on a VS Code information-message toast, which runs into the same cross-iframe brittleness session-sets-tree.spec.ts + S4 release-checkout palette scenario hit. Layer-2 covers the polling state machine end-to-end (4 beginPolling tests asserting on the spawned start_session args, the retry-on-state-change path, dispose semantics). Manual operator smoke remains the path for the toast-button UX.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 10,
+      "stepKey": "session-005/round-a-verification",
+      "dateTime": "2026-05-20T07:30:00-04:00",
+      "description": "Authored verify_session5.py following the Session 1+2+3 template (RouteResult JSON-dump-first per feedback_ai_router_route_result_handling). Bundled the primary deliverables in full (CheckoutPollService.ts, claude-session-start-invoker.js, configWatcher.ts, checkoutPollService.test.ts, checkout-polling.spec.ts) plus extension.ts excerpt (service registration block + pythonPath/timeout resolvers) plus package.json excerpt (the new dabblerSessionSets.checkoutPollTimeoutMinutes setting) plus three ground-truth references (proposal-addendum §9 H3+H4 verdicts, spec.md Session 5 only, start_session.py EXIT_CHECKOUT_CONFLICT + boundary checks excerpt). Bundle 78,491 chars — between S1's 56k and S2's 96k. Seven assertion groups (A conflict-record contract, B service state machine, C H4 identity gate, D detection-path correctness, E extension registration robustness, F test adequacy, G risky/missing). Round A verdict: VERIFIED with no must-fix issues. Round B not required. Session 5 closes near top of $0.10-$0.25 forecast band ($0.032 single round); cumulative routed spend across S1+S2+S3+S5 ≈$0.165 of $1.25 total Set 033 NTE.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "engine": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.03233875,
+          "input_tokens": 25799,
+          "output_tokens": 9,
+          "task_type": "session-verification"
+        }
+      ]
     }
   ]
 }
