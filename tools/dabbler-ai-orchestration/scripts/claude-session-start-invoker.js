@@ -34,17 +34,28 @@
 // (e.g., spawn fails entirely). This matches the retired writer's
 // "best-effort, never block the hook chain" contract.
 //
+// Set 033 Session 5: when start_session exits with EXIT_CHECKOUT_CONFLICT
+// (4 — H3 refusal because a different engine+provider holds the slot),
+// the invoker writes a structured conflict record to
+// `~/.dabbler/checkout-conflicts/<timestamp>-claude-<slug>.json`. The
+// in-extension CheckoutPollService watches that directory and surfaces
+// a non-blocking poll/force-override/dismiss prompt. The stderr log
+// (existing behavior) remains for hook-log debuggability.
+//
 // No CLI arguments. The mode is implicit (this script is only attached
 // to SessionStart). Future hook variants (e.g., UserPromptSubmit) can
 // either ship their own thin shim or pass a `--mode` flag — the
 // previous combined-helper pattern was retired with H1.
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const cp = require("child_process");
 
 const CLAUDE_ENGINE = "claude";
 const CLAUDE_PROVIDER = "anthropic";
+const EXIT_CHECKOUT_CONFLICT = 4;
+const CONFLICT_DIR = path.join(os.homedir(), ".dabbler", "checkout-conflicts");
 
 function readStdinSync() {
   try {
@@ -154,6 +165,48 @@ function spawnStartSession(setDir, model, effort) {
   });
 }
 
+// Emit a structured conflict record so the in-extension
+// CheckoutPollService can surface a poll/force-override/dismiss prompt.
+// Best-effort: any failure here is swallowed (the stderr log path still
+// fires below, so the operator retains the existing visibility).
+function emitConflictRecord(resolution, model, effort) {
+  try {
+    fs.mkdirSync(CONFLICT_DIR, { recursive: true });
+    const state = resolution.state || {};
+    const existing = state.orchestrator || {};
+    const record = {
+      schemaVersion: 1,
+      detectedAt: new Date().toISOString(),
+      source: "claude-invoker",
+      sessionSetPath: resolution.setDir,
+      sessionSetSlug: resolution.slug,
+      sessionNumber: typeof state.currentSession === "number"
+        ? state.currentSession
+        : null,
+      heldByEngine: typeof existing.engine === "string" ? existing.engine : "",
+      heldByProvider: typeof existing.provider === "string" ? existing.provider : "",
+      heldByModel: typeof existing.model === "string" ? existing.model : null,
+      checkedOutAt: typeof existing.checkedOutAt === "string"
+        ? existing.checkedOutAt
+        : null,
+      wouldBeHolderEngine: CLAUDE_ENGINE,
+      wouldBeHolderProvider: CLAUDE_PROVIDER,
+      wouldBeHolderModel: typeof model === "string" ? model : null,
+      wouldBeHolderEffort: typeof effort === "string" ? effort : null,
+    };
+    // Filename: timestamp + source + slug so concurrent writers
+    // (multiple Claude windows or one Claude + one Codex) don't
+    // collide. ISO timestamp is filesystem-safe after replacing ':'.
+    const stamp = record.detectedAt.replace(/:/g, "-");
+    const filename = `${stamp}-claude-${resolution.slug}.json`;
+    const filePath = path.join(CONFLICT_DIR, filename);
+    fs.writeFileSync(filePath, JSON.stringify(record) + "\n", "utf8");
+  } catch {
+    // Sentinel emission is best-effort; the stderr log carries the
+    // same information for the hook-log debugger.
+  }
+}
+
 function main() {
   const payload = parsePayload(readStdinSync());
   const startCwd = (typeof payload.cwd === "string" && payload.cwd)
@@ -187,11 +240,14 @@ function main() {
   }
 
   if (result.status !== 0) {
-    // EXIT_CHECKOUT_CONFLICT (4) is the H3 refusal — log the holder
-    // message and exit 0. Any other non-zero (boundary violations,
-    // usage errors) also surfaces to stderr and exits 0; the writer
-    // is the source of truth for state, the hook is best-effort
-    // notification.
+    // EXIT_CHECKOUT_CONFLICT (4) is the H3 refusal — write the
+    // structured conflict record (S5) AND log to stderr for the
+    // hook-log debugger. Any other non-zero (boundary violations,
+    // usage errors) only surfaces to stderr; the writer is the
+    // source of truth for state, the hook is best-effort notification.
+    if (result.status === EXIT_CHECKOUT_CONFLICT) {
+      emitConflictRecord(resolution, model, effort);
+    }
     if (result.stderr) {
       process.stderr.write(
         `claude-session-start-invoker: start_session exit ${result.status}:\n${result.stderr}`,

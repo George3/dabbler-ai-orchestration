@@ -14,9 +14,15 @@
 // Hard coordination (H3): the writer REFUSES when a different
 // engine+provider already holds the check-out, and the watcher does
 // NOT pass `--force` — the operator must explicitly take over via the
-// Command Palette "Release Check-Out" action. Refusal noise is
-// silent (no toast) because the watcher fires on every config-file
-// touch and a noisy toast on every Codex edit would be hostile.
+// Command Palette "Release Check-Out" action.
+//
+// Set 033 Session 5: on EXIT_CHECKOUT_CONFLICT (4), the watcher writes
+// a structured conflict record to `~/.dabbler/checkout-conflicts/` so
+// the in-extension CheckoutPollService can surface a non-blocking
+// poll/force-override/dismiss prompt. Refusal toasts remain off — the
+// watcher fires on every config-file touch, and one prompt per
+// distinct (slug, codex+openai) pair is what the operator sees (the
+// service's in-flight de-dup short-circuits duplicates).
 //
 // The TOML parse is intentionally minimal: only the top-level `model`
 // and `model_reasoning_effort` keys are read. A full TOML parser is
@@ -35,6 +41,8 @@ import * as path from "path";
 const CODEX_CONFIG_REL = path.join(".codex", "config.toml");
 const CODEX_ENGINE = "codex";
 const CODEX_PROVIDER = "openai";
+const EXIT_CHECKOUT_CONFLICT = 4;
+const CONFLICT_DIR = path.join(os.homedir(), ".dabbler", "checkout-conflicts");
 
 interface CodexConfigSnapshot {
   model: string | null;
@@ -122,11 +130,19 @@ function resolvePythonPath(workspaceCwd: string): string {
 // Multi-in-progress is the supported case post-S2, but the watcher
 // only fires off a single check-out claim — fail-closed on ambiguity
 // (the operator picks via the manual quickpick when this happens).
-function resolveSingleInProgressSet(workspaceCwd: string): {
+interface ResolvedInProgressSet {
   setDir: string;
+  slug: string;
   currentSession: number | null;
-  existingHolder: { engine?: string; provider?: string } | null;
-} | null {
+  existingHolder: {
+    engine?: string;
+    provider?: string;
+    model?: string;
+    checkedOutAt?: string;
+  } | null;
+}
+
+function resolveSingleInProgressSet(workspaceCwd: string): ResolvedInProgressSet | null {
   let current = path.resolve(workspaceCwd);
   while (true) {
     const candidate = path.join(current, "docs", "session-sets");
@@ -139,11 +155,7 @@ function resolveSingleInProgressSet(workspaceCwd: string): {
       // not a dir; fall through to parent walk
     }
     if (entries) {
-      const inProgress: {
-        setDir: string;
-        currentSession: number | null;
-        existingHolder: { engine?: string; provider?: string } | null;
-      }[] = [];
+      const inProgress: ResolvedInProgressSet[] = [];
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         const setDir = path.join(candidate, entry.name);
@@ -155,11 +167,14 @@ function resolveSingleInProgressSet(workspaceCwd: string): {
             const cs = typeof state.currentSession === "number" ? state.currentSession : null; // noqa: D13: in-flight session number passed verbatim to start_session writer; not a legacy-progress derivation
             inProgress.push({
               setDir,
+              slug: entry.name,
               currentSession: cs,
               existingHolder: state.orchestrator
                 ? {
                     engine: state.orchestrator.engine,
                     provider: state.orchestrator.provider,
+                    model: state.orchestrator.model,
+                    checkedOutAt: state.orchestrator.checkedOutAt,
                   }
                 : null,
             });
@@ -175,6 +190,45 @@ function resolveSingleInProgressSet(workspaceCwd: string): {
     const parent = path.dirname(current);
     if (parent === current) return null;
     current = parent;
+  }
+}
+
+// Set 033 Session 5: write a structured conflict record so the
+// in-extension CheckoutPollService can surface a poll/force-override/
+// dismiss prompt. Best-effort: failure here is silent (the watcher's
+// existing log-nothing-on-refusal posture is preserved as a fallback).
+function emitConflictRecord(
+  resolved: ResolvedInProgressSet,
+  wouldBeModel: string,
+  wouldBeEffort: string,
+): void {
+  try {
+    fs.mkdirSync(CONFLICT_DIR, { recursive: true });
+    const existing = resolved.existingHolder ?? {};
+    const detectedAt = new Date().toISOString();
+    const record = {
+      schemaVersion: 1,
+      detectedAt,
+      source: "codex-watcher",
+      sessionSetPath: resolved.setDir,
+      sessionSetSlug: resolved.slug,
+      sessionNumber: resolved.currentSession,
+      heldByEngine: typeof existing.engine === "string" ? existing.engine : "",
+      heldByProvider: typeof existing.provider === "string" ? existing.provider : "",
+      heldByModel: typeof existing.model === "string" ? existing.model : null,
+      checkedOutAt: typeof existing.checkedOutAt === "string"
+        ? existing.checkedOutAt
+        : null,
+      wouldBeHolderEngine: CODEX_ENGINE,
+      wouldBeHolderProvider: CODEX_PROVIDER,
+      wouldBeHolderModel: wouldBeModel,
+      wouldBeHolderEffort: wouldBeEffort,
+    };
+    const stamp = detectedAt.replace(/:/g, "-");
+    const filename = `${stamp}-codex-${resolved.slug}.json`;
+    fs.writeFileSync(path.join(CONFLICT_DIR, filename), JSON.stringify(record) + "\n", "utf8");
+  } catch {
+    // best-effort
   }
 }
 
@@ -206,22 +260,24 @@ function dispatchCheckOut(snapshot: CodexConfigSnapshot, opts: WriteOpts): void 
   }
 
   const python = resolvePythonPath(opts.cwd);
+  const model = snapshot.model;
+  const effort = snapshot.effort ?? "medium";
   const args = [
     "-m", "ai_router.start_session",
     "--session-set-dir", resolved.setDir,
     "--engine", CODEX_ENGINE,
     "--provider", CODEX_PROVIDER,
-    "--model", snapshot.model,
-    "--effort", snapshot.effort ?? "medium",
+    "--model", model,
+    "--effort", effort,
   ];
   if (resolved.currentSession != null) {
     args.push("--session-number", String(resolved.currentSession));
   }
   // No `--force`: the watcher never overrides an existing different-
-  // holder check-out. H3 refusal returns exit 4; we swallow stderr to
-  // avoid spamming toasts on every config edit. The operator routes
-  // explicit overrides through the Command Palette "Release
-  // Check-Out" action.
+  // holder check-out. H3 refusal returns exit 4 — we emit a structured
+  // conflict record so the in-extension CheckoutPollService can offer
+  // poll/force/dismiss. The operator routes explicit immediate
+  // overrides through the Command Palette "Release Check-Out" action.
 
   const child = cp.spawn(python, args, {
     cwd: opts.cwd,
@@ -233,6 +289,11 @@ function dispatchCheckOut(snapshot: CodexConfigSnapshot, opts: WriteOpts): void 
     // silent. The operator notices via the orchestrator indicator
     // not updating; they can run the manual quickpick to claim
     // explicitly.
+  });
+  child.on("exit", (code) => {
+    if (code === EXIT_CHECKOUT_CONFLICT) {
+      emitConflictRecord(resolved, model, effort);
+    }
   });
 }
 

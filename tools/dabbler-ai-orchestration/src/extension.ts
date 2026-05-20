@@ -24,6 +24,10 @@ import { registerCheckOutOrchestrator } from "./commands/checkOutOrchestrator";
 import { registerReleaseCheckOut } from "./commands/releaseCheckOut";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { activateCodexConfigWatcher } from "./codex/configWatcher";
+import {
+  CheckoutPollService,
+  DEFAULT_TIMEOUT_MINUTES,
+} from "./providers/CheckoutPollService";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -264,6 +268,46 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("activateCodexConfigWatcher", () => {
     context.subscriptions.push(activateCodexConfigWatcher(context));
+  });
+
+  // Set 033 Session 5: CheckoutPollService watches
+  // ~/.dabbler/checkout-conflicts/ for structured conflict records
+  // emitted by the Claude SessionStart invoker and the Codex config
+  // watcher on EXIT_CHECKOUT_CONFLICT (H3 refusal). For each record,
+  // it surfaces a poll/force/dismiss prompt; "poll" watches the held
+  // set's session-state.json (5s debounce) and auto-retries
+  // start_session when the slot becomes free (H4 identity gate). The
+  // pythonPath resolver mirrors the one in checkOutOrchestrator.ts /
+  // configWatcher.ts so all three paths share the operator's
+  // dabblerSessionSets.pythonPath setting.
+  safeRegister("CheckoutPollService", () => {
+    const pollService = new CheckoutPollService({
+      pythonPathResolver: (cwd: string): string => {
+        const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
+        const inspected = cfg.inspect<string>("pythonPath");
+        const explicit =
+          inspected?.workspaceFolderValue ??
+          inspected?.workspaceValue ??
+          inspected?.globalValue;
+        const raw = (explicit ?? "python").trim();
+        if (!raw) return "python";
+        if (path.isAbsolute(raw)) return raw;
+        if (raw.includes(path.sep) || raw.includes("/")) {
+          return path.resolve(cwd, raw);
+        }
+        return raw;
+      },
+      timeoutMinutesResolver: (): number => {
+        const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
+        const value = cfg.get<number>("checkoutPollTimeoutMinutes", DEFAULT_TIMEOUT_MINUTES);
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+          return DEFAULT_TIMEOUT_MINUTES;
+        }
+        return Math.min(value, 1440);
+      },
+    });
+    pollService.start();
+    context.subscriptions.push(pollService);
   });
 
   // Set 030 Session 5: flip scanState to "ready" once activation
