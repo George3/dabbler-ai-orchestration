@@ -15,7 +15,7 @@ CLI shape::
 
     python -m ai_router.start_session --session-set-dir <path> \\
         --engine claude --model claude-opus-4-7 [--session-number N] \\
-        [--effort medium] [--provider anthropic]
+        [--effort medium] [--provider anthropic] [--force]
 
 Behavior:
 
@@ -34,13 +34,25 @@ Behavior:
   This is the boundary the v0.13.11 defensive guards are *recovering
   from*; making the writer refuse the bad input is the prevention
   layer.
+- **Hard coordination (Set 033, H3 + H4).** When the existing
+  ``orchestrator`` block names a different ``engine + provider``
+  composite than the caller, the CLI REFUSES with a clear error
+  naming the current holder + both release paths (``--force`` and
+  the "Release Check-Out" Command Palette action), unless
+  ``--force`` is set. Force-override appends a single line to
+  ``~/.dabbler/orchestrator-writer.log`` and proceeds with the
+  write; the writer logic in ``register_session_start`` rewrites
+  ``checkedOutAt`` and ``lastActivityAt`` for the new holder.
 
 Exit codes:
 
 - ``0`` — success (or idempotent no-op).
 - ``2`` — usage error (bad args, missing session set directory).
 - ``3`` — boundary violation (request to advance while a session is
-  still open).
+  still open, re-open of a closed session, or skip-ahead).
+- ``4`` — check-out conflict (Set 033 H3): a different
+  ``engine + provider`` holds the in-progress check-out and
+  ``--force`` was not set.
 
 The CLI never makes routed LLM calls — it only writes state and emits
 events. Safe to invoke under any budget / cost regime.
@@ -51,6 +63,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 from typing import Optional
 
 try:
@@ -78,6 +91,14 @@ except ImportError:
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_BOUNDARY = 3
+EXIT_CHECKOUT_CONFLICT = 4
+
+# Set 033 Session 1 (H3): the force-override audit trail. Append-only,
+# best-effort — a log-write failure does not block the override (the
+# state file is the source of truth; the log is observability).
+ORCHESTRATOR_WRITER_LOG = os.path.expanduser(
+    "~/.dabbler/orchestrator-writer.log"
+)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -138,7 +159,68 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "google). Optional."
         ),
     )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Override an existing check-out held by a different "
+            "engine+provider (Set 033 H3). Appends a force-override "
+            "entry to ~/.dabbler/orchestrator-writer.log and "
+            "proceeds. Does not override other boundary checks "
+            "(in-flight session, closed-session re-open, skip-ahead)."
+        ),
+    )
     return p
+
+
+def _identity_label(engine: Optional[str], provider: Optional[str]) -> str:
+    """Render the H4 holder identity (``engine + provider`` composite) for the
+    refusal error and the writer-log audit trail.
+
+    ``provider`` is optional on the CLI side, so a None provider
+    displays as ``<unspecified>`` rather than producing
+    ``claude+None`` in the error text.
+    """
+    return f"{engine or '<unknown>'} + {provider or '<unspecified>'}"
+
+
+def _log_force_override(
+    session_set_dir: str,
+    session_number: int,
+    prior_engine: Optional[str],
+    prior_provider: Optional[str],
+    new_engine: str,
+    new_provider: Optional[str],
+) -> None:
+    """Append a force-override entry to ``~/.dabbler/orchestrator-writer.log``.
+
+    Best-effort: directory creation and write are wrapped in a
+    broad except so a permissions or disk-full failure does not
+    block the override itself. The state file remains the source of
+    truth; the writer log is an observability surface.
+
+    Format: one timestamped line per entry, parseable by
+    ``awk`` / ``rg`` without further structure. Format is documented
+    in ``ai_router/docs/close-out.md`` (Set 033 S6).
+    """
+    try:
+        os.makedirs(os.path.dirname(ORCHESTRATOR_WRITER_LOG), exist_ok=True)
+        ts = datetime.now().astimezone().isoformat()
+        set_name = os.path.basename(session_set_dir.rstrip("/\\"))
+        prior_label = _identity_label(prior_engine, prior_provider)
+        new_label = _identity_label(new_engine, new_provider)
+        line = (
+            f"{ts} force-override "
+            f"session-set={set_name} "
+            f"session={session_number} "
+            f"prior={prior_label} "
+            f"new={new_label}\n"
+        )
+        with open(ORCHESTRATOR_WRITER_LOG, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        # Observability surface only; never block the override.
+        pass
 
 
 def _infer_next_session(session_set_dir: str) -> int:
@@ -271,6 +353,54 @@ def run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return EXIT_BOUNDARY
+
+    # Set 033 Session 1 (H3 + H4): hard coordination check. If the
+    # existing orchestrator block on disk names a different
+    # ``engine + provider`` composite than the caller, refuse the
+    # write unless ``--force`` is set. The check runs AFTER the
+    # existing boundary checks so the more-specific "session N is
+    # still in flight" / "session N is already closed" / "skip-ahead"
+    # errors surface first when applicable — H3 is the
+    # holder-conflict layer, not a replacement for the lifecycle
+    # boundary.
+    #
+    # Force-override is an authority handoff, not a state-machine
+    # transition: it bypasses ONLY this H3 check, not the other
+    # boundary refusals above. Logged best-effort to the writer log
+    # so the holder change is auditable.
+    prior_orch = state.get("orchestrator") if isinstance(state, dict) else None
+    if isinstance(prior_orch, dict):
+        prior_engine = prior_orch.get("engine")
+        prior_provider = prior_orch.get("provider")
+        same_holder = (
+            prior_engine == args.engine and prior_provider == args.provider
+        )
+        if not same_holder:
+            if not getattr(args, "force", False):
+                print(
+                    f"start_session: refused -- session set is checked "
+                    f"out by a different orchestrator "
+                    f"({_identity_label(prior_engine, prior_provider)}); "
+                    f"caller is "
+                    f"{_identity_label(args.engine, args.provider)}. "
+                    f"Release the check-out before starting: re-run "
+                    f"with --force to override, or invoke the "
+                    f"\"Release Check-Out\" Command Palette action.",
+                    file=sys.stderr,
+                )
+                return EXIT_CHECKOUT_CONFLICT
+            # Force-override: log the handoff (best-effort) then
+            # proceed. register_session_start handles the timestamps
+            # — checkedOutAt rewrites to now because the H4 identity
+            # changed.
+            _log_force_override(
+                session_set_dir=session_set_dir,
+                session_number=requested,
+                prior_engine=prior_engine,
+                prior_provider=prior_provider,
+                new_engine=args.engine,
+                new_provider=args.provider,
+            )
 
     # Idempotent path: caller asked for the in-flight session
     # exactly. Re-emitting work_started is a no-op (ledger dedupes),

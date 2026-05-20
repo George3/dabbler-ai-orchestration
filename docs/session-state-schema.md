@@ -84,7 +84,14 @@ fields:
   "startedAt": "<ISO 8601 timestamp | null>",
   "completedAt": "<ISO 8601 timestamp | null>",
   "verificationVerdict": "VERIFIED" | null,
-  "orchestrator": { "engine": "...", "provider": "...", "model": "...", "effort": "..." } | null,
+  "orchestrator": {
+    "engine": "...",
+    "provider": "...",
+    "model": "...",
+    "effort": "...",
+    "checkedOutAt": "<ISO 8601 timestamp>",
+    "lastActivityAt": "<ISO 8601 timestamp>"
+  } | null,
   "sessions": [
     { "number": 1, "title": "Schema doc + helper", "status": "complete" },
     { "number": 2, "title": "Writers + scaffolding", "status": "in-progress" },
@@ -104,7 +111,7 @@ fields:
 | `startedAt` | ISO 8601 or null | First session start time. |
 | `completedAt` | ISO 8601 or null | Final session completion time. |
 | `verificationVerdict` | `"VERIFIED"` or null | Set by `close_session` after all gates pass. |
-| `orchestrator` | object or null | Engine / provider / model / effort that ran the set. Null for hand-driven Lightweight runs. |
+| `orchestrator` | object or null | Engine / provider / model / effort + check-out timestamps for the holder. Null when `status != "in-progress"`. Null for hand-driven Lightweight runs that have not started a session. See **Check-out / check-in** below. |
 | `sessions` | array of objects | The canonical progress ledger. See below. |
 
 ### `sessions[]` — the canonical progress ledger
@@ -122,6 +129,67 @@ exists so consumers don't have to re-parse `spec.md` for every UI
 refresh. A future repair command may refresh stale titles from
 `spec.md`; until then, title drift is cosmetic (per the Set 030
 Gemini-approved clarification).
+
+### Check-out / check-in (Set 033)
+
+The `orchestrator` block doubles as the authoritative **check-out
+record** for the session set. Set 033 anchored the framework's
+coordination model in this block (rather than the retired per-set
+`.dabbler/orchestrator.json` marker — H2 in the Set 032 audit
+verdicts). Two nested timestamp fields capture the lifecycle:
+
+| Field | Set on | Bumped on |
+|---|---|---|
+| `checkedOutAt` | Fresh check-out (`status` flips `null → in-progress` with a new holder) OR force-override handoff (`--force`). | Never bumped by a same-holder write — preserved across re-attach. |
+| `lastActivityAt` | Every write. Mirrors `checkedOutAt` on a fresh check-out. | Every same-holder re-attach or in-state holder update. |
+
+**Holder identity (H4):** the equality predicate is the
+`engine + provider` composite. Two orchestrators with the same
+`engine + provider` but different `model` (e.g.,
+`claude-opus-4-7` and `claude-sonnet-4-6` both running through the
+`claude + anthropic` identity) are treated as the **same holder**.
+Model and effort are mutable fields inside the block; they update
+in place on a same-holder re-attach without resetting
+`checkedOutAt`.
+
+**Hard coordination (H3):** `start_session` REFUSES to write when
+the existing `orchestrator` block names a different
+`engine + provider` than the caller, unless `--force` is set. The
+refusal error names both (a) the current holder and (b) the two
+release paths — `--force` and the "Release Check-Out" Command
+Palette action — so the operator can act on it without consulting
+external docs.
+
+**Force-override (`--force`)** is an authority handoff, not a
+state-machine transition. The writer appends a single line to
+`~/.dabbler/orchestrator-writer.log` (best-effort; failure to write
+the log does not block the override) and proceeds with the write;
+`checkedOutAt` is rewritten to now and `lastActivityAt` mirrors
+it. The lifecycle invariant — at most one `in-progress` session
+per set, top-level status agreement with `sessions[]` — is
+unchanged.
+
+**Block-null invariant:** when top-level `status` is anything other
+than `"in-progress"` (`"not-started"`, `"complete"`, or
+`"cancelled"`), the `orchestrator` block is `null`. The block lives
+exactly as long as a check-out does. The Full-tier `close_session`
+writer clears the block on close; on Lightweight tier the human
+maintains this invariant by hand on close.
+
+**Migration tolerance:** an in-flight set whose `orchestrator`
+block lacks `checkedOutAt` (e.g., a state file written by a pre-Set-033
+writer that is still in-progress when v0.18.x ships) is **tolerated
+on read**. The next `start_session` call by the same holder
+populates `checkedOutAt` with the current time, since the prior
+value is unknown — a one-time loss of fidelity in exchange for not
+forcing a synchronous migration of every in-flight set across
+consumer repos.
+
+**Documentation alias (OQ2):** the events `work_started` and
+`closeout_succeeded` in `session-events.jsonl` are equivalent to
+"check out" and "check in" in operator-facing prose. The ledger
+event names are NOT renamed (no schema change); only the
+documentation vocabulary adopts the check-out / check-in framing.
 
 ### Dual-write legacy fields (Set 030 steady state)
 
@@ -387,7 +455,9 @@ release.
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
-    "effort": "normal"
+    "effort": "normal",
+    "checkedOutAt": "2026-05-11T14:30:00-04:00",
+    "lastActivityAt": "2026-05-11T16:42:18-04:00"
   },
   "sessions": [
     { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
@@ -400,7 +470,9 @@ release.
 
 `get_progress()` returns `currentSession=2`, `nextSession=3`,
 `completedSessions=[1]`, `isBetweenSessions=False`. The extension's
-tree view renders this as `1/4 · session 2 in flight`.
+tree view renders this as `1/4 · session 2 in flight`. `checkedOutAt`
+captures when this set was first checked out; `lastActivityAt`
+bumped on the most recent same-holder re-attach.
 
 ### Between sessions
 
@@ -417,7 +489,14 @@ flight.
   "startedAt": "2026-05-17T05:00:00-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": { "engine": "claude", "provider": "anthropic", "model": "claude-opus-4-7", "effort": "high" },
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "checkedOutAt": "2026-05-17T05:00:00-04:00",
+    "lastActivityAt": "2026-05-17T05:00:00-04:00"
+  },
   "sessions": [
     { "number": 1, "title": "Schema doc + get_progress() helper + v2-read synthesizer", "status": "complete" },
     { "number": 2, "title": "Dual-write writers + scaffolding",                          "status": "not-started" },
@@ -443,12 +522,7 @@ tree view renders this as `1/5` plain (no in-flight annotation).
   "startedAt": "2026-05-11T14:30:00-04:00",
   "completedAt": "2026-05-13T18:45:00-04:00",
   "verificationVerdict": "VERIFIED",
-  "orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "normal"
-  },
+  "orchestrator": null,
   "sessions": [
     { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
     { "number": 2, "title": "Wire the wizard into onboarding", "status": "complete" },
@@ -457,6 +531,11 @@ tree view renders this as `1/5` plain (no in-flight annotation).
   ]
 }
 ```
+
+The `orchestrator` block is `null` on a closed set per the Set 033
+block-null invariant — the check-out cleared on close. Historical
+files in the wild may still carry a populated block on a closed
+set; that's tolerated on read but no new write produces it.
 
 ---
 

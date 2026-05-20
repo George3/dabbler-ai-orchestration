@@ -564,6 +564,39 @@ def register_session_start(
 
     derived_current, derived_total, derived_completed = _derive_legacy_fields(sessions)
 
+    # Set 033 Session 1 (H3 + H4 + OQ1): compute checkedOutAt and
+    # lastActivityAt from the existing orchestrator block. The H4
+    # identity predicate is the ``engine + provider`` composite; on a
+    # same-holder re-attach, ``checkedOutAt`` is preserved across the
+    # rewrite so the operator-visible "checked out at HH:MM" reflects
+    # when this holder first claimed the set, not the last resume.
+    # On a fresh check-out (no prior block, or prior block null) and
+    # on a force-override handoff (different ``engine + provider``,
+    # which the CLI's H3 refusal logic only lets through on
+    # ``--force``), ``checkedOutAt`` is set to now. ``lastActivityAt``
+    # bumps on every write.
+    now = _now_iso()
+    prior_orch = existing.get("orchestrator") if isinstance(existing, dict) else None
+    same_holder = (
+        isinstance(prior_orch, dict)
+        and prior_orch.get("engine") == orchestrator_engine
+        and prior_orch.get("provider") == orchestrator_provider
+    )
+    if same_holder:
+        prior_checked_out = prior_orch.get("checkedOutAt") if prior_orch else None
+        # Migration tolerance: an in-flight set whose prior writer
+        # didn't emit ``checkedOutAt`` (pre-Set-033 writers) lands
+        # here on the first same-holder re-attach. Populate the field
+        # with ``now`` rather than leaving it None; the one-time loss
+        # of fidelity is documented in docs/session-state-schema.md.
+        checked_out_at = (
+            prior_checked_out
+            if isinstance(prior_checked_out, str) and prior_checked_out
+            else now
+        )
+    else:
+        checked_out_at = now
+
     state = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
@@ -576,7 +609,7 @@ def register_session_start(
         "completedSessions": derived_completed,
         "status": SESSION_STATUS_IN_PROGRESS,
         "lifecycleState": SessionLifecycleState.WORK_IN_PROGRESS.value,
-        "startedAt": _now_iso(),
+        "startedAt": now,
         "completedAt": None,
         "verificationVerdict": None,
         "orchestrator": {
@@ -584,6 +617,8 @@ def register_session_start(
             "provider": orchestrator_provider,
             "model": orchestrator_model,
             "effort": orchestrator_effort,
+            "checkedOutAt": checked_out_at,
+            "lastActivityAt": now,
         },
     }
     path = _state_path(session_set)
