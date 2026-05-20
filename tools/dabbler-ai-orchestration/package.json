@@ -228,8 +228,13 @@
         "category": "Dabbler"
       },
       {
-        "command": "dabbler.setOrchestrator",
-        "title": "Set Orchestrator Model & Effort",
+        "command": "dabbler.checkOutOrchestrator",
+        "title": "Check Out As…",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.releaseCheckOut",
+        "title": "Release Check-Out",
         "category": "Dabbler"
       },
       {

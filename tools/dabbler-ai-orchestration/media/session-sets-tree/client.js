@@ -282,7 +282,7 @@
     // Buttons inside accordion / banner with data-command. Optional
     // data-command-args is a JSON-encoded array of args appended to
     // the executeCommand call (Session 5 — used by the smart CTA to
-    // pass `prefillProvider` to dabbler.setOrchestrator).
+    // pass `prefillProvider` to dabbler.checkOutOrchestrator).
     Array.from(root.querySelectorAll('[data-command]')).forEach(function (btn) {
       btn.addEventListener("click", function (ev) {
         ev.stopPropagation();

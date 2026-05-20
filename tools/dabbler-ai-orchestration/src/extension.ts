@@ -20,7 +20,8 @@ import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsF
 import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
 import { registerInstallOrchestratorHookGeminiCommand } from "./commands/installOrchestratorHookGemini";
 import { registerInstallOrchestratorHookCopilotCommand } from "./commands/installOrchestratorHookCopilot";
-import { registerSetOrchestratorManual } from "./commands/setOrchestratorManual";
+import { registerCheckOutOrchestrator } from "./commands/checkOutOrchestrator";
+import { registerReleaseCheckOut } from "./commands/releaseCheckOut";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { activateCodexConfigWatcher } from "./codex/configWatcher";
 import { SessionSet } from "./types";
@@ -252,8 +253,11 @@ export function activate(context: vscode.ExtensionContext): void {
   safeRegister("registerInstallOrchestratorHookCopilot", () =>
     registerInstallOrchestratorHookCopilotCommand(context),
   );
-  safeRegister("registerSetOrchestratorManual", () =>
-    registerSetOrchestratorManual(context),
+  safeRegister("registerCheckOutOrchestrator", () =>
+    registerCheckOutOrchestrator(context),
+  );
+  safeRegister("registerReleaseCheckOut", () =>
+    registerReleaseCheckOut(context),
   );
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),

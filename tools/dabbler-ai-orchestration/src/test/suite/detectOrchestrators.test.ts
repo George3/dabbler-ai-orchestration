@@ -166,7 +166,10 @@ suite("pickEmptyStateCta", () => {
     withScenario({ codex: true }, () => {
       const cta = pickEmptyStateCta();
       assert.ok(cta);
-      assert.strictEqual(cta?.commandId, "dabbler.setOrchestrator");
+      // Set 033 S3: command id renamed from `dabbler.setOrchestrator`
+      // to `dabbler.checkOutOrchestrator` alongside the H1+H3+H4
+      // check-out / check-in model.
+      assert.strictEqual(cta?.commandId, "dabbler.checkOutOrchestrator");
       assert.deepStrictEqual(cta?.args, [{ prefillProvider: "openai" }]);
     });
   });

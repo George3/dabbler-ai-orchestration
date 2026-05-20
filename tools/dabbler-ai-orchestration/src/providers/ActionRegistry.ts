@@ -63,12 +63,16 @@ export const ROW_ACTIONS: RowAction[] = [
     when: (s) => inFlightLike(s) },
   { id: "dabblerSessionSets.copySlug",          label: "Copy: Slug only",                    group: 401, when: () => true },
   // Orchestrator group — relegated from the accordion-body buttons in
-  // Set 029 Session 6. The Set Orchestrator quickpick targets the
-  // walk-up-resolved in-progress set, so only surface it on in-progress
-  // rows. The writer-log is global diagnostic — always available.
-  { id: "dabbler.setOrchestrator",              label: "Set Orchestrator Model & Effort…", group: 501,
+  // Set 029 Session 6. Set 033 S3 renamed "Set Orchestrator…" to
+  // "Check Out As…" to match the H1+H3+H4 check-out / check-in model,
+  // and added "Release Check-Out" as the H3-named release path. Both
+  // act on the in-progress set's `orchestrator` block; the writer-log
+  // is global diagnostic and always available.
+  { id: "dabbler.checkOutOrchestrator",         label: "Check Out As…",                      group: 501,
     when: (s) => s.state === "in-progress" },
-  { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log",       group: 502, when: () => true },
+  { id: "dabbler.releaseCheckOut",              label: "Release Check-Out",                  group: 502,
+    when: (s) => s.state === "in-progress" },
+  { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log",       group: 503, when: () => true },
   { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",               group: 801, when: needsMigration },
   { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",                 group: 901,
     when: (s) => cancellable(s) },

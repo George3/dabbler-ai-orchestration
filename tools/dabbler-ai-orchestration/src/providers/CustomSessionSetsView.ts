@@ -95,7 +95,8 @@ const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
   "dabbler.installOrchestratorHook.claudeCode",
   "dabbler.installOrchestratorHook.gemini",
   "dabbler.installOrchestratorHook.copilot",
-  "dabbler.setOrchestrator",
+  "dabbler.checkOutOrchestrator",
+  "dabbler.releaseCheckOut",
   "dabbler.openOrchestratorWriterLog",
 ]);
 

@@ -199,7 +199,7 @@ export function computeMismatch(marker: OrchestratorMarker, rec: Recommendation)
       diffs.join("; ") +
       ". This may be intentional (e.g., extra credits, task harder or simpler than anticipated) — " +
       `the Suggested row surfaces the recommendation; you decide. ` +
-      `Switch via "Dabbler: Set Orchestrator Model & Effort".`,
+      `Switch via "Dabbler: Check Out As…".`,
   };
 }
 

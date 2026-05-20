@@ -13,7 +13,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { EmptyCta } from "./OrchestratorAccordion";
-import { readMru, type Provider } from "../commands/setOrchestratorManual";
+import { readMru, type Provider } from "../commands/checkOutOrchestrator";
 
 interface ProviderCta {
   provider: Provider;
@@ -28,18 +28,19 @@ const CODEX_CTA: EmptyCta = {
   // Codex auto-detect is a watcher activated at extension start; the
   // CTA points at the manual override pre-filled with Codex so an
   // operator who hasn't yet set ~/.codex/config.toml still gets a
-  // signal in one click.
-  commandId: "dabbler.setOrchestrator",
-  label: "set Codex orchestrator",
+  // signal in one click. Set 033 S3: command id renamed to
+  // checkOutOrchestrator alongside the H1+H3+H4 check-out model.
+  commandId: "dabbler.checkOutOrchestrator",
+  label: "check out as Codex",
   args: [{ prefillProvider: "openai" }],
 };
 const GEMINI_CTA: EmptyCta = {
   commandId: "dabbler.installOrchestratorHook.gemini",
-  label: "set Gemini orchestrator",
+  label: "check out as Gemini",
 };
 const COPILOT_CTA: EmptyCta = {
   commandId: "dabbler.installOrchestratorHook.copilot",
-  label: "set Copilot orchestrator",
+  label: "check out as Copilot",
 };
 
 const PROVIDER_TO_CTA: Record<Provider, EmptyCta> = {

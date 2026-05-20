@@ -1,6 +1,10 @@
-// Universal manual-override quickpick for the orchestrator indicator.
+// Universal "Check Out As…" quickpick — the manual path for an
+// operator to claim the orchestrator check-out on the in-progress
+// session set.
 //
-// Replaces the Session 2 stub. Per Set 029 Session 5 spec:
+// Set 033 Session 3 (H1 + H2 + H3 + H4 migration): replaces the
+// `dabbler.setOrchestrator` command and its marker-writer dispatch.
+//
 //   - Top section: MRU tuples (provider + model + effort + thinking),
 //     most-recent first. Stored in ~/.dabbler/orchestrator-mru.json.
 //   - Bottom row: "(set new combination…)" — multi-step flow
@@ -10,14 +14,19 @@
 //   - Hotkey-bindable: accepts {provider, model, effort, thinking}
 //     args; bypasses the quickpick and applies directly (with the
 //     same force-override confirmation when applicable).
-//   - Force-override: if a fresh `current`-precedence marker exists
-//     from another writer, prompt "Override existing live signal from
-//     <writer>?" before proceeding.
+//   - Force-override: if the in-progress set's `orchestrator` block
+//     (per S1's check-out record) names a DIFFERENT `engine + provider`
+//     composite (H4 identity), prompt "Override existing check-out
+//     held by <holder>?" before proceeding.
 //
-// Marker write is delegated to the shared
-// `scripts/write-orchestrator-marker.js` helper with `--mode manual`.
-// The helper handles atomic write, retry, multi-writer precedence,
-// and writer-log appends.
+// Per H1 ("hooks become invokers, not writers"), this command no
+// longer dispatches to a Node marker-writer. It invokes
+// `python -m ai_router.start_session` — the canonical writer that
+// enforces H3 hard coordination and writes the `orchestrator` block
+// on `session-state.json`. The `thinking` boolean is preserved in the
+// MRU (it tunes the quickpick UX) but is NOT written to
+// `session-state.json`'s orchestrator block (which has no `thinking`
+// field per the S1 schema delta).
 
 import * as vscode from "vscode";
 import * as cp from "child_process";
@@ -25,7 +34,6 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-const HELPER_REL = path.join("scripts", "write-orchestrator-marker.js");
 const MRU_LIMIT = 8;
 
 // Compute the MRU file path on every call rather than caching at
@@ -52,9 +60,7 @@ interface ProviderModelList {
   models: { id: string; label: string }[];
 }
 
-// Curated per-provider model lists. Matches the marker writer's
-// display-name normalizer (deriveModelDisplayName) so manual entries
-// render identically to auto-detected ones. Order: flagship-first.
+// Curated per-provider model lists. Order: flagship-first.
 export const PROVIDER_MODELS: ProviderModelList[] = [
   {
     provider: "anthropic",
@@ -100,6 +106,22 @@ const EFFORT_LEVELS: { id: EffortLevel; label: string }[] = [
   { id: "high", label: "High effort" },
   { id: "max", label: "Max effort" },
 ];
+
+// Per-provider "engine brand" used as the H4 identity field on
+// `session-state.json`'s orchestrator block. The H4 verdict pins
+// identity to (engine + provider) — model is a mutable field, so
+// two Claude models from anthropic count as the same holder by
+// design (R3 in the Set 033 spec).
+const PROVIDER_TO_ENGINE: Record<Provider, string> = {
+  anthropic: "claude",
+  openai: "codex",
+  google: "gemini",
+  github: "copilot",
+};
+
+export function providerToEngine(provider: Provider): string {
+  return PROVIDER_TO_ENGINE[provider];
+}
 
 // ----- MRU storage -----
 
@@ -168,23 +190,29 @@ export function formatTupleLabel(tuple: OrchestratorTuple): string {
   return `${provider} ${model} — ${effortLabel}, ${thinking}`;
 }
 
-// ----- Marker writer dispatch -----
+// ----- In-progress set resolution -----
 
-function helperPathAbs(extensionUri: vscode.Uri): string {
-  return vscode.Uri.joinPath(extensionUri, HELPER_REL).fsPath;
+export interface InProgressSet {
+  slug: string;
+  setDir: string;
+  state: {
+    currentSession: number | null;
+    orchestrator: {
+      engine?: string;
+      provider?: string;
+      model?: string;
+      effort?: string;
+    } | null;
+  };
 }
 
-// Set 029 Session 6 — converted from sync fs to fs.promises per S5
-// Round-B Gemini SUGGEST #2. The walk + reads no longer block the
-// extension host event loop. Caller (maybeConfirmForceOverride) is
-// already async, so the await chain is well-contained.
-async function readCurrentMarkerForWorkspace(workspaceCwd: string): Promise<{
-  exists: boolean;
-  writer: string | null;
-  signalKind: string | null;
-  ageSec: number | null;
-}> {
-  const empty = { exists: false, writer: null, signalKind: null, ageSec: null };
+// Walk up from `workspaceCwd` to find `docs/session-sets/`. Return ALL
+// in-progress sets (multi-in-progress is the supported case per S2's
+// reader migration — H2 retired the single-in-progress fail-closed
+// posture). Empty array means no in-progress set was found.
+export async function listInProgressSetsAt(
+  workspaceCwd: string,
+): Promise<InProgressSet[]> {
   let current = path.resolve(workspaceCwd);
   while (true) {
     const candidate = path.join(current, "docs", "session-sets");
@@ -198,63 +226,131 @@ async function readCurrentMarkerForWorkspace(workspaceCwd: string): Promise<{
       // not a dir; fall through to parent walk
     }
     if (entries) {
-      const inProgress: string[] = [];
+      const found: InProgressSet[] = [];
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        const statePath = path.join(candidate, entry.name, "session-state.json");
+        const setDir = path.join(candidate, entry.name);
+        const statePath = path.join(setDir, "session-state.json");
         try {
           const raw = await fs.promises.readFile(statePath, "utf8");
           const state = JSON.parse(raw);
-          if (state && state.status === "in-progress") inProgress.push(entry.name);
+          if (state && state.status === "in-progress") {
+            const cs = typeof state.currentSession === "number" ? state.currentSession : null; // noqa: D13: in-flight session number passed verbatim to start_session writer; not a legacy-progress derivation
+            found.push({
+              slug: entry.name,
+              setDir,
+              state: {
+                currentSession: cs,
+                orchestrator: state.orchestrator ?? null,
+              },
+            });
+          }
         } catch {
           // skip — unreadable / missing / invalid JSON
         }
       }
-      if (inProgress.length !== 1) return empty;
-      const markerPath = path.join(candidate, inProgress[0], ".dabbler", "orchestrator.json");
-      try {
-        const raw = await fs.promises.readFile(markerPath, "utf8");
-        const marker = JSON.parse(raw);
-        const ageSec = marker.updatedAt
-          ? (Date.now() - Date.parse(marker.updatedAt)) / 1000
-          : null;
-        return {
-          exists: true,
-          writer: typeof marker.writer === "string" ? marker.writer : null,
-          signalKind: typeof marker.signalKind === "string" ? marker.signalKind : null,
-          ageSec,
-        };
-      } catch {
-        return empty;
-      }
+      return found;
     }
     const parent = path.dirname(current);
-    if (parent === current) return empty;
+    if (parent === current) return [];
     current = parent;
   }
 }
+
+// Prompt the operator to pick a target set when multiple are in
+// progress; auto-resolve when there's only one; show an error and
+// return null when there are none. Used by both the manual quickpick
+// and the Release Check-Out command so the resolution UX is identical.
+export async function pickTargetInProgressSet(
+  workspaceCwd: string,
+  pickerTitle: string,
+): Promise<InProgressSet | null> {
+  const sets = await listInProgressSetsAt(workspaceCwd);
+  if (sets.length === 0) {
+    vscode.window.showErrorMessage(
+      "No in-progress session set in this workspace. Run `python -m ai_router.start_session` to begin one before checking out an orchestrator.",
+    );
+    return null;
+  }
+  if (sets.length === 1) return sets[0];
+  const items = sets.map((s) => {
+    const holder = s.state.orchestrator
+      ? `${s.state.orchestrator.engine ?? "?"} + ${s.state.orchestrator.provider ?? "?"}`
+      : "unclaimed";
+    return {
+      label: s.slug,
+      description: `held by ${holder}`,
+      set: s,
+    };
+  });
+  const picked = await vscode.window.showQuickPick(items, {
+    title: pickerTitle,
+    placeHolder: "Multiple in-progress session sets; pick one",
+  });
+  return picked?.set ?? null;
+}
+
+// ----- start_session dispatch -----
 
 interface WriteContext {
   extensionUri: vscode.Uri;
   workspaceCwd: string;
 }
 
-function dispatchManualWrite(
+// Resolve the python executable for the workspace. Mirrors the
+// resolvePythonPath logic in installAiRouterCommands.ts: prefer the
+// operator's explicit `dabblerSessionSets.pythonPath` setting,
+// otherwise fall back to bare `python` on PATH. The setting can be an
+// absolute path, a workspace-relative path, or a bare executable
+// name.
+function resolvePythonPath(workspaceCwd: string): string {
+  const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
+  const inspected = cfg.inspect<string>("pythonPath");
+  const explicit =
+    inspected?.workspaceFolderValue ??
+    inspected?.workspaceValue ??
+    inspected?.globalValue;
+  const raw = (explicit ?? "python").trim();
+  if (!raw) return "python";
+  if (path.isAbsolute(raw)) return raw;
+  if (raw.includes(path.sep) || raw.includes("/")) {
+    return path.resolve(workspaceCwd, raw);
+  }
+  return raw;
+}
+
+export interface DispatchResult {
+  exitCode: number;
+  stderr: string;
+}
+
+// Spawn `python -m ai_router.start_session` with the resolved args.
+// `setDir` is absolute (resolved from the workspace walk-up).
+// `--force` is passed only when the operator has confirmed an override
+// of an existing different-holder check-out.
+export function dispatchCheckOut(
   tuple: OrchestratorTuple,
+  set: InProgressSet,
   ctx: WriteContext,
-  forceOverride: boolean,
-): Promise<{ exitCode: number; stderr: string }> {
-  const helperAbs = helperPathAbs(ctx.extensionUri);
+  force: boolean,
+): Promise<DispatchResult> {
+  const python = resolvePythonPath(ctx.workspaceCwd);
+  const args = [
+    "-m", "ai_router.start_session",
+    "--session-set-dir", set.setDir,
+    "--engine", providerToEngine(tuple.provider),
+    "--provider", tuple.provider,
+    "--model", tuple.model,
+    "--effort", tuple.effort,
+  ];
+  if (set.state.currentSession != null) { // noqa: D13: in-flight session number passed verbatim to start_session writer; not a legacy-progress derivation
+    args.push("--session-number", String(set.state.currentSession)); // noqa: D13: same as above
+  }
+  if (force) args.push("--force");
   return new Promise((resolve) => {
-    if (!fs.existsSync(helperAbs)) {
-      resolve({ exitCode: 127, stderr: `helper not found: ${helperAbs}` });
-      return;
-    }
-    const args = ["--mode", "manual", "--writer", "manual-override"];
-    if (forceOverride) args.push("--force-override");
-    const child = cp.spawn(process.execPath, [helperAbs, ...args], {
+    const child = cp.spawn(python, args, {
       cwd: ctx.workspaceCwd,
-      stdio: ["pipe", "ignore", "pipe"],
+      stdio: ["ignore", "ignore", "pipe"],
     });
     const stderrChunks: Buffer[] = [];
     child.stderr.on("data", (c) => stderrChunks.push(c));
@@ -265,22 +361,6 @@ function dispatchManualWrite(
         stderr: Buffer.concat(stderrChunks).toString("utf8"),
       }),
     );
-    const payload = {
-      provider: tuple.provider,
-      model: tuple.model,
-      effort: {
-        normalized: tuple.effort,
-        native: tuple.effort,
-        thinking: tuple.thinking,
-        signalKind: "manual",
-        confidence: "high",
-      },
-    };
-    try {
-      child.stdin.end(JSON.stringify(payload));
-    } catch {
-      // child may already be dead
-    }
   });
 }
 
@@ -293,7 +373,7 @@ async function pickProvider(): Promise<Provider | undefined> {
     provider: p.provider,
   }));
   const picked = await vscode.window.showQuickPick(items, {
-    title: "Set Orchestrator — Provider",
+    title: "Check Out As — Provider",
     placeHolder: "Select the provider",
   });
   return picked?.provider;
@@ -303,7 +383,7 @@ async function pickModel(provider: Provider): Promise<string | undefined> {
   const list = PROVIDER_MODELS.find((p) => p.provider === provider)?.models ?? [];
   const items = list.map((m) => ({ label: m.label, description: m.id, id: m.id }));
   const picked = await vscode.window.showQuickPick(items, {
-    title: `Set Orchestrator — ${findProviderLabel(provider)} Model`,
+    title: `Check Out As — ${findProviderLabel(provider)} Model`,
     placeHolder: "Select the model",
   });
   return picked?.id;
@@ -312,7 +392,7 @@ async function pickModel(provider: Provider): Promise<string | undefined> {
 async function pickEffort(): Promise<EffortLevel | undefined> {
   const items = EFFORT_LEVELS.map((e) => ({ label: e.label, id: e.id }));
   const picked = await vscode.window.showQuickPick(items, {
-    title: "Set Orchestrator — Effort",
+    title: "Check Out As — Effort",
     placeHolder: "Select effort tier",
   });
   return picked?.id;
@@ -324,7 +404,7 @@ async function pickThinking(): Promise<boolean | undefined> {
     { label: "Thinking off", value: false },
   ];
   const picked = await vscode.window.showQuickPick(items, {
-    title: "Set Orchestrator — Thinking",
+    title: "Check Out As — Thinking",
     placeHolder: "Toggle extended thinking",
   });
   return picked?.value;
@@ -346,7 +426,7 @@ function buildKeybindingSnippet(tuple: OrchestratorTuple): string {
   return JSON.stringify(
     {
       key: "ctrl+shift+alt+o",
-      command: "dabbler.setOrchestrator",
+      command: "dabbler.checkOutOrchestrator",
       args: tuple,
     },
     null,
@@ -356,23 +436,24 @@ function buildKeybindingSnippet(tuple: OrchestratorTuple): string {
 
 // ----- Force-override prompt -----
 
+// Per H4: identity is (engine + provider). When the existing
+// orchestrator block names a different composite than the operator's
+// chosen tuple, prompt for force-override before proceeding. Same
+// composite (or unclaimed) → no prompt; start_session's same-holder
+// re-attach (S1) bumps lastActivityAt without disrupting anything.
 async function maybeConfirmForceOverride(
-  workspaceCwd: string,
+  tuple: OrchestratorTuple,
+  set: InProgressSet,
 ): Promise<{ proceed: boolean; force: boolean }> {
-  const existing = await readCurrentMarkerForWorkspace(workspaceCwd);
-  if (!existing.exists) return { proceed: true, force: false };
-  // Only the strongest signal class needs a confirmation; the helper
-  // already silently accepts equal-or-stronger overrides without
-  // ceremony. "current" is the strongest non-manual class.
-  if (existing.signalKind !== "current") return { proceed: true, force: false };
-  // Don't prompt on stale signals — the helper will overwrite a stale
-  // marker unconditionally, so the prompt would be misleading.
-  if (existing.ageSec !== null && existing.ageSec > 28800) {
-    return { proceed: true, force: true };
+  const existing = set.state.orchestrator;
+  if (!existing) return { proceed: true, force: false };
+  const newEngine = providerToEngine(tuple.provider);
+  if (existing.engine === newEngine && existing.provider === tuple.provider) {
+    return { proceed: true, force: false };
   }
-  const writer = existing.writer || "unknown";
+  const heldBy = `${existing.engine ?? "?"} + ${existing.provider ?? "?"}`;
   const picked = await vscode.window.showWarningMessage(
-    `Override existing live signal from ${writer}?`,
+    `Override existing check-out on "${set.slug}" held by ${heldBy}?`,
     { modal: true },
     "Override",
   );
@@ -388,6 +469,10 @@ interface ManualCommandArgs {
   effort?: EffortLevel;
   thinking?: boolean;
   prefillProvider?: Provider;
+  // Set 033 S3: when releaseCheckOut launches the quickpick, it pre-
+  // selects the in-progress set the operator already confirmed they
+  // want to release. Bypasses the picker step.
+  targetSet?: InProgressSet;
 }
 
 function isCompleteArgs(args: ManualCommandArgs | undefined): args is Required<
@@ -402,27 +487,30 @@ function isCompleteArgs(args: ManualCommandArgs | undefined): args is Required<
   );
 }
 
-async function executeWrite(
+async function executeCheckOut(
   tuple: OrchestratorTuple,
+  set: InProgressSet,
   ctx: WriteContext,
 ): Promise<void> {
-  const force = await maybeConfirmForceOverride(ctx.workspaceCwd);
-  if (!force.proceed) return;
-  const result = await dispatchManualWrite(tuple, ctx, force.force);
+  const decision = await maybeConfirmForceOverride(tuple, set);
+  if (!decision.proceed) return;
+  const result = await dispatchCheckOut(tuple, set, ctx, decision.force);
   if (result.exitCode !== 0) {
     vscode.window.showErrorMessage(
-      `Manual override failed (exit ${result.exitCode}): ${result.stderr.trim() || "see Writer Log"}`,
+      `Check-out failed (exit ${result.exitCode}): ${result.stderr.trim() || "see writer log"}`,
     );
     return;
   }
   pushMru(tuple);
+  const forceNote = decision.force ? " (forced override)" : "";
   vscode.window.showInformationMessage(
-    `Orchestrator set: ${formatTupleLabel(tuple)}`,
+    `Checked out as ${formatTupleLabel(tuple)} on "${set.slug}"${forceNote}.`,
   );
 }
 
 async function runQuickpick(
   ctx: WriteContext,
+  set: InProgressSet,
   prefillProvider?: Provider,
 ): Promise<void> {
   const mru = readMru();
@@ -467,14 +555,14 @@ async function runQuickpick(
 
   const picked = await vscode.window.showQuickPick(items, {
     title: prefillProvider
-      ? `Set Orchestrator — ${findProviderLabel(prefillProvider)}`
-      : "Set Orchestrator",
+      ? `Check Out As — ${findProviderLabel(prefillProvider)} (${set.slug})`
+      : `Check Out As (${set.slug})`,
     placeHolder: "Pick a recent combination, set a new one, or copy a hotkey snippet",
   });
   if (!picked) return;
 
   if (picked.flow === "mru" && picked.tuple) {
-    await executeWrite(picked.tuple, ctx);
+    await executeCheckOut(picked.tuple, set, ctx);
     return;
   }
   if (picked.flow === "hotkey") {
@@ -499,33 +587,38 @@ async function runQuickpick(
     tuple = await runMultiStepFlow();
   }
   if (!tuple) return;
-  await executeWrite(tuple, ctx);
+  await executeCheckOut(tuple, set, ctx);
 }
 
-export function registerSetOrchestratorManual(
+export function registerCheckOutOrchestrator(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "dabbler.setOrchestrator",
+      "dabbler.checkOutOrchestrator",
       async (args?: ManualCommandArgs) => {
         const workspaceCwd =
           vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
         const ctx: WriteContext = { extensionUri: context.extensionUri, workspaceCwd };
 
+        const set = args?.targetSet
+          ?? (await pickTargetInProgressSet(workspaceCwd, "Check Out As — Session Set"));
+        if (!set) return;
+
         if (isCompleteArgs(args)) {
-          await executeWrite(
+          await executeCheckOut(
             {
               provider: args.provider,
               model: args.model,
               effort: args.effort,
               thinking: args.thinking,
             },
+            set,
             ctx,
           );
           return;
         }
-        await runQuickpick(ctx, args?.prefillProvider);
+        await runQuickpick(ctx, set, args?.prefillProvider);
       },
     ),
   );

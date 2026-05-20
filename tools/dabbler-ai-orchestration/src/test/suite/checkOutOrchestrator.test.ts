@@ -4,16 +4,19 @@ import * as os from "os";
 import * as path from "path";
 import {
   formatTupleLabel,
+  providerToEngine,
   pushMru,
   readMru,
   type OrchestratorTuple,
-} from "../../commands/setOrchestratorManual";
+} from "../../commands/checkOutOrchestrator";
 
 // Set 029 Session 5 — manual-override quickpick helpers.
 // MRU read/write hits ~/.dabbler/orchestrator-mru.json directly so the
 // suite redirects HOME/USERPROFILE to a tmpdir per test, runs the
-// helper, then restores. Pure logic (label formatting) needs no
-// filesystem isolation.
+// helper, then restores. Pure logic (label formatting + provider→engine
+// mapping) needs no filesystem isolation. Set 033 S3 added the
+// providerToEngine coverage alongside the command rename to
+// `dabbler.checkOutOrchestrator` and the marker-helper retirement.
 
 function withTempHome(fn: () => void): void {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-mru-"));
@@ -168,5 +171,26 @@ suite("formatTupleLabel", () => {
       formatTupleLabel(unknown),
       "Codex future-mystery-model — Low effort, Thinking off",
     );
+  });
+});
+
+suite("providerToEngine", () => {
+  // Set 033 S3 / H4: the (engine + provider) composite is the holder-
+  // identity key on session-state.json's orchestrator block. The
+  // manual quickpick maps the operator-facing provider to the engine
+  // brand name that the writer + reader read back. Two Claude models
+  // from anthropic resolve to the same (claude + anthropic) holder by
+  // design (Set 033 R3); the mapping is the place that pins this.
+  test("anthropic → claude", () => {
+    assert.strictEqual(providerToEngine("anthropic"), "claude");
+  });
+  test("openai → codex", () => {
+    assert.strictEqual(providerToEngine("openai"), "codex");
+  });
+  test("google → gemini", () => {
+    assert.strictEqual(providerToEngine("google"), "gemini");
+  });
+  test("github → copilot", () => {
+    assert.strictEqual(providerToEngine("github"), "copilot");
   });
 });

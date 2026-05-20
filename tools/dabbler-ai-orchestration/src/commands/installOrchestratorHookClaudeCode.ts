@@ -1,27 +1,54 @@
 // Claude Code orchestrator-hook installer.
 //
-// Adds (or refreshes) two hooks in ~/.claude/settings.json:
-//   - SessionStart  → pipes hook payload into write-orchestrator-marker.js
-//                     with --mode session-start (writes the model + Medium
-//                     default effort to ~/.dabbler/current-orchestrator.json
-//                     per Set 029 Q5 + R7 locked design).
-//   - UserPromptSubmit → pipes hook payload into the same helper with
-//                     --mode user-prompt-submit (detects /think* prefixes
-//                     and updates effort.signalKind to last-observed).
+// Set 033 Session 3 (H1 refactor: hooks become invokers, not writers).
+//
+// Adds (or refreshes) one hook in ~/.claude/settings.json:
+//   - SessionStart  → pipes hook payload into
+//                     `scripts/claude-session-start-invoker.js`, which
+//                     walks up the cwd to find the in-progress session
+//                     set and invokes `python -m ai_router.start_session`
+//                     — the canonical writer that enforces H3 hard
+//                     coordination and writes `session-state.json`'s
+//                     `orchestrator` block.
+//
+// The previous installer also installed a `UserPromptSubmit` hook that
+// piped through the retired `write-orchestrator-marker.js` helper to
+// update `effort.signalKind`. With the marker file retired (H2) and
+// the `orchestrator` block having no `signalKind` field, that hook
+// no longer has a meaningful behavior. The installer drops the
+// `UserPromptSubmit` entry — and ALSO removes any previously-installed
+// dabbler `UserPromptSubmit` entry that still points at the deleted
+// helper, so re-running the installer cleans up the stale reference
+// in operators' settings.
 //
 // The command is idempotent. It locates an existing dabbler entry by
-// matcher AND command-path-substring ("write-orchestrator-marker.js");
-// re-running upgrades the command string to the current shipped helper
-// path without duplicating entries. Other hooks the operator may have
-// installed (independent SessionStart matchers, foreign commands) are
-// preserved verbatim.
+// matcher AND command-path-substring; re-running upgrades the command
+// string to the current shipped helper path without duplicating
+// entries. The substring check accepts BOTH the new helper
+// (`claude-session-start-invoker.js`) AND the retired helper
+// (`write-orchestrator-marker.js`) so installs landing on operators
+// who still have the broken old reference are repaired in place.
 
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-const HELPER_REL = path.join("scripts", "write-orchestrator-marker.js");
+// Set 033 S3: invoker shim (Node, ships in the VSIX) that bridges
+// Claude Code's SessionStart hook payload to `python -m ai_router.start_session`.
+const INVOKER_REL = path.join("scripts", "claude-session-start-invoker.js");
+
+// Substrings the installer treats as "this is a dabbler-managed hook entry":
+// the current invoker filename PLUS the retired helper filename so a
+// re-install replaces any leftover stale reference an operator may have.
+const DABBLER_HOOK_SUBSTRINGS = [
+  "claude-session-start-invoker.js",
+  "write-orchestrator-marker.js",
+];
+
+function isDabblerManagedCommand(command: string): boolean {
+  return DABBLER_HOOK_SUBSTRINGS.some((s) => command.includes(s));
+}
 
 interface HookCommandEntry {
   type: string;
@@ -40,19 +67,21 @@ interface ClaudeSettings {
   [k: string]: unknown;
 }
 
-function helperPathAbs(extensionUri: vscode.Uri): string {
-  return vscode.Uri.joinPath(extensionUri, HELPER_REL).fsPath;
+function invokerPathAbs(extensionUri: vscode.Uri): string {
+  return vscode.Uri.joinPath(extensionUri, INVOKER_REL).fsPath;
 }
 
-function buildHookCommand(helperAbsPath: string, mode: "session-start" | "user-prompt-submit"): string {
+function buildHookCommand(invokerAbsPath: string): string {
   // Claude Code hooks invoke a shell command and pipe the JSON payload
-  // to its stdin. node + the absolute helper path + --mode flag is the
-  // simplest portable invocation across Windows/macOS/Linux.
-  // We quote the helper path in case the path contains spaces (e.g.,
+  // to its stdin. node + the absolute invoker path is the simplest
+  // portable invocation across Windows/macOS/Linux. The invoker reads
+  // the payload, walks up to the in-progress session set, and spawns
+  // `python -m ai_router.start_session`.
+  // We quote the invoker path in case the path contains spaces (e.g.,
   // "C:\Program Files\..." or "C:\Users\Some Name\..."). Backslashes
   // need no escaping inside the double-quoted string for the shell
   // executors Claude Code runs.
-  return `node "${helperAbsPath}" --mode ${mode}`;
+  return `node "${invokerAbsPath}"`;
 }
 
 function ensureMatcherEntry(
@@ -63,7 +92,7 @@ function ensureMatcherEntry(
   const list = Array.isArray(entries) ? entries.slice() : [];
 
   // Find an existing entry: same matcher (or both undefined) AND already
-  // points at write-orchestrator-marker.js. Update in place if found.
+  // points at a dabbler-managed command. Update in place if found.
   for (let i = 0; i < list.length; i++) {
     const entry = list[i];
     const matcherMatches =
@@ -72,7 +101,11 @@ function ensureMatcherEntry(
     if (!Array.isArray(entry.hooks)) continue;
     let updated = false;
     const newHooks = entry.hooks.map((h) => {
-      if (h.type === "command" && typeof h.command === "string" && h.command.includes("write-orchestrator-marker.js")) {
+      if (
+        h.type === "command" &&
+        typeof h.command === "string" &&
+        isDabblerManagedCommand(h.command)
+      ) {
         updated = true;
         return { type: "command", command };
       }
@@ -85,14 +118,46 @@ function ensureMatcherEntry(
   }
 
   // No existing entry — append a fresh one. Keep matcher only if the
-  // caller specified one; Claude Code treats omitted matcher as "match
-  // all", which is what UserPromptSubmit wants.
+  // caller specified one.
   const newEntry: HookMatcherEntry =
     matcher !== undefined
       ? { matcher, hooks: [{ type: "command", command }] }
       : { hooks: [{ type: "command", command }] };
   list.push(newEntry);
   return list;
+}
+
+// Set 033 S3: prune the retired UserPromptSubmit hook (and any other
+// hook event the installer historically wrote into) so a re-install
+// after the H1 refactor leaves operators with a clean settings.json.
+// We ONLY remove the specific dabbler-managed hook commands — other
+// hooks the operator may have installed at the same matcher are
+// preserved verbatim. If a matcher entry's `hooks` array becomes
+// empty after pruning, the entry itself is dropped.
+function pruneDabblerHooks(
+  entries: HookMatcherEntry[] | undefined,
+): HookMatcherEntry[] | undefined {
+  if (!Array.isArray(entries)) return entries;
+  const pruned: HookMatcherEntry[] = [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry.hooks)) {
+      pruned.push(entry);
+      continue;
+    }
+    const filtered = entry.hooks.filter(
+      (h) =>
+        !(
+          h.type === "command" &&
+          typeof h.command === "string" &&
+          isDabblerManagedCommand(h.command)
+        ),
+    );
+    if (filtered.length > 0) {
+      pruned.push({ ...entry, hooks: filtered });
+    }
+    // Empty `hooks` after the prune → drop the entry entirely.
+  }
+  return pruned;
 }
 
 function loadClaudeSettings(): { settings: ClaudeSettings; path: string; exists: boolean } {
@@ -117,9 +182,8 @@ function loadClaudeSettings(): { settings: ClaudeSettings; path: string; exists:
 function writeClaudeSettings(settingsPath: string, settings: ClaudeSettings): void {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   const text = JSON.stringify(settings, null, 2) + "\n";
-  // Atomic write: tmp + rename. Same precaution as the marker writer
-  // because ~/.claude/settings.json is sometimes open by other Claude
-  // tooling.
+  // Atomic write: tmp + rename. Same precaution as before — Claude
+  // tooling occasionally has the file open.
   const tmp = `${settingsPath}.tmp.${process.pid}.${Math.floor(Math.random() * 1e9)}`;
   fs.writeFileSync(tmp, text, { encoding: "utf8" });
   fs.renameSync(tmp, settingsPath);
@@ -128,10 +192,10 @@ function writeClaudeSettings(settingsPath: string, settings: ClaudeSettings): vo
 export async function installClaudeCodeOrchestratorHook(
   extensionUri: vscode.Uri,
 ): Promise<void> {
-  const helperAbs = helperPathAbs(extensionUri);
-  if (!fs.existsSync(helperAbs)) {
+  const invokerAbs = invokerPathAbs(extensionUri);
+  if (!fs.existsSync(invokerAbs)) {
     vscode.window.showErrorMessage(
-      `Cannot install hook: helper script not found at ${helperAbs}. ` +
+      `Cannot install hook: invoker script not found at ${invokerAbs}. ` +
       `Re-install the Dabbler AI Orchestration extension.`,
     );
     return;
@@ -146,17 +210,16 @@ export async function installClaudeCodeOrchestratorHook(
   }
   const { settings, path: settingsPath, exists } = loaded;
 
-  const sessionStartCmd = buildHookCommand(helperAbs, "session-start");
-  const userPromptSubmitCmd = buildHookCommand(helperAbs, "user-prompt-submit");
+  const sessionStartCmd = buildHookCommand(invokerAbs);
 
   settings.hooks = settings.hooks || {};
 
   // SessionStart: install one entry per source matcher we care about.
   // The Claude Code docs list four source values: startup, resume, clear,
-  // compact. We attach to all four so the gauge updates on every session
-  // boundary. The matcher field accepts a single value per entry; we
-  // create one entry per matcher to keep the resulting settings.json
-  // readable and easy to remove by hand.
+  // compact. We attach to all four so the orchestrator block updates on
+  // every session boundary. The matcher field accepts a single value per
+  // entry; we create one entry per matcher to keep the resulting
+  // settings.json readable and easy to remove by hand.
   for (const matcher of ["startup", "resume", "clear", "compact"]) {
     settings.hooks.SessionStart = ensureMatcherEntry(
       settings.hooks.SessionStart,
@@ -165,13 +228,13 @@ export async function installClaudeCodeOrchestratorHook(
     );
   }
 
-  // UserPromptSubmit: one entry, no matcher (fire on every prompt). The
-  // helper short-circuits non-/think* prompts at zero cost.
-  settings.hooks.UserPromptSubmit = ensureMatcherEntry(
-    settings.hooks.UserPromptSubmit,
-    undefined,
-    userPromptSubmitCmd,
-  );
+  // UserPromptSubmit: prune any dabbler-managed entries left over from
+  // the pre-Set-033 helper. The new check-out model doesn't carry
+  // signalKind, so there's nothing for a per-prompt hook to do.
+  settings.hooks.UserPromptSubmit = pruneDabblerHooks(settings.hooks.UserPromptSubmit);
+  if (Array.isArray(settings.hooks.UserPromptSubmit) && settings.hooks.UserPromptSubmit.length === 0) {
+    delete settings.hooks.UserPromptSubmit;
+  }
 
   try {
     writeClaudeSettings(settingsPath, settings);
@@ -185,9 +248,9 @@ export async function installClaudeCodeOrchestratorHook(
   const verbWasWord = exists ? "Updated" : "Created";
   vscode.window
     .showInformationMessage(
-      `${verbWasWord} ~/.claude/settings.json with Dabbler orchestrator hooks ` +
-      `(SessionStart + UserPromptSubmit). Restart Claude Code or run /clear in ` +
-      `an active session to populate the indicator.`,
+      `${verbWasWord} ~/.claude/settings.json with the Dabbler orchestrator hook ` +
+      `(SessionStart → start_session). Restart Claude Code or run /clear in ` +
+      `an active session to claim the check-out.`,
       "Open settings.json",
     )
     .then((picked) => {
