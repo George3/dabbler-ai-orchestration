@@ -333,7 +333,14 @@ export function readSessionSets(root: string): SessionSet[] {
           completedAt?: string;
           startedAt?: string;
           status?: string;
-          orchestrator?: { engine?: string; model?: string; effort?: string };
+          orchestrator?: {
+            engine?: string;
+            provider?: string;
+            model?: string;
+            effort?: string;
+            checkedOutAt?: string;
+            lastActivityAt?: string;
+          };
           verificationVerdict?: string;
           forceClosed?: boolean;
           schemaVersion?: number;

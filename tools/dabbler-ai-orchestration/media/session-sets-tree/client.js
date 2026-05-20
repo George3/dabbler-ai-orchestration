@@ -91,21 +91,9 @@
     }
 
     const parts = [];
-    if (lastSnapshot.ambiguityBanner.visible) {
-      const cands = lastSnapshot.ambiguityBanner.candidates
-        .map(function (s) { return escHtml(s); })
-        .join(", ");
-      parts.push(
-        '<div class="ambiguity-banner" role="status">' +
-          '<span class="ambiguity-icon" aria-hidden="true">ℹ</span>' +
-          'Multiple in-progress sets — orchestrator info hidden.' +
-          ' <button type="button" class="ambiguity-link" data-command="dabbler.openOrchestratorWriterLog">' +
-          'Open writer log</button>' +
-          (cands ? ' <span class="ambiguity-candidates">(' + cands + ')</span>' : '') +
-        '</div>'
-      );
-    }
-
+    // Set 033 Session 2: ambiguity banner retired. Multi-in-progress
+    // is the supported case — every in-progress row carries its own
+    // accordion below.
     parts.push('<div role="tree" aria-label="Session Sets" class="tree">');
     for (const bucket of lastSnapshot.buckets) {
       parts.push(renderBucket(bucket));
@@ -137,10 +125,13 @@
   }
 
   function renderRow(row) {
-    const isExpandable = row.isResolvedSet && row.accordionHtml !== null;
-    // Default expansion: in-progress + resolved + not currently
-    // suppressed for this occurrence. Manual override (current
-    // session click) takes precedence.
+    // Set 033 Session 2: every in-progress row is expandable when
+    // accordionHtml is non-null (multi-in-progress is the supported
+    // case). Non-in-progress rows still skip the accordion entirely.
+    const isExpandable = row.accordionHtml !== null;
+    // Default expansion: expandable + not currently suppressed for
+    // this occurrence. Manual override (current session click) takes
+    // precedence.
     let expanded;
     if (Object.prototype.hasOwnProperty.call(manualToggles, row.slug)) {
       expanded = manualToggles[row.slug];
@@ -152,8 +143,8 @@
       ? '<span class="chevron" aria-hidden="true">' + (expanded ? "▾" : "▸") + '</span>'
       : '<span class="chevron-spacer" aria-hidden="true"></span>';
     const accordionAttrs = isExpandable
-      ? (' data-expandable="1" data-marker-updated-at="' +
-          (row._markerUpdatedAt ? escAttr(row._markerUpdatedAt) : "") + '"')
+      ? (' data-expandable="1" data-accordion-updated-at="' +
+          (row.accordionUpdatedAt ? escAttr(row.accordionUpdatedAt) : "") + '"')
       : "";
 
     const bodyHtml = isExpandable && expanded
@@ -183,14 +174,14 @@
   }
 
   function isSuppressedForRow(row) {
-    // We don't currently transport per-row marker.updatedAt on the
-    // RowPayload — the resolved set's accordion-body is generated
-    // by the host from MarkerWatchService.snapshot(), and the
-    // suppression echo carries slug → updatedAt mapping. If the
-    // host's suppression record exists for this slug, treat as
-    // suppressed (the snapshot was generated with the same marker
-    // state that the suppression is keyed against).
-    return Object.prototype.hasOwnProperty.call(suppressed, row.slug);
+    // Set 033 Session 2: row payload now carries `accordionUpdatedAt`
+    // (orchestrator.lastActivityAt). A row is suppressed iff the
+    // host's suppression record for the slug exactly matches the
+    // current accordion's updatedAt. New orchestrator activity bumps
+    // lastActivityAt, the key mismatches, and the row auto-expands
+    // on the next paint without the operator having to intervene.
+    if (!row.accordionUpdatedAt) return false;
+    return suppressed[row.slug] === row.accordionUpdatedAt;
   }
 
   // ----- Roving tabindex + kbd nav -----
@@ -241,12 +232,12 @@
         ? expand
         : item.getAttribute("aria-expanded") !== "true";
     manualToggles[slug] = desired;
-    const markerUpdatedAt = item.getAttribute("data-marker-updated-at") || null;
+    const accordionUpdatedAt = item.getAttribute("data-accordion-updated-at") || null;
     vscode.postMessage({
       type: "toggleRow",
       slug: slug,
       expanded: desired,
-      markerUpdatedAt: markerUpdatedAt,
+      accordionUpdatedAt: accordionUpdatedAt,
     });
     render();
     // Re-focus the same row after re-render.

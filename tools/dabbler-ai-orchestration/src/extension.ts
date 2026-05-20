@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { CustomSessionSetsView } from "./providers/CustomSessionSetsView";
-import { MarkerWatchService } from "./providers/MarkerWatchService";
 import { ScanState } from "./providers/scanState";
 import { registerMigrateSetCommand } from "./commands/migrateSet";
 import { discoverRoots, readAllSessionSets } from "./utils/fileSystem";
@@ -62,9 +61,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // accordion-body for the resolved in-progress set's orchestrator
   // gauges, the typed message protocol with monotonic version, and
   // the QuickPick-based row-context menu (per S4 audit Q6 = a).
-  const marker = new MarkerWatchService();
-  context.subscriptions.push({ dispose: () => marker.dispose() });
-  const provider = new CustomSessionSetsView(context, scanState, marker);
+  //
+  // Set 033 Session 2: MarkerWatchService retired (H2). Each
+  // in-progress row's accordion is computed from the orchestrator
+  // block on its own session-state.json — the workspace-level
+  // file-watcher below (which already watches session-state.json)
+  // covers every signal the view needs.
+  const provider = new CustomSessionSetsView(context, scanState);
   context.subscriptions.push({ dispose: () => provider.dispose() });
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CustomSessionSetsView.viewType, provider),

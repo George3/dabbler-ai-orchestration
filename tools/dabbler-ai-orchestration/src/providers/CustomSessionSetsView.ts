@@ -1,8 +1,8 @@
 // Custom-tree WebviewViewProvider for `dabblerSessionSets`. Set 029
 // Session 4 ship — replaces the v0.15.0 native TreeView. Consumes:
 //   - SessionSetsModel (pure scan/bucket/sort/text helpers)
-//   - MarkerWatchService (per-set marker reader + watchers)
-//   - OrchestratorAccordion (pure render helpers)
+//   - inProgressSetsService (listInProgressSets + ai-assignment recommendation)
+//   - OrchestratorAccordion (pure render helpers + orchestrator-block adapter)
 //   - ActionRegistry (typed action-applicability predicates per row)
 //   - suppressionState (manual-collapse persistence reducer)
 //   - ScanState (loading/ready phase from extension.ts)
@@ -15,9 +15,16 @@
 //
 // Per S4 audit GPT-5.4 M3: every render message carries a monotonic
 // version. Out-of-order messages are dropped by the webview client.
+//
+// Set 033 Session 2: per H2, the `.dabbler/orchestrator.json` per-set
+// marker is retired. Each in-progress row's accordion body is now
+// computed from that set's `orchestrator` block on session-state.json
+// (Set 033 Session 1 schema) plus its ai-assignment.md recommendation.
+// The single-active-set ambiguity banner is gone — multi-in-progress
+// is the supported case and every in-progress row gets its own
+// accordion.
 
 import * as vscode from "vscode";
-import * as path from "path";
 import { readAllSessionSets } from "../utils/fileSystem";
 import { SessionSet } from "../types";
 import { ScanState } from "./scanState";
@@ -33,11 +40,11 @@ import {
   uatBadge,
 } from "./SessionSetsModel";
 import {
-  MarkerWatchService,
-  MarkerSnapshot,
-  SetResolution,
-} from "./MarkerWatchService";
+  listInProgressSets,
+  recommendationFor,
+} from "./inProgressSetsService";
 import {
+  accordionStateFromOrchestratorBlock,
   renderAccordionBody,
   RenderState,
 } from "./OrchestratorAccordion";
@@ -92,11 +99,6 @@ const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
   "dabbler.openOrchestratorWriterLog",
 ]);
 
-interface RowResolutionInputs {
-  resolution: SetResolution;
-  state: RenderState;
-}
-
 function contextValueFor(set: SessionSet): string {
   const parts = [`sessionSet:${set.state}`];
   if (set.config?.requiresUAT) parts.push("uat");
@@ -128,12 +130,9 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly scanState: ScanState,
-    private readonly marker: MarkerWatchService,
   ) {
     this.welcomeHtml = this.loadWelcomeHtmlFromPackageJson();
-    this.marker.start();
     this.context.subscriptions.push(
-      this.marker.onDidChange(() => this.scheduleRender()),
       this.scanState.onDidChange(() => this.postScanState()),
     );
   }
@@ -187,7 +186,7 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
         void this.showContextMenu(msg.slug);
         return;
       case "toggleRow":
-        this.handleToggle(msg.slug, msg.expanded, msg.markerUpdatedAt);
+        this.handleToggle(msg.slug, msg.expanded, msg.accordionUpdatedAt);
         return;
       case "activateRow":
         // Default activation: openSpec (per S4 step 3 / GPT M3).
@@ -252,7 +251,7 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     await this.context.workspaceState.update(SUPPRESSION_KEY, next);
   }
 
-  private handleToggle(slug: string, expanded: boolean, markerUpdatedAt: string | null): void {
+  private handleToggle(slug: string, expanded: boolean, accordionUpdatedAt: string | null): void {
     const current = this.getSuppression();
     if (expanded) {
       // Operator manually expanded — clear suppression for this slug.
@@ -261,9 +260,9 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
         void this.setSuppression(next);
         this.postSuppressionEcho();
       }
-    } else if (markerUpdatedAt) {
+    } else if (accordionUpdatedAt) {
       // Operator manually collapsed — suppress for this occurrence only.
-      const next = suppress(current, slug, markerUpdatedAt);
+      const next = suppress(current, slug, accordionUpdatedAt);
       void this.setSuppression(next);
       this.postSuppressionEcho();
     }
@@ -292,36 +291,18 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       void this.setSuppression(pruned);
     }
 
-    const snap: MarkerSnapshot = this.marker.snapshot();
-    // When the resolved set has no marker yet, decorate the empty state
-    // with a CTA pointing at the best-installed orchestrator. The check
-    // is cheap (a few fs.statSync calls + vscode.extensions.getExtension)
-    // so we run it per snapshot rather than caching — extensions can
-    // be installed/uninstalled at runtime.
-    let renderState = snap.state;
-    if (renderState.kind === "empty" && snap.resolution.kind === "resolved") {
-      const cta = pickEmptyStateCta();
-      renderState = { kind: "empty", cta };
-    }
-    const inputs: RowResolutionInputs = {
-      resolution: snap.resolution,
-      state: renderState,
-    };
+    // Set 033 Session 2: every in-progress row gets its own accordion.
+    // Compute the per-row RenderState lazily inside buildRow via the
+    // orchestrator block on the set's session-state.json. The empty-
+    // state CTA is shared across in-progress rows that have no
+    // orchestrator block yet (e.g., a pre-Set-033 in-flight set, or
+    // a freshly-started set that hasn't run start_session yet).
+    const emptyCta = pickEmptyStateCta();
 
     const payload: SnapshotPayload = {
-      buckets: this.buildBuckets(all, inputs),
+      buckets: this.buildBuckets(all, emptyCta),
       hasAnySets: all.length > 0,
       welcomeHtml: this.welcomeHtml,
-      ambiguityBanner: {
-        visible:
-          snap.resolution.kind === "unresolved" &&
-          snap.resolution.reason === "multiple-in-progress-sets",
-        candidates:
-          snap.resolution.kind === "unresolved" &&
-          snap.resolution.reason === "multiple-in-progress-sets"
-            ? snap.resolution.candidates ?? []
-            : [],
-      },
     };
 
     const msg: HostToWebview = {
@@ -363,15 +344,24 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     return this.scanState.phase === "loading" ? "loading" : "ready";
   }
 
-  private buildBuckets(all: SessionSet[], inputs: RowResolutionInputs): BucketPayload[] {
+  private buildBuckets(
+    all: SessionSet[],
+    emptyCta: import("./OrchestratorAccordion").EmptyCta | null,
+  ): BucketPayload[] {
     const buckets = bucketSets(all);
+    // Set 033 Session 2: order in-progress sets by `startedAt` ascending
+    // (the older the in-flight set, the higher it ranks) — same order
+    // as `listInProgressSets()`. SessionSetsModel.sortBucket still
+    // sorts by `lastTouched` desc for the visual rows; we apply the
+    // in-progress-specific ordering here.
+    const inProgressOrdered = listInProgressSets(buckets.inProgress);
     const groups: BucketPayload[] = [
-      this.buildBucket("in-progress", "In Progress", buckets.inProgress, inputs),
-      this.buildBucket("not-started", "Not Started", buckets.notStarted, inputs),
-      this.buildBucket("complete", "Complete", buckets.complete, inputs),
+      this.buildBucket("in-progress", "In Progress", inProgressOrdered, emptyCta),
+      this.buildBucket("not-started", "Not Started", buckets.notStarted, emptyCta),
+      this.buildBucket("complete", "Complete", buckets.complete, emptyCta),
     ];
     if (buckets.cancelled.length > 0) {
-      groups.push(this.buildBucket("cancelled", "Cancelled", buckets.cancelled, inputs));
+      groups.push(this.buildBucket("cancelled", "Cancelled", buckets.cancelled, emptyCta));
     }
     return groups;
   }
@@ -380,23 +370,35 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     key: BucketPayload["key"],
     label: string,
     subset: SessionSet[],
-    inputs: RowResolutionInputs,
+    emptyCta: import("./OrchestratorAccordion").EmptyCta | null,
   ): BucketPayload {
-    const sorted = sortBucket(subset, key);
-    const rows = sorted.map((set) => this.buildRow(set, inputs));
+    const sorted = key === "in-progress" ? subset : sortBucket(subset, key);
+    const rows = sorted.map((set) => this.buildRow(set, emptyCta));
     return { key, label, count: subset.length, rows };
   }
 
-  private buildRow(set: SessionSet, inputs: RowResolutionInputs): RowPayload {
-    const resolvedSlug =
-      inputs.resolution.kind === "resolved" ? inputs.resolution.resolved.slug : null;
-    const isResolvedSet = set.name === resolvedSlug;
-    // Only render the accordion-body HTML for the resolved set; per
-    // S4 Q3 = a, non-in-progress rows do not get an accordion at all,
-    // and non-resolved in-progress rows don't get one either (rare —
-    // only fires under multi-in-progress ambiguity, where the banner
-    // surfaces the issue).
-    const accordionHtml = isResolvedSet ? renderAccordionBody(inputs.state) : null;
+  private buildRow(
+    set: SessionSet,
+    emptyCta: import("./OrchestratorAccordion").EmptyCta | null,
+  ): RowPayload {
+    // Set 033 Session 2: every in-progress row gets an accordion body
+    // (multi-in-progress is the supported case). The body is computed
+    // from this set's `orchestrator` block on session-state.json + its
+    // ai-assignment.md recommendation. Non-in-progress rows still
+    // skip the accordion entirely per S4 Q3 = a.
+    let accordionHtml: string | null = null;
+    let accordionUpdatedAt: string | null = null;
+    if (set.state === "in-progress") {
+      const block = set.liveSession?.orchestrator ?? null;
+      const recommendation = recommendationFor(set);
+      let state: RenderState = accordionStateFromOrchestratorBlock(block, recommendation);
+      if (state.kind === "empty") {
+        state = { kind: "empty", cta: emptyCta };
+      } else {
+        accordionUpdatedAt = state.marker.updatedAt;
+      }
+      accordionHtml = renderAccordionBody(state);
+    }
     return {
       slug: set.name,
       name: set.name,
@@ -405,8 +407,8 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       contextValue: contextValueFor(set),
       iconSlug: ICON_FILES[set.state] ?? "",
       needsMigration: set.needsMigration,
-      isResolvedSet,
       accordionHtml,
+      accordionUpdatedAt,
     };
   }
 

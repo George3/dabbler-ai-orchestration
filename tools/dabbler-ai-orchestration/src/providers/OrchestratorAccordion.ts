@@ -455,3 +455,88 @@ export function renderAccordionBody(state: RenderState): string {
   }
   return renderAccordionLoaded(state.marker, state.stale, state.ageSec, state.mismatch);
 }
+
+// ----- Set 033 Session 2 — orchestrator block → RenderState -----
+//
+// The `.dabbler/orchestrator.json` per-set marker is retired (H2);
+// the orchestrator's check-out record is now the `orchestrator` block
+// on `session-state.json` (Set 033 Session 1 schema). The accordion
+// renderer's input shape — RenderState / OrchestratorMarker — is
+// preserved so the gauge geometry, mismatch logic, CSS class hooks,
+// and Suggested-row treatment carry through unchanged. This adapter
+// synthesizes an OrchestratorMarker-shaped object from the simpler
+// check-out record:
+//
+//   - `signalKind` always `"current"` — the orchestrator block is the
+//     writer's own self-report at check-out time, so it is by
+//     definition the live signal. The retired "configured-default" /
+//     "last-observed" / "manual" branches in the renderer remain
+//     reachable in principle (CSS hooks survive) but no orchestrator-
+//     block-fed render produces them.
+//   - `confidence` always `"high"` — the writer just declared.
+//   - `tier` from `classifyRecommendationTier(provider, model)` — the
+//     same classifier the recommendation parser uses.
+//   - `thinking` always `false` — the new architecture does not track
+//     `/think` runtime state. The accordion's "thinking on/off"
+//     sublabel becomes "thinking off" for every block-fed render.
+//   - `stalenessMaxSec` = DEFAULT_STALENESS_MAX_SEC (8h).
+//   - `ageSec` measured from `lastActivityAt` if present (S1 schema),
+//     else from `checkedOutAt`, else `0` (fresh tolerated read).
+//
+// Inputs:
+//   - `block` — the orchestrator block from session-state.json
+//     (`liveSession.orchestrator`). May be null / partial.
+//   - `recommendation` — optional Recommendation pulled from the
+//     set's ai-assignment.md by the caller (per-row, since the
+//     custom-tree now renders N in-progress sets).
+//
+// Returns `{ kind: "empty" }` when the block is null / lacks the
+// minimum identity (engine + provider OR engine + model).
+export function accordionStateFromOrchestratorBlock(
+  block: {
+    engine?: string;
+    provider?: string;
+    model?: string;
+    effort?: string;
+    checkedOutAt?: string;
+    lastActivityAt?: string;
+  } | null | undefined,
+  recommendation: Recommendation | null = null,
+): RenderState {
+  if (!block) return { kind: "empty" };
+  const provider = block.provider ?? block.engine ?? "";
+  const model = block.model ?? "";
+  if (!provider && !model) return { kind: "empty" };
+
+  const effort = (block.effort ?? "unknown").toLowerCase();
+  const tier = classifyRecommendationTier(provider, model);
+
+  const marker: OrchestratorMarker = {
+    schemaVersion: 3,
+    sessionSetSlug: undefined,
+    updatedAt: block.lastActivityAt ?? block.checkedOutAt ?? new Date().toISOString(),
+    writer: block.engine ?? "orchestrator",
+    signalKind: "current",
+    confidence: "high",
+    provider,
+    providerDisplayName: provider,
+    model,
+    modelDisplayName: model,
+    tier: (tier === "unknown" ? "unknown" : tier) as OrchestratorMarker["tier"],
+    effort: {
+      normalized: (effort as OrchestratorMarker["effort"]["normalized"]),
+      native: effort,
+      thinking: false,
+      signalKind: "current",
+      confidence: "high",
+    },
+    stalenessMaxSec: DEFAULT_STALENESS_MAX_SEC,
+  };
+
+  const reference = block.lastActivityAt ?? block.checkedOutAt;
+  const ageSec = reference ? (Date.now() - Date.parse(reference)) / 1000 : 0;
+  const stale = ageSec > DEFAULT_STALENESS_MAX_SEC;
+  const mismatch = recommendation ? computeMismatch(marker, recommendation) : null;
+
+  return { kind: "loaded", marker, stale, ageSec, mismatch };
+}

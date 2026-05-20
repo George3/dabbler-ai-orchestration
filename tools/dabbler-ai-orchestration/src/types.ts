@@ -58,8 +58,17 @@ export interface UatSummary {
 
 export interface OrchestratorInfo {
   engine?: string;
+  provider?: string;
   model?: string;
   effort?: string;
+  // Set 033 Session 1: check-out / check-in nested timestamps under the
+  // orchestrator block. `checkedOutAt` is set on transition to
+  // status: in-progress and preserved across same-holder re-attaches
+  // (H4 identity = engine + provider). `lastActivityAt` is bumped on
+  // every re-attach. Both are `null`able for tolerated reads of pre-S1
+  // in-flight files; next same-holder start_session populates them.
+  checkedOutAt?: string;
+  lastActivityAt?: string;
 }
 
 export interface LiveSession {

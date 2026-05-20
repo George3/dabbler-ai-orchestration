@@ -26,10 +26,12 @@ import {
   closeVSCode,
   launchVSCode,
   LaunchedVSCode,
+  makeAdditionalSet,
   makeSet,
   makeTmpDir,
   openSessionSetsView,
-  seedOrchestratorMarker,
+  seedOrchestratorBlock,
+  startSession,
   triggerRefresh,
 } from "./electronLaunch";
 
@@ -153,83 +155,86 @@ test("welcome panel renders when no session sets exist (webview path)", async ()
 });
 
 // ---------------------------------------------------------------------
-// Session 5: multi-provider orchestrator detection painted on screen.
-// Logic predicates (TOML parse, MRU ordering, detection priority,
-// force-override semantics) live in Layer-2 unit tests; these three
-// scenarios only verify what an operator actually sees rendered.
+// Set 033 Session 2: orchestrator-block driven accordion rendering.
+// Replaces the pre-Set-033 marker-seeded scenarios — the per-set
+// `.dabbler/orchestrator.json` marker is retired (H2) and the
+// accordion now reads from session-state.json's `orchestrator` block.
+// The Set 029 S5 signal-class scenarios (configured-default / manual)
+// covered the retired signalKind affordance; the new block-fed render
+// emits only signal-current, so those scenarios are no longer
+// meaningful and have been removed. Set 033 Session 4 will add the
+// dedicated check-out conflict + force-override + release-checkout
+// Playwright scenarios.
 // ---------------------------------------------------------------------
 
-test("configured-default Codex marker renders with dashed-rim signal class", async () => {
+test("seeded orchestrator block renders provider sublabel in the accordion", async () => {
   const per: PerTest = {};
   try {
-    per.tmpPath = makeTmpDir("dabbler-pw-codex-default");
-    const h = makeSet(per.tmpPath, "029-codex-default", 2);
-    seedOrchestratorMarker(h, {
-      provider: "openai",
-      providerDisplayName: "Codex",
-      model: "gpt-5",
-      modelDisplayName: "GPT-5",
-      signalKind: "configured-default",
-      confidence: "medium",
-      effort: {
-        normalized: "high",
-        native: "high",
-        thinking: true,
-        signalKind: "configured-default",
-        confidence: "medium",
-      },
+    per.tmpPath = makeTmpDir("dabbler-pw-orch-block");
+    const h = makeSet(per.tmpPath, "033-orch-block", 2);
+    startSession(h, 1);
+    seedOrchestratorBlock(h, {
+      engine: "claude",
+      provider: "anthropic",
+      model: "claude-opus-4-7",
+      effort: "high",
     });
     per.launch = await launchVSCode(h.repo_root);
     const inner = await openSessionSetsView(per.launch.page);
     await triggerRefresh(per.launch.page);
 
     const row = inner.locator(
-      '[role="treeitem"][data-slug="029-codex-default"]',
+      '[role="treeitem"][data-slug="033-orch-block"]',
     );
     await expect(row).toBeVisible({ timeout: 30_000 });
-    // Both gauges in the accordion body carry signal-configured-default.
-    // The dashed-rim treatment is driven by this class (see tree.css
-    // `.signal-configured-default .gauge-rim`).
-    const gauges = row.locator(".gauge-cell.signal-configured-default");
-    expect(await gauges.count()).toBeGreaterThanOrEqual(1);
-    // Codex provider sublabel renders verbatim.
-    await expect(row.getByText(/Codex/)).toBeVisible();
+    // Provider sublabel renders verbatim. The synthesizer uses the
+    // bare provider string ("anthropic") as the display name — Set 029
+    // S5's rich providerDisplayName mapping was tied to the retired
+    // marker schema.
+    await expect(row.getByText(/anthropic/)).toBeVisible();
   } finally {
     await teardown(per);
   }
 });
 
-test("manual Gemini marker renders with signal-manual class on gauges", async () => {
+test("two in-progress sets each render their own accordion body", async () => {
   const per: PerTest = {};
   try {
-    per.tmpPath = makeTmpDir("dabbler-pw-gemini-manual");
-    const h = makeSet(per.tmpPath, "029-gemini-manual", 2);
-    seedOrchestratorMarker(h, {
-      provider: "google",
-      providerDisplayName: "Gemini",
-      model: "gemini-2.5-pro",
-      modelDisplayName: "Gemini 2.5 Pro",
-      signalKind: "manual",
-      confidence: "high",
-      effort: {
-        normalized: "high",
-        native: "high",
-        thinking: true,
-        signalKind: "manual",
-        confidence: "high",
-      },
+    per.tmpPath = makeTmpDir("dabbler-pw-multi-inflight");
+    const a = makeSet(per.tmpPath, "033-set-a", 2);
+    const b = makeAdditionalSet(a, "033-set-b", 2);
+    // Both sets in-progress with distinct orchestrator identities.
+    // The new tree provider must paint two accordions, one per row.
+    startSession(a, 1);
+    seedOrchestratorBlock(a, {
+      engine: "claude",
+      provider: "anthropic",
+      model: "claude-opus-4-7",
+      effort: "high",
     });
-    per.launch = await launchVSCode(h.repo_root);
+    startSession(b, 1);
+    seedOrchestratorBlock(b, {
+      engine: "gpt-5-4",
+      provider: "openai",
+      model: "gpt-5",
+      effort: "medium",
+    });
+    per.launch = await launchVSCode(a.repo_root);
     const inner = await openSessionSetsView(per.launch.page);
     await triggerRefresh(per.launch.page);
 
-    const row = inner.locator(
-      '[role="treeitem"][data-slug="029-gemini-manual"]',
-    );
-    await expect(row).toBeVisible({ timeout: 30_000 });
-    const gauges = row.locator(".gauge-cell.signal-manual");
-    expect(await gauges.count()).toBeGreaterThanOrEqual(1);
-    await expect(row.getByText(/Gemini/)).toBeVisible();
+    const rowA = inner.locator('[role="treeitem"][data-slug="033-set-a"]');
+    const rowB = inner.locator('[role="treeitem"][data-slug="033-set-b"]');
+    await expect(rowA).toBeVisible({ timeout: 30_000 });
+    await expect(rowB).toBeVisible();
+    // Both rows must carry an accordion body (data-expandable="1").
+    // Pre-Set-033 only the resolver's single "active" row had one.
+    await expect(rowA).toHaveAttribute("data-expandable", "1");
+    await expect(rowB).toHaveAttribute("data-expandable", "1");
+    // Pre-Set-033 the ambiguity banner appeared at "multiple
+    // in-progress sets". It must NOT appear anymore — the new
+    // protocol drops the field entirely.
+    await expect(inner.locator(".ambiguity-banner")).toHaveCount(0);
   } finally {
     await teardown(per);
   }

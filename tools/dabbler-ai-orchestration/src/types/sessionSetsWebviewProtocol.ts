@@ -22,6 +22,12 @@ export type ScanState = "loading" | "ready";
 // Derived from SessionSet + the SessionSetsModel helpers; the host
 // runs the model functions once per snapshot and ships only the
 // strings + flags the webview needs.
+//
+// Set 033 Session 2: `isResolvedSet` retired — multi-in-progress is
+// the supported case and every in-progress row gets its own
+// accordion. `accordionUpdatedAt` carries the orchestrator block's
+// `lastActivityAt` (or `checkedOutAt` fallback) and serves as the
+// suppression key per row (replaces the marker file's `updatedAt`).
 export interface RowPayload {
   slug: string;
   name: string;
@@ -30,8 +36,8 @@ export interface RowPayload {
   contextValue: string;            // for ActionRegistry membership tests (e.g., "sessionSet:in-progress:uat")
   iconSlug: string;                // "in-progress.svg" / "done.svg" / etc.
   needsMigration: boolean;
-  isResolvedSet: boolean;          // true iff this is the row the orchestrator marker resolves to
-  accordionHtml: string | null;    // pre-rendered (for resolved set) or null (for everything else)
+  accordionHtml: string | null;    // pre-rendered (for in-progress rows) or null (for everything else)
+  accordionUpdatedAt: string | null; // suppression key — orchestrator.lastActivityAt or null on empty-state accordion
 }
 
 export interface BucketPayload {
@@ -48,9 +54,6 @@ export interface SnapshotPayload {
   // Welcome HTML (rendered host-side from package.json `viewsWelcome`
   // contents — preserves declarative source per Q3 = a).
   welcomeHtml: string;
-  // Banner above In Progress bucket when resolver returned
-  // "multiple-in-progress-sets" (per S4 Q8 = a+c).
-  ambiguityBanner: { visible: boolean; candidates: string[] };
 }
 
 // ----- Host → Webview -----
@@ -73,7 +76,7 @@ export interface ScanStateChangedMsg {
 export interface SuppressionEchoMsg {
   type: "suppressionEcho";
   version: number;
-  suppressed: Record<string, string>;  // slug → marker.updatedAt
+  suppressed: Record<string, string>;  // slug → accordion.updatedAt
 }
 
 export type HostToWebview = RowsSnapshotMsg | ScanStateChangedMsg | SuppressionEchoMsg;
@@ -102,11 +105,14 @@ export interface ShowRowContextMenuMsg {
 
 // Operator manually collapsed / expanded a row. Host updates
 // workspaceState (suppress / clear) and may re-fire a SuppressionEcho.
+// `accordionUpdatedAt` carries the suppression-key value from the
+// row's accordion (orchestrator.lastActivityAt) so suppression
+// ages naturally when the orchestrator block changes.
 export interface ToggleRowMsg {
   type: "toggleRow";
   slug: string;
   expanded: boolean;
-  markerUpdatedAt: string | null;
+  accordionUpdatedAt: string | null;
 }
 
 // Operator activated a row (Enter / Space / double-click). Defaults

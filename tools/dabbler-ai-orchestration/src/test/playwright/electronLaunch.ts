@@ -239,47 +239,43 @@ export function cancelSet(h: FixtureHandle): void {
 }
 
 /**
- * Set 029 Session 5 — seed a per-set orchestrator marker file so
- * Layer-3 smokes can verify the painted-on-screen treatment for a
- * given signalKind without driving the marker writer through hooks.
+ * Set 033 Session 2 — seed the `orchestrator` block on a fixture's
+ * `session-state.json` so Layer-3 smokes can verify the painted-on-
+ * screen treatment without driving the writer (`start_session`) end-
+ * to-end. Replaces the pre-Set-033 `seedOrchestratorMarker` helper
+ * which wrote `.dabbler/orchestrator.json` (now retired per H2).
  *
- * The marker shape matches v3 (see `scripts/write-orchestrator-marker.js`).
- * Defaults produce a generic Codex configured-default marker; callers
- * override for the manual/current/last-observed variants.
+ * Defaults produce a Claude Opus claim that mirrors the canonical
+ * Set 033 Session 1 schema: engine + provider + model + effort +
+ * timestamps. Callers override for other-provider variants. Merges
+ * into the existing `orchestrator` block rather than replacing the
+ * full state file.
  */
-export function seedOrchestratorMarker(
+export function seedOrchestratorBlock(
   h: FixtureHandle,
-  overrides: Partial<Record<string, unknown>> = {},
+  overrides: Partial<{
+    engine: string;
+    provider: string;
+    model: string;
+    effort: string;
+    checkedOutAt: string;
+    lastActivityAt: string;
+  }> = {},
 ): void {
-  const markerDir = path.join(h.set_dir, ".dabbler");
-  fs.mkdirSync(markerDir, { recursive: true });
-  const base = {
-    schemaVersion: 3,
-    sessionSetSlug: path.basename(h.set_dir),
-    updatedAt: new Date().toISOString(),
-    writer: "playwright-seed",
-    signalKind: "configured-default",
-    confidence: "medium",
-    provider: "openai",
-    providerDisplayName: "Codex",
-    model: "gpt-5",
-    modelDisplayName: "GPT-5",
-    tier: "flagship",
-    effort: {
-      normalized: "medium",
-      native: "medium",
-      thinking: true,
-      signalKind: "configured-default",
-      confidence: "medium",
-    },
-    stalenessMaxSec: 28800,
+  const statePath = path.join(h.set_dir, "session-state.json");
+  const raw = fs.readFileSync(statePath, "utf8");
+  const state = JSON.parse(raw) as Record<string, unknown>;
+  const now = new Date().toISOString();
+  state.orchestrator = {
+    engine: "claude",
+    provider: "anthropic",
+    model: "claude-opus-4-7",
+    effort: "high",
+    checkedOutAt: now,
+    lastActivityAt: now,
+    ...overrides,
   };
-  const marker = { ...base, ...overrides };
-  fs.writeFileSync(
-    path.join(markerDir, "orchestrator.json"),
-    JSON.stringify(marker, null, 2) + "\n",
-    "utf8",
-  );
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
 export function makeAdditionalSet(
