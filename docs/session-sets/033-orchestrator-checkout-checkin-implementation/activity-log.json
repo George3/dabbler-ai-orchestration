@@ -155,6 +155,87 @@
           "task_type": "session-verification"
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/claude-hook-refactored-to-invoker",
+      "dateTime": "2026-05-20T04:25:00-04:00",
+      "description": "Wrote scripts/claude-session-start-invoker.js (new ~190-line Node shim) replacing the retired write-orchestrator-marker.js for the Claude SessionStart hook path (H1). The shim reads the SessionStart payload from stdin, walks up cwd to find docs/session-sets/<slug>/ with status: in-progress, reads the existing orchestrator block, and spawns `python -m ai_router.start_session` with engine=claude + provider=anthropic + the resolved model/effort. Per the SessionStart payload lacking a model signal, preserveExistingClaude() preserves the existing model + effort when claude+anthropic already holds (avoids degrading a more-accurate field recorded by the manual quickpick or configWatcher). No --force ever — hooks never auto-override; H3 refusal (exit 4 from start_session) is logged to stderr but the shim exits 0 to keep Claude's hook chain alive. Refactored commands/installOrchestratorHookClaudeCode.ts to point at the new invoker (HELPER_REL renamed → INVOKER_REL); the matcher-update logic now accepts BOTH the new invoker filename AND the retired write-orchestrator-marker.js filename via DABBLER_HOOK_SUBSTRINGS so a re-install repairs stale references operators still have in their settings.json. UserPromptSubmit hook retired entirely: the signalKind field it updated was removed alongside the per-set marker file in S2, so the hook had no behavior left. Added pruneDabblerHooks() to surgically remove any stale dabbler-managed UserPromptSubmit entries from the operator's settings.json on re-install; other hooks the operator may have installed at the same matcher are preserved verbatim.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/command-renamed",
+      "dateTime": "2026-05-20T04:40:00-04:00",
+      "description": "git mv src/commands/setOrchestratorManual.ts → checkOutOrchestrator.ts (blame preserved). Rewrote the file: removed HELPER_REL + helperPathAbs + readCurrentMarkerForWorkspace + dispatchManualWrite (all marker-helper plumbing now retired); added PROVIDER_TO_ENGINE map (anthropic→claude, openai→codex, google→gemini, github→copilot) as the H4 identity bridge; added exported providerToEngine() function; added listInProgressSetsAt() walk-up resolver that reads session-state.json's orchestrator block (no marker file); added pickTargetInProgressSet() that prompts the operator when multiple in-progress sets exist (multi-in-progress is first-class per S2 — single-set fail-closed posture retired); added dispatchCheckOut() that spawns `python -m ai_router.start_session --session-set-dir <abs> --engine <derived> --provider <picked> --model <picked> --effort <picked> [--session-number <currentSession>] [--force]`; resolved pythonPath via the same workspace setting + fallback chain installAiRouterCommands.ts uses; maybeConfirmForceOverride() compares (existing.engine, existing.provider) to (newEngine, tuple.provider) per H4 (model excluded from identity — R3 by design); register function renamed to registerCheckOutOrchestrator; command id renamed to dabbler.checkOutOrchestrator. Quickpick titles updated from 'Set Orchestrator — ...' to 'Check Out As — ...'. Keybinding-snippet command id updated. Added a `targetSet?: InProgressSet` arg shape so releaseCheckOut can hand the resolved set to the quickpick without re-prompting. Updated package.json contributes.commands: dabbler.setOrchestrator (title 'Set Orchestrator Model & Effort') → dabbler.checkOutOrchestrator (title 'Check Out As…'). Updated ActionRegistry.ts: id + label updated; openOrchestratorWriterLog row bumped from group 502 to 503 to make room for the new releaseCheckOut row at 502. Updated providers/CustomSessionSetsView.ts SUPPORTED_ROW_COMMAND_IDS, providers/detectOrchestrators.ts (CODEX_CTA commandId + label + Gemini/Copilot CTA labels updated from 'set ... orchestrator' to 'check out as ...'), providers/OrchestratorAccordion.ts (mismatch reason string), commands/installOrchestratorHookGemini.ts + installOrchestratorHookCopilot.ts (executeCommand target), media/session-sets-tree/client.js (comment), src/extension.ts (import + safeRegister name).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/release-checkout-command-added",
+      "dateTime": "2026-05-20T04:50:00-04:00",
+      "description": "Authored src/commands/releaseCheckOut.ts (new ~85-line command) — one of H3's two named release paths (the other is `start_session --force` on the CLI). Flow: walk up to find in-progress set(s) via the SHARED pickTargetInProgressSet helper (single source of truth — no divergent UX between Check Out As… and Release Check-Out); short-circuit on unclaimed slot (info toast, no-op); show modal confirmation 'Release the orchestrator check-out on \"<slug>\" currently held by <engine + provider (model)>?'; on confirm, delegate to dabbler.checkOutOrchestrator with { targetSet: set } so the operator picks the new holder in the same multi-step flow. The two-modal sequence (Release confirm + the quickpick's own different-holder Override confirm) is intentional — the first establishes intent, the second sanity-checks the identity handoff. The actual force-override is the writer's standard --force path (audit trail goes to ~/.dabbler/orchestrator-writer.log via start_session's _log_force_override). Exported describeHolder() helper for unit-test coverage. Registered in package.json contributes.commands with the 'Dabbler' category for Command Palette discoverability; registered via safeRegister in extension.ts; surfaced in ActionRegistry as row 502 with label 'Release Check-Out', gated on state==='in-progress' (same gate as Check Out As…).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/codex-watcher-audited",
+      "dateTime": "2026-05-20T05:00:00-04:00",
+      "description": "Refactored src/codex/configWatcher.ts (was an audit-only item in the spec but the HELPER_REL reference made the file runtime-broken post-S2 — same R1 surface as the Claude installer). Removed HELPER_REL + helperPathAbs + classifyTier + deriveModelDisplayName + deriveProviderDisplayName (all marker-writer payload-shaping logic) + the JSON-payload write path. New flow: on config-toml change, resolveSingleInProgressSet() walks up cwd, finds the in-progress session set, reads the existing orchestrator block; if codex+openai already holds (same-holder short-circuit) the watcher elides the python spawn to avoid spamming start_session on every editor save; otherwise dispatchCheckOut() spawns `python -m ai_router.start_session --session-set-dir <abs> --engine codex --provider openai --model <parsed> --effort <parsed-or-medium> [--session-number <currentSession>]`. No --force (same hard-coordination rule as the Claude shim — operator routes explicit overrides through Release Check-Out). H3 refusal is silent (no toast) — the watcher fires on every config-file touch and a noisy toast on every Codex edit would be hostile.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/installer-shims-audited",
+      "dateTime": "2026-05-20T05:05:00-04:00",
+      "description": "Audited src/commands/installOrchestratorHookGemini.ts + installOrchestratorHookCopilot.ts: both remain manual-only paths per [[project_029_pivot_to_per_set_identity]]. Neither writes the orchestrator block directly; both delegate via vscode.commands.executeCommand to the renamed manual quickpick. Updated the executeCommand target from 'dabbler.setOrchestrator' to 'dabbler.checkOutOrchestrator' in both files; updated head comments to cite the H1+H3+H4 model + the command rename. No behavior change beyond the id update.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/action-registry-copy-updated",
+      "dateTime": "2026-05-20T05:10:00-04:00",
+      "description": "src/providers/ActionRegistry.ts: row 501 id renamed dabbler.setOrchestrator → dabbler.checkOutOrchestrator, label renamed 'Set Orchestrator Model & Effort…' → 'Check Out As…'; new row 502 id dabbler.releaseCheckOut label 'Release Check-Out' (gated on state==='in-progress'); openOrchestratorWriterLog row bumped from 502 to 503 to make room. src/providers/OrchestratorAccordion.ts: the mismatch-reason string that pointed at 'Dabbler: Set Orchestrator Model & Effort' updated to point at 'Dabbler: Check Out As…' so the user-facing copy stays in sync with the renamed Command Palette entry.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/unit-tests-green",
+      "dateTime": "2026-05-20T05:20:00-04:00",
+      "description": "git mv src/test/suite/setOrchestratorManual.test.ts → checkOutOrchestrator.test.ts (blame preserved). Updated the import to point at the renamed module; preserved the 13 pre-existing pushMru + readMru + formatTupleLabel tests verbatim. Added a new providerToEngine suite (4 tests) asserting the H4 identity bridge: anthropic→claude, openai→codex, google→gemini, github→copilot. Authored src/test/suite/releaseCheckOut.test.ts (new, 4 tests) covering the describeHolder helper's four shapes (full identity + model, model-absent, partial-identity placeholders, null orchestrator). Updated src/test/suite/actionRegistry.test.ts: the expected ROW_ACTIONS id set now includes dabbler.checkOutOrchestrator + dabbler.releaseCheckOut + openOrchestratorWriterLog (was: just setOrchestrator + openOrchestratorWriterLog); total ROW_ACTIONS.length bumped from 16 to 17; the 'appears only on in-progress rows' test renamed and covers BOTH new ids with the same state-bucket matrix. Updated src/test/suite/detectOrchestrators.test.ts Codex-only scenario to expect dabbler.checkOutOrchestrator as the CTA commandId. D13 lint (noLegacyFieldReads.test.ts) fired on three state.currentSession reads in the new code (checkOutOrchestrator.ts listInProgressSetsAt + dispatchCheckOut, configWatcher.ts resolveSingleInProgressSet); fixed via inline // noqa: D13 annotations with justifying comments — the carve-out is appropriate (these reads pass currentSession verbatim to start_session as --session-number, not legacy-progress derivation). npx tsc --noEmit clean. npm run test:unit: 409 passing, 2 pre-existing failures (configEditor-foundation + notificationsSection — unchanged from S2 disposition, neither touches changed files).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/round-a-verification",
+      "dateTime": "2026-05-20T05:35:00-04:00",
+      "description": "Authored verify_session3.py following the Session 1+2 template (RouteResult JSON-dump-first per feedback_ai_router_route_result_handling). Bundled the primary S3 deliverables in full (claude-session-start-invoker.js, checkOutOrchestrator.ts, releaseCheckOut.ts, installOrchestratorHookClaudeCode.ts, configWatcher.ts, installer shims, ActionRegistry.ts, detectOrchestrators.ts) plus excerpts (CustomSessionSetsView supported-commands allowlist, extension.ts registration block, package.json commands section, OrchestratorAccordion mismatch helper) plus the test files in full (checkOutOrchestrator.test.ts, releaseCheckOut.test.ts, actionRegistry.test.ts) plus three ground-truth references (proposal-addendum §9 H1+H3+H4 verdicts, spec.md Session 3 only, start_session.py _build_arg_parser CLI definitions). Bundle 109,162 chars — larger than S1 (56k) and S2 (96k) but consistent with the layered-surface scope of S3 (Node shim + renamed TS module + new TS command + 4 refactored TS files + tests). Seven assertion groups (A H1 invoker refactor, B H3 release affordance, C H4 identity surface, D rename completeness end-to-end, E UserPromptSubmit retirement, F test adequacy, G risky/missing). Round A verdict: VERIFIED with no must-fix issues. Round B not required. Session 3 closes near top of $0.05-$0.15 forecast band ($0.044 single round); cumulative routed spend across S1+S2+S3 ≈$0.13 of $1.25 total Set 033 NTE.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "engine": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.043538749999999994,
+          "input_tokens": 34759,
+          "output_tokens": 9,
+          "task_type": "session-verification"
+        }
+      ]
     }
   ]
 }
