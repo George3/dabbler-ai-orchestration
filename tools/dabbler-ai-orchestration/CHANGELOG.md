@@ -5,6 +5,99 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-05-21 (Set 035 — state-file sole truth for cancellation)
+
+Extends the Set 033 H2 verdict (`session-state.json` is canonical) to
+the cancellation / restoration side of the lifecycle. The bucketing
+reader now consults `state.status === "cancelled"` first; `CANCELLED.md`
+and `RESTORED.md` markdown files survive as durable audit-history
+artifacts and serve as a legacy-fallback signal only. No companion
+PyPI release this set — `ai_router/session_lifecycle.py` was verified
+byte-equivalent with the TypeScript writer (10-row parity check) and
+required no edits.
+
+### Added
+
+- **`readCancellationState(sessionSetDir)`** in
+  `src/utils/cancelLifecycle.ts` — single canonical reader entry point.
+  Returns `"cancelled" | "restored" | "active" | "unknown"` as a
+  discrete `CancellationState` type union (also exported). Resolution
+  order: state.status==="cancelled" → cancelled; non-cancelled status
+  + `RESTORED.md` present → restored (history-aware); non-cancelled
+  status + no `RESTORED.md` → active; no / unparseable / non-string
+  status state file → unknown (caller falls back to legacy
+  file-presence predicate).
+- **3 Layer-3 Playwright scenarios** in
+  `src/test/playwright/cancellation-state-file.spec.ts`:
+  state-file-only cancellation (markdown deleted); legacy fallback
+  (state file deleted); state-file wins on stray `CANCELLED.md`
+  alongside `status: "complete"`.
+
+### Changed
+
+- **`src/utils/fileSystem.ts:readSessionSets`** — bucketing precedence
+  now reads `readCancellationState()` first. `"unknown"` +
+  `isCancelled(dir)` legacy-fallback path emits `console.warn` naming
+  the directory and pointing at `ensure_state_file` for repair.
+- **`renderAccordionEmpty()`** in
+  `src/providers/OrchestratorAccordion.ts` — removed two grey
+  placeholder `renderGaugeSvg('unknown', ...)` elements from the
+  empty-state branch (operator-directed bundle in Session 1). Empty
+  state now renders only the `.acc-empty-cta` line. Loaded-state
+  rendering unchanged.
+- **`docs/session-state-schema.md`** — "Cancel / restore" section
+  rewritten state-file-first with three new subsections (Canonical
+  reader / Writer symmetry / Layer-3 coverage). Status-table
+  footnote on `"cancelled"` names the state field as canonical.
+  Bucketing-list bullet now reads "status === cancelled → Cancelled
+  (state file wins, Set 035)".
+- **`docs/ai-led-session-workflow.md`** — "Cancelling and restoring
+  a session set" section reframed: canonical writers flip
+  `state.status='cancelled'` AND prepend to `CANCELLED.md` in a
+  single atomic boundary; hand-edit affordance points at
+  `session-state.json` with markdown audit entry
+  recommended-not-required. "Detection precedence" rewritten as a
+  three-tier ladder. Step 1's `or CANCELLED.md present = skip`
+  bullet replaced with `or status: "cancelled" = skip`.
+- **`src/utils/cancelLifecycle.ts` JSDoc** — header reframed (markdown
+  markers are durable audit artifacts post-Set-035); byte-equivalence
+  pin cites Session 2's verified 10-row parity table; legacy
+  `isCancelled()` / `wasRestored()` tagged as legacy-fallback-only
+  with a pointer at `readCancellationState()` as primary entry point.
+
+### Tests
+
+- **10 new test cases** in `src/test/suite/cancelLifecycle.test.ts`
+  under suite "cancelLifecycle — readCancellationState (Set 035
+  state-file-first)" — covers the new contract + legacy fallback +
+  missing/unparseable state-file edge cases.
+- **6 new writer-parity test cases** in the same file under suite
+  "cancelLifecycle — writer parity (Set 035 Session 2)" — covers
+  LF-only newlines + no-BOM byte scan; JSON byte-equivalent with
+  Python; cancel writes only status+preCancelStatus
+  (deep-equality); cancel+restore round-trip; cancel timestamp
+  shape; re-cancel after restore preserves original preCancelStatus.
+
+### Tooling
+
+- **`docs/session-sets/035-.../scripts/harvest_glossary.py`** — new
+  one-shot tool that scans source files for filename-like string
+  literals, groups by extension, clusters near-matches via
+  Levenshtein distance (default ≤ 3) using union-find. Useful for
+  cross-solution naming consistency audits.
+
+### Known issues
+
+- 3 pre-existing Layer-3 test-side failures in
+  `src/test/playwright/session-sets-tree.spec.ts`
+  (`renders ARIA tree structure with bucket grouping for an in-progress
+  set`, `seeded orchestrator block renders provider sublabel in the
+  accordion`, `empty-state CTA falls back to Claude installer when no
+  orchestrators detected`) — test-scaffolding / locator-specificity
+  issues, NOT production regressions. `renderAccordionEmpty` still
+  emits `.acc-empty-cta` and `"No signal —"` text correctly. Deferred
+  to Set 034 (styling iteration).
+
 ## [0.18.0] — 2026-05-21 (Set 033 — orchestrator check-out / check-in)
 
 Ships the reader / UI / queueing side of the check-out / check-in

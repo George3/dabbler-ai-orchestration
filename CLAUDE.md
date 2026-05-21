@@ -39,9 +39,11 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.18.0** (Set 033 — orchestrator check-out / check-in;
-  Marketplace publish gated on operator confirmation). Companion
-  PyPI release: `dabbler-ai-router` 0.6.0. The version walk:
+- Current: **v0.18.1** (Set 035 — state-file sole truth for
+  cancellation/restoration; Marketplace publish gated on operator
+  confirmation). No companion PyPI release this set
+  (`ai_router/session_lifecycle.py` verified byte-equivalent with the
+  TypeScript writer and required no edits). The version walk:
   - **0.14.2** (S2) — Claude-only Orchestrator webview, marker
     helper + hook installer.
   - **0.15.x** (S3) — per-session-set identity (schema v3,
@@ -93,6 +95,27 @@ is a required duplicate — `vsce package` expects the file alongside
     companion `dabbler-ai-router 0.6.0`. Cross-repo CLAUDE.md
     insertion text at
     [`docs/cross-repo-checkout-notice.md`](docs/cross-repo-checkout-notice.md).
+  - **0.18.1** (Set 035) — state-file sole truth for cancellation /
+    restoration extended from the Set 033 H2 verdict (orchestrator
+    block) to the cancellation lifecycle. New canonical reader
+    `readCancellationState(sessionSetDir)` in `cancelLifecycle.ts`
+    consults `session-state.json`'s `status` field first; `CANCELLED.md`
+    / `RESTORED.md` markdown files survive as durable audit-history
+    artifacts and serve as a legacy-fallback signal only (no usable
+    state file + `CANCELLED.md` present → `console.warn` + bucket to
+    cancelled). `fileSystem.ts:readSessionSets` migrated. TS + Python
+    writers verified byte-equivalent across 10 parity rows; no Python
+    edits needed (no PyPI release). 16 new unit tests (10 reader + 6
+    writer-parity) and 3 new Layer-3 Playwright scenarios in
+    `cancellation-state-file.spec.ts`. Bundled: empty-state grey
+    gauges removed from `renderAccordionEmpty()` per operator
+    directive; glossary-harvest tool (`scripts/harvest_glossary.py`)
+    surfaced 40 near-match clusters across 5 extension buckets (all
+    triaged as acceptable variance). Deferred follow-ups: 3 pre-
+    existing Layer-3 test-scaffolding failures in
+    `session-sets-tree.spec.ts` → Set 034 (styling iteration); C1
+    Python CLI `print_session_set_status` cancellation-reader
+    migration → follow-on patch.
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`
