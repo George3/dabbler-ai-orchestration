@@ -1,16 +1,19 @@
-# chatSessionId + MVVM watcher-scope discipline — audit complete, awaiting implementation spec
+# chatSessionId + MVVM watcher-scope discipline — audit complete, implementation set scaffolded
 
-> **Status as of 2026-05-21:** **audit complete + verdicts locked.**
+> **Status as of 2026-05-21:** **audit complete + verdicts locked
+> + implementation set scaffolded.**
 > Both Gemini Pro (routed) and GPT-5.4 (operator manual paste)
 > returned Round-A verdicts; the operator adjudicated and locked
 > the verdict pattern in [`proposal-addendum.md`](proposal-addendum.md).
+> The implementation set ships at
+> [`docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/`](../../session-sets/036-chatsessionid-and-watcher-scope-implementation/spec.md).
 >
-> **Consuming session sets (audit-then-spec):** the audit work is
-> done (this directory). The next move is an **implementation spec
-> set** (Set-037-candidate) authored from the locked verdicts.
-> Sits behind the already-queued Set 034/035 (state-file-sole-truth
-> audit per [[project_034_035_state_file_sole_truth_audit]]) in
-> the queue.
+> **Queue position:** Set 035
+> (`035-state-file-sole-truth-marker-retirement`) and Set 034
+> (`034-session-set-explorer-styling-iteration`) are queued
+> ahead. Recommended execution order: 035 → 034 → 036, by impact
+> magnitude (smallest reader-only change first, then styling,
+> then this larger migration). No hard dependency between them.
 
 ## What's here
 

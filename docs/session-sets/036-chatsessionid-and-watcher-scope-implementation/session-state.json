@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "036-chatsessionid-and-watcher-scope-implementation",
+  "currentSession": null,
+  "totalSessions": 6,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Writer migration + per-set lifecycle lock (Q5 prerequisite)",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "new_chat_id CLI + Claude Code hook-invoker pass-through",
+      "status": "not-started"
+    },
+    {
+      "number": 3,
+      "title": "signalKind retirement + Codex config-toml watcher retirement",
+      "status": "not-started"
+    },
+    {
+      "number": 4,
+      "title": "Takeover UX (Q3) + watcher-inventory convention test (Q7)",
+      "status": "not-started"
+    },
+    {
+      "number": 5,
+      "title": "Layer-3 Playwright coverage + cross-tier docs + cross-repo notice",
+      "status": "not-started"
+    },
+    {
+      "number": 6,
+      "title": "Tests + change-log + dual-registry release",
+      "status": "not-started"
+    }
+  ],
+  "completedSessions": []
+}
