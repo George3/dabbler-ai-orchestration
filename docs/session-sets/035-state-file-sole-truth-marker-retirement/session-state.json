@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "035-state-file-sole-truth-marker-retirement",
+  "currentSession": null,
+  "totalSessions": 4,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Reader migration to state-file-sole-truth",
+      "status": "not-started"
+    },
+    {
+      "number": 2,
+      "title": "Writer alignment + glossary harvest",
+      "status": "not-started"
+    },
+    {
+      "number": 3,
+      "title": "Documentation + Layer-3 coverage",
+      "status": "not-started"
+    },
+    {
+      "number": 4,
+      "title": "Tests + change-log + dual-registry release",
+      "status": "not-started"
+    }
+  ],
+  "completedSessions": []
+}
