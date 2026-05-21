@@ -87,6 +87,82 @@
           "output_path": "verification-output/round-a-session-1-result.json"
         }
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/writer-parity-verified",
+      "dateTime": "2026-05-21T07:50:00-04:00",
+      "description": "Compared tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts (TypeScript writer) against ai_router/session_lifecycle.py (Python mirror) line-by-line for byte-equivalent on-disk shape. Verified 10 parity rows: filename constants (CANCELLED.md/RESTORED.md/session-state.json), history header (`# Cancellation history`), timestamp format (TS hand-rolled vs Python datetime.now().astimezone().replace(microsecond=0).isoformat() — both produce `2026-05-14T11:23:07-04:00` shape), newline discipline (TS explicit `\\n` + Node fs.writeFileSync = no translation; Python open `wb` + content.encode('utf-8') = raw bytes, no translation), UTF-8 encoding no BOM both sides, atomic write pattern (unique-suffix temp + rename), prepend semantics (self-terminating `<verb> on <iso>\\n<reason>\\n\\n` with header on first write), state-file flip (status='cancelled' + preCancelStatus=<prior>; re-cancel preserves original), restore inference fallback (change-log.md → 'complete'; activity-log.json → 'in-progress'; else 'not-started'), and JSON serialization (TS JSON.stringify(state, null, 2) + '\\n' vs Python json.dumps(state, indent=2) + '\\n'). All rows match. Parity table committed to glossary-harvest.md disposition section. No drift; the two writers can safely write into the same session-set folder across platforms without producing divergent on-disk shapes.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/glossary-harvest-script-authored",
+      "dateTime": "2026-05-21T08:05:00-04:00",
+      "description": "Authored docs/session-sets/035-state-file-sole-truth-marker-retirement/scripts/harvest_glossary.py — one-shot Python tool that walks the solution looking for filename-like string literals matching `\\b[A-Za-z_][A-Za-z0-9_.\\-]{0,63}\\.(md|json|jsonl|toml|yaml|yml|txt|html)\\b`, groups by extension, then clusters near-matches via Levenshtein distance (default `<= 3`) using union-find. Excludes machine-generated trees (.git, node_modules, .venv, out, dist, build, __pycache__, *.egg-info, .vscode-test, test-results, playwright-report, .pytest_cache, .mypy_cache, .ruff_cache). Scans source files only (extensions: .ts/.tsx/.js/.jsx/.mjs/.cjs/.py/.md/.json/.jsonl/.yaml/.yml/.toml/.sh/.ps1/.html/.css/.txt). Curated set of CANONICAL_MARKERS (CANCELLED.md, RESTORED.md, change-log.md, activity-log.json, session-state.json, session-events.jsonl, disposition.json, spec.md, orchestrator.json, orchestrator-mru.json, orchestrator-writer.log, router-config.yaml, budget.yaml, local-overrides.yaml, ai-assignment.md, config.toml) used to rank clusters by operator relevance (canonical-touching clusters appear first in their bucket). Outputs Markdown report to stdout by default or to docs/session-sets/035-.../glossary-harvest.md via --write-report. CLI: --root (default cwd), --threshold (default 3), --write-report.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/glossary-harvest-report-committed",
+      "dateTime": "2026-05-21T08:15:00-04:00",
+      "description": "Ran harvest_glossary.py against the repo root; output committed to docs/session-sets/035-state-file-sole-truth-marker-retirement/glossary-harvest.md (706 lines). 40 clusters surfaced across 5 extension buckets (.html: 2 clusters; .json: 11 clusters; .md: 18 clusters; .txt: 4 clusters; .yaml: 1 cluster). Five clusters touch canonical markers and are ranked at the top of each bucket: Session-State.json/Session-state.json/session-state.json; Package.json/package.json; SPEC.md/Spec.md/no-spec.md/no-such.md/spec.md; CHANGELOG.md/change-log.md; CANCELLED.md/_cancelled.md/cancelled.md (the trigger case).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/in-session-fixes-applied",
+      "dateTime": "2026-05-21T08:25:00-04:00",
+      "description": "Triaged all 40 clusters into three dispositions per the spec (acceptable variance / fix in-session / follow-on candidate). Outcome: ZERO in-session fixes. The five canonical-touching clusters all triaged as (a) acceptable variance: (1) Session-State.json/Session-state.json — Title Case heading + sentence-start prose in docs/planning/lessons-learned.md and project-guidance.md, no code/path references use wrong casing; (2) Package.json — heading + bullet-start prose in 3 historical proposal/spec/spec-delta docs; (3) SPEC.md/Spec.md — `docs/screenshots/SPEC.md` is a distinct artifact (Set 011's screenshot manifest), `Spec.md` instances are sentence-case prose comments in progress.py/progress.ts/CHANGELOG/etc.; (4) CHANGELOG.md vs change-log.md — DIFFERENT canonical artifacts (PyPI/Marketplace release log vs per-session-set aggregation), Levenshtein-3 neighbors but semantically distinct; (5) CANCELLED.md/_cancelled.md/cancelled.md — the trigger case is rendered moot by Session 1's reader migration (state-file-first contract ignores stray markers); all _cancelled.md/cancelled.md occurrences are self-references in this set's own spec/harvest-script docstring or historical artifacts in closed Set 033's activity-log.json. All non-canonical clusters fall into: numbered-session artifact families (intentional per-session per-set files); distinct proposals/audits (intentional split-naming); test fixtures and example values (throwaway names); sentence-case prose for canonical filenames (Adoption-bootstrap.md heading style; MEMORY.md personal-memory-system filename); historical incident references (SUPERSEDED.md/_superseded.md in closed Set 033 activity-log). Disposition tables + per-cluster rationale committed to glossary-harvest.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/_cancelled-md-resolution-documented",
+      "dateTime": "2026-05-21T08:30:00-04:00",
+      "description": "Authored the 'Resolution: _cancelled.md mismatch' section of glossary-harvest.md. Documents that the case that motivated this harvest (an AI engine writing _cancelled.md while the reader expects CANCELLED.md) is now harmless post-Session-1: the bucketing reader (readCancellationState() in cancelLifecycle.ts) consults session-state.json's status field first; markdown markers are audit-history artifacts, not the canonical state signal. A stray _cancelled.md left by a non-canonical writer would not flip the set into the Cancelled bucket. The canonical writers (TS cancelSessionSet() and Python cancel_session_set() — verified byte-equivalent in step 1) always produce CANCELLED.md, never the alternate shape. Future-contributor guidance: stray _cancelled.md is a historical artifact, safe to delete or leave alone (reader ignores it). Also logged the C1 follow-on candidate — Python CLI print_session_set_status at ai_router/__init__.py:935 still calls is_cancelled(path) file-presence-first, mirroring the TS pattern Session 1 migrated; recommended scope for a follow-on patch release (add read_cancellation_state to session_lifecycle.py, refactor one CLI caller, add four parity tests, bump dabbler-ai-router patch version). Out of Session 2's writer-parity-scoped budget; surfaces for operator decision at Set 035 close.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/writer-tests-green",
+      "dateTime": "2026-05-21T08:45:00-04:00",
+      "description": "Added 6 new test cases to cancelLifecycle.test.ts under suite 'cancelLifecycle — writer parity (Set 035 Session 2)': (1) CANCELLED.md uses LF newlines only (byte-scan asserts no 0x0D CR, no UTF-8 BOM); (2) session-state.json serialization matches Python json.dumps(state, indent=2) + '\\n' (trailing newline, no tabs, 6-space indent for sessions[0] keys = 2-space-per-level); (3) cancel writes only status + preCancelStatus, leaving 11 sibling keys untouched via deep-equality assertions on a realistic baseline with nested orchestrator + sessions[]; (4) round-trip: cancel + restore returns status to exact prior value (parametric over not-started/in-progress/complete, asserts preCancelStatus cleared); (5) cancel timestamp is local-time ISO-8601 with second precision and ±HH:MM offset (Python-mirror shape) — regex match on `\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}` + negative asserts no millisecond fractions and no UTC Z suffix; (6) re-cancel after restore preserves original preCancelStatus across C1 → R1 → C2 cycle. All 6 new tests passing. Full extension suite: 462 passing, 2 pre-existing unrelated failures (configEditor ViewColumn.One stub gap; notificationsSection 'wired in Set 026 Session 7' assertion) unchanged. ai_router/tests/test_session_lifecycle.py: 17 passed. Typecheck (npx tsc --noEmit) clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/round-a-verification",
+      "dateTime": "2026-05-21T08:55:00-04:00",
+      "description": "Round A verification via gemini-pro (gemini-2.5-pro tier 2) at $0.02323625 cost (17,333 input tokens + 157 output tokens; 40.0s elapsed). Bundle size 48,542 chars covering: TS cancelLifecycle.ts writer (header section + cancelSessionSet/restoreSessionSet body), full Python session_lifecycle.py mirror, full harvest_glossary.py source, glossary-harvest.md disposition section (clusters touching canonical markers + follow-on candidates + writer parity check summary table), new writer-parity test suite (6 cases), and Session 2 spec contract. Verdict: VERIFIED, no must-fix issues. Verifier endorsed the four risk-analysis points from the focus prompt (TS timezone offset sign inversion, temp filename length, harvest regex word-boundary scope, sentence-case-prose disposition call). Round B not needed. Cumulative Set 035 routed spend: $0.0394 of $0.50 forecast.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "model_id": "gemini-2.5-pro",
+          "tier": 2,
+          "task_type": "session-verification",
+          "input_tokens": 17333,
+          "output_tokens": 157,
+          "cost_usd": 0.02323625,
+          "elapsed_seconds": 40.04722046852112,
+          "verdict": "VERIFIED",
+          "output_path": "verification-output/round-a-session-2-result.json"
+        }
+      ]
     }
   ]
 }
