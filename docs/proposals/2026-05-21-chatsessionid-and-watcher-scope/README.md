@@ -1,25 +1,33 @@
-# chatSessionId + MVVM watcher-scope discipline — pre-audit artifacts
+# chatSessionId + MVVM watcher-scope discipline — audit complete, awaiting implementation spec
 
-> **Status as of 2026-05-21:** pre-audit; awaiting external review by
-> GPT-5.4 (operator-driven, manual paste) and Gemini Pro (operator's
-> call on whether to route via `ai_router` or paste manually).
+> **Status as of 2026-05-21:** **audit complete + verdicts locked.**
+> Both Gemini Pro (routed) and GPT-5.4 (operator manual paste)
+> returned Round-A verdicts; the operator adjudicated and locked
+> the verdict pattern in [`proposal-addendum.md`](proposal-addendum.md).
 >
-> **Consuming session sets (audit-then-spec):** TBD; the audit set
-> would be a Set-036-candidate that follows the already-queued Set
-> 034/035 (state-file-sole-truth audit per
-> [[project_034_035_state_file_sole_truth_audit]]). The
-> implementation set would be a separate Set-037-candidate.
+> **Consuming session sets (audit-then-spec):** the audit work is
+> done (this directory). The next move is an **implementation spec
+> set** (Set-037-candidate) authored from the locked verdicts.
+> Sits behind the already-queued Set 034/035 (state-file-sole-truth
+> audit per [[project_034_035_state_file_sole_truth_audit]]) in
+> the queue.
 
 ## What's here
 
 | File | What it is | Status |
 |---|---|---|
-| [`proposal.md`](proposal.md) | The design proposal — direction + open questions | Draft, awaiting external review |
-| [`audit-resolution-request.md`](audit-resolution-request.md) | The focused review packet for GPT-5.4 + Gemini Pro | Ready to paste/route |
+| [`proposal.md`](proposal.md) | The design proposal — direction + open questions | FROZEN (any further changes go in the addendum) |
+| [`audit-resolution-request.md`](audit-resolution-request.md) | The focused review packet for GPT-5.4 + Gemini Pro | FROZEN |
+| [`audit-resolution-gemini-pro.txt`](audit-resolution-gemini-pro.txt) / [`.json`](audit-resolution-gemini-pro.json) | Gemini Pro Round-A verdict (routed via `ai_router`, $0.025) | FROZEN |
+| [`audit-resolution-gpt-5-4.txt`](audit-resolution-gpt-5-4.txt) | GPT-5.4 Round-A verdict (operator manual paste) | FROZEN |
+| [`proposal-addendum.md`](proposal-addendum.md) | **LOCKED verdicts** — operator-adjudicated post-review decision record | FROZEN |
+| [`route_gemini_audit.py`](route_gemini_audit.py) | Routing script for the Gemini Round-A call | Historical |
 
-This package is the input to the audit. Verdicts and the
-post-audit decision record will land alongside as they arrive
-(see "Expected post-audit additions" below).
+The audit is complete. The next consumer of this directory is the
+implementation-spec-set author who reads the
+[`proposal-addendum.md`](proposal-addendum.md) "What ships in the
+follow-on implementation spec" section and authors a
+spec for Set-037-candidate.
 
 ## What problem this addresses
 
@@ -123,27 +131,31 @@ verdicts from Set 032 (H1, H2, H3, H4 base composite, OQ1, OQ2).
 This proposal **refines** H4 (adds chatSessionId), and otherwise
 builds on top of the Set 033 implementation.
 
-## Expected post-audit additions to this directory
+## Post-audit summary (landed 2026-05-21)
 
-When the audit completes, the directory will accumulate the
-following (matching the
-`docs/proposals/2026-05-19-orchestrator-tracking-architecture/`
-shape):
+The audit's final outcome:
 
-- `proposal-addendum.md` — post-audit clarifications + locked
-  verdicts for D1, D2, Q1–Q7.
-- `audit-resolution-gemini-pro.{txt,json}` — Gemini Pro's
-  verdict (whether routed or pasted).
-- `audit-resolution-gpt-5-4.txt` — GPT-5.4's verdict (operator
-  manual paste).
-- Optionally: `audit-resolution-paste-for-gpt-5-4.md` — the
-  paste-ready packet, kept around for reproducibility.
-- Optionally: routing scripts (`route_*.py`) if the operator
-  decides to route via `ai_router`.
+- **Direction ratified** by both providers (D1 + D2). Gemini
+  VERIFIED both; GPT-5.4 REFINED both with wording sharpenings
+  that the addendum adopted.
+- **Six items refined** via cross-provider consensus (Q1, Q2, Q3,
+  Q4, Q5, Q7). The addendum captures the locked text.
+- **One item rejected** (Q6): no persistent
+  `requireExplicitTakeover` setting. GPT-5.4's safety-first
+  argument won; if real friction surfaces later, the
+  implementation set ships a one-shot affordance instead.
+- **One critical empirical correction** (Q1): no per-chat env
+  var is confirmed for any orchestrator. Claude Code uses its
+  hook-payload `session_id`; all other orchestrators use a new
+  `python -m ai_router.new_chat_id` fallback CLI.
+- **One load-bearing concurrency requirement** (Q5): the hybrid
+  migration's read/check/write sequence must be serialized via
+  a per-set lifecycle lock, otherwise the split-brain race the
+  feature is meant to prevent still happens.
 
-The post-audit decision record is what the implementation spec
-cites. This README will be updated to reference it once it
-lands.
+See [`proposal-addendum.md`](proposal-addendum.md) "Locked
+verdicts" and "What ships in the follow-on implementation spec"
+for the complete decision record.
 
 ## Cross-references
 
