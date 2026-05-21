@@ -189,9 +189,15 @@ def test_happy_3session_full_cycle(tmp_path: Path) -> None:
         # in-progress, so ``currentSession`` is ``None`` — both in the
         # between-sessions window and after the final close. This is
         # the v3 fix for the ambiguous "in-flight or most-recently-
-        # closed" v2 semantic (per spec problem statement). The
-        # totalSessions, startedAt, and orchestrator block invariants
-        # are unchanged across the migration.
+        # closed" v2 semantic (per spec problem statement).
+        #
+        # Set 033 Session 6 (H1 + H3): the ``orchestrator`` block is
+        # ALSO cleared on every successful close. The session boundary
+        # is the release point — between sessions, no orchestrator
+        # holds the set, so any holder can claim the next session via
+        # ``start_session`` without ``--force``. The next iteration's
+        # ``drive_start_session`` repopulates the block; this
+        # assertion pins the post-close clear.
         assert state.get("currentSession") is None, (
             f"close_session must derive currentSession from sessions[]; "
             f"saw {state.get('currentSession')!r} after closing N={n}, "
@@ -199,11 +205,11 @@ def test_happy_3session_full_cycle(tmp_path: Path) -> None:
         )
         assert state.get("totalSessions") == total
         assert state.get("startedAt") is not None
-        orchestrator = state.get("orchestrator") or {}
-        assert orchestrator.get("engine") == "claude-code"
-        assert orchestrator.get("model") == "claude-opus-4-7"
-        assert orchestrator.get("provider") == "anthropic"
-        assert orchestrator.get("effort") == "high"
+        assert state.get("orchestrator") is None, (
+            f"close_session must clear orchestrator block (Set 033 "
+            f"Session 6 check-in); saw {state.get('orchestrator')!r} "
+            f"after closing N={n}"
+        )
 
         if not is_final:
             assert state.get("status") == "in-progress"

@@ -5,6 +5,102 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-05-21 (Set 033 — orchestrator check-out / check-in)
+
+Ships the reader / UI / queueing side of the check-out / check-in
+coordination model anchored in `session-state.json`'s `orchestrator`
+block, per the Set 032 audit verdicts. Companion PyPI release:
+`dabbler-ai-router 0.6.0`.
+
+### Added
+
+- **`dabbler.releaseCheckOut` command** ("Dabbler: Release Check-Out"
+  in the Command Palette). Wraps `start_session --force` against
+  the in-progress set (or, on multi-in-progress, QuickPick-selected
+  set). Confirmation step required. Force-override is logged to
+  `~/.dabbler/orchestrator-writer.log` by the writer.
+- **Queueing / polling on check-out conflict.** New
+  `CheckoutPollService` (`src/providers/CheckoutPollService.ts`)
+  watches `~/.dabbler/checkout-conflicts/` for sentinel JSON files
+  emitted by the Claude `SessionStart` invoker and the Codex
+  config-toml watcher when `start_session` exits with
+  `EXIT_CHECKOUT_CONFLICT (4)`. Surfaces a non-blocking
+  information message with three actions:
+  - **Poll for release** — 5s-debounced `fs.watch` on the held
+    set's `session-state.json`; auto-retries `start_session` for
+    the would-be holder when the set frees (uses the H4 identity
+    predicate).
+  - **Force override** — invokes `start_session --force`.
+  - **Dismiss** — no further action.
+- **`dabblerSessionSets.checkoutPollTimeoutMinutes` setting**
+  (default 30, range 1..1440). On timeout, surfaces a one-time
+  toast pointing at the "Release Check-Out" Command Palette
+  action.
+- **Multi-in-progress rendering.** The Session Sets view renders
+  N in-progress sets as N per-set accordions; each has its own
+  gauges + bucket counts. Single-active-set banner is gone.
+
+### Changed
+
+- **`dabbler.setOrchestrator` renamed to `dabbler.checkOutOrchestrator`**
+  ("Check Out As…"). The implementation modules and call sites
+  follow. ActionRegistry display label updated.
+- **`resolveActiveSet()` replaced by `listInProgressSets()`** in
+  the reader path (previously `MarkerWatchService.ts`; now
+  `inProgressSetsService.ts`). Returns the array of in-progress
+  `session-state.json` records sorted by `startedAt`; reads each
+  set's state file directly via the existing async `fs.promises`
+  scan.
+- **Hook refactor (H1).** The Claude `SessionStart` hook invokes
+  `python -m ai_router.start_session` rather than writing the
+  `orchestrator` block directly. Failure surfaces as a toast
+  (no silent retry). The Codex config-toml watcher was already
+  H1-compliant (Set 029 Session 5).
+
+### Removed
+
+- **`.dabbler/orchestrator.json` per-set marker file** (H2 single
+  source of truth — `session-state.json` is canonical):
+  - Writer (`scripts/write-orchestrator-marker.js`) deleted.
+  - All in-repo stale `.dabbler/orchestrator.json` files purged.
+  - `docs/orchestrator-marker-schema.md` deleted; canonical schema
+    is now `docs/session-state-schema.md`.
+
+### Layer-3 tests
+
+- `src/test/playwright/checkout-conflict.spec.ts` — refusal-error
+  content (holder identity + both release paths in stderr),
+  force-override (`orchestrator-writer.log` audit line), same-
+  orchestrator re-attach.
+- `src/test/playwright/multi-in-progress.spec.ts` — two-set
+  rendering with distinct holders.
+- `src/test/playwright/checkout-polling.spec.ts` — sentinel
+  consumed on activation (1 passing + 1 skipped FIXME on the full
+  polls-then-attaches happy path, covered exhaustively at Layer 2).
+- Pre-existing 2 skipped Playwright scenarios with FIXMEs
+  (release-checkout Command Palette brittleness, pre-existing
+  multi-in-progress accordion-body display bug) — out of scope
+  for this set.
+
+### Migration
+
+- **Consumer repos** receive a one-time CLAUDE.md insertion via
+  `docs/cross-repo-checkout-notice.md` (authored in this set).
+  Operator pulls into each manually:
+  - `dabbler-platform`
+  - `dabbler-access-harvester`
+  - `dabbler-homehealthcare-accessdb`
+
+### Reference
+
+- [`docs/session-state-schema.md`](../../docs/session-state-schema.md)
+  "Check-out / check-in (Set 033)" — full schema + holder identity
+- [`ai_router/docs/close-out.md`](../../ai_router/docs/close-out.md)
+  Section 4 — stranded-check-out recovery
+- [`docs/ai-led-session-workflow.md`](../../docs/ai-led-session-workflow.md)
+  "Orchestrator check-out / check-in (Set 033)" — workflow-level
+  invariants
+
 ## [0.17.1] — 2026-05-19 (Set 029 Session 6 — UI affordance polish)
 
 Polish pass before the Marketplace publish of the multi-provider work

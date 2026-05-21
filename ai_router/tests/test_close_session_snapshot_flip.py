@@ -628,3 +628,197 @@ def test_mid_set_close_out_does_not_flip_set_to_complete(tmp_path: Path):
         e.event_type == "closeout_succeeded" and e.session_number == 1
         for e in events
     ), "session-level closeout_succeeded event must still be recorded"
+
+
+# ---------------------------------------------------------------------------
+# Set 033 Session 6 — cross-tier orchestrator check-in
+# ---------------------------------------------------------------------------
+#
+# The session boundary is the release point. On every successful close
+# (mid-set or final, Full or Lightweight), the orchestrator block on
+# session-state.json is cleared so the next session can be claimed by
+# any holder (same or different) via start_session. Idempotent: a
+# block that is already None lands the same write.
+
+def test_close_session_clears_orchestrator_block_on_final_close(tmp_path: Path):
+    """Set 033 Session 6 (H1 + H3): a successful final close clears the
+    ``orchestrator`` block to ``None``. The session boundary IS the
+    release point — close-out is the writer side of the check-in.
+    """
+    _repo, set_dir = _build_repo_with_set(tmp_path, total_sessions=1)
+    write_disposition(str(set_dir), Disposition(
+        status="completed",
+        summary="final-close orchestrator clear",
+        verification_method="api",
+        files_changed=[],
+        verification_message_ids=[],
+        next_orchestrator=_valid_next_orc(),
+        blockers=[],
+    ))
+    (set_dir / "change-log.md").write_text(
+        "# change log\n\nSession 1 work landed.\n",
+        encoding="utf-8",
+    )
+    _commit_and_push(_repo, "land work")
+
+    # Sanity: the start_session writer populated the orchestrator
+    # block. If this precondition ever changes, the post-close
+    # assertion below would pass trivially — so guard it.
+    pre = read_session_state(str(set_dir))
+    assert pre is not None
+    assert isinstance(pre.get("orchestrator"), dict), (
+        "fixture precondition: register_session_start must have "
+        "populated the orchestrator block"
+    )
+
+    outcome = close_session.run(_ns(session_set_dir=str(set_dir)))
+    assert outcome.result == "succeeded", outcome.messages
+
+    post = read_session_state(str(set_dir))
+    assert post is not None
+    assert post["orchestrator"] is None, (
+        "final close-out must clear the orchestrator block (Set 033 "
+        "Session 6 H1+H3 check-in); got "
+        f"orchestrator={post.get('orchestrator')!r}"
+    )
+    # Belt-and-suspenders: every other close-out invariant still holds.
+    assert post["status"] == "complete"
+    assert post["lifecycleState"] == "closed"
+
+
+def test_close_session_clears_orchestrator_block_on_mid_set_close(tmp_path: Path):
+    """Set 033 Session 6: a mid-set close (no change-log.md, set still
+    in-progress) ALSO clears the orchestrator block. The check-in is
+    per-session, not per-set — between sessions, no orchestrator holds
+    the set, so any holder can claim the next session via
+    start_session without --force.
+    """
+    repo, set_dir = _build_repo_with_set(tmp_path, total_sessions=5)
+    write_disposition(str(set_dir), Disposition(
+        status="completed",
+        summary="mid-set orchestrator clear",
+        verification_method="api",
+        files_changed=[],
+        verification_message_ids=[],
+        next_orchestrator=_valid_next_orc(),
+        blockers=[],
+    ))
+    # Deliberately no change-log.md — this is session 1 of 5.
+    _commit_and_push(repo, "land session 1 work")
+
+    pre = read_session_state(str(set_dir))
+    assert pre is not None
+    assert isinstance(pre.get("orchestrator"), dict)
+
+    outcome = close_session.run(_ns(session_set_dir=str(set_dir)))
+    assert outcome.result == "succeeded", outcome.messages
+
+    post = read_session_state(str(set_dir))
+    assert post is not None
+    # The SET stays in-progress (no change-log.md) but the
+    # orchestrator block still clears, freeing the lock between
+    # sessions.
+    assert post["status"] == "in-progress"
+    assert post["lifecycleState"] == "work_in_progress"
+    assert post["orchestrator"] is None, (
+        "mid-set close-out must also clear the orchestrator block "
+        "— the check-in is per-session, not per-set; got "
+        f"orchestrator={post.get('orchestrator')!r}"
+    )
+
+
+def test_close_session_orchestrator_clear_is_idempotent_tier_agnostic(
+    tmp_path: Path,
+):
+    """Set 033 Session 6: ``_flip_state_to_closed`` clears the
+    orchestrator block regardless of tier-specific gate plumbing.
+
+    This test calls the writer directly (no CLI, no gates, no events
+    ledger plumbing) on two synthetic state files: one with the
+    block populated, one with the block already ``None``. Both end
+    with ``orchestrator: None``. The writer change is the single
+    cross-tier surface — the Full-tier CLI runs gates around it,
+    and the Lightweight tier hand-writes a state file that already
+    obeys the same invariant — so a tier-agnostic unit test on the
+    writer is the smallest test that proves cross-tier behavior.
+    """
+    import session_state as _ss
+
+    # ---- Case 1: orchestrator block populated -> cleared ----
+    set_dir_a = tmp_path / "tier-a"
+    set_dir_a.mkdir()
+    (set_dir_a / "spec.md").write_text("# spec\n", encoding="utf-8")
+    (set_dir_a / "session-state.json").write_text(
+        json.dumps({
+            "schemaVersion": 3,
+            "sessionSetName": "tier-a",
+            "sessions": [
+                {"number": 1, "title": "only", "status": "in-progress"},
+            ],
+            "currentSession": 1,
+            "totalSessions": 1,
+            "completedSessions": [],
+            "status": "in-progress",
+            "lifecycleState": "work_in_progress",
+            "startedAt": "2026-05-21T01:00:00-04:00",
+            "completedAt": None,
+            "verificationVerdict": None,
+            "orchestrator": {
+                "engine": "claude",
+                "provider": "anthropic",
+                "model": "claude-opus-4-7",
+                "effort": "high",
+                "checkedOutAt": "2026-05-21T01:00:00-04:00",
+                "lastActivityAt": "2026-05-21T01:00:00-04:00",
+            },
+        }, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    # The writer needs a change-log.md for last-session detection
+    # (so completedAt + lifecycleState=closed fields flip too — but
+    # the orchestrator clear is unconditional regardless of that
+    # branch).
+    (set_dir_a / "change-log.md").write_text(
+        "# change log\n", encoding="utf-8",
+    )
+    _ss._flip_state_to_closed(str(set_dir_a))
+    state_a = json.loads((set_dir_a / "session-state.json").read_text(
+        encoding="utf-8"
+    ))
+    assert state_a["orchestrator"] is None, (
+        "writer must clear orchestrator block when it was populated"
+    )
+
+    # ---- Case 2: orchestrator block already None -> stays None ----
+    set_dir_b = tmp_path / "tier-b"
+    set_dir_b.mkdir()
+    (set_dir_b / "spec.md").write_text("# spec\n", encoding="utf-8")
+    (set_dir_b / "session-state.json").write_text(
+        json.dumps({
+            "schemaVersion": 3,
+            "sessionSetName": "tier-b",
+            "sessions": [
+                {"number": 1, "title": "only", "status": "in-progress"},
+            ],
+            "currentSession": 1,
+            "totalSessions": 1,
+            "completedSessions": [],
+            "status": "in-progress",
+            "lifecycleState": "work_in_progress",
+            "startedAt": "2026-05-21T01:00:00-04:00",
+            "completedAt": None,
+            "verificationVerdict": None,
+            "orchestrator": None,
+        }, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (set_dir_b / "change-log.md").write_text(
+        "# change log\n", encoding="utf-8",
+    )
+    _ss._flip_state_to_closed(str(set_dir_b))
+    state_b = json.loads((set_dir_b / "session-state.json").read_text(
+        encoding="utf-8"
+    ))
+    assert state_b["orchestrator"] is None, (
+        "idempotent: null -> null is a no-op write that lands cleanly"
+    )

@@ -5,6 +5,98 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-21 (Set 033 — orchestrator check-out / check-in)
+
+Ships the writer side of the check-out / check-in coordination
+model anchored in `session-state.json`'s `orchestrator` block, per
+the Set 032 audit verdicts. Companion VS Code Marketplace release:
+`DarndestDabbler.dabbler-ai-orchestration 0.18.0`.
+
+### Added
+
+- **`start_session` hard-coordination gate (H3 + H4).** New exit
+  code `EXIT_CHECKOUT_CONFLICT = 4` fires when the existing
+  `orchestrator` block on `session-state.json` names a different
+  `engine + provider` (H4 identity composite) than the caller and
+  `--force` is not set. The refusal stderr names both the current
+  holder and the two release paths (`--force`, "Release Check-Out"
+  Command Palette action) so the operator can act without consulting
+  external docs.
+- **`--force` flag on `start_session` CLI.** Authority handoff;
+  rewrites `checkedOutAt` to now and appends an audit line to
+  `~/.dabbler/orchestrator-writer.log` (best-effort; failure to
+  write the log does not block the override).
+- **Nested timestamps on the `orchestrator` block (OQ1).**
+  - `checkedOutAt` — set on fresh check-out / preserved across
+    same-holder re-attach.
+  - `lastActivityAt` — bumped on every write.
+- **Cross-tier check-in.** `close_session` (via
+  `_flip_state_to_closed`) clears the `orchestrator` block to
+  `null` on every successful close, mid-set and final alike. The
+  session boundary IS the release point. **Idempotent** — a close
+  on a set whose block is already `null` lands the same write and
+  reports `succeeded`.
+
+### Changed
+
+- **Holder-identity equality** is the `engine + provider` composite
+  (H4). Two orchestrators with the same `engine + provider` but
+  different `model` (e.g., `claude-opus-4-7` vs.
+  `claude-sonnet-4-6` both on `claude + anthropic`) are treated as
+  the same holder; model and effort update in place on a same-
+  holder re-attach without resetting `checkedOutAt`.
+- **Documentation aliases (OQ2).** In operator-facing prose,
+  `work_checked_out` ↔ `work_started` and `work_checked_in` ↔
+  `closeout_succeeded`. The ledger event names in
+  `session-events.jsonl` are unchanged (no schema break).
+
+### Migration
+
+- **In-flight sets without `checkedOutAt`** (state files written by
+  pre-0.6.0 writers that are still mid-set when 0.6.0 lands) are
+  tolerated on read. The next `start_session` call from the same
+  holder populates `checkedOutAt` with the current time — a one-
+  time loss of fidelity (the actual original check-out moment is
+  unknown) in exchange for not forcing a synchronous migration of
+  every in-flight set across consumer repos.
+- **Stranded check-outs** (state file says held but the holder is
+  gone): use `start_session --force` from the would-be next holder,
+  or "Release Check-Out" from the VS Code Command Palette. Both
+  log the authority handoff to
+  `~/.dabbler/orchestrator-writer.log`. See
+  [`ai_router/docs/close-out.md`](docs/close-out.md) Section 4.
+
+### Release notes
+
+- **No breaking changes** to consumers that don't read the
+  `orchestrator` block directly. The block grew two new nested
+  fields and is now cleared on close (was: stayed populated
+  between sessions). Consumers that scanned `session-state.json`
+  to derive the current holder will start seeing `null` between
+  sessions; if that breaks anything, the holder identity is
+  derived from `session-events.jsonl` (`work_started` for the
+  highest open session number).
+- **Schema version unchanged** (still v3). The two new fields nest
+  under the existing `orchestrator` block; no top-level structural
+  change.
+- **Tier symmetry preserved.** Full tier writers do the check-in
+  automatically; Lightweight tier humans write `orchestrator: null`
+  by hand at the same boundary alongside the manual
+  `completedSessions[]` update.
+
+### Reference
+
+- [`docs/session-state-schema.md`](../docs/session-state-schema.md)
+  "Check-out / check-in (Set 033)" — full schema + holder identity
+  + invariants
+- [`ai_router/docs/close-out.md`](docs/close-out.md) Section 4 —
+  stranded-check-out recovery; Section 2 — check-in side effect
+- [`docs/ai-led-session-workflow.md`](../docs/ai-led-session-workflow.md)
+  "Orchestrator check-out / check-in (Set 033)" — workflow-level
+  invariants
+- [`docs/cross-repo-checkout-notice.md`](../docs/cross-repo-checkout-notice.md)
+  — one-time consumer-repo CLAUDE.md insertion text
+
 ## [0.5.1] — 2026-05-19
 
 ### Fixed

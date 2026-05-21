@@ -172,9 +172,25 @@ unchanged.
 **Block-null invariant:** when top-level `status` is anything other
 than `"in-progress"` (`"not-started"`, `"complete"`, or
 `"cancelled"`), the `orchestrator` block is `null`. The block lives
-exactly as long as a check-out does. The Full-tier `close_session`
-writer clears the block on close; on Lightweight tier the human
-maintains this invariant by hand on close.
+exactly as long as a check-out does — the session boundary IS the
+release point.
+
+The invariant is tier-symmetric:
+
+- **Full tier (Set 033 Session 6):** `close_session` clears the
+  block on every successful close (mid-set and final alike). The
+  same `_flip_state_to_closed` write that flips `status` and
+  `lifecycleState` also sets `orchestrator: null` immediately before
+  the file write. **Idempotent** — a block that is already `null`
+  (the previous holder force-released, or the session was closed via
+  a path that already cleared it) lands the same write and the close
+  proceeds normally. Close-out success is intentionally **not**
+  coupled to the prior check-out state, so the check-in is safe to
+  retry.
+- **Lightweight tier:** the human writes `orchestrator: null` by
+  hand at the same boundary, alongside the manual
+  `completedSessions[]` update. The rule is identical; only the
+  actor differs.
 
 **Migration tolerance:** an in-flight set whose `orchestrator`
 block lacks `checkedOutAt` (e.g., a state file written by a pre-Set-033
@@ -185,11 +201,29 @@ value is unknown — a one-time loss of fidelity in exchange for not
 forcing a synchronous migration of every in-flight set across
 consumer repos.
 
-**Documentation alias (OQ2):** the events `work_started` and
+**Documentation aliases (OQ2):** the events `work_started` and
 `closeout_succeeded` in `session-events.jsonl` are equivalent to
-"check out" and "check in" in operator-facing prose. The ledger
-event names are NOT renamed (no schema change); only the
-documentation vocabulary adopts the check-out / check-in framing.
+**`work_checked_out`** and **`work_checked_in`** in operator-facing
+prose. The ledger event names are NOT renamed (no schema change);
+the aliases live in documentation only. Per the Set 032 audit
+verdict, this lets the check-out / check-in framing settle into the
+operator vocabulary without churning every reader of the events
+ledger or breaking the analytics surface that already keys on
+`work_started` / `closeout_succeeded`.
+
+**Stranded-checkout recovery.** A session set whose holder
+disappeared (crashed orchestrator, abandoned workstation) before
+running `close_session` ends up with an `orchestrator` block that
+no live process is claiming. Two recovery paths exist:
+
+- `start_session --force` from the would-be next holder. The
+  refusal-message body (S1) names this path explicitly.
+- "Release Check-Out" from the VS Code Command Palette. Wraps the
+  same `--force` invocation.
+
+Both paths log the authority handoff to
+`~/.dabbler/orchestrator-writer.log` for audit; neither alters the
+events ledger.
 
 ### Dual-write legacy fields (Set 030 steady state)
 

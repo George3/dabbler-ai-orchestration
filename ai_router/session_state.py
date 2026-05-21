@@ -915,6 +915,27 @@ def _flip_state_to_closed(
         state["verificationVerdict"] = verification_verdict
     if forced:
         state["forceClosed"] = True
+    # Set 033 Session 6 (H1 + H3): cross-tier check-in. The session
+    # boundary is the release point — once the close-out gate passes,
+    # the orchestrator block is cleared so the next session can be
+    # taken by any holder (same or different) via start_session.
+    # Applies to Full AND Lightweight tiers identically, per the
+    # operator's "Lightweight doesn't excuse skipping the lock"
+    # clarification mid-Set-029-S6. Idempotent: a block that is
+    # already None (force-released, or a no-op close) lands the same
+    # write. ``closeout_succeeded`` in the events ledger is the
+    # ``work_checked_in`` alias (OQ2 — doc-only aliasing; no schema
+    # change).
+    #
+    # The clear is UNCONDITIONAL within this function — any caller
+    # that reaches ``_flip_state_to_closed`` gets the check-in
+    # automatically. New writer paths (a hypothetical force-recover
+    # CLI, a repair path that flips a snapshot, etc.) inherit the
+    # check-in without needing to opt in. Do NOT gate this on
+    # ``forced``, ``is_last_session``, or any caller-supplied flag;
+    # the spec contract is "every successful close releases the
+    # check-out".
+    state["orchestrator"] = None
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
         f.write("\n")

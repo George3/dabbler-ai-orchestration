@@ -367,6 +367,64 @@ the wizard prompt assume the file is created up front.
 robustness measure for legacy folders, not a license to skip the file
 on new ones.
 
+### Orchestrator check-out / check-in (Set 033)
+
+The `orchestrator` block on `session-state.json` doubles as the
+authoritative **check-out record** for the set. Two related
+invariants govern how sets are claimed and released:
+
+1. **Within-set sequential.** At most one in-progress session per
+   session set at a time. `start_session` enforces this: a request
+   that would create a second in-flight session in the same set is
+   refused at the boundary. The check-out lives exactly as long as
+   the one in-progress session does. `close_session` clears the
+   block (`orchestrator: null`) on every successful close, releasing
+   the set so the next session can be claimed by any holder.
+2. **Across-set parallel.** Two different session sets can each
+   have their own in-progress session at the same time, even with
+   different holders. The Session Set Explorer (`v0.18.x` onward)
+   renders multiple in-progress sets — that is the supported
+   case, not a degenerate one. Per-set accordions, per-set
+   check-out records; no cross-set coupling.
+
+**Holder identity** is the `engine + provider` composite (H4 from
+the Set 032 audit). Two orchestrators with the same
+`engine + provider` but different `model` are treated as the same
+holder; model and effort update in place on a same-holder re-attach.
+
+**Hard coordination** (H3): `start_session` REFUSES to take a set
+that is already held by a different `engine + provider` than the
+caller. The refusal error names both the current holder and the two
+release paths.
+
+**Force-override is the one explicit deviation.** When a different
+orchestrator needs to take a set whose check-out belongs to someone
+else — typically because the original holder crashed, abandoned the
+workstation, or is otherwise stranded — there are two operator-
+facing affordances, both audit-preserving:
+
+- `start_session --force` from the would-be next holder.
+- "Release Check-Out" Command Palette action (extension v0.18.x+),
+  which wraps the same `--force` invocation.
+
+Both paths append a single line to
+`~/.dabbler/orchestrator-writer.log` recording the prior holder,
+the new holder, and an ISO timestamp. The events ledger
+(`session-events.jsonl`) is unchanged — force-override is an
+authority handoff, not a state-machine transition.
+
+**Tier symmetry.** On Full tier, `close_session` clears the
+`orchestrator` block automatically (Set 033 Session 6). On
+Lightweight tier, the human writes `orchestrator: null` by hand at
+the same boundary, alongside the manual `completedSessions[]`
+update. The rule is identical; only the actor differs.
+
+See [`docs/session-state-schema.md`](session-state-schema.md)
+"Check-out / check-in (Set 033)" for the full schema delta and
+field semantics, and
+[`ai_router/docs/close-out.md`](../ai_router/docs/close-out.md)
+Section 4 for the stranded-check-out recovery flow.
+
 ### Cancelling and restoring a session set
 
 Cancellation is an operator action that takes a set out of the active
@@ -1580,6 +1638,13 @@ The orchestrator:
 2. Reads the spec to find that session's plan
 3. Checks prerequisites from prior sessions
 4. Executes — regardless of which agent ran previous sessions
+
+Between sessions, the `orchestrator` block on `session-state.json` is
+`null` (the prior `close_session` cleared it on Full tier; the human
+clears it on Lightweight). The new orchestrator's `start_session`
+populates the block fresh — there is no special "handoff" path. See
+"Orchestrator check-out / check-in (Set 033)" above for the full
+invariant set and the stranded-holder recovery affordances.
 
 ---
 

@@ -39,9 +39,9 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.17.1** (Set 029 Session 6 — UI affordance polish +
-  pre-publish artifact preservation; Marketplace publish gated on
-  operator confirmation). The version walk through Set 029:
+- Current: **v0.18.0** (Set 033 — orchestrator check-out / check-in;
+  Marketplace publish gated on operator confirmation). Companion
+  PyPI release: `dabbler-ai-router` 0.6.0. The version walk:
   - **0.14.2** (S2) — Claude-only Orchestrator webview, marker
     helper + hook installer.
   - **0.15.x** (S3) — per-session-set identity (schema v3,
@@ -74,6 +74,25 @@ is a required duplicate — `vsce package` expects the file alongside
     `docs/proposals/2026-05-19-orchestrator-tracking-architecture/`.
     Hygiene: `readCurrentMarkerForWorkspace` converted from sync to
     async `fs.promises`.
+  - **0.18.0** (Set 033) — orchestrator check-out / check-in
+    migration shipped across six sessions per the Set 032 audit
+    verdicts (H1 router-only writes, H2 `session-state.json` sole
+    truth, H3 hard coordination, H4 `engine + provider` identity,
+    OQ1 nested timestamps, OQ2 documentation aliases). User-facing
+    surface: `dabbler.setOrchestrator` →
+    `dabbler.checkOutOrchestrator` ("Check Out As…"); new
+    `dabbler.releaseCheckOut` Command Palette action; multi-in-
+    progress rendering (single-active-set banner retired);
+    queueing/polling on conflict via `CheckoutPollService` with
+    configurable timeout (`dabblerSessionSets.checkoutPollTimeoutMinutes`,
+    default 30); Claude `SessionStart` hook refactored to invoke
+    `start_session` (H1); `.dabbler/orchestrator.json` per-set
+    marker retired entirely. Layer-3 Playwright coverage of
+    multi-set + refusal + force + re-attach. Cross-tier
+    `close_session` check-in (Full + Lightweight) shipped in
+    companion `dabbler-ai-router 0.6.0`. Cross-repo CLAUDE.md
+    insertion text at
+    [`docs/cross-repo-checkout-notice.md`](docs/cross-repo-checkout-notice.md).
 - Publisher: `DarndestDabbler` (VS Code Marketplace: `DarndestDabbler.dabbler-ai-orchestration`)
 - Namespace: `dabblerSessionSets` (shared across all consumers)
 - Build: `cd tools/dabbler-ai-orchestration && npx vsce package`

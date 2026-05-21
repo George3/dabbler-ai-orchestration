@@ -260,6 +260,20 @@ Flag combination rules (validated up front; failure exits 2):
   honest.
 - `--timeout` must be positive.
 
+Orchestrator check-in (Set 033 Session 6). On every successful
+close, `close_session` clears the `orchestrator` block on
+`session-state.json` to `null` — the session boundary IS the release
+point, so the next session can be claimed by any holder via
+`start_session` without `--force`. The check-in is **idempotent**: a
+close on a set whose block is already `null` (the previous holder
+force-released, or the session was closed via a path that already
+cleared it) lands the same write and reports `succeeded`. This
+applies to Full tier and Lightweight tier alike (Lightweight humans
+write `orchestrator: null` by hand at the same boundary). See
+[`docs/session-state-schema.md`](../../docs/session-state-schema.md)
+"Check-out / check-in (Set 033)" for the full schema and the
+holder-identity rule.
+
 ---
 
 ## Section 3 — What the script does
@@ -309,8 +323,10 @@ returns the corresponding exit code without touching downstream state.
      `"manual"`.
 9. **Idempotent writes.** Each of these is safe to retry:
    - `mark_session_complete(session_set, verification_verdict, ...)` —
-     flips `session-state.json` from `in-progress` to `complete` and
-     records the verdict + `completedAt` ISO timestamp.
+     flips `session-state.json` from `in-progress` to `complete`,
+     records the verdict + `completedAt` ISO timestamp, **and clears
+     the `orchestrator` block to `null`** (Set 033 Session 6
+     check-in; cross-tier; idempotent on already-null).
    - Append the next-orchestrator recommendation to `ai-assignment.md`
      (every session except the last).
    - Last session only: write `change-log.md` and append the
@@ -383,6 +399,34 @@ message `"--manual-verify requires either --interactive ... or
 verification must record *why* somewhere durable. Either add
 `--interactive` (prompted on stdin) or write a one-line reason to a
 file and pass `--reason-file <path>`.
+
+**Stranded check-out (Set 033 Session 6).** A session set whose
+holder crashed, lost network, or abandoned the workstation BEFORE
+running `close_session` ends up with an `orchestrator` block on
+`session-state.json` that no live process is claiming. This is NOT a
+close-out gate failure — `close_session` never even started — but it
+shows up at the next `start_session` call from a different
+orchestrator, which refuses with the H3 hard-coordination error
+naming the now-stranded holder. Two recovery paths, both audit-trail
+preserving:
+
+- **`start_session --force`** from the would-be next holder. The
+  H3 refusal message itself names this path. The writer appends a
+  single line to `~/.dabbler/orchestrator-writer.log` recording the
+  prior holder, the new holder, and an ISO timestamp; `checkedOutAt`
+  is rewritten to now. Use this when the new holder is at the
+  command line and ready to start the next session immediately.
+- **"Release Check-Out" Command Palette action** (extension v0.18.x
+  onward). Wraps the same `--force` invocation with a confirmation
+  prompt; appropriate when an operator is in VS Code and wants to
+  release the check-out without immediately taking it. The block
+  ends up `null` and the next `start_session` from any holder runs
+  without `--force`.
+
+If the holder who originally took the check-out comes back online
+later, their `start_session` re-invocation on the same set is a
+fresh check-out (the H4 identity check sees `null` and treats it as
+an unheld set); no special "reclaim" path is needed.
 
 ---
 
