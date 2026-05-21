@@ -10,7 +10,7 @@
     {
       "number": 2,
       "title": "Writer alignment + glossary harvest",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 3,
@@ -23,22 +23,16 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 2,
+  "currentSession": null,
   "totalSessions": 4,
   "completedSessions": [
-    1
+    1,
+    2
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
   "startedAt": "2026-05-21T06:43:08.456239-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "medium",
-    "checkedOutAt": "2026-05-21T06:43:08.456239-04:00",
-    "lastActivityAt": "2026-05-21T06:43:08.456239-04:00"
-  }
+  "orchestrator": null
 }
