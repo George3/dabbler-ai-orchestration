@@ -1,0 +1,25 @@
+{
+  "status": "completed",
+  "summary": "Set 035 Session 1 of 4 — reader migration to state-file sole truth for the cancellation lifecycle. Extends the H2 single-source-of-truth verdict that Set 033 Session 2 locked for the orchestrator block. New readCancellationState(sessionSetDir) in tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts returns 'cancelled' | 'restored' | 'active' | 'unknown' as a discrete CancellationState type. State file's `status` field is the canonical signal; RESTORED.md presence drives the history-aware 'restored' return when status is non-cancelled; the markdown markers (CANCELLED.md / RESTORED.md) remain on disk as audit-history artifacts and as the legacy-fallback signal when no usable state file is present. The reader does NOT silently let a stray CANCELLED.md override a non-cancelled status — that's an operator-resolvable inconsistency, not a signal. Caller refactor: fileSystem.ts:276 calls readCancellationState() first; the legacy isCancelled() file-presence check fires only on the 'unknown' return and emits console.warn naming the directory and pointing at ensure_state_file for repair (diagnostic trail for a state-file write bug masking a real cancellation). The legacy isCancelled() / wasRestored() predicates remain exported with updated JSDoc tagging them as legacy-fallback-only with a pointer at readCancellationState() as the primary entry point — they have legitimate callers (the fileSystem.ts fallback path, tests, future Python-mirror parity comparisons). Schema doc updates: status-table footnote on 'cancelled' rewritten to name status: 'cancelled' as canonical (Set 035 extending H2 from Set 033 S2); 'Cancel / restore' section rewritten state-file-first describing the canonical contract, the markdown files as audit artifacts, the legacy-fallback path with console.warn, and the no-silent-override rule; bucketing-table first bullet rewritten 'status === cancelled → Cancelled (state file wins, Set 035)' with the legacy fallback noted. 10 new test cases pinning the contract across all four return values + legacy fallback + end-to-end cancel/restore round-trips; 456 passing in the extension suite, 2 pre-existing unrelated failures (configEditor ViewColumn.One stub gap; notificationsSection 'wired in Set 026 Session 7' assertion). Typecheck (npx tsc --noEmit) clean. Bundled per operator directive 2026-05-21: the two grey placeholder gauges removed from the accordion empty-state in renderAccordionEmpty() — the gauges read as 'data we don't have' and were more confusing than useful; only the CTA line ('No signal — install Claude Code hook') remains. Layer-3 Playwright assertion on .acc-empty-cta still applies. Mid-session operator follow-on: flagged the CTA copy itself as Claude-specific ('I don't need to install a Claude Code hook. What if I am using Copilot exclusively?'); scaffolded as new Session 6 of Set 036 ('Orchestrator-agnostic UI audit + empty-state refactor') rather than expanded inline — Set 036 totalSessions extended 6 → 7, release session renumbered S6 → S7, R7 risk + estimated-cost table updated, audit session captures three disposition options (a/b/c) for the CTA refactor with default lean (b) retire-if-unreachable. Verification: Round A via gemini-pro VERIFIED, no must-fix issues ($0.0161; bundle 34,518 chars; seven assertion groups). Round B not needed. Cumulative routed Set 035 spend: $0.016 of $0.50 forecast. Next session (Session 2 of 4): writer alignment + glossary harvest.",
+  "files_changed": [
+    "tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts",
+    "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/cancelLifecycle.test.ts",
+    "tools/dabbler-ai-orchestration/src/providers/OrchestratorAccordion.ts",
+    "docs/session-state-schema.md",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-state.json",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/spec.md",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/verify_session1.py (new)",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/verification-output/round-a-session-1-result.json (new)",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/session-state.json",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/session-events.jsonl",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/activity-log.json",
+    "docs/session-sets/035-state-file-sole-truth-marker-retirement/disposition.json"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [
+    "verification-output/round-a-session-1-result.json"
+  ],
+  "next_orchestrator": null,
+  "blockers": []
+}
