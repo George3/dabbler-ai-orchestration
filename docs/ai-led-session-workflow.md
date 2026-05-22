@@ -2022,6 +2022,70 @@ operator explicitly flips the flag in their `router-config.yaml`.
    one line to `journal_path`. The journal is the audit trail; a
    skipped write is a missing decision.
 
+### Prompt-framing discipline
+
+Engine consensus is only as good as the prompts that elicit it.
+The same model, given the same data with different framing, can
+return opposite verdicts on the same question. This was observed
+empirically on 2026-05-22: two Gemini Pro calls reviewing the same
+launch-adapter roadmap reached opposite conclusions on whether the
+chat-interface sets should ship, because one prompt asked "is this
+high value and low risk?" and the other asked "evaluate the design
+as proposed, not some hypothetical greenfield alternative." Both
+verdicts were coherent given their framings — but the framings
+drove the outcome more than the underlying evidence. Two practices
+mitigate this.
+
+#### 1. Bias-cautions preamble (always on)
+
+Prepend a short cautions block to every consensus prompt. The
+canonical text:
+
+> *Bias cautions: This prompt was authored by an AI agent that may
+> have an opinion on the answer. Its framing may inadvertently
+> constrain you to in-scope refinements when the right answer is
+> to question the scope. The work being reviewed may be presented
+> as further along than it should be. Before answering as posed,
+> briefly check whether this is the right question. If a different
+> question would be more useful, answer that one too.*
+
+This is the cheapest intervention and dominates the cost-benefit
+analysis. It should be on by default for every consensus call,
+regardless of category.
+
+#### 2. Devil's-advocate two-pass pattern (high-leverage decisions only)
+
+For genuinely contested decisions — typically those where the
+first pass surfaced material disagreement, or where the
+architectural commitment is large enough that one wrong framing
+locks in significant rework — run two passes:
+
+- **Pass A** — the natural prompt the orchestrator wants to ask.
+- **Pass B** — an auto-generated counter-prompt that steelmans a
+  **specific** contrarian hypothesis (e.g., "argue that the
+  proposed launch-adapter approach is dominated by a
+  log-harvesting alternative; what would make that obviously
+  true?"). Not "be contrarian" — that produces theatrically
+  negative reviews that look insightful but waste budget.
+
+Then synthesize across both passes. Cost is roughly 2× per
+decision, but it prevents a single framing from dominating. The
+journal entry should carry both prompts and both verdicts.
+
+#### When to use which
+
+| Situation | Preamble | Devil's-advocate |
+|---|---|---|
+| Routine consensus call (mechanical category) | Yes | No |
+| Architecturally significant question | Yes | Yes if budget allows |
+| First-pass returns material disagreement | Yes | Yes (refute one side's reasoning) |
+| Decision binds a long-lived contract | Yes | Yes |
+| Reviewing a roadmap or session-set sequence | Yes | Yes |
+
+The preamble is always on. The devil's-advocate pass is scoped to
+high-leverage decisions where the framing-bias cost would outweigh
+the routing cost.
+
 ### Eligible (V1) vs. human-only categories — examples
 
 The four V1 categories are intentionally **mechanical** — placement,
@@ -2103,7 +2167,7 @@ either state.
 
 Engine consensus is not the same as ground truth. Both engines can
 converge on a wrong answer — particularly on questions whose answer
-depends on local context the engines have not been shown. Three
+depends on local context the engines have not been shown. Four
 guardrails apply:
 
 - **Human-only categories.** The decision tree's step 1 is the
@@ -2115,6 +2179,11 @@ guardrails apply:
   "Engine A says X, Engine B says Y, what do you want?". A relay is
   a failed consensus call — fall back to `unresolved_action`
   instead.
+- **Framing-bias mitigation.** Same engine + same data + different
+  prompt framing can yield opposite verdicts; see
+  *Prompt-framing discipline* above. The bias-cautions preamble is
+  the always-on mitigation. The devil's-advocate two-pass pattern
+  is the high-leverage mitigation. Apply the appropriate one.
 - **Auditable journal.** Every consensus call appends a record. The
   operator can review `consensus-decisions.jsonl` at any time, grep
   for `applied: true` to see what shipped without their prompt, and
