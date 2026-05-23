@@ -1,27 +1,29 @@
 {
   "status": "completed",
-  "summary": "Set 036 Session 1 of 7 — Writer migration + per-set lifecycle lock (Q5 prerequisite). Shipped: (1) schema delta — orchestrator block in session-state.json now carries chatSessionId; strict-on-write contract (key always present on new writes, value None when no ID supplied); (2) start_session.py — new --chat-session-id arg with $CHAT_SESSION_ID env fallback; H4 composite refined to engine + provider + chatSessionId; tolerant-on-read for prior block missing key OR prior key=None; refusal message names existing chatSessionId; force-override audit-log line records both IDs; (3) close_lock.py — LOCK_FILENAME renamed to '.lifecycle.lock' with LEGACY_LOCK_FILENAME='.close_session.lock' honored on read (R1 alias window); dual-acquire pattern serializes against a live pre-Set-036 close_session (Round A blocker fix); new acquire_lock_with_timeout() polling variant (default 30s); EXIT_LOCK_CONTENTION=5 wired to start_session; (4) close_session.py — _peek_orchestrator_identity snapshots the block BEFORE _flip_state_to_closed clears it; closeout_succeeded event payload extended with chatSessionId+engine+provider+model (Q4 audit trail); (5) gate_checks.py — both lock filenames added to _WORKING_TREE_IGNORE_PATTERNS; (6) ai_router/docs/close-out.md — three paragraphs updated (Step 3 lifecycle-lock acquisition, Stale lock troubleshooting, Cross-set parallelism); (7) session_events.py — closeout_succeeded payload contract documented. Tests: ai_router/tests/test_chatsessionid_writer.py with 17 unit tests; full ai_router unit suite 649 passed + 1 skipped; e2e suite 8 passed. Verification: Round A via gpt-5-4 ($0.339635, 254s) — 1 Blocker (legacy-lock serialization), 1 Major (empty-string CLI semantics), 1 Minor (docstring exit code); all three fixed. Round B via gpt-5-4 ($0.2883275) — 3 Minor (missing null-tolerance test, doc symbol reference, missing None-payload test); all three fixed. Cumulative Session 1 routed spend: $0.628. Out of scope for Session 1 (deferred to Sessions 2–7): new_chat_id CLI + Claude Code hook-invoker (S2); signalKind retirement + Codex config-toml watcher retirement (S3); Takeover UX modal/CLI + watcher-inventory test (S4); Layer-3 Playwright + docs + cross-repo notice (S5); orchestrator-agnostic UI audit + empty-state refactor (S6); final tests + change-log + dual-registry release (S7). Migration risk R1 (lock filename rename) acknowledged in the spec; mitigation strengthened from read-only sweep to dual-acquire per Round A.",
+  "summary": "Set 036 Session 2 of 7 — new_chat_id CLI + Claude Code hook-invoker pass-through (Q1 native-source wiring). Shipped: (1) ai_router/new_chat_id.py — agent-facing UUID v4 CLI for orchestrators with no native per-chat session-id surface; --export emits shell-eval-able line via bash / powershell / fish formatters with single-quote escape hardening; --shell auto-detect consults $SHELL first on every platform (Round A Major fix); idempotent against existing $CHAT_SESSION_ID; EXIT_SHELL_DETECT_FAILED=1 when --export hits an undetectable shell with no --shell. (2) claude-session-start-invoker.js — extracts session_id from SessionStart payload via new extractSessionId() (trim + non-empty gate; null on missing/malformed); forwards as --chat-session-id to start_session; preserveExistingClaude() now gates model/effort preservation on the full H4 triple including chatSessionId (Round B Medium fix: was only engine+provider, which incorrectly preserved a different Claude chat's gauges); tolerant branches for legacy key-absent + Set-036-null cases mirror start_session.py's H3 predicate; stderr warning on missing session_id (Round B Low fix: R2 schema-drift visibility). (3) installOrchestratorHookGemini.ts + installOrchestratorHookCopilot.ts — invoke shared maybeShowNewChatIdWorkflowToast helper before checkOutOrchestrator quickpick; one-time-per-(workspace, orchestrator) info toast with three clipboard-copy actions: bash (current-shell `eval \"$(cmd)\"` form per Round B Major fix — pipeline-subshell variant doesn't persist export), PowerShell (Invoke-Expression), fish (Round B Medium fix: was omitted despite being in R3 initial scope). (4) src/commands/newChatIdWorkflowToast.ts (new) — shared toast helper with workspaceState suppression. Tests: 26 unit tests in ai_router/tests/test_new_chat_id.py (22 initial + 4 added during Round A); 22 Layer-2 tests in src/test/suite/claudeSessionStartInvoker.test.ts (13 initial + 9 added during Round B for preserveExistingClaude). Full Python suite: 686 passed + 1 skipped (was 682 pre-Session-2). Full extension Layer-2: 484 passed; 2 pre-existing scaffolding failures unrelated to Session 2 (configEditor-foundation panel lifecycle + notificationsSection rendering). tsc --noEmit clean. Verification: Round A via gpt-5-4 ($0.197865, 149s, Python CLI bundle) — 1 Major (Windows shell-detect over-eager) + 1 Minor (fish escape untested), both fixed. Round B via gpt-5-4 ($0.2651975, 195s, JS+TS bundle) — 1 Major (broken pipeline-subshell eval form) + 2 Medium (fish copy command missing + preserveExistingClaude missing H4 composite) + 1 Low (no R2 stderr signal), all four fixed. Cumulative Session 2 routed spend: $0.463 ($0.198 + $0.265). Cumulative Set 036 spend (Sessions 1+2): $1.091 of $5 NTE. Bundled fix: CI workflow `actions/upload-artifact@v3 → v4` (commit eca6a96) — pre-existing deprecation breaking the Playwright matrix on every push; addressed mid-session as a standalone hotfix. Bundled fix: Set 011 (cancelled) state-file conformance to Set 035 H2 (commit 637c5c0) — flipped status to 'cancelled' to match CANCELLED.md presence, scrubbed two duplicate timestamp entries from CANCELLED.md that a buggy re-cancel double-append surfaced. Memory note added on the cancel-lifecycle double-append behavior for a future session set. Out of scope for Session 2 (deferred to Sessions 3–7): signalKind retirement + Codex config-toml watcher retirement (S3); Takeover UX modal/CLI prompt + watcher-inventory test (S4); Layer-3 Playwright coverage + cross-tier docs + cross-repo notice (S5); orchestrator-agnostic UI audit + empty-state refactor (S6); final tests + change-log + dual-registry release (S7).",
   "files_changed": [
-    "ai_router/close_lock.py",
-    "ai_router/close_session.py",
-    "ai_router/gate_checks.py",
-    "ai_router/session_events.py",
-    "ai_router/session_state.py",
-    "ai_router/start_session.py",
-    "ai_router/docs/close-out.md",
-    "ai_router/tests/test_chatsessionid_writer.py (new)",
-    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/activity-log.json (new)",
-    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/disposition.json (new)",
-    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-events.jsonl",
+    "ai_router/new_chat_id.py (new)",
+    "ai_router/tests/test_new_chat_id.py (new)",
+    "tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js",
+    "tools/dabbler-ai-orchestration/src/commands/newChatIdWorkflowToast.ts (new)",
+    "tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookGemini.ts",
+    "tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookCopilot.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/claudeSessionStartInvoker.test.ts (new)",
+    "scripts/verify_session_036_2.py (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-a-session-2-result.json (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-b-session-2-result.json (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/activity-log.json",
     "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-state.json",
-    "scripts/verify_session_036_1.py (new)",
-    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-a-session-1-result.json (new)",
-    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-b-session-1-result.json (new)"
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-events.jsonl",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/disposition.json",
+    ".github/workflows/test.yml (bundled hotfix — commit eca6a96)",
+    "docs/session-sets/011-readme-polish/session-state.json (bundled hotfix — commit 637c5c0)",
+    "docs/session-sets/011-readme-polish/CANCELLED.md (bundled hotfix — commit 637c5c0, scrub of duplicate timestamps)"
   ],
   "verification_method": "api",
   "verification_message_ids": [
-    "verification-output/round-a-session-1-result.json",
-    "verification-output/round-b-session-1-result.json"
+    "verification-output/round-a-session-2-result.json",
+    "verification-output/round-b-session-2-result.json"
   ],
   "next_orchestrator": {
     "engine": "claude",
@@ -30,7 +32,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 ships the new_chat_id CLI + Claude Code hook-invoker pass-through that flows the per-chat session_id from the SessionStart payload through to start_session's --chat-session-id arg. Session 1's writer contract (strict-on-write chatSessionId, tolerant-on-read for missing/None prior values, lifecycle lock around the read/check/write window) is what the Session 2 plumbing must satisfy — same orchestrator preserves the architectural context of HOW the Claude Code session_id maps to the orchestrator block and WHERE the new_chat_id UUID workflow fits in the fallback for non-Claude orchestrators. The chatSessionId composite identity and per-set lifecycle lock are foundational for the Session 4 takeover UX (which fires on chatSessionId mismatch detection) and the Session 5 Layer-3 Playwright coverage."
+      "specifics": "Session 3 retires the signalKind enum from the OrchestratorAccordion UI surface AND deletes the Codex config-toml watcher entirely per the D1 watcher-scope discipline locked in the audit-addendum. The work spans both the extension TS (accordion render simplification, marker view-model collapse, CSS sweep) and the watcher-source deletion (src/codex/configWatcher.ts removed, extension.ts safeRegister call removed). Same orchestrator preserves the Set-033/Set-036 design context — the Q5 lifecycle lock from Session 1, the chatSessionId Q1 plumbing from Session 2, and the upcoming Q3 takeover UX (Session 4) all sit downstream of Session 3's watcher-scope cleanup, so a fresh orchestrator would need extensive re-orientation. The empty-state CTA refactor (Session 6) and Layer-3 coverage (Session 5) further benefit from a single Claude session carrying the full architectural through-line."
     }
   },
   "blockers": []

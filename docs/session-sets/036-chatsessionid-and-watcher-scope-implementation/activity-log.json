@@ -92,6 +92,87 @@
           "round": "B"
         }
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/new-chat-id-cli-implemented",
+      "dateTime": "2026-05-23T11:50:00-04:00",
+      "description": "Created ai_router/new_chat_id.py — the Q1-fallback CLI that mints a per-chat UUID v4 for orchestrators with no native session-id surface (Codex CLI, Gemini Code Assist, GitHub Copilot, manual Lightweight tier). Plain mode prints the UUID; --export emits a shell-eval-able line via _format_bash / _format_powershell / _format_fish with single-quote escaping. _detect_shell consults $SHELL first on every platform (Round A Major fix: was Windows-first), then falls back to PowerShell on Windows when $SHELL is unset or unrecognized. Idempotency: existing non-empty $CHAT_SESSION_ID short-circuits the mint so repeated invocations from the same shell re-emit the same identifier. Exit codes: 0 success, 1 shell-detect-failed (--export without --shell on undetectable shell), 2 argparse.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/claude-invoker-passes-session-id",
+      "dateTime": "2026-05-23T12:00:00-04:00",
+      "description": "Extended tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js to extract session_id from the SessionStart payload via the new extractSessionId() helper (trim + non-empty-string gate; null on missing / non-string / whitespace-only) and forward it as --chat-session-id to start_session. preserveExistingClaude() now takes the caller's chatSessionId and gates model/effort preservation on the full H4 triple (Round B Medium fix: was only engine + provider, which incorrectly preserved a different Claude chat's gauges). Tolerant branches: prior chatSessionId key absent (pre-Set-036) or value null (Set 036+ no-ID write) treated as same-holder. Stderr warning emitted when session_id is missing/invalid (Round B Low fix: R2 schema-drift visibility).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/installer-shims-updated",
+      "dateTime": "2026-05-23T12:10:00-04:00",
+      "description": "Updated installOrchestratorHookGemini.ts + installOrchestratorHookCopilot.ts to invoke maybeShowNewChatIdWorkflowToast (new shared helper in src/commands/newChatIdWorkflowToast.ts) before opening the dabbler.checkOutOrchestrator quickpick. One-time-per-(workspace, orchestrator) info toast surfaces the new_chat_id workflow with three clipboard-copy actions: bash (Round B Major fix: switched from broken `... | eval \"$(cat)\"` pipeline-subshell form to current-shell `eval \"$(cmd)\"` so the export persists), PowerShell (`Invoke-Expression`), and fish (Round B Medium fix: was omitted despite being in R3 initial scope; `... | source`). Suppression via workspaceState; 'Don't show again' button. File-level JSDoc updated on both shims to reference Q1 audit verdict + new_chat_id workflow.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/unit-tests-green",
+      "dateTime": "2026-05-23T12:20:00-04:00",
+      "description": "Added ai_router/tests/test_new_chat_id.py with 26 unit tests (22 initial + 4 added during Round A fix-up): plain-mode UUID v4 emission, distinct UUIDs across calls, per-shell export shape (bash / powershell / fish), auto-detect (Windows + $SHELL=bash/fish/nu fallback after Round A Major fix; Unix bash/zsh/fish/pwsh basenames), idempotency (existing $CHAT_SESSION_ID short-circuits mint in both plain and export modes), empty-env-value mints fresh, failure mode (--export without --shell on undetectable shell exits 1 with stderr citing every SUPPORTED_SHELLS entry), helper-level single-quote escape coverage (Round A Minor fix: added fish-formatter escape test). Full ai_router unit suite: 686 passed + 1 skipped (was 682 pre-Session-2).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/layer2-invoker-test-green",
+      "dateTime": "2026-05-23T12:30:00-04:00",
+      "description": "Added tools/dabbler-ai-orchestration/src/test/suite/claudeSessionStartInvoker.test.ts with 22 Layer-2 tests across three suites: extractSessionId (9 tests: missing / empty / whitespace-only / non-string / non-object payload variants + trim behavior), parsePayload (4 tests: well-formed / empty / malformed / end-to-end with extractSessionId), preserveExistingClaude — Round B Medium fix (9 tests: no-block / wrong-engine / wrong-provider / chatSessionId match / mismatch / legacy-key-absent tolerance / null-key tolerance / fallback to 'unknown' / both-null tolerance). Dynamic-import workaround for Node's ESM detector (uses await import(pathToFileURL(invokerPath).href) in suiteSetup so the file: URL works on Windows). tsc --noEmit clean. Full extension Layer-2 suite: 484 passed (was 475 pre-Session-2; +9 for preserveExistingClaude), 2 pre-existing failures unrelated to Session 2 (configEditor-foundation panel lifecycle + notificationsSection rendering scaffolding gaps).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/round-a-verification",
+      "dateTime": "2026-05-23T12:40:00-04:00",
+      "description": "Round A verification routed via session-verification task type — selected gpt-5-4 (complexity_score=66, tier 3); 149s elapsed; $0.197865. Bundle: ai_router/new_chat_id.py + ai_router/tests/test_new_chat_id.py (Python CLI surface only, ~580 LOC). Two findings: (1) Major — _detect_shell()'s Windows short-circuit is too aggressive; an operator on Git-Bash/MSYS/WSL with $SHELL=/usr/bin/bash gets PowerShell syntax instead of bash. Fix: $SHELL is consulted first on every platform; Windows falls back to PowerShell only when $SHELL is unset or has an unrecognized basename. Added three tests covering Windows+SHELL=bash, Windows+SHELL=fish, Windows+SHELL=nu (unrecognized → powershell fallback). (2) Minor — fish formatter's embedded single-quote escape path is untested. Fix: added test_format_fish_escapes_embedded_single_quote. Both addressed; suite now 26 tests, all green.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.197865,
+          "input_tokens": null,
+          "output_tokens": null,
+          "round": "A"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/round-b-verification",
+      "dateTime": "2026-05-23T13:00:00-04:00",
+      "description": "Round B verification routed via session-verification — gpt-5-4; 195s elapsed; $0.2651975. Bundle: JS invoker + TS install shims + toast helper + Layer-2 test (~640 LOC). Four findings: (1) Major — newChatIdWorkflowToast.ts bash command `... | eval \"$(cat)\"` runs eval in a pipeline subshell on bash, so the resulting export doesn't persist in the caller's shell. Fix: switched to current-shell form `eval \"$(python -m ai_router.new_chat_id --export --shell bash)\"`. Toast message text updated to no longer teach the pipe-based pattern. (2) Medium — fish copy command missing from the toast despite R3 initial-scope inclusion. Fix: added COPY_COMMAND_FISH constant (`... | source`) and 'Copy fish command' action. (3) Medium — invoker's preserveExistingClaude() still gated on engine+provider only, missing chatSessionId from H4 composite; a new Claude chat could inherit model/effort from a different existing Claude chat. Fix: helper now takes callerChatSessionId; gates preservation on the full H4 triple with the same tolerant branches as start_session.py's H3 predicate (key absent / value null both pass). Added 9 Layer-2 tests covering all branches. (4) Low — invoker didn't emit promised R2 stderr signal when session_id was missing/invalid. Fix: stderr line emitted before fallback to env/None. All four addressed; full extension Layer-2 suite 484 passed.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.2651975,
+          "input_tokens": null,
+          "output_tokens": null,
+          "round": "B"
+        }
+      ]
     }
   ]
 }

@@ -10,7 +10,7 @@
     {
       "number": 2,
       "title": "new_chat_id CLI + Claude Code hook-invoker pass-through",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 3,
@@ -38,15 +38,23 @@
       "status": "not-started"
     }
   ],
-  "currentSession": null,
+  "currentSession": 2,
   "totalSessions": 7,
   "completedSessions": [
     1
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-23T10:18:03.437276-04:00",
+  "startedAt": "2026-05-23T11:43:52.040251-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": null
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "chatSessionId": null,
+    "checkedOutAt": "2026-05-23T11:43:52.040251-04:00",
+    "lastActivityAt": "2026-05-23T11:43:52.040251-04:00"
+  }
 }

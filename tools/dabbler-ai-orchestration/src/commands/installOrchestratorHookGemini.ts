@@ -10,11 +10,27 @@
 // from `dabbler.setOrchestrator` to `dabbler.checkOutOrchestrator`
 // alongside the H1+H3+H4 check-out model.
 //
-// If/when Gemini Code Assist ships a state-marker file (audit Q2 noted
-// this as a roadmap item), swap the body for a real installer that
-// invokes `python -m ai_router.start_session` directly (per H1).
+// Set 036 Session 2 (chatSessionId): the Q1 audit confirmed Gemini
+// Code Assist exposes no per-chat session-id surface either. The Set
+// 036 H4 composite identity (engine + provider + chatSessionId) is
+// therefore satisfied via the fallback CLI rather than any native
+// signal — operators run `python -m ai_router.new_chat_id` once per
+// chat session, export the printed UUID as CHAT_SESSION_ID, and the
+// subsequent `start_session` invocation pins that UUID into the
+// orchestrator block. A one-time informational toast surfaces the
+// workflow when this command is invoked so first-time operators
+// learn about the fallback before they hit a takeover modal.
+//
+// If/when Gemini Code Assist ships a state-marker file OR a per-chat
+// session-id surface (audit Q2 noted these as roadmap items), swap
+// the body for a real installer that invokes `python -m
+// ai_router.start_session` directly with the native chatSessionId.
 
 import * as vscode from "vscode";
+import {
+  maybeShowNewChatIdWorkflowToast,
+  NEW_CHAT_ID_TOAST_SUPPRESS_KEY_GEMINI,
+} from "./newChatIdWorkflowToast";
 
 export function registerInstallOrchestratorHookGeminiCommand(
   context: vscode.ExtensionContext,
@@ -22,10 +38,17 @@ export function registerInstallOrchestratorHookGeminiCommand(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "dabbler.installOrchestratorHook.gemini",
-      () =>
-        vscode.commands.executeCommand("dabbler.checkOutOrchestrator", {
-          prefillProvider: "google",
-        }),
+      async () => {
+        await maybeShowNewChatIdWorkflowToast(
+          context,
+          "Gemini Code Assist",
+          NEW_CHAT_ID_TOAST_SUPPRESS_KEY_GEMINI,
+        );
+        await vscode.commands.executeCommand(
+          "dabbler.checkOutOrchestrator",
+          { prefillProvider: "google" },
+        );
+      },
     ),
   );
 }
