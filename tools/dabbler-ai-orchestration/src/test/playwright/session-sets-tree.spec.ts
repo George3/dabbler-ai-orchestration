@@ -160,11 +160,11 @@ test("welcome panel renders when no session sets exist (webview path)", async ()
 // `.dabbler/orchestrator.json` marker is retired (H2) and the
 // accordion now reads from session-state.json's `orchestrator` block.
 // The Set 029 S5 signal-class scenarios (configured-default / manual)
-// covered the retired signalKind affordance; the new block-fed render
-// emits only signal-current, so those scenarios are no longer
-// meaningful and have been removed. Set 033 Session 4 will add the
-// dedicated check-out conflict + force-override + release-checkout
-// Playwright scenarios.
+// covered the retired signalKind affordance; with Set 036 S3 also
+// retiring the enum on the renderer side, no signalKind class is
+// emitted at all and the original scenarios are gone for good. Set
+// 033 Session 4 added the dedicated check-out conflict +
+// force-override + release-checkout Playwright scenarios.
 // ---------------------------------------------------------------------
 
 test("seeded orchestrator block renders provider sublabel in the accordion", async () => {

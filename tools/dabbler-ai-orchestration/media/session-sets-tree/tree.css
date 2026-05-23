@@ -399,24 +399,11 @@ body.vscode-light, body.vscode-high-contrast-light {
 .effort-max        .gauge-arc-fill { stroke: #FFB000; }
 .effort-unknown    .gauge-arc-fill { stroke: var(--vscode-disabledForeground, #888); }
 
-.signal-current            .gauge-arc-fill { stroke-opacity: 1; }
-.signal-manual             .gauge-arc-fill { stroke-opacity: 1; }
-.signal-last-observed      .gauge-arc-fill { stroke-opacity: 1; }
-.signal-configured-default .gauge-arc-fill { stroke-opacity: 0.85; }
-.signal-configured-default .gauge-rim {
-  stroke-dasharray: 2 2;
-  stroke-opacity: 1;
-}
-
-.clock-overlay {
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  font-size: 14px;
-  opacity: 0.85;
-  line-height: 1;
-  z-index: 1;
-}
+/* Set 036 Session 3: the signalKind class hooks (.signal-current,
+ * .signal-manual, .signal-last-observed, .signal-configured-default)
+ * and the .clock-overlay rule are retired with the enum itself —
+ * every gauge now renders as solid fill. Only the stale overlay
+ * (signal-agnostic; see below) remains as a non-default treatment. */
 
 /* Stale-state diagonal stripes (signal-agnostic overlay). */
 .stale .gauge-svg-wrap::after {

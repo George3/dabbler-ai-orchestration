@@ -2,7 +2,6 @@
 // Session 4 ship — replaces the v0.15.0 native TreeView. Consumes:
 //   - SessionSetsModel (pure scan/bucket/sort/text helpers)
 //   - inProgressSetsService (listInProgressSets + ai-assignment recommendation)
-//   - OrchestratorAccordion (pure render helpers + orchestrator-block adapter)
 //   - ActionRegistry (typed action-applicability predicates per row)
 //   - suppressionState (manual-collapse persistence reducer)
 //   - ScanState (loading/ready phase from extension.ts)
@@ -10,19 +9,21 @@
 //
 // Per S4 audit GPT-5.4 M4: this file owns lifecycle + message
 // protocol + snapshot serialization. It does NOT own kbd nav (that's
-// in media/session-sets-tree/client.js). It does NOT own gauge
-// rendering (that's in OrchestratorAccordion).
+// in media/session-sets-tree/client.js). Gauge rendering historically
+// lived in OrchestratorAccordion — Set 034 retired the per-row
+// accordion entirely (`accordionHtml` ships as `null` on every row),
+// so this view no longer imports that module.
 //
 // Per S4 audit GPT-5.4 M3: every render message carries a monotonic
 // version. Out-of-order messages are dropped by the webview client.
 //
 // Set 033 Session 2: per H2, the `.dabbler/orchestrator.json` per-set
-// marker is retired. Each in-progress row's accordion body is now
-// computed from that set's `orchestrator` block on session-state.json
-// (Set 033 Session 1 schema) plus its ai-assignment.md recommendation.
-// The single-active-set ambiguity banner is gone — multi-in-progress
-// is the supported case and every in-progress row gets its own
-// accordion.
+// marker is retired. The `orchestrator` block on session-state.json
+// (Set 033 Session 1 schema) is the canonical record. The single-
+// active-set ambiguity banner is gone — multi-in-progress is the
+// supported case. Set 034 then retired the on-screen accordion that
+// would have rendered the block; each in-progress row now ships
+// name / fraction / description only.
 
 import * as vscode from "vscode";
 import { readAllSessionSets } from "../utils/fileSystem";
@@ -68,8 +69,11 @@ const RENDER_DEBOUNCE_MS = 50;
 
 // Allowlist for executeCommand dispatch from the webview. Defense-
 // in-depth: even if a malicious string slipped through the protocol
-// type check, only these commands fire. Includes all 14 row-context
-// actions + 3 indicator-action buttons.
+// type check, only these commands fire. Holds the 14 row-context
+// actions; the orchestrator-control buttons that used to live in the
+// per-row accordion body were retired in Set 034 and no longer
+// dispatch from this surface (they remain accessible via the Command
+// Palette and the right-click menu).
 const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
   // 14 row-context actions
   "dabblerSessionSets.openSpec",
@@ -399,16 +403,17 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     // Set 034: the per-row accordion is GONE. Operator feedback
     // 2026-05-21 (mid-Set-034 Session 1) — the gauges and the
     // orchestrator-info text below them read as more authoritative
-    // than the underlying signal warrants: signalKind is always
-    // "current" under the Set 033 adapter regardless of how stale
-    // the recorded check-out is, effort tracking via /think_* slash
+    // than the underlying signal warrants: the adapter rendered
+    // every check-out as a live high-confidence signal regardless of
+    // how stale it actually was, effort tracking via /think_* slash
     // commands was retired in Set 033 H2 (no longer observed), and
-    // for orchestrators without a hook path (Copilot, Gemini) the
-    // gauge area was either empty or whatever the last manual
-    // checkout claimed. Rather than try to honestly caveat all of
-    // that visually, retire the entire orchestrator-tracking display
-    // surface until Set 036+ delivers a real signal. Rows now show
-    // just name + fraction + description.
+    // for orchestrators without a hook path (Copilot, Gemini, Codex
+    // post-Set-036-S3) the gauge area was either empty or whatever
+    // the last manual checkout claimed. Rather than try to honestly
+    // caveat all of that visually, retire the entire
+    // orchestrator-tracking display surface until a future set
+    // delivers a real signal. Rows now show just name + fraction +
+    // description.
     //
     // Net effect: accordionHtml is null on every row; client.js no
     // longer renders any accordion body. The `orchestrator` block on

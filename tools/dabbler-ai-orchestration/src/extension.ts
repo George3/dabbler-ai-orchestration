@@ -23,7 +23,6 @@ import { registerInstallOrchestratorHookCopilotCommand } from "./commands/instal
 import { registerCheckOutOrchestrator } from "./commands/checkOutOrchestrator";
 import { registerReleaseCheckOut } from "./commands/releaseCheckOut";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
-import { activateCodexConfigWatcher } from "./codex/configWatcher";
 import {
   CheckoutPollService,
   DEFAULT_TIMEOUT_MINUTES,
@@ -243,11 +242,16 @@ export function activate(context: vscode.ExtensionContext): void {
   // writer-log opener remain available as standalone commands; the
   // accordion-body buttons dispatch them via postMessage.
   //
-  // Set 029 Session 5: full multi-provider surface — Codex auto-detect
-  // via config-watcher (no command), Gemini + Copilot manual-only
-  // shim commands that delegate to the universal manual-override
-  // quickpick. Manual stub from S2 is retired in favor of the real
-  // implementation.
+  // Set 029 Session 5: full multi-provider surface — Gemini + Copilot
+  // manual-only shim commands that delegate to the universal
+  // manual-override quickpick. Manual stub from S2 is retired in favor
+  // of the real implementation.
+  //
+  // Set 036 Session 3 (D1 watcher-scope discipline): the Codex
+  // config.toml auto-detect watcher is retired. Codex joins Gemini
+  // and Copilot as a manual-only orchestrator; operators claim a
+  // Codex check-out via "Check Out As…" (the canonical writer path)
+  // instead of via filesystem inference.
   safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
     registerInstallOrchestratorHookClaudeCodeCommand(context),
   );
@@ -266,20 +270,16 @@ export function activate(context: vscode.ExtensionContext): void {
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),
   );
-  safeRegister("activateCodexConfigWatcher", () => {
-    context.subscriptions.push(activateCodexConfigWatcher(context));
-  });
 
   // Set 033 Session 5: CheckoutPollService watches
   // ~/.dabbler/checkout-conflicts/ for structured conflict records
-  // emitted by the Claude SessionStart invoker and the Codex config
-  // watcher on EXIT_CHECKOUT_CONFLICT (H3 refusal). For each record,
-  // it surfaces a poll/force/dismiss prompt; "poll" watches the held
-  // set's session-state.json (5s debounce) and auto-retries
-  // start_session when the slot becomes free (H4 identity gate). The
-  // pythonPath resolver mirrors the one in checkOutOrchestrator.ts /
-  // configWatcher.ts so all three paths share the operator's
-  // dabblerSessionSets.pythonPath setting.
+  // emitted by the Claude SessionStart invoker on
+  // EXIT_CHECKOUT_CONFLICT (H3 refusal). For each record, it surfaces
+  // a poll/force/dismiss prompt; "poll" watches the held set's
+  // session-state.json (5s debounce) and auto-retries start_session
+  // when the slot becomes free (H4 identity gate). The pythonPath
+  // resolver mirrors the one in checkOutOrchestrator.ts so both paths
+  // share the operator's dabblerSessionSets.pythonPath setting.
   safeRegister("CheckoutPollService", () => {
     const pollService = new CheckoutPollService({
       pythonPathResolver: (cwd: string): string => {

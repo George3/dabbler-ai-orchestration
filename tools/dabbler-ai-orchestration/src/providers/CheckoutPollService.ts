@@ -1,10 +1,14 @@
 // Set 033 Session 5 — check-out conflict polling service.
 //
-// When the Claude SessionStart invoker or the Codex config-toml watcher
-// invokes `python -m ai_router.start_session` and gets EXIT_CHECKOUT_CONFLICT
+// When the Claude SessionStart invoker invokes
+// `python -m ai_router.start_session` and gets EXIT_CHECKOUT_CONFLICT
 // (4 — H3 hard-coordination refusal because a different engine+provider
-// already holds the slot), they write a structured conflict record to
-// `~/.dabbler/checkout-conflicts/<timestamp>.json`. This service:
+// already holds the slot), it writes a structured conflict record to
+// `~/.dabbler/checkout-conflicts/<timestamp>.json`. (Set 036 Session 3
+// retired the Codex config-toml watcher — formerly a second producer
+// of these records — under the D1 watcher-scope discipline; the
+// service still parses `source: "codex-watcher"` on read for any
+// pre-Set-036 record an operator may have on disk.) This service:
 //
 //   1. Consumes those records via `fs.watch` on the directory (plus an
 //      initial scan at activation so records written while the extension
@@ -140,7 +144,7 @@ export interface CheckoutPollServiceOpts {
   // Resolves the python executable for a workspace cwd. Injected so
   // tests can pass a fixture-stable resolver and the service can
   // share the canonical pythonPath resolution with the rest of the
-  // extension (mirror of checkOutOrchestrator.ts / configWatcher.ts).
+  // extension (mirror of checkOutOrchestrator.ts).
   pythonPathResolver: (cwd: string) => string;
   // Returns the configured poll timeout in minutes (read fresh on each
   // beginPolling so a setting change picks up without restart).

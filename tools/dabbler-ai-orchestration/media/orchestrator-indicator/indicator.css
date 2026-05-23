@@ -1,14 +1,15 @@
 /*
  * Orchestrator Indicator gauges — semi-circle CSS gauges, two side-by-side.
  *
- * Visual-treatment matrix per Set 029 audit (audit-summary.md §"Visual
- * treatment by signalKind", REVISED 2026-05-18):
- *
- *   current             → solid fill, solid rim, no badge
- *   configured-default  → solid fill ~85% opacity, dashed rim, "DEFAULT" pill
- *   last-observed       → hollow rim + filled needle + clock-icon overlay + time-elapsed suffix
- *   manual              → solid fill + operator-icon overlay
- *   stale (signal-agnostic) → diagonal-stripe overlay at 50% opacity over underlying treatment
+ * Set 036 Session 3 (D1 watcher-scope discipline): the signalKind
+ * enum is retired. Every gauge renders as solid fill (the previous
+ * `.signal-current` treatment) — the orchestrator block is the
+ * writer's own self-report at check-out time, so it is by definition
+ * the live signal. The retired `configured-default` / `last-observed`
+ * / `manual` variants had no remaining producer once the Codex
+ * config.toml watcher was retired and the `/think_*` UserPromptSubmit
+ * hook was dropped. Only the stale (signal-agnostic) diagonal-stripe
+ * overlay survives.
  *
  * Height budget: ≤150px total visible content (operator-revised
  * 2026-05-18 from the original ≤100px after seeing the rendered
@@ -195,42 +196,11 @@ html, body {
 .effort-max        .gauge-arc-fill { stroke: #FFB000; }   /* IBM yellow */
 .effort-unknown    .gauge-arc-fill { stroke: var(--vscode-disabledForeground, #888); }
 
-/* signalKind treatments */
-/* Operator feedback 2026-05-18 round 3: gauges should have color
- * whenever there's information to display. The audit's "hollow rim +
- * filled needle" for last-observed was REMOVING the color signal —
- * that's wrong. The clock-overlay + time-elapsed suffix on the
- * sublabel already say "not live"; we don't need to also drain the
- * gauge of color. Same logic for `manual` (item 8): the mismatch
- * badge with directional `< than suggested` / `> than suggested`
- * already conveys "operator deviated from recommendation" — no need
- * for a separate operator-icon overlay or (manual) suffix.
- *
- * signal-current and signal-manual both render as solid fill —
- * indistinguishable visually, and that's intentional. */
-.signal-current            .gauge-arc-fill { stroke-opacity: 1; }
-.signal-manual             .gauge-arc-fill { stroke-opacity: 1; }
-.signal-last-observed      .gauge-arc-fill { stroke-opacity: 1; }
-.signal-configured-default .gauge-arc-fill { stroke-opacity: 0.85; }
-.signal-configured-default .gauge-rim {
-  stroke-dasharray: 2 2;
-  stroke-opacity: 1;
-}
-
-/* Pill badge for configured-default */
-/* Clock-icon overlay for last-observed — positioned at the top-LEFT
- * of the gauge wrapper. Was at top-RIGHT but now shares space with
- * the thinking LED on the effort gauge; moved to the opposite corner
- * so both indicators can be visible without collision. */
-.clock-overlay {
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  font-size: 14px;
-  opacity: 0.85;
-  line-height: 1;
-  z-index: 1;
-}
+/* Set 036 Session 3: the signalKind class hooks (.signal-current,
+ * .signal-manual, .signal-last-observed, .signal-configured-default)
+ * and the .clock-overlay rule are retired with the enum itself —
+ * every gauge now renders as solid fill. Only the stale overlay
+ * (signal-agnostic; see below) remains as a non-default treatment. */
 
 /* Capacity asterisk — small pill-shaped "*" placed inline after the
  * effort gauge sublabel ("High*" / "Medium*"). Hover (or focus) opens
@@ -253,8 +223,7 @@ html, body {
  * artwork, not behind it (Round A verifier finding 2026-05-18: a
  * background-image on .gauge-svg paints behind the SVG content and
  * doesn't actually overlay the rendered strokes). Signal-agnostic
- * per audit-summary §Q6 — overlays on top of whatever the underlying
- * signalKind treatment is.
+ * per audit-summary §Q6.
  *
  * Implementation: position the .gauge-svg-wrap as a positioning
  * context; a ::after pseudo-element absolute-positioned over the

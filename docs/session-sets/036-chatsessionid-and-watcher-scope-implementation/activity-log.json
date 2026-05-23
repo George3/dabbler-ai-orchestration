@@ -173,6 +173,87 @@
           "round": "B"
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/codex-watcher-retired",
+      "dateTime": "2026-05-23T12:30:00-04:00",
+      "description": "Deleted tools/dabbler-ai-orchestration/src/codex/configWatcher.ts (the entire src/codex/ directory went with it — configWatcher.ts was its only file) and tools/dabbler-ai-orchestration/src/test/suite/codexConfigParser.test.ts (10 unit tests pairing the deleted TOML extractor + parseCodexConfig). The watcher computed a `codex + openai` start_session claim from a TOML config edit and dispatched the writer subprocess on the operator's behalf — the most prominent violator of the proposal-addendum's D1 watcher-scope discipline (no orchestrator-state inference). Codex now joins Gemini Code Assist and GitHub Copilot as manual-only orchestrators; operators claim a Codex check-out via the universal `Dabbler: Check Out As…` quickpick (dispatches `python -m ai_router.start_session` with explicit identity).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/signal-kind-enum-removed",
+      "dateTime": "2026-05-23T12:38:00-04:00",
+      "description": "Retired the `signalKind` enum from OrchestratorAccordion.ts entirely. Removed both the top-level `signalKind: \"current\" | \"configured-default\" | \"last-observed\" | \"manual\"` field on `OrchestratorMarker` and the nested `effort.signalKind` + `effort.observedAt` fields. The enum existed to communicate signal quality/recency to operators when multiple inference paths fed the marker; with the Codex config-toml watcher gone (S3) and the `/think_*` UserPromptSubmit hook dropped (Set 033 S3), every remaining signal is by construction the writer's own self-report at check-out time. The `accordionStateFromOrchestratorBlock` adapter no longer synthesizes either field. Knock-on simplifications shipped in subsequent steps below.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/clock-overlay-ui-removed",
+      "dateTime": "2026-05-23T12:42:00-04:00",
+      "description": "Removed the `<span class=\"clock-overlay\">⏱</span>` rendering from `renderAccordionLoaded` (both the modelOverlay and effortOverlay positions). The overlay was the visual cue for `signalKind === \"last-observed\"` — with no remaining producer of that variant, the span is dead chrome. The `.clock-overlay` CSS rule survives the step but is retired by the CSS cleanup step.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/configured-default-qualifier-removed",
+      "dateTime": "2026-05-23T12:45:00-04:00",
+      "description": "Removed the `(configured default)` qualifier from `describeMarker`'s model clause (was emitted when `signalKind === \"configured-default\"`). Collapsed `modelTooltip` from a four-branch switch to a single `live signal (<confidence> confidence)` return, and `effortTooltip` from a three-condition cascade to a single `effort: <Effort> (<confidence> confidence)` return. The `effort.observedAt` time-elapsed clause in `describeMarker` (`thinking on (last /think Xs ago)`) is gone with the interface field; the remaining `providerHasExtraCapacity` branch emits `thinking on` / `thinking off` only.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/css-cleaned-up",
+      "dateTime": "2026-05-23T12:50:00-04:00",
+      "description": "Removed the `.signal-current` / `.signal-manual` / `.signal-last-observed` / `.signal-configured-default` rules and the `.clock-overlay` rule from both media/orchestrator-indicator/indicator.css and media/session-sets-tree/tree.css. Each site got a one-paragraph retirement-note comment in place of the deleted rules so a future reader sees why the class hooks disappeared. The visual-treatment-matrix header comment at the top of indicator.css was rewritten to record that every gauge now renders as solid fill (formerly the `.signal-current` treatment); the only surviving non-default treatment is the signal-agnostic stale-stripe overlay. The `data-signal=` attribute is no longer emitted by `renderGaugeSvg` (signature dropped the `signalKind` parameter), so no CSS attribute selector ever fires on it. Orphaned `.grey-gauges` rules from Set 035 are deliberately left for Session 6's planned CSS sweep.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/marker-view-model-simplified",
+      "dateTime": "2026-05-23T12:55:00-04:00",
+      "description": "`renderGaugeSvg` signature dropped its `signalKind: string` parameter (and the SVG no longer emits `data-signal=`). `renderAccordionLoaded` no longer assembles `signal-${marker.signalKind}` / `signal-${marker.effort.signalKind || \"current\"}` tokens onto the `gauge-cell` class string. The `accordionStateFromOrchestratorBlock` adapter's synthesized marker dropped both `signalKind: \"current\"` and the nested `effort.signalKind: \"current\"` keys. The renderer's input shape now matches the on-disk orchestrator block plus display metadata only (tier, confidence, stalenessMaxSec). Note: the spec called for an `orchestratorAccordion.test.ts` update, but no such test file exists in the repo — the renderer's contract is pinned by the Set 033 Playwright scenarios (which assert provider sublabel text only) and will get richer coverage in Set 036 Session 5 + Session 6's empty-state Playwright scenarios.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/tests-updated",
+      "dateTime": "2026-05-23T13:05:00-04:00",
+      "description": "No new tests added. Test deltas vs Session 2 baseline: extension Layer-2 suite went from 484 passing to 474 passing (delta -10 = the deleted codexConfigParser.test.ts pair); the same 2 pre-existing failures (configEditor-foundation panel lifecycle + notificationsSection rendering scaffolding gaps) carry through unchanged. Python ai_router suite: 686 passed + 1 skipped (unchanged). `npx tsc --noEmit` on the extension: clean. Audit pass for indirect-signal inference paths (D1 discipline check): MRU file age is read in detectOrchestrators.ts for ordering the install-link smart-CTA — that's a non-orchestrator UI ordering signal, explicitly permitted under D1. No other inference paths surfaced.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/round-a-verification",
+      "dateTime": "2026-05-23T13:20:00-04:00",
+      "description": "Round A verification routed via session-verification — gpt-5-4; complexity_score=67, tier 3; 122s elapsed; $0.203052. Bundle: 10 full files (~600 LOC of behavior changes + comment updates). Verdict: 4 Minor findings, no Blockers / Majors. (1) CheckoutPollService.ts header (lines 3-20) still described the deleted Codex watcher as an active producer of conflict records. Fix: rewrote the header to name the Claude SessionStart invoker as the sole live producer; called out that `source: \"codex-watcher\"` parsing survives on read for any pre-Set-036 record on disk. (2) CustomSessionSetsView.ts header (lines 1-25) still listed OrchestratorAccordion as a consumed module despite Set 034 retiring the per-row accordion. Fix: dropped OrchestratorAccordion from the consumed-modules bullet list; rewrote the inline comment to flag that the module is still present in the source but no longer imported here; collapsed the Set-033-S2 paragraph to acknowledge Set 034's accordion retirement. (3) CustomSessionSetsView.ts COMMAND_ALLOWLIST comment (lines 69-93) claimed '14 row-context actions + 3 indicator-action buttons' but only the 14 row-context actions remain. Fix: rewrote to describe only the row-context set, noting the orchestrator-control buttons retired in Set 034. (4) openOrchestratorWriterLog.ts info message contradicted the module header (header said 'check-outs + refusals + force overrides'; message said only 'refusals + force overrides'). Fix: aligned the message to enumerate all three. All four addressed; tsc --noEmit re-confirmed clean (comment-only fixes have no runtime impact).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.203052,
+          "input_tokens": 31541,
+          "output_tokens": 8280,
+          "round": "A"
+        }
+      ]
     }
   ]
 }

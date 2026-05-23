@@ -7,6 +7,13 @@
 // pre-selected so the operator gets one click to a working Copilot
 // check-out. No actual hook is installed.
 //
+// Set 036 Session 3 (D1 watcher-scope discipline): Codex now joins
+// Copilot and Gemini as a manual-only orchestrator — its config.toml
+// auto-detect watcher was retired, leaving Claude Code as the sole
+// orchestrator with an auto-detect path. Operators of every other
+// engine claim via "Check Out As…" (which dispatches the canonical
+// `python -m ai_router.start_session` writer).
+//
 // Set 033 S3: command id of the manual-override quickpick renamed
 // from `dabbler.setOrchestrator` to `dabbler.checkOutOrchestrator`
 // alongside the H1+H3+H4 check-out model.

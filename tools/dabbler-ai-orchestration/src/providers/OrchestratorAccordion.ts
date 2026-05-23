@@ -8,6 +8,14 @@
 // all unchanged from v0.15.0. Callers (CustomSessionSetsView)
 // resolve the RenderState elsewhere and ask this module to render
 // the body fragment.
+//
+// Set 036 Session 3 (D1 watcher-scope discipline): the inference-
+// derived `signalKind` enum is retired. The orchestrator block on
+// session-state.json is the writer's own self-report at check-out
+// time, so it is by definition the live signal. The retired
+// "configured-default" / "last-observed" / "manual" variants had no
+// remaining producer once the Codex config.toml watcher was retired
+// and the `/think_*` UserPromptSubmit hook was dropped (Set 033 S3).
 
 // ----- Schema types -----
 
@@ -16,7 +24,6 @@ export interface OrchestratorMarker {
   sessionSetSlug?: string;
   updatedAt: string;
   writer: string;
-  signalKind: "current" | "configured-default" | "last-observed" | "manual";
   confidence: "high" | "medium" | "low";
   provider: string;
   providerDisplayName: string;
@@ -27,9 +34,7 @@ export interface OrchestratorMarker {
     normalized: "low" | "medium" | "high" | "extra-high" | "max";
     native: string;
     thinking: boolean;
-    signalKind: "current" | "configured-default" | "last-observed" | "manual";
     confidence: "high" | "medium" | "low";
-    observedAt?: string;
   };
   stalenessMaxSec: number;
 }
@@ -143,21 +148,9 @@ export function describeMarker(marker: OrchestratorMarker): string {
   const modelIsUnknown = !marker.model || marker.model === "unknown";
   const modelText = modelIsUnknown ? "(model unknown)" : (marker.modelDisplayName || "");
   const effortText = effortDisplayName(marker.effort.normalized).toLowerCase();
-  const modelClause = marker.signalKind === "configured-default"
-    ? `${provider} ${modelText} (configured default)`
-    : `${provider} ${modelText}`;
-  let desc = `${modelClause}, ${effortText} effort`;
+  let desc = `${provider} ${modelText}, ${effortText} effort`;
   if (providerHasExtraCapacity(marker.provider)) {
-    const thinkingOn = marker.effort.thinking === true;
-    if (thinkingOn && marker.effort.signalKind === "last-observed" && marker.effort.observedAt) {
-      const ageSec = (Date.now() - Date.parse(marker.effort.observedAt)) / 1000;
-      const native = marker.effort.native || "/think";
-      desc += `, thinking on (last ${native} ${fmtAge(ageSec)} ago)`;
-    } else if (thinkingOn) {
-      desc += `, thinking on`;
-    } else {
-      desc += `, thinking off`;
-    }
+    desc += marker.effort.thinking === true ? `, thinking on` : `, thinking off`;
   }
   return desc.trim().replace(/\s+/g, " ");
 }
@@ -250,7 +243,7 @@ export function effortColorBucket(effort: string): string {
   }
 }
 
-export function renderGaugeSvg(tier: string, signalKind: string, needleAngleDeg: number): string {
+export function renderGaugeSvg(tier: string, needleAngleDeg: number): string {
   const cx = 35;
   const cy = 35;
   const radius = 28;
@@ -267,7 +260,7 @@ export function renderGaugeSvg(tier: string, signalKind: string, needleAngleDeg:
   const needleTipX = cx + needleLength * Math.cos(needleAngleRad);
   const needleTipY = cy + needleLength * Math.sin(needleAngleRad);
 
-  return `<svg class="gauge-svg" viewBox="0 0 70 38" data-tier="${escAttr(tier)}" data-signal="${escAttr(signalKind)}">
+  return `<svg class="gauge-svg" viewBox="0 0 70 38" data-tier="${escAttr(tier)}">
   <path class="gauge-arc-bg" d="${arcBg}" />
   <path class="gauge-arc-fill" d="${arcFill}" />
   <path class="gauge-rim" d="${arcBg}" />
@@ -280,34 +273,12 @@ export function renderGaugeSvg(tier: string, signalKind: string, needleAngleDeg:
 
 export function modelTooltip(marker: OrchestratorMarker): string {
   const conf = marker.confidence;
-  switch (marker.signalKind) {
-    case "current":
-      return conf === "low"
-        ? "live signal (low confidence — hook payload missing model)"
-        : `live signal (${conf} confidence)`;
-    case "configured-default":
-      return "configured default (medium confidence — does not track runtime changes)";
-    case "last-observed":
-      return "last observed via /think (high confidence in detection, but may not reflect current message)";
-    case "manual":
-      return "set manually (high confidence)";
-    default:
-      return "";
-  }
+  return conf === "low"
+    ? "live signal (low confidence — hook payload missing model)"
+    : `live signal (${conf} confidence)`;
 }
 
 export function effortTooltip(marker: OrchestratorMarker): string {
-  const eSig = marker.effort.signalKind;
-  if (eSig === "last-observed" && marker.effort.observedAt) {
-    const age = fmtAge((Date.now() - Date.parse(marker.effort.observedAt)) / 1000);
-    return `last observed ${age} ago via ${marker.effort.native || "/think"} (high confidence in detection, but may not reflect current message)`;
-  }
-  if (eSig === "configured-default") {
-    return "configured default effort (medium confidence — does not track runtime changes)";
-  }
-  if (eSig === "manual") {
-    return "set manually (high confidence)";
-  }
   return `effort: ${effortDisplayName(marker.effort.normalized)} (${marker.effort.confidence} confidence)`;
 }
 
@@ -355,6 +326,11 @@ export function renderAccordionEmpty(cta?: EmptyCta | null): string {
 // wholesale — same SVG, same sublabels, same model-section vertical
 // stack with optional Suggested row, same stale annotation, same
 // "updated Xs ago" footer.
+//
+// Set 036 Session 3: the per-cell `signal-${...}` class and the
+// clock-overlay span are gone with the signalKind retirement. Every
+// gauge renders as solid-fill (the previous `.signal-current`
+// treatment), and tooltips collapse to a single live-signal branch.
 export function renderAccordionLoaded(
   marker: OrchestratorMarker,
   stale: boolean,
@@ -364,12 +340,10 @@ export function renderAccordionLoaded(
   const modelClasses = [
     "gauge-cell",
     `tier-${marker.tier || "unknown"}`,
-    `signal-${marker.signalKind}`,
   ].join(" ");
   const effortClasses = [
     "gauge-cell",
     `effort-${marker.effort.normalized || "unknown"}`,
-    `signal-${marker.effort.signalKind || "current"}`,
   ].join(" ");
 
   const modelNeedle = tierToNeedleAngle(marker.tier);
@@ -379,13 +353,6 @@ export function renderAccordionLoaded(
   const modelSublabelText = modelIsUnknown
     ? escHtml(marker.providerDisplayName)
     : `${escHtml(marker.providerDisplayName)} ${escHtml(marker.modelDisplayName)}`;
-
-  const modelOverlay = marker.signalKind === "last-observed"
-    ? `<span class="clock-overlay" title="last observed signal">⏱</span>`
-    : "";
-  const effortOverlay = marker.effort.signalKind === "last-observed"
-    ? `<span class="clock-overlay" title="last observed signal">⏱</span>`
-    : "";
 
   const modelTip = modelTooltip(marker);
   const effortTip = effortTooltip(marker);
@@ -420,15 +387,13 @@ export function renderAccordionLoaded(
   return `<div class="gauges ${staleClass}">
   <div class="${modelClasses}" title="${escAttr(modelTip)}">
     <div class="gauge-svg-wrap">
-      ${renderGaugeSvg(marker.tier, marker.signalKind, modelNeedle)}
-      ${modelOverlay}
+      ${renderGaugeSvg(marker.tier, modelNeedle)}
     </div>
     <div class="gauge-sublabel">${modelSublabelText}</div>
   </div>
   <div class="${effortClasses}" title="${escAttr(effortTip)}">
     <div class="gauge-svg-wrap">
-      ${renderGaugeSvg(effortColorBucket(marker.effort.normalized), marker.effort.signalKind, effortNeedle)}
-      ${effortOverlay}
+      ${renderGaugeSvg(effortColorBucket(marker.effort.normalized), effortNeedle)}
     </div>
     <div class="gauge-sublabel">${escHtml(effortDisplayName(marker.effort.normalized))}</div>
   </div>
@@ -459,12 +424,6 @@ export function renderAccordionBody(state: RenderState): string {
 // synthesizes an OrchestratorMarker-shaped object from the simpler
 // check-out record:
 //
-//   - `signalKind` always `"current"` — the orchestrator block is the
-//     writer's own self-report at check-out time, so it is by
-//     definition the live signal. The retired "configured-default" /
-//     "last-observed" / "manual" branches in the renderer remain
-//     reachable in principle (CSS hooks survive) but no orchestrator-
-//     block-fed render produces them.
 //   - `confidence` always `"high"` — the writer just declared.
 //   - `tier` from `classifyRecommendationTier(provider, model)` — the
 //     same classifier the recommendation parser uses.
@@ -474,6 +433,11 @@ export function renderAccordionBody(state: RenderState): string {
 //   - `stalenessMaxSec` = DEFAULT_STALENESS_MAX_SEC (8h).
 //   - `ageSec` measured from `lastActivityAt` if present (S1 schema),
 //     else from `checkedOutAt`, else `0` (fresh tolerated read).
+//
+// Set 036 Session 3: with `signalKind` retired, the adapter no longer
+// synthesizes it. The block is by construction the live signal — no
+// other producer remains after the Codex config.toml watcher and
+// `/think_*` UserPromptSubmit hook were dropped.
 //
 // Inputs:
 //   - `block` — the orchestrator block from session-state.json
@@ -508,7 +472,6 @@ export function accordionStateFromOrchestratorBlock(
     sessionSetSlug: undefined,
     updatedAt: block.lastActivityAt ?? block.checkedOutAt ?? new Date().toISOString(),
     writer: block.engine ?? "orchestrator",
-    signalKind: "current",
     confidence: "high",
     provider,
     providerDisplayName: provider,
@@ -519,7 +482,6 @@ export function accordionStateFromOrchestratorBlock(
       normalized: (effort as OrchestratorMarker["effort"]["normalized"]),
       native: effort,
       thinking: false,
-      signalKind: "current",
       confidence: "high",
     },
     stalenessMaxSec: DEFAULT_STALENESS_MAX_SEC,
