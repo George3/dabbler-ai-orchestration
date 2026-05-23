@@ -75,6 +75,10 @@ Exit codes:
 - ``5`` — lock contention (Set 036 Q5): the per-set lifecycle lock
   is held by a live peer and could not be acquired within the
   configured timeout (default 30s).
+- ``6`` — read-only chosen (Set 036 Q3 CLI side): operator answered
+  "r" at the interactive TTY takeover prompt; no state was written.
+  Caller (the agent) is expected to observe the exit code and treat
+  the session set as read-only for the remainder of the chat.
 
 The CLI never makes routed LLM calls — it only writes state and emits
 events. Safe to invoke under any budget / cost regime.
@@ -127,6 +131,7 @@ EXIT_USAGE = 2
 EXIT_BOUNDARY = 3
 EXIT_CHECKOUT_CONFLICT = 4
 EXIT_LOCK_CONTENTION = 5
+EXIT_READ_ONLY = 6  # Set 036 Session 4: operator chose Read-Only at TTY prompt
 
 # Set 036 Session 1: env var that provides the chatSessionId when the
 # ``--chat-session-id`` argument is omitted. Wrapper scripts (the
@@ -330,6 +335,73 @@ def _infer_next_session(session_set_dir: str) -> int:
     if closed:
         return max(closed) + 1
     return 1
+
+
+# Set 036 Session 4 (Q3 CLI side): when the H3 + chatSessionId refusal
+# fires under an interactive TTY, prompt the operator for one of the
+# three audit-locked actions. Non-interactive invocations (no TTY)
+# still receive the EXIT_CHECKOUT_CONFLICT exit code with no prompt,
+# matching the proposal-addendum's directive to "refuse with
+# EXIT_CHECKOUT_CONFLICT and direct the operator to re-run with
+# --force if takeover is intended."
+#
+# Choice mapping:
+#   t / T   → "take-over" — caller proceeds via the existing
+#             force-override branch (logs to the writer log + writes).
+#   r / R   → "read-only" — exits EXIT_READ_ONLY with a stderr note;
+#             no state mutation. The agent observes the exit code and
+#             can self-impose read-only behavior.
+#   c / C   → "cancel" — exits EXIT_CHECKOUT_CONFLICT (the original
+#             refusal exit code), same as non-interactive.
+#
+# Empty line / Ctrl-D / any other char defaults to cancel — explicit
+# operator confirmation is required to take over.
+def _is_interactive_tty() -> bool:
+    """Return True only when stdin AND stderr are both TTYs.
+
+    Stdin alone is insufficient — a script that captures stderr but
+    leaves stdin open would otherwise see the prompt swallowed and
+    the operator would never see the question.
+    """
+    try:
+        return bool(sys.stdin.isatty() and sys.stderr.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def _prompt_takeover_choice(
+    prior_label: str,
+    new_label: str,
+) -> str:
+    """Read a single-char choice from stdin. Returns one of
+    'take-over' / 'read-only' / 'cancel'.
+
+    Writes the prompt to stderr (not stdout) so any caller that
+    captures stdout still sees the question on the terminal.
+    """
+    sys.stderr.write(
+        f"\nstart_session: chatSessionId mismatch on the check-out.\n"
+        f"  held by:    {prior_label}\n"
+        f"  this chat:  {new_label}\n\n"
+        f"  [t] Take Over (force-override; audit-logged)\n"
+        f"  [r] Open in Read-Only Mode (no claim; exit "
+        f"{EXIT_READ_ONLY})\n"
+        f"  [c] Cancel (default; exit {EXIT_CHECKOUT_CONFLICT})\n"
+        f"choice [t/r/c]: "
+    )
+    sys.stderr.flush()
+    try:
+        line = sys.stdin.readline()
+    except (EOFError, KeyboardInterrupt):
+        return "cancel"
+    if not line:
+        return "cancel"
+    ch = line.strip()[:1].lower()
+    if ch == "t":
+        return "take-over"
+    if ch == "r":
+        return "read-only"
+    return "cancel"
 
 
 def _resolve_chat_session_id(args: argparse.Namespace) -> Optional[str]:
@@ -563,18 +635,40 @@ def _run_under_lock(args: argparse.Namespace) -> int:
         )
         same_holder = engine_provider_match and chat_session_id_matches
         if not same_holder:
-            if not getattr(args, "force", False):
-                prior_label = _identity_label(
-                    prior_engine,
-                    prior_provider,
-                    prior_chat_session_id,
-                    chat_session_id_present=prior_chat_session_id_present,
-                )
-                new_label = _identity_label(
-                    args.engine,
-                    args.provider,
-                    new_chat_session_id,
-                )
+            forced = bool(getattr(args, "force", False))
+            prior_label = _identity_label(
+                prior_engine,
+                prior_provider,
+                prior_chat_session_id,
+                chat_session_id_present=prior_chat_session_id_present,
+            )
+            new_label = _identity_label(
+                args.engine,
+                args.provider,
+                new_chat_session_id,
+            )
+            # Set 036 Session 4 (Q3 CLI side): only prompt when the
+            # mismatch is specifically a chatSessionId one (same
+            # engine+provider, different chat). The engine+provider
+            # case stays on the non-interactive refusal path — the
+            # operator routes that flow through the extension's
+            # poll/force/dismiss prompt or invokes --force directly.
+            chat_session_id_mismatch = (
+                engine_provider_match and not chat_session_id_matches
+            )
+            if not forced and chat_session_id_mismatch and _is_interactive_tty():
+                choice = _prompt_takeover_choice(prior_label, new_label)
+                if choice == "take-over":
+                    forced = True
+                elif choice == "read-only":
+                    sys.stderr.write(
+                        f"start_session: read-only mode chosen; no "
+                        f"claim written for {new_label} on this "
+                        f"session set.\n"
+                    )
+                    return EXIT_READ_ONLY
+                # 'cancel' falls through to the standard refusal below.
+            if not forced:
                 print(
                     f"start_session: refused -- session set is checked "
                     f"out by a different orchestrator "

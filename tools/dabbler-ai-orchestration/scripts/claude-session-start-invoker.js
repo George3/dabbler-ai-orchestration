@@ -218,7 +218,7 @@ function spawnStartSession(setDir, model, effort, chatSessionId) {
 // CheckoutPollService can surface a poll/force-override/dismiss prompt.
 // Best-effort: any failure here is swallowed (the stderr log path still
 // fires below, so the operator retains the existing visibility).
-function emitConflictRecord(resolution, model, effort) {
+function emitConflictRecord(resolution, model, effort, chatSessionId) {
   try {
     fs.mkdirSync(CONFLICT_DIR, { recursive: true });
     const state = resolution.state || {};
@@ -235,6 +235,9 @@ function emitConflictRecord(resolution, model, effort) {
       heldByEngine: typeof existing.engine === "string" ? existing.engine : "",
       heldByProvider: typeof existing.provider === "string" ? existing.provider : "",
       heldByModel: typeof existing.model === "string" ? existing.model : null,
+      heldByChatSessionId: typeof existing.chatSessionId === "string"
+        ? existing.chatSessionId
+        : null,
       checkedOutAt: typeof existing.checkedOutAt === "string"
         ? existing.checkedOutAt
         : null,
@@ -242,6 +245,9 @@ function emitConflictRecord(resolution, model, effort) {
       wouldBeHolderProvider: CLAUDE_PROVIDER,
       wouldBeHolderModel: typeof model === "string" ? model : null,
       wouldBeHolderEffort: typeof effort === "string" ? effort : null,
+      wouldBeHolderChatSessionId: typeof chatSessionId === "string" && chatSessionId.length > 0
+        ? chatSessionId
+        : null,
     };
     // Filename: timestamp + source + slug so concurrent writers
     // (multiple Claude windows or one Claude + one Codex) don't
@@ -323,7 +329,7 @@ function main() {
     // usage errors) only surfaces to stderr; the writer is the
     // source of truth for state, the hook is best-effort notification.
     if (result.status === EXIT_CHECKOUT_CONFLICT) {
-      emitConflictRecord(resolution, model, effort);
+      emitConflictRecord(resolution, model, effort, chatSessionId);
     }
     if (result.stderr) {
       process.stderr.write(

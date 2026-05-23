@@ -27,6 +27,7 @@ import {
   CheckoutPollService,
   DEFAULT_TIMEOUT_MINUTES,
 } from "./providers/CheckoutPollService";
+import { getReadOnlyIntentService } from "./providers/ReadOnlyIntentService";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -270,6 +271,13 @@ export function activate(context: vscode.ExtensionContext): void {
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),
   );
+
+  // Set 036 Session 4: ReadOnlyIntentService is the in-memory map of
+  // session sets the operator picked "Open in Read-Only Mode" on via
+  // the chatSessionMismatchModal. checkOutOrchestrator reads it to
+  // prompt-before-write; lifetime ends when the extension host
+  // deactivates.
+  context.subscriptions.push({ dispose: () => getReadOnlyIntentService().dispose() });
 
   // Set 033 Session 5: CheckoutPollService watches
   // ~/.dabbler/checkout-conflicts/ for structured conflict records

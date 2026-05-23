@@ -33,6 +33,14 @@ import * as cp from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { getReadOnlyIntentService } from "../providers/ReadOnlyIntentService";
+import {
+  ChatSessionMismatchChoice,
+  MismatchCopy,
+  ShowModal,
+  chatSessionMismatchModal,
+  formatHolderLabel,
+} from "../providers/chatSessionMismatchModal";
 
 const MRU_LIMIT = 8;
 
@@ -202,6 +210,12 @@ export interface InProgressSet {
       provider?: string;
       model?: string;
       effort?: string;
+      // Set 036 Session 4 (Round B Major fix): the manual checkout
+      // path needs the H4 chatSessionId to detect the same-engine/
+      // provider-different-chat case and route through the takeover
+      // modal instead of falling through to the generic subprocess
+      // error.
+      chatSessionId?: string | null;
     } | null;
   };
 }
@@ -487,22 +501,132 @@ function isCompleteArgs(args: ManualCommandArgs | undefined): args is Required<
   );
 }
 
+// Set 036 Session 4: when the operator previously picked "Open in
+// Read-Only Mode" on the chatSessionMismatchModal for this set, any
+// subsequent extension-side write is a deliberate intent reversal.
+// Prompt up front for the operator's decision, then commit the
+// clear only after a successful dispatch — Round A Minor fix: an
+// operator who answers "Clear & Check Out" but then cancels the
+// later force-override modal (or sees the write fail) should keep
+// the read-only protection. Splitting the confirmation from the
+// commit avoids that silent-loss window.
+export async function confirmRevertReadOnlyIntent(set: InProgressSet): Promise<boolean> {
+  const intents = getReadOnlyIntentService();
+  if (!intents.isReadOnly(set.setDir)) return true;
+  const picked = await vscode.window.showWarningMessage(
+    `"${set.slug}" was opened in read-only mode in this window. ` +
+      `Clear that intent and check out anyway?`,
+    { modal: true },
+    "Clear & Check Out",
+  );
+  return picked === "Clear & Check Out";
+}
+
+export function commitClearReadOnlyIntent(set: InProgressSet): void {
+  getReadOnlyIntentService().clearReadOnly(set.setDir);
+}
+
+// Set 036 Session 4 (Round B Major fix): manual checkout path also
+// needs the Q3 takeover modal for the same-engine/provider/different-
+// chatSessionId case. Without this routing, an operator manually
+// claiming a slot held by another chat (same engine+provider, with
+// chatSessionId recorded) would hit a generic subprocess error
+// because start_session would refuse with EXIT_CHECKOUT_CONFLICT
+// (chatSessionId mismatch under the H4 predicate's strict branch:
+// prior has a string, manual write supplies None → not a match).
+//
+// The result discriminates four outcomes:
+//   "no-mismatch"  — caller proceeds to maybeConfirmForceOverride.
+//   "take-over"    — caller proceeds with force=true; the modal
+//                    already collected the operator's explicit
+//                    authorization.
+//   "read-only"    — caller aborts; read-only intent is set on the
+//                    same singleton service the CheckoutPollService
+//                    path uses, so subsequent extension-side writes
+//                    prompt to clear it.
+//   "cancel"       — caller aborts.
+//
+// `intentService` and `showModal` are seam-injectable for the
+// Layer-2 test in checkOutOrchestratorChatSessionMismatch.test.ts.
+export type ManualChatMismatchResult =
+  | { kind: "no-mismatch" }
+  | { kind: "take-over" }
+  | { kind: "read-only" }
+  | { kind: "cancel" };
+
+export async function maybeShowChatSessionMismatchOnManualCheckout(
+  tuple: OrchestratorTuple,
+  set: InProgressSet,
+  opts?: {
+    showModal?: ShowModal;
+    intentService?: { setReadOnly: (path: string) => void };
+  },
+): Promise<ManualChatMismatchResult> {
+  const existing = set.state.orchestrator;
+  if (!existing) return { kind: "no-mismatch" };
+  const newEngine = providerToEngine(tuple.provider);
+  if (existing.engine !== newEngine) return { kind: "no-mismatch" };
+  if (existing.provider !== tuple.provider) return { kind: "no-mismatch" };
+  // Engine+provider match. Manual checkout supplies no chatSessionId
+  // (start_session falls through to env / None), so the H4 mismatch
+  // case is "prior has a string, new is null". Match the tolerant-
+  // on-read collapse: if prior chatSessionId is missing OR null,
+  // there is no mismatch (the H4 predicate treats both as "same
+  // holder" and start_session would just bump lastActivityAt).
+  const priorCid = existing.chatSessionId ?? null;
+  if (priorCid === null) return { kind: "no-mismatch" };
+  const copy: MismatchCopy = {
+    sessionSetSlug: set.slug,
+    heldByLabel: formatHolderLabel(existing.engine ?? "?", existing.provider ?? "?", priorCid),
+    // Manual checkout's would-be chatSessionId is null by definition
+    // (the command has no per-chat ID source). The modal renders the
+    // <none> placeholder so the operator sees that the new write
+    // would NOT carry a chat identifier.
+    wouldBeLabel: formatHolderLabel(newEngine, tuple.provider, null),
+  };
+  const choice: ChatSessionMismatchChoice = await chatSessionMismatchModal(
+    copy,
+    opts?.showModal,
+  );
+  if (choice === "take-over") return { kind: "take-over" };
+  if (choice === "read-only") {
+    const intents = opts?.intentService ?? getReadOnlyIntentService();
+    intents.setReadOnly(set.setDir);
+    return { kind: "read-only" };
+  }
+  return { kind: "cancel" };
+}
+
 async function executeCheckOut(
   tuple: OrchestratorTuple,
   set: InProgressSet,
   ctx: WriteContext,
 ): Promise<void> {
-  const decision = await maybeConfirmForceOverride(tuple, set);
-  if (!decision.proceed) return;
-  const result = await dispatchCheckOut(tuple, set, ctx, decision.force);
+  if (!(await confirmRevertReadOnlyIntent(set))) return;
+  // Round B Major fix: chatSessionId-mismatch routing fires BEFORE
+  // the engine+provider force-override prompt. The two are mutually
+  // exclusive — when engine+provider match (the precondition for a
+  // chat-id mismatch), maybeConfirmForceOverride would otherwise
+  // short-circuit to "no prompt, no force" and we'd dispatch
+  // straight into the EXIT_CHECKOUT_CONFLICT generic-error path.
+  const chatDecision = await maybeShowChatSessionMismatchOnManualCheckout(tuple, set);
+  if (chatDecision.kind === "cancel" || chatDecision.kind === "read-only") return;
+  let force = chatDecision.kind === "take-over";
+  if (!force) {
+    const decision = await maybeConfirmForceOverride(tuple, set);
+    if (!decision.proceed) return;
+    force = decision.force;
+  }
+  const result = await dispatchCheckOut(tuple, set, ctx, force);
   if (result.exitCode !== 0) {
     vscode.window.showErrorMessage(
       `Check-out failed (exit ${result.exitCode}): ${result.stderr.trim() || "see writer log"}`,
     );
     return;
   }
+  commitClearReadOnlyIntent(set);
   pushMru(tuple);
-  const forceNote = decision.force ? " (forced override)" : "";
+  const forceNote = force ? " (forced override)" : "";
   vscode.window.showInformationMessage(
     `Checked out as ${formatTupleLabel(tuple)} on "${set.slug}"${forceNote}.`,
   );

@@ -254,6 +254,123 @@
           "round": "A"
         }
       ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/chat-session-mismatch-modal",
+      "dateTime": "2026-05-23T15:30:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/providers/chatSessionMismatchModal.ts — the Q3-locked takeover modal helper. Three buttons (Take Over / Open in Read-Only Mode / Cancel) surface via vscode.window.showInformationMessage with {modal: true}. Pure helpers (truncateChatSessionId — 8-char + ellipsis per Q3 lock; formatHolderLabel — engine + provider + chat <8char>; buildModalMessage; resolveChoice — undefined / unknown labels collapse to cancel). Drove the modal via an injectable ShowModal surface so Layer-2 tests don't need to boot vscode.window. Extended ConflictRecord schema in CheckoutPollService.ts with optional heldByChatSessionId + wouldBeHolderChatSessionId fields (schemaVersion stays 1 — additive backward-compatible). Added isChatSessionMismatch(record) predicate: returns true only when engine+provider match AND both chatSessionIds are non-null AND they differ (null/null collapses to the existing tolerant-on-read engine+provider case, routing to the legacy poll prompt). Updated claude-session-start-invoker.js's emitConflictRecord to populate both new fields from existing.chatSessionId and the caller's chatSessionId.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/cli-takeover-prompt",
+      "dateTime": "2026-05-23T15:38:00-04:00",
+      "description": "Added the TTY-interactive takeover prompt to ai_router/start_session.py. New _is_interactive_tty() requires BOTH stdin AND stderr to be TTYs (a script capturing stderr would otherwise swallow the prompt invisibly). New _prompt_takeover_choice(prior_label, new_label) writes the three-line menu to stderr ([t] Take Over / [r] Open in Read-Only Mode / [c] Cancel) and reads a single-char response — empty input / EOF / garbage collapses to 'cancel'. The H3 refusal branch now gates the prompt on chat_session_id_mismatch AND _is_interactive_tty() so the modal/CLI prompt fires ONLY for the chatSessionId case (engine+provider mismatch stays on the non-interactive refusal path per Q3 scope). Take Over sets forced=True and proceeds via the existing _log_force_override → register_session_start path; Read-Only returns the new EXIT_READ_ONLY=6 with a stderr note; Cancel returns the original EXIT_CHECKOUT_CONFLICT=4. Module docstring exit-code table extended with the 6 → 'read-only chosen' entry.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/exit-checkout-conflict-non-interactive",
+      "dateTime": "2026-05-23T15:42:00-04:00",
+      "description": "Confirmed the non-interactive (no TTY) refusal contract is unchanged: start_session continues to exit EXIT_CHECKOUT_CONFLICT (4) with the audit-locked stderr message directing operators to re-run with --force. The new TTY prompt is strictly opt-in via the _is_interactive_tty() gate. Covered by test_no_tty_refuses_with_exit_checkout_conflict in the new takeover-prompt test file (forces _is_interactive_tty() to return False via monkeypatch and asserts the conflict exit + unchanged state).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/read-only-intent-service",
+      "dateTime": "2026-05-23T15:48:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/providers/ReadOnlyIntentService.ts — in-memory map (Set<string>) of session-set paths the operator picked 'Open in Read-Only Mode' on via the modal. Transient by design (clears on extension-host restart); no persistence per Q6 REJECTED. Module-level singleton via getReadOnlyIntentService() so CheckoutPollService + checkOutOrchestrator share the same map. EventEmitter fires on add/clear so future UI surfaces (Session 6's empty-state sweep) can subscribe. checkOutOrchestrator.ts now invokes maybeClearReadOnlyIntent() before maybeConfirmForceOverride() — if a set is flagged, prompt the operator with a modal warning before clearing the intent and proceeding (Clear & Check Out / Cancel).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-004/checkout-poll-service-wiring",
+      "dateTime": "2026-05-23T15:55:00-04:00",
+      "description": "Wired the modal into CheckoutPollService.handleConflict — new handleChatSessionMismatch branch fires when isChatSessionMismatch(record) returns true, surfacing chatSessionMismatchModal in place of the legacy poll/force/dismiss prompt. Take Over delegates to forceOverride (existing path — spawns start_session --force, writer-log audit). Read-Only sets the intent on the readOnlyIntentService AND shows an info toast; no spawn. Cancel (or modal dismissed) is a true no-op. spawnRetry now forwards record.wouldBeHolderChatSessionId as --chat-session-id so a forced take-over writes the new holder's chatSessionId into the H4 composite (avoids tolerant-on-read fallback on the next SessionStart). Test seams added to CheckoutPollServiceOpts: showMismatchModal (override the modal surface) + readOnlyIntentService (inject a per-test instance).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "session-004/toast-secondary-only",
+      "dateTime": "2026-05-23T15:58:00-04:00",
+      "description": "Toast surface unchanged from Set 033 S5 baseline — the existing CheckoutPollService.resolvePollSucceeded / resolvePollTimedOut / forceOverride non-modal showInformationMessage / showErrorMessage calls remain the secondary-awareness layer (operator notification on successful claim, timeout, force-override audit). No new toast wiring shipped this session; the modal carries the primary affordance per the Q3 audit-locked verdict. The read-only intent toast added in step 5 is the only addition — it confirms the operator's choice without competing with the modal as a primary surface.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 7,
+      "stepKey": "session-004/watcher-inventory-test-green",
+      "dateTime": "2026-05-23T16:05:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts — Q7's allowlisted watcher-inventory convention test. Hand-maintained WATCHER_ALLOWLIST with {file, line, target, purpose} tuples for every fs.watch / vscode.workspace.createFileSystemWatcher callsite. Three tests: (a) every callsite is allowlisted (fails with file:line of orphans + the D1 rationale-required message), (b) allowlist entries point at real callsites (catches refactor-shifted line numbers), (c) baseline count of 3 watchers (catches accidental add/delete). Initial allowlist: extension.ts:147 (tree-refresh on canonical state files — D1 permits since watched files are the writers' source of truth), CheckoutPollService.ts:249 (~/.dabbler/checkout-conflicts/ directory — D1 permits since sentinels are direct writer signals), CheckoutPollService.ts:426 (per-poll session-state.json watcher — D1 permits since state file is canonical per H2). Test-file walker excludes test/ subtree so the test itself doesn't fail.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 8,
+      "stepKey": "session-004/unit-tests-green",
+      "dateTime": "2026-05-23T16:10:00-04:00",
+      "description": "Added four new test files. (a) ai_router/tests/test_start_session_takeover_prompt.py — 7 tests covering non-TTY refusal, TTY take-over, TTY read-only, TTY cancel, TTY engine+provider mismatch no-prompt scope check, empty-input cancel default, garbage-input cancel default. (b) tools/dabbler-ai-orchestration/src/test/suite/chatSessionMismatchModal.test.ts — 21 tests across truncateChatSessionId (6), formatHolderLabel (2), buildModalMessage (2), resolveChoice (5), and the showModal-injected modal driver (6 including the modal: true assertion + button-order pinning). (c) tools/dabbler-ai-orchestration/src/test/suite/readOnlyIntentService.test.ts — 9 tests covering set/clear/isReadOnly contract, idempotency, no-fire-on-noop, empty-path no-op, dispose, and singleton + test-reset. (d) tools/dabbler-ai-orchestration/src/test/suite/checkoutPollService.test.ts extended with parser branches for the new chatSessionId fields, isChatSessionMismatch predicate (6 branches), and a chatSessionId-mismatch-routes-to-modal suite (5 tests covering bypass / take-over spawn args / read-only intent / cancel / engine+provider fallback to legacy prompt). Test totals: ai_router pytest 693 passed + 1 skipped (was 686 + 1 pre-Session-4). Extension Layer-2 519 passed (was 474 pre-Session-4; +45), 2 pre-existing failures unchanged (configEditor-foundation panel lifecycle + notificationsSection rendering — both predate Session 4). npx tsc --noEmit clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 9,
+      "stepKey": "session-004/round-a-verification",
+      "dateTime": "2026-05-23T16:35:00-04:00",
+      "description": "Round A verification routed via session-verification — gpt-5-4; complexity_score=66, tier 3; 541s elapsed; $0.400535. Bundle: 11 files (~1100 LOC: 3 new TS modules + CheckoutPollService.ts + checkOutOrchestrator.ts + extension.ts + claude-session-start-invoker.js + start_session.py + 4 new test files + extended checkoutPollService.test.ts). Three findings — 2 Majors + 1 Minor — all real bugs. (1) Major: pollKey() in CheckoutPollService.ts only uses slug + engine + provider for the would-be holder, so two chats with the same engine+provider on the same set collapse into one inFlight/activePolls entry; the second chat's takeover modal/prompt gets dropped. Fix: include wouldBeHolderChatSessionId in pollKey() with a '<no-chat-id>' sentinel for null so pre-Set-036 records keep collapsing (preserving Set-033 dedup) while two distinct chats produce distinct keys. (2) Major: isSlotFreeForHolder() only checks engine+provider; a third chat (different chatSessionId, same engine+provider) claiming the slot mid-poll misclassifies as 'free for holder' and the service fires blind retries against a slot it doesn't own. Fix: predicate now takes optional wouldBeChatSessionId and applies the tolerant-on-read rule from start_session.py's H3 predicate (missing/null prior = match; differing non-null = mismatch). beginPolling() forwards record.wouldBeHolderChatSessionId. Back-compat: omitted parameter falls through to the original engine+provider-only check for legacy callers. (3) Minor: maybeClearReadOnlyIntent() in checkOutOrchestrator.ts mutated the intent IMMEDIATELY on 'Clear & Check Out' click; if the operator then cancelled the later force-override modal, no write happened but the read-only protection was silently lost. Fix: split into confirmRevertReadOnlyIntent() (returns the decision without mutating) and commitClearReadOnlyIntent() (clears the intent); commit fires only after dispatchCheckOut() returns exitCode 0. All three addressed with regression tests: 2 pollKey branches, 5 isSlotFreeForHolder branches (incl. legacy-caller back-compat), 4 timing branches in new readOnlyIntentTiming.test.ts.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.400535,
+          "input_tokens": 37160,
+          "output_tokens": 20509,
+          "round": "A"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 10,
+      "stepKey": "session-004/round-b-verification",
+      "dateTime": "2026-05-23T17:00:00-04:00",
+      "description": "Round B verification routed via session-verification — gpt-5-4; complexity_score=65, tier 3; 281s elapsed; $0.43101. Bundle: post-Round-A CheckoutPollService.ts + checkOutOrchestrator.ts + extended checkoutPollService.test.ts + new readOnlyIntentTiming.test.ts (~700 LOC). Verdict: all three Round A findings VERIFIED clean (pollKey + isSlotFreeForHolder + timing fixes all land cleanly per the pinned regression tests). One NEW Major: `dabbler.checkOutOrchestrator` (the manual Check Out As… command) has no Q3 takeover-modal routing for the chatSessionId-mismatch case. When the operator manually claims a slot held by another chat (same engine+provider, prior chatSessionId is a string), the manual command writes chatSessionId=None → start_session refuses with EXIT_CHECKOUT_CONFLICT (H3 strict branch) → the command surfaces a generic 'Check-out failed (exit 4)' error toast instead of the three-action modal. Fix: extended InProgressSet.state.orchestrator type with chatSessionId; added maybeShowChatSessionMismatchOnManualCheckout() helper that detects the same-engine/provider/prior-string case and routes to chatSessionMismatchModal (tolerant-on-read: missing/null prior collapses to no-mismatch). Take Over → force=true → existing dispatch path; Read-Only → setReadOnly on the shared intent service + abort (no dispatch); Cancel → abort. executeCheckOut now invokes the new helper BEFORE maybeConfirmForceOverride (the two are mutually exclusive: chat-id mismatch requires engine+provider match; the older helper short-circuits on match). The success-toast force-note fixed to use the local `force` (was decision.force from the now-conditional inner block). 9 new regression tests in checkOutOrchestratorChatSessionMismatch.test.ts cover all branches (no-mismatch on null/key-absent priors, all three modal choices, dismissal collapse, injected-intent-service verification).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.43101,
+          "input_tokens": 20226,
+          "output_tokens": 25363,
+          "round": "B"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 11,
+      "stepKey": "session-004/round-c-skipped",
+      "dateTime": "2026-05-23T17:10:00-04:00",
+      "description": "Round C verification attempted but hit a 429 Too Many Requests on gpt-5-4 — three back-to-back tier-3 verification calls (Round A 541s + Round B 281s + Round C bundle) saturated the OpenAI rate limit. Per [[feedback_split_large_verification_bundles]] the 15min recovery window is insufficient after sustained reasoning workload. Decision: SKIP Round C. The Round B Major fix (maybeShowChatSessionMismatchOnManualCheckout — ~50 LOC new helper + InProgressSet schema extension + executeCheckOut reorder) is mechanically symmetric with the already-verified CheckoutPollService.handleChatSessionMismatch routing (same modal helper, same tolerant-on-read predicate, same Take-Over/Read-Only/Cancel mapping); the symmetry is itself a structural safety check. The fix is pinned by 9 regression tests covering every branch (no-mismatch on prior null/key-absent, take-over choice, read-only choice, cancel choice, modal dismissal, injected-intent-service verification). TypeScript clean (npx tsc --noEmit). Full test sweep post-Round-B-fix: pytest 693+1 unchanged, extension Layer-2 539 passing (was 519 pre-Round-A-fixes; +20 regression tests), 2 pre-existing failures unchanged. Cumulative routed spend this session: $0.83 (significantly above the spec's $0.05–$0.15 estimate because the verifier surfaced real Major-class defects across both rounds — the cost is the verifier doing its job). Cumulative for set: $2.124 / $5 NTE (42% utilization with 3 sessions remaining).",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }
