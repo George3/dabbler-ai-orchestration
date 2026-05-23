@@ -1,0 +1,37 @@
+{
+  "status": "completed",
+  "summary": "Set 036 Session 1 of 7 — Writer migration + per-set lifecycle lock (Q5 prerequisite). Shipped: (1) schema delta — orchestrator block in session-state.json now carries chatSessionId; strict-on-write contract (key always present on new writes, value None when no ID supplied); (2) start_session.py — new --chat-session-id arg with $CHAT_SESSION_ID env fallback; H4 composite refined to engine + provider + chatSessionId; tolerant-on-read for prior block missing key OR prior key=None; refusal message names existing chatSessionId; force-override audit-log line records both IDs; (3) close_lock.py — LOCK_FILENAME renamed to '.lifecycle.lock' with LEGACY_LOCK_FILENAME='.close_session.lock' honored on read (R1 alias window); dual-acquire pattern serializes against a live pre-Set-036 close_session (Round A blocker fix); new acquire_lock_with_timeout() polling variant (default 30s); EXIT_LOCK_CONTENTION=5 wired to start_session; (4) close_session.py — _peek_orchestrator_identity snapshots the block BEFORE _flip_state_to_closed clears it; closeout_succeeded event payload extended with chatSessionId+engine+provider+model (Q4 audit trail); (5) gate_checks.py — both lock filenames added to _WORKING_TREE_IGNORE_PATTERNS; (6) ai_router/docs/close-out.md — three paragraphs updated (Step 3 lifecycle-lock acquisition, Stale lock troubleshooting, Cross-set parallelism); (7) session_events.py — closeout_succeeded payload contract documented. Tests: ai_router/tests/test_chatsessionid_writer.py with 17 unit tests; full ai_router unit suite 649 passed + 1 skipped; e2e suite 8 passed. Verification: Round A via gpt-5-4 ($0.339635, 254s) — 1 Blocker (legacy-lock serialization), 1 Major (empty-string CLI semantics), 1 Minor (docstring exit code); all three fixed. Round B via gpt-5-4 ($0.2883275) — 3 Minor (missing null-tolerance test, doc symbol reference, missing None-payload test); all three fixed. Cumulative Session 1 routed spend: $0.628. Out of scope for Session 1 (deferred to Sessions 2–7): new_chat_id CLI + Claude Code hook-invoker (S2); signalKind retirement + Codex config-toml watcher retirement (S3); Takeover UX modal/CLI + watcher-inventory test (S4); Layer-3 Playwright + docs + cross-repo notice (S5); orchestrator-agnostic UI audit + empty-state refactor (S6); final tests + change-log + dual-registry release (S7). Migration risk R1 (lock filename rename) acknowledged in the spec; mitigation strengthened from read-only sweep to dual-acquire per Round A.",
+  "files_changed": [
+    "ai_router/close_lock.py",
+    "ai_router/close_session.py",
+    "ai_router/gate_checks.py",
+    "ai_router/session_events.py",
+    "ai_router/session_state.py",
+    "ai_router/start_session.py",
+    "ai_router/docs/close-out.md",
+    "ai_router/tests/test_chatsessionid_writer.py (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/activity-log.json (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/disposition.json (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-events.jsonl",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/session-state.json",
+    "scripts/verify_session_036_1.py (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-a-session-1-result.json (new)",
+    "docs/session-sets/036-chatsessionid-and-watcher-scope-implementation/verification-output/round-b-session-1-result.json (new)"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [
+    "verification-output/round-a-session-1-result.json",
+    "verification-output/round-b-session-1-result.json"
+  ],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Session 2 ships the new_chat_id CLI + Claude Code hook-invoker pass-through that flows the per-chat session_id from the SessionStart payload through to start_session's --chat-session-id arg. Session 1's writer contract (strict-on-write chatSessionId, tolerant-on-read for missing/None prior values, lifecycle lock around the read/check/write window) is what the Session 2 plumbing must satisfy — same orchestrator preserves the architectural context of HOW the Claude Code session_id maps to the orchestrator block and WHERE the new_chat_id UUID workflow fits in the fallback for non-Claude orchestrators. The chatSessionId composite identity and per-set lifecycle lock are foundational for the Session 4 takeover UX (which fires on chatSessionId mismatch detection) and the Session 5 Layer-3 Playwright coverage."
+    }
+  },
+  "blockers": []
+}

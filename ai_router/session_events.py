@@ -27,7 +27,16 @@ Ten event types covering the per-session lifecycle:
 - ``closeout_requested`` — close-out script began the
   commit/push/notify ceremony (Set 3 wiring; emitted only by future
   close-out machinery).
-- ``closeout_succeeded`` — close-out completed cleanly.
+- ``closeout_succeeded`` — close-out completed cleanly. Set 036
+  Session 1 (Q4 audit trail) extended the payload to carry the
+  orchestrator-identity snapshot taken just before
+  ``_flip_state_to_closed`` nulled the block: ``chatSessionId``,
+  ``engine``, ``provider``, and ``model``. Each is ``None`` when
+  the state file recorded a null value (Set 036+ writer with no ID
+  to record) and omitted entirely when the close ran against a
+  legacy state file with no orchestrator block at all (the dict-
+  unpacking ``**orchestrator_identity`` in ``close_session.py``
+  collapses to no kwargs in that case).
 - ``closeout_failed`` — close-out hit an unrecoverable error
   (Critical/Major issue, push rejected, etc.).
 - ``closeout_force_used`` — operator invoked ``close_session --force``

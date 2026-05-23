@@ -1,19 +1,11 @@
 {
   "schemaVersion": 3,
   "sessionSetName": "036-chatsessionid-and-watcher-scope-implementation",
-  "currentSession": null,
-  "totalSessions": 7,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null,
   "sessions": [
     {
       "number": 1,
       "title": "Writer migration + per-set lifecycle lock (Q5 prerequisite)",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 2,
@@ -46,5 +38,20 @@
       "status": "not-started"
     }
   ],
-  "completedSessions": []
+  "currentSession": 1,
+  "totalSessions": 7,
+  "completedSessions": [],
+  "status": "in-progress",
+  "lifecycleState": "work_in_progress",
+  "startedAt": "2026-05-23T10:18:03.437276-04:00",
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "checkedOutAt": "2026-05-23T10:18:03.437276-04:00",
+    "lastActivityAt": "2026-05-23T10:18:03.437276-04:00"
+  }
 }

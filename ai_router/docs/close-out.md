@@ -285,11 +285,22 @@ returns the corresponding exit code without touching downstream state.
 1. **Parse and validate args.** Combination rules above. Failure → 2.
 2. **Resolve session-set directory** — explicit `--session-set-dir`,
    else discover from CWD via `find_active_session_set`.
-3. **Acquire close lock** (`ai_router.close_lock.close_session_lock`).
-   The lock file lives at `<session-set-dir>/.close_session.lock` and
-   stores `pid`, `worker_id`, and `acquired_at`. A stale lock (dead PID, or
+3. **Acquire lifecycle lock** via `ai_router.close_lock.acquire_lock`
+   (or the `close_session_lock` context-manager helper that wraps it).
+   The lock dual-acquires `<session-set-dir>/.lifecycle.lock` (the
+   Set 036 canonical name) **and** `<session-set-dir>/.close_session.lock`
+   (legacy-interop mutex honored for one release per the R1
+   migration contract). Both files carry `pid`, `worker_id`, and
+   `acquired_at`. A stale lock on either path (dead PID, or
    acquired more than the stale-window ago) is reaped automatically.
    A live lock fails closed with exit 3.
+
+   Both `start_session` and `close_session` now acquire the same
+   lock (Set 036 Q5 — hybrid migration safety): `start_session` polls
+   for up to 30s before giving up with `EXIT_LOCK_CONTENTION=5`;
+   `close_session` keeps its existing immediate-failure contract
+   (exit 3) so a stuck close-out surfaces fast rather than blocking
+   under the same poll window.
 4. **Idempotency check.** Read `session-state.json` (see
    [`docs/session-state-schema.md`](../../docs/session-state-schema.md)
    for the full schema, canonical status values, and the alias map
@@ -390,8 +401,9 @@ whether the work is genuinely complete, then either resume the session
 **Stale lock** — exit 3 with `lock_contention`, but the lock holder
 PID is dead. The lock file should be reaped automatically on the next
 attempt; if it isn't (clock skew, exotic kill paths), inspect
-`<session-set-dir>/.close_session.lock` and remove it manually only
-after confirming no other close-out is running.
+`<session-set-dir>/.lifecycle.lock` (Set 036 rename — `.close_session.lock`
+on legacy state still in flight) and remove it manually only after
+confirming no other close-out is running.
 
 **Manual-verify silent bypass refused** — exit 2 with the validation
 message `"--manual-verify requires either --interactive ... or
@@ -606,6 +618,8 @@ lock file but `pid_file_path` does not point to a live daemon,
 something killed the previous close-out hard. Read the lock file:
 
 ```bash
+cat docs/session-sets/<slug>/.lifecycle.lock
+# Or, for legacy state still in flight (Set 036 rename window):
 cat docs/session-sets/<slug>/.close_session.lock
 ```
 
@@ -676,11 +690,13 @@ maintain `completedSessions[]` manually per
 `docs/session-state-schema.md`) or Full tier (every session
 through `close_session`). Don't switch mid-set.
 
-**Cross-set parallelism on the same `(repo, branch)`.** The close-out
-lock at `<session-set-dir>/.close_session.lock` serializes **same-set
-close-out re-entry** only. It does not scope to the `(repo, branch)`
-pair, so two session sets pointing at the same branch can still race
-during their work phase. The shipping operating model assumes parallel
+**Cross-set parallelism on the same `(repo, branch)`.** The
+per-set lifecycle lock at `<session-set-dir>/.lifecycle.lock` (Set 036
+Q5 — renamed from `.close_session.lock`; both `start_session` and
+`close_session` now acquire it) serializes **same-set lifecycle
+re-entry** only. It does not scope to the `(repo, branch)` pair, so
+two session sets pointing at the same branch can still race during
+their work phase. The shipping operating model assumes parallel
 sessions use distinct `session-set/<slug>` branches via the sibling-
 worktrees-folder layout (see `docs/planning/repo-worktree-layout.md`),
 which makes the cross-set-on-same-branch case rare; when it does

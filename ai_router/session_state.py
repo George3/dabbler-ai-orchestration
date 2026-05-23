@@ -413,6 +413,7 @@ def register_session_start(
     orchestrator_model: str,
     orchestrator_effort: str = "unknown",
     orchestrator_provider: Optional[str] = None,
+    orchestrator_chat_session_id: Optional[str] = None,
 ) -> str:
     """Write ``session-state.json`` marking *session_number* as in-progress.
 
@@ -564,24 +565,44 @@ def register_session_start(
 
     derived_current, derived_total, derived_completed = _derive_legacy_fields(sessions)
 
-    # Set 033 Session 1 (H3 + H4 + OQ1): compute checkedOutAt and
-    # lastActivityAt from the existing orchestrator block. The H4
-    # identity predicate is the ``engine + provider`` composite; on a
-    # same-holder re-attach, ``checkedOutAt`` is preserved across the
-    # rewrite so the operator-visible "checked out at HH:MM" reflects
-    # when this holder first claimed the set, not the last resume.
+    # Set 033 Session 1 (H3 + H4 + OQ1) + Set 036 Session 1 (Q5):
+    # compute checkedOutAt and lastActivityAt from the existing
+    # orchestrator block. The H4 identity predicate is the
+    # ``engine + provider + chatSessionId`` composite (Set 036
+    # refinement); on a same-holder re-attach, ``checkedOutAt`` is
+    # preserved across the rewrite so the operator-visible "checked
+    # out at HH:MM" reflects when this holder first claimed the set,
+    # not the last resume.
+    #
+    # Tolerance: a prior orchestrator block missing ``chatSessionId``
+    # (pre-Set-036 writer) or with ``chatSessionId: null`` (Set 036
+    # writer that had no ID to record at write time) treats the
+    # caller's chatSessionId as a match for engine + provider equality
+    # — the writer cannot recover the historical chat identity, so we
+    # accept the new one and populate the field on the next write.
+    #
     # On a fresh check-out (no prior block, or prior block null) and
-    # on a force-override handoff (different ``engine + provider``,
-    # which the CLI's H3 refusal logic only lets through on
-    # ``--force``), ``checkedOutAt`` is set to now. ``lastActivityAt``
-    # bumps on every write.
+    # on a force-override handoff (different ``engine + provider`` or
+    # different ``chatSessionId``, which the CLI's H3 refusal logic
+    # only lets through on ``--force``), ``checkedOutAt`` is set to
+    # now. ``lastActivityAt`` bumps on every write.
     now = _now_iso()
     prior_orch = existing.get("orchestrator") if isinstance(existing, dict) else None
-    same_holder = (
-        isinstance(prior_orch, dict)
-        and prior_orch.get("engine") == orchestrator_engine
-        and prior_orch.get("provider") == orchestrator_provider
-    )
+    if isinstance(prior_orch, dict):
+        prior_chat_session_id = prior_orch.get("chatSessionId")
+        prior_has_chat_session_field = "chatSessionId" in prior_orch
+        chat_session_id_matches = (
+            not prior_has_chat_session_field
+            or prior_chat_session_id is None
+            or prior_chat_session_id == orchestrator_chat_session_id
+        )
+        same_holder = (
+            prior_orch.get("engine") == orchestrator_engine
+            and prior_orch.get("provider") == orchestrator_provider
+            and chat_session_id_matches
+        )
+    else:
+        same_holder = False
     if same_holder:
         prior_checked_out = prior_orch.get("checkedOutAt") if prior_orch else None
         # Migration tolerance: an in-flight set whose prior writer
@@ -597,6 +618,16 @@ def register_session_start(
     else:
         checked_out_at = now
 
+    # Set 036 Session 1 (Q5 strict-on-write): the orchestrator block
+    # always carries a ``chatSessionId`` field on a new write. The
+    # value is either the caller-supplied UUID (from the
+    # ``--chat-session-id`` arg or the ``$CHAT_SESSION_ID`` env that
+    # the CLI resolves into it) or ``None`` when neither is provided.
+    # Storing ``None`` explicitly (rather than omitting the key) is
+    # the contract that lets downstream readers tell "this writer
+    # was Set 036+ aware but had no chatSessionId to record" apart
+    # from "this writer pre-dated Set 036" (the latter omits the key
+    # entirely).
     state = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
@@ -617,6 +648,7 @@ def register_session_start(
             "provider": orchestrator_provider,
             "model": orchestrator_model,
             "effort": orchestrator_effort,
+            "chatSessionId": orchestrator_chat_session_id,
             "checkedOutAt": checked_out_at,
             "lastActivityAt": now,
         },

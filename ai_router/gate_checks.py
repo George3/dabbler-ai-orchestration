@@ -146,6 +146,13 @@ _WORKING_TREE_IGNORE_PATTERNS = (
     # mid-close-out git status. The orchestrator commits
     # session-events.jsonl during the close-out commit; the lock file
     # is gone before the commit lands.
+    #
+    # Set 036 Session 1 renamed the lock from ``.close_session.lock``
+    # to ``.lifecycle.lock`` (Q5 — start_session + close_session now
+    # share the lock). Both filenames are ignored for one release:
+    # legacy state files / mid-migration scenarios may still surface
+    # the old name briefly.
+    ".lifecycle.lock",
     ".close_session.lock",
     "session-events.jsonl",
 )

@@ -567,6 +567,43 @@ def _peek_session_number(session_set_dir: str) -> Optional[int]:
     return None
 
 
+def _peek_orchestrator_identity(session_set_dir: str) -> dict:
+    """Snapshot the orchestrator block's identity fields for the audit trail.
+
+    Set 036 Session 1 (Q4): the ``closeout_succeeded`` event payload
+    carries ``chatSessionId``, ``engine``, ``provider``, and ``model``
+    alongside the existing ``method`` field so a forensic walk of the
+    events ledger can answer "who was checked out when the close
+    completed?" without consulting the snapshot (which the close
+    itself nulls per Set 033 Session 6's H1 / H3 check-in).
+
+    Returns a dict with keys ``chatSessionId``, ``engine``,
+    ``provider``, ``model``. Missing or null fields land as ``None``
+    in the returned dict; callers feed the whole dict through
+    ``**fields`` to ``append_event`` so the keys with None values
+    still appear in the payload — a forensic reader can then
+    distinguish "this writer recorded null" from "this writer
+    pre-dated the field" by key presence vs. absence.
+
+    Returns an empty dict when the state file is absent or the
+    orchestrator block is null (legacy state file, or a re-run
+    against a set whose snapshot has already been flipped to closed
+    by an earlier successful close). In the empty-dict case, the
+    audit payload has no orchestrator-identity component — the
+    forensic value is degraded but the close itself still completes.
+    """
+    state = read_session_state(session_set_dir) or {}
+    orch = state.get("orchestrator") if isinstance(state, dict) else None
+    if not isinstance(orch, dict):
+        return {}
+    return {
+        "chatSessionId": orch.get("chatSessionId"),
+        "engine": orch.get("engine"),
+        "provider": orch.get("provider"),
+        "model": orch.get("model"),
+    }
+
+
 def _read_disposition_or_none(session_set_dir: str) -> Optional[Disposition]:
     """Return the parsed disposition, or None if the file is absent / malformed."""
     return read_disposition(session_set_dir)
@@ -1178,6 +1215,12 @@ def run(
         return outcome
 
     outcome.session_number = _peek_session_number(session_set_dir)
+    # Set 036 Session 1 (Q4): snapshot the orchestrator identity before
+    # the close-out flow runs. ``_flip_state_to_closed`` nulls the
+    # block as part of cross-tier check-in (Set 033 Session 6), so we
+    # have to capture the fields now if we want them in the audit
+    # payload of the ``closeout_succeeded`` event below.
+    orchestrator_identity = _peek_orchestrator_identity(session_set_dir)
 
     # Repair branch: short-circuits the gate flow. ``--repair`` is a
     # diagnostic / corrective tool that bypasses the normal close-out
@@ -1409,12 +1452,21 @@ def run(
             return outcome
 
         outcome.result = "succeeded"
+        # Set 036 Session 1 (Q4): include the orchestrator-identity
+        # snapshot in the closeout_succeeded payload so the audit
+        # trail records chatSessionId + engine + provider + model
+        # alongside the verification method. ``**orchestrator_identity``
+        # is empty when the state file lacked an orchestrator block
+        # entirely (legacy state file, or a re-run against an already-
+        # nulled snapshot); the payload then degrades gracefully to
+        # the pre-Set-036 shape.
         _emit_event(
             session_set_dir,
             "closeout_succeeded",
             outcome.session_number,
             outcome,
             method=method,
+            **orchestrator_identity,
         )
 
         # Flip session-state.json to complete/closed via the gate-bypass

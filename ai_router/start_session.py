@@ -15,7 +15,8 @@ CLI shape::
 
     python -m ai_router.start_session --session-set-dir <path> \\
         --engine claude --model claude-opus-4-7 [--session-number N] \\
-        [--effort medium] [--provider anthropic] [--force]
+        [--effort medium] [--provider anthropic] \\
+        [--chat-session-id <uuid>] [--force]
 
 Behavior:
 
@@ -34,15 +35,32 @@ Behavior:
   This is the boundary the v0.13.11 defensive guards are *recovering
   from*; making the writer refuse the bad input is the prevention
   layer.
-- **Hard coordination (Set 033, H3 + H4).** When the existing
-  ``orchestrator`` block names a different ``engine + provider``
-  composite than the caller, the CLI REFUSES with a clear error
-  naming the current holder + both release paths (``--force`` and
-  the "Release Check-Out" Command Palette action), unless
-  ``--force`` is set. Force-override appends a single line to
-  ``~/.dabbler/orchestrator-writer.log`` and proceeds with the
-  write; the writer logic in ``register_session_start`` rewrites
-  ``checkedOutAt`` and ``lastActivityAt`` for the new holder.
+- **Hard coordination (Set 033, H3 + H4; Set 036 Q5 + Q1 refinement).**
+  When the existing ``orchestrator`` block names a different
+  ``engine + provider + chatSessionId`` composite than the caller,
+  the CLI REFUSES with a clear error naming the current holder
+  (including the existing ``chatSessionId`` when present) + both
+  release paths (``--force`` and the "Release Check-Out" Command
+  Palette action), unless ``--force`` is set. Force-override appends
+  a single line to ``~/.dabbler/orchestrator-writer.log`` and
+  proceeds with the write; the writer logic in
+  ``register_session_start`` rewrites ``checkedOutAt`` and
+  ``lastActivityAt`` for the new holder.
+
+  *Tolerant-on-read.* A prior block missing ``chatSessionId``
+  entirely (pre-Set-036 writer) or with the field present and
+  ``null`` (Set 036 writer that had no ID at the time of write) is
+  treated as a match against any caller-supplied chatSessionId for
+  engine + provider equality. The first new write populates the
+  field strictly.
+
+- **Per-set lifecycle lock (Set 036 Q5).** Both ``start_session`` and
+  ``close_session`` acquire the same ``<set-dir>/.lifecycle.lock``
+  for the duration of their read/check/write window so a hybrid
+  migration (one orchestrator opening a new session while another
+  is in mid-close-out) never interleaves writes. ``start_session``
+  polls for up to 30s before giving up; close_session fails
+  immediately on contention (its existing contract).
 
 Exit codes:
 
@@ -50,9 +68,13 @@ Exit codes:
 - ``2`` — usage error (bad args, missing session set directory).
 - ``3`` — boundary violation (request to advance while a session is
   still open, re-open of a closed session, or skip-ahead).
-- ``4`` — check-out conflict (Set 033 H3): a different
-  ``engine + provider`` holds the in-progress check-out and
-  ``--force`` was not set.
+- ``4`` — check-out conflict (Set 033 H3, Set 036 chatSessionId
+  refinement): a different ``engine + provider + chatSessionId``
+  composite holds the in-progress check-out and ``--force`` was not
+  set.
+- ``5`` — lock contention (Set 036 Q5): the per-set lifecycle lock
+  is held by a live peer and could not be acquired within the
+  configured timeout (default 30s).
 
 The CLI never makes routed LLM calls — it only writes state and emits
 events. Safe to invoke under any budget / cost regime.
@@ -76,6 +98,12 @@ try:
         read_session_state,
         register_session_start,
     )
+    from close_lock import (  # type: ignore[import-not-found]
+        DEFAULT_ACQUIRE_TIMEOUT_SECONDS,
+        LockContention,
+        acquire_lock_with_timeout,
+        release_lock,
+    )
 except ImportError:
     from .progress import (  # type: ignore[no-redef]
         SessionStateInvariantError,
@@ -86,12 +114,27 @@ except ImportError:
         read_session_state,
         register_session_start,
     )
+    from .close_lock import (  # type: ignore[no-redef]
+        DEFAULT_ACQUIRE_TIMEOUT_SECONDS,
+        LockContention,
+        acquire_lock_with_timeout,
+        release_lock,
+    )
 
 
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_BOUNDARY = 3
 EXIT_CHECKOUT_CONFLICT = 4
+EXIT_LOCK_CONTENTION = 5
+
+# Set 036 Session 1: env var that provides the chatSessionId when the
+# ``--chat-session-id`` argument is omitted. Wrapper scripts (the
+# Claude Code hook invoker in Set 036 Session 2) populate this from
+# their native per-chat metadata surface; manual workflows set it via
+# ``python -m ai_router.new_chat_id --export | source`` (also Set 036
+# Session 2).
+CHAT_SESSION_ID_ENV_VAR = "CHAT_SESSION_ID"
 
 # Set 033 Session 1 (H3): the force-override audit trail. Append-only,
 # best-effort — a log-write failure does not block the override (the
@@ -160,11 +203,26 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--chat-session-id",
+        default=None,
+        help=(
+            "Per-chat session identifier (Set 036 Q1). Refines the "
+            "H4 holder-identity predicate to "
+            "``engine + provider + chatSessionId``. Defaults to the "
+            "$CHAT_SESSION_ID env var when set, otherwise None. "
+            "Claude Code's hook invoker populates this from the "
+            "SessionStart payload's ``session_id`` field; other "
+            "orchestrators source it via ``python -m "
+            "ai_router.new_chat_id`` (Set 036 Session 2)."
+        ),
+    )
+    p.add_argument(
         "--force",
         action="store_true",
         help=(
             "Override an existing check-out held by a different "
-            "engine+provider (Set 033 H3). Appends a force-override "
+            "engine + provider + chatSessionId composite (Set 033 H3 "
+            "+ Set 036 Q5 refinement). Appends a force-override "
             "entry to ~/.dabbler/orchestrator-writer.log and "
             "proceeds. Does not override other boundary checks "
             "(in-flight session, closed-session re-open, skip-ahead)."
@@ -173,15 +231,38 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _identity_label(engine: Optional[str], provider: Optional[str]) -> str:
-    """Render the H4 holder identity (``engine + provider`` composite) for the
-    refusal error and the writer-log audit trail.
+def _identity_label(
+    engine: Optional[str],
+    provider: Optional[str],
+    chat_session_id: Optional[str] = None,
+    *,
+    chat_session_id_present: bool = True,
+) -> str:
+    """Render the H4 holder identity composite for refusal + audit trail.
+
+    Pre-Set-036 composite: ``engine + provider``. Set 036 refinement
+    extends to ``engine + provider + chatSessionId``. The chatSessionId
+    segment is appended unless ``chat_session_id_present`` is False
+    (legacy state file with no chatSessionId field), in which case
+    the segment is rendered as ``chatSessionId=<none recorded>`` so
+    the operator-facing error message is unambiguous about the
+    legacy state.
 
     ``provider`` is optional on the CLI side, so a None provider
     displays as ``<unspecified>`` rather than producing
     ``claude+None`` in the error text.
     """
-    return f"{engine or '<unknown>'} + {provider or '<unspecified>'}"
+    engine_label = engine or "<unknown>"
+    provider_label = provider or "<unspecified>"
+    if not chat_session_id_present:
+        chat_label = "<no chat session ID recorded>"
+    elif chat_session_id is None:
+        chat_label = "<null>"
+    else:
+        chat_label = chat_session_id
+    return (
+        f"{engine_label} + {provider_label} + chatSessionId={chat_label}"
+    )
 
 
 def _log_force_override(
@@ -189,8 +270,11 @@ def _log_force_override(
     session_number: int,
     prior_engine: Optional[str],
     prior_provider: Optional[str],
+    prior_chat_session_id: Optional[str],
+    prior_chat_session_id_present: bool,
     new_engine: str,
     new_provider: Optional[str],
+    new_chat_session_id: Optional[str],
 ) -> None:
     """Append a force-override entry to ``~/.dabbler/orchestrator-writer.log``.
 
@@ -201,14 +285,24 @@ def _log_force_override(
 
     Format: one timestamped line per entry, parseable by
     ``awk`` / ``rg`` without further structure. Format is documented
-    in ``ai_router/docs/close-out.md`` (Set 033 S6).
+    in ``ai_router/docs/close-out.md`` (Set 033 S6); Set 036 extends
+    the prior= and new= labels with the ``chatSessionId`` segment.
     """
     try:
         os.makedirs(os.path.dirname(ORCHESTRATOR_WRITER_LOG), exist_ok=True)
         ts = datetime.now().astimezone().isoformat()
         set_name = os.path.basename(session_set_dir.rstrip("/\\"))
-        prior_label = _identity_label(prior_engine, prior_provider)
-        new_label = _identity_label(new_engine, new_provider)
+        prior_label = _identity_label(
+            prior_engine,
+            prior_provider,
+            prior_chat_session_id,
+            chat_session_id_present=prior_chat_session_id_present,
+        )
+        new_label = _identity_label(
+            new_engine,
+            new_provider,
+            new_chat_session_id,
+        )
         line = (
             f"{ts} force-override "
             f"session-set={set_name} "
@@ -238,6 +332,35 @@ def _infer_next_session(session_set_dir: str) -> int:
     return 1
 
 
+def _resolve_chat_session_id(args: argparse.Namespace) -> Optional[str]:
+    """Return the effective chatSessionId for this invocation.
+
+    Precedence:
+
+    1. ``--chat-session-id`` explicitly supplied (any string value,
+       including the empty string) — the CLI is authoritative; an
+       empty string is interpreted as "deliberately clear", not
+       "fall through to env". This lets a caller in a shell with an
+       inherited ``$CHAT_SESSION_ID`` opt out of the env value for
+       a single invocation (verifier Round A finding).
+    2. ``$CHAT_SESSION_ID`` env var when set to a non-empty string.
+    3. ``None``.
+
+    An empty string at either level collapses to ``None`` in the
+    returned value so the state file never carries an empty-string
+    identity (downstream consumers compare against ``None`` for the
+    "no ID recorded" case, not ``""``).
+    """
+    explicit = getattr(args, "chat_session_id", None)
+    if explicit is not None:
+        # Explicit CLI override — empty string clears, non-empty wins.
+        return explicit if isinstance(explicit, str) and explicit else None
+    env_value = os.environ.get(CHAT_SESSION_ID_ENV_VAR)
+    if isinstance(env_value, str) and env_value:
+        return env_value
+    return None
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the start_session boundary write. Returns exit code.
 
@@ -247,6 +370,8 @@ def run(args: argparse.Namespace) -> int:
     2. Idempotency check (skip the write when the requested session is
        already the in-flight session).
     3. Boundary enforcement (refuse to advance past an open session).
+    4. Set 036 Session 1: per-set lifecycle lock acquisition (Q5)
+       around the read/check/write window.
 
     Separated from :func:`main` so tests can call ``run`` with a
     namespace built from :func:`_build_arg_parser` without needing
@@ -261,6 +386,46 @@ def run(args: argparse.Namespace) -> int:
         )
         return EXIT_USAGE
 
+    # Set 036 Session 1: acquire the per-set lifecycle lock around the
+    # entire read/check/write window. The lock serializes against any
+    # concurrent close_session on the same set (which now holds the
+    # same lock) so a hybrid migration never interleaves writes. The
+    # timeout-poll variant gives a small (default 30s) blocking window
+    # so a brief race against an in-progress close-out resolves
+    # cleanly without an operator-visible failure.
+    try:
+        lock_handle = acquire_lock_with_timeout(
+            session_set_dir,
+            timeout_seconds=DEFAULT_ACQUIRE_TIMEOUT_SECONDS,
+            worker_id=f"start_session/{os.getpid()}",
+        )
+    except LockContention as exc:
+        print(
+            f"start_session: refused -- lifecycle lock contention: "
+            f"{exc}",
+            file=sys.stderr,
+        )
+        return EXIT_LOCK_CONTENTION
+
+    try:
+        return _run_under_lock(args)
+    finally:
+        try:
+            release_lock(lock_handle)
+        except OSError:
+            pass
+
+
+def _run_under_lock(args: argparse.Namespace) -> int:
+    """The original boundary + identity + write flow, executed with the
+    per-set lifecycle lock already held by the caller.
+
+    Split out so tests that want to assert the lock's external
+    behavior can inspect :func:`run` while tests that pre-acquire the
+    lock (e.g., to simulate close_session holding it) can drive the
+    inner flow directly.
+    """
+    session_set_dir = args.session_set_dir
     state = read_session_state(session_set_dir) or {}
     closed = compute_effective_completed_sessions(session_set_dir)
     closed_set = set(closed)
@@ -354,37 +519,68 @@ def run(args: argparse.Namespace) -> int:
             )
             return EXIT_BOUNDARY
 
-    # Set 033 Session 1 (H3 + H4): hard coordination check. If the
-    # existing orchestrator block on disk names a different
-    # ``engine + provider`` composite than the caller, refuse the
-    # write unless ``--force`` is set. The check runs AFTER the
-    # existing boundary checks so the more-specific "session N is
-    # still in flight" / "session N is already closed" / "skip-ahead"
-    # errors surface first when applicable — H3 is the
-    # holder-conflict layer, not a replacement for the lifecycle
-    # boundary.
+    # Set 033 Session 1 (H3 + H4) + Set 036 Session 1 (Q5): hard
+    # coordination check. If the existing orchestrator block on disk
+    # names a different ``engine + provider + chatSessionId``
+    # composite than the caller, refuse the write unless ``--force``
+    # is set. The check runs AFTER the existing boundary checks so
+    # the more-specific "session N is still in flight" / "session N
+    # is already closed" / "skip-ahead" errors surface first when
+    # applicable — H3 is the holder-conflict layer, not a replacement
+    # for the lifecycle boundary.
+    #
+    # Tolerant-on-read for chatSessionId: a prior block missing the
+    # ``chatSessionId`` field entirely (pre-Set-036 writer) or with
+    # the field present and ``null`` (Set 036 writer that had no ID
+    # to record) treats the caller's chatSessionId as a match for
+    # engine + provider equality. The first new write populates the
+    # field strictly via :func:`register_session_start`.
     #
     # Force-override is an authority handoff, not a state-machine
     # transition: it bypasses ONLY this H3 check, not the other
     # boundary refusals above. Logged best-effort to the writer log
     # so the holder change is auditable.
+    new_chat_session_id = _resolve_chat_session_id(args)
     prior_orch = state.get("orchestrator") if isinstance(state, dict) else None
+    # The H3 + H4 check only fires when there is a prior orchestrator
+    # block (a check-out is in progress). On a fresh check-out
+    # (prior_orch is None), there is no holder to coordinate against
+    # and we fall through to the register_session_start call which
+    # records the caller as the new holder.
     if isinstance(prior_orch, dict):
         prior_engine = prior_orch.get("engine")
         prior_provider = prior_orch.get("provider")
-        same_holder = (
-            prior_engine == args.engine and prior_provider == args.provider
+        prior_chat_session_id = prior_orch.get("chatSessionId")
+        prior_chat_session_id_present = "chatSessionId" in prior_orch
+        engine_provider_match = (
+            prior_engine == args.engine
+            and prior_provider == args.provider
         )
+        chat_session_id_matches = (
+            not prior_chat_session_id_present
+            or prior_chat_session_id is None
+            or prior_chat_session_id == new_chat_session_id
+        )
+        same_holder = engine_provider_match and chat_session_id_matches
         if not same_holder:
             if not getattr(args, "force", False):
+                prior_label = _identity_label(
+                    prior_engine,
+                    prior_provider,
+                    prior_chat_session_id,
+                    chat_session_id_present=prior_chat_session_id_present,
+                )
+                new_label = _identity_label(
+                    args.engine,
+                    args.provider,
+                    new_chat_session_id,
+                )
                 print(
                     f"start_session: refused -- session set is checked "
                     f"out by a different orchestrator "
-                    f"({_identity_label(prior_engine, prior_provider)}); "
-                    f"caller is "
-                    f"{_identity_label(args.engine, args.provider)}. "
-                    f"Release the check-out before starting: re-run "
-                    f"with --force to override, or invoke the "
+                    f"({prior_label}); caller is {new_label}. Release "
+                    f"the check-out before starting: re-run with "
+                    f"--force to override, or invoke the "
                     f"\"Release Check-Out\" Command Palette action.",
                     file=sys.stderr,
                 )
@@ -398,8 +594,11 @@ def run(args: argparse.Namespace) -> int:
                 session_number=requested,
                 prior_engine=prior_engine,
                 prior_provider=prior_provider,
+                prior_chat_session_id=prior_chat_session_id,
+                prior_chat_session_id_present=prior_chat_session_id_present,
                 new_engine=args.engine,
                 new_provider=args.provider,
+                new_chat_session_id=new_chat_session_id,
             )
 
     # Idempotent path: caller asked for the in-flight session
@@ -422,6 +621,7 @@ def run(args: argparse.Namespace) -> int:
         orchestrator_model=args.model,
         orchestrator_effort=args.effort,
         orchestrator_provider=args.provider,
+        orchestrator_chat_session_id=new_chat_session_id,
     )
     return EXIT_OK
 

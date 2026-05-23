@@ -1,14 +1,34 @@
-"""Concurrency lock for ``close_session``.
+"""Concurrency lock for session-set lifecycle writers.
 
-Two ``close_session`` invocations on the same session set must not run
-simultaneously: they would both append ``closeout_requested`` events,
-both attempt the same gate checks, and both attempt to flip lifecycle
-state — a race that can leave the events ledger and ``session-state.json``
-disagreeing about the truth.
+Two writers on the same session set must not run simultaneously: they
+would both read/check/write the same ``session-state.json`` snapshot
+and append overlapping events to ``session-events.jsonl`` — a race
+that can leave the events ledger and the snapshot disagreeing about
+the truth.
 
-The lock is a single file at
-``<session-set-dir>/.close_session.lock`` containing a small JSON
-record::
+Set 036 Session 1 (Q5 hard requirement) renamed the lock from
+``.close_session.lock`` to ``.lifecycle.lock`` and extended its
+acquirers from ``close_session`` alone to both ``start_session`` and
+``close_session``. The lock now serializes the full lifecycle window
+— from the boundary "I am about to take this session" through "I am
+flipping the session to closed."
+
+Cross-version interop during the R1 alias window
+------------------------------------------------
+
+Pre-Set-036 ``close_session`` deployments (consumer repos still
+pinned to ``dabbler-ai-router < 0.7.0``) read/write only the legacy
+``.close_session.lock`` filename. To actually serialize against them
+during the alias window, **every acquisition holds BOTH filenames**
+atomically: the new canonical ``.lifecycle.lock`` plus the legacy
+``.close_session.lock``. A legacy writer trying to take the
+``.close_session.lock`` mutex sees our hold and backs off; a new
+writer sees the same hold via either path. This dual-hold is the
+mitigation for the spec R1 risk (the read-only legacy sweep is not
+sufficient — flagged by the cross-provider verifier on the Set 036
+Session 1 Round A pass).
+
+Both filenames carry the same small JSON record::
 
     {
       "pid": 12345,
@@ -16,28 +36,50 @@ record::
       "acquired_at": "2026-04-30T12:34:56.789012-04:00"
     }
 
-Acquisition is best-effort but Windows-safe:
+Acquisition (per :func:`acquire_lock`) is best-effort but
+Windows-safe:
 
-1. Attempt ``os.open`` with ``O_CREAT | O_EXCL | O_RDWR``. On success
-   the caller holds the lock.
-2. On collision, parse the existing record and decide whether to
-   reclaim:
+1. Sweep any stale ``.close_session.lock`` (dead PID OR
+   ``acquired_at`` older than :data:`STALE_LOCK_TTL_SECONDS`). A
+   live legacy holder raises :class:`LockContention` — they ARE the
+   peer we contend with.
+2. Atomically create ``.lifecycle.lock`` via ``os.open`` with
+   ``O_CREAT | O_EXCL | O_RDWR``. On collision, attempt stale
+   reclaim (one retry) before raising LockContention.
+3. Atomically create ``.close_session.lock`` (legacy-interop
+   mutex). On collision after step 2's success, roll back the
+   new-name file and treat as contention.
 
-   - If ``acquired_at`` is older than :data:`STALE_LOCK_TTL_SECONDS`
-     OR the PID is no longer running, the lock is *stale*; we delete
-     it and retry once.
-   - Otherwise the lock is held by a live peer; raise
-     :class:`LockContention` so the caller can surface the result
-     ``lock_contention`` and exit code 3.
+Release reverses the order: ``.lifecycle.lock`` first, then
+``.close_session.lock``. A crash between the two leaves an orphan
+that the next acquirer's stale-check reaps via TTL or dead-PID
+probe.
 
 The reclaim path emits a warning string (returned via the
 ``acquire_lock`` return value's ``warnings`` list) so the caller can
 include it in the structured output and the human can see *why* the
 peer was reclaimed.
 
+For callers that want bounded blocking rather than immediate-failure
+semantics (Set 036 Q5 — the hybrid migration safety contract),
+:func:`acquire_lock_with_timeout` polls for up to ``timeout_seconds``
+before raising :class:`LockContention`. ``start_session`` uses this
+path with a default 30s window so a normal sequential workflow that
+races a still-running ``close_session`` finishes cleanly without an
+operator-visible failure.
+
+Caller-visible exit-code mapping when LockContention propagates:
+
+* ``start_session`` → ``EXIT_LOCK_CONTENTION = 5`` (Set 036 Session 1)
+* ``close_session`` → exit code ``3`` (``lock_contention`` result)
+
+The two callers pick different codes because they have independent
+exit-code spaces; the lock helper itself raises a single exception
+type and lets each CLI map it.
+
 This module does **not** depend on ``close_session`` — it is a leaf
-utility. ``close_session`` imports it (not the other way around) so
-tests can exercise the lock in isolation.
+utility. ``close_session`` and ``start_session`` import it (not the
+other way around) so tests can exercise the lock in isolation.
 """
 
 from __future__ import annotations
@@ -45,14 +87,23 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Iterator, List, Optional
 
 
-LOCK_FILENAME = ".close_session.lock"
+# Set 036 Session 1: lifecycle lock. The constant is kept as
+# ``LOCK_FILENAME`` for backwards compatibility with importers (the
+# existing test suite and gate_checks reference this name) but now
+# resolves to ``.lifecycle.lock``. ``LEGACY_LOCK_FILENAME`` is the
+# pre-Set-036 name, honored on read only — see :func:`_legacy_lock_path`.
+LOCK_FILENAME = ".lifecycle.lock"
+LEGACY_LOCK_FILENAME = ".close_session.lock"
 STALE_LOCK_TTL_SECONDS = 600  # 10 minutes per spec
+DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 30  # Set 036 Q5 — bounded blocking default
+_ACQUIRE_POLL_INTERVAL_SECONDS = 0.25
 
 
 class LockContention(Exception):
@@ -86,6 +137,16 @@ class LockHandle:
 
 def _lock_path(session_set_dir: str) -> str:
     return os.path.join(session_set_dir, LOCK_FILENAME)
+
+
+def _legacy_lock_path(session_set_dir: str) -> str:
+    """Path to the pre-Set-036 ``.close_session.lock`` filename.
+
+    Honored on read for one release per Set 036 spec R1: scripts and
+    monitoring that reference the legacy path see a graceful migration
+    window. New writes always go to :func:`_lock_path`.
+    """
+    return os.path.join(session_set_dir, LEGACY_LOCK_FILENAME)
 
 
 def _now_iso() -> str:
@@ -247,101 +308,243 @@ def _write_lock_atomic(path: str, payload: dict) -> bool:
     return True
 
 
+def _try_create_with_stale_reclaim(
+    path: str,
+    payload: dict,
+    warnings: List[str],
+    label: str,
+) -> bool:
+    """Attempt an atomic create with one stale-reclaim retry.
+
+    Returns True if the file now exists and is owned by us, False if
+    a live peer holds the path. The reclaim path appends a warning
+    line to *warnings* so the caller can include it in the returned
+    handle. *label* identifies the file in the warning text
+    ("lifecycle.lock" vs ".close_session.lock") so a mixed-failure
+    diagnostic surface stays readable.
+
+    Raises :class:`LockContention` when a stale-but-unremovable file
+    blocks acquisition (the OS reports the file present, but we
+    cannot unlink it — usually a permission anomaly).
+    """
+    for _attempt in range(2):
+        if _write_lock_atomic(path, payload):
+            return True
+        existing = _read_lock_record(path)
+        if existing is None or not _is_stale(existing):
+            return False
+        old_pid = existing.get("pid")
+        old_age_note = existing.get("acquired_at", "<no timestamp>")
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            # Someone else cleaned it up; retry directly.
+            pass
+        except OSError as exc:
+            raise LockContention(
+                f"lock at {path} is stale but could not be removed: "
+                f"{exc}",
+                record=existing,
+            ) from exc
+        warnings.append(
+            f"WARNING: reclaimed stale lock at {label} (pid={old_pid}, "
+            f"acquired_at={old_age_note})"
+        )
+    return False
+
+
 def acquire_lock(
     session_set_dir: str,
     *,
     worker_id: Optional[str] = None,
 ) -> LockHandle:
-    """Acquire the close-session lock for *session_set_dir*.
+    """Acquire the lifecycle lock for *session_set_dir*.
 
     Returns a :class:`LockHandle` on success. Raises
     :class:`LockContention` when a live peer holds the lock.
 
-    Stale-lock reclaim path: if the existing lock is stale per
-    :func:`_is_stale`, it is deleted, a warning is recorded on the
-    returned handle, and acquisition is retried exactly once. We only
-    retry once — a second collision after a successful unlink almost
-    certainly means another peer raced us and won.
+    Set 036 Session 1 dual-acquisition: during the R1 alias window
+    we hold BOTH the new ``.lifecycle.lock`` and the legacy
+    ``.close_session.lock`` filenames so a pre-Set-036
+    ``close_session`` that still reads/writes only the legacy
+    filename actually serializes against us. Acquisition order:
+
+    1. New-name ``.lifecycle.lock`` first — the canonical Set-036
+       gate. Stale-reclaim retry on collision.
+    2. Legacy ``.close_session.lock`` second — the interop gate.
+       Stale-reclaim retry on collision; if a live peer (typically
+       a pre-Set-036 close_session) holds it, roll back the
+       new-name file and raise :class:`LockContention`.
+
+    The dual-hold means the returned ``LockHandle.path`` is the
+    new-name file (``.lifecycle.lock``) — callers that need to read
+    the legacy file go through :data:`LEGACY_LOCK_FILENAME` directly.
+    :func:`release_lock` deletes both files; partial releases are
+    benign (the surviving file gets swept by the next acquirer's
+    stale check).
+
+    Stale-lock reclaim path: a file whose ``acquired_at`` is older
+    than :data:`STALE_LOCK_TTL_SECONDS` OR whose PID is no longer
+    running is deleted in place, a warning is recorded on the
+    returned handle, and the create is retried exactly once. We
+    only retry once — a second collision after a successful unlink
+    almost certainly means another peer raced us and won.
     """
-    path = _lock_path(session_set_dir)
+    new_path = _lock_path(session_set_dir)
+    legacy_path = _legacy_lock_path(session_set_dir)
     pid = os.getpid()
-    worker = worker_id or f"close_session/{pid}"
+    worker = worker_id or f"lifecycle/{pid}"
     warnings: List[str] = []
+    payload = {
+        "pid": pid,
+        "worker_id": worker,
+        "acquired_at": _now_iso(),
+    }
 
-    for attempt in range(2):
-        payload = {
-            "pid": pid,
-            "worker_id": worker,
-            "acquired_at": _now_iso(),
-        }
-        if _write_lock_atomic(path, payload):
-            return LockHandle(
-                path=path,
-                pid=pid,
-                worker_id=worker,
-                acquired_at=payload["acquired_at"],
-                warnings=warnings,
-            )
-
-        existing = _read_lock_record(path)
-        if existing is not None and _is_stale(existing):
-            old_pid = existing.get("pid")
-            old_age_note = existing.get("acquired_at", "<no timestamp>")
-            try:
-                os.unlink(path)
-            except FileNotFoundError:
-                # Someone else cleaned it up; retry directly.
-                pass
-            except OSError as exc:
-                raise LockContention(
-                    f"lock at {path} is stale but could not be removed: {exc}",
-                    record=existing,
-                ) from exc
-            warnings.append(
-                f"WARNING: reclaimed stale lock (pid={old_pid}, "
-                f"acquired_at={old_age_note})"
-            )
-            # Loop and retry the create.
-            continue
-
-        # Live peer holds it.
+    # Step 1: acquire the new canonical file. A live peer here is a
+    # Set-036+ writer holding the same set's lock; refuse cleanly.
+    if not _try_create_with_stale_reclaim(
+        new_path, payload, warnings, label=LOCK_FILENAME,
+    ):
+        existing = _read_lock_record(new_path) or {}
         raise LockContention(
-            f"close_session lock at {path} is held by another process",
-            record=existing or {},
+            f"lifecycle lock at {new_path} is held by another process",
+            record=existing,
         )
 
-    # Two collisions in a row → treat as live contention.
-    raise LockContention(
-        f"close_session lock at {path} could not be acquired after retry",
-        record=_read_lock_record(path) or {},
+    # Step 2: acquire the legacy-interop file. A live peer here is
+    # typically a pre-Set-036 close_session; refusing serializes the
+    # hybrid-migration window correctly. Roll back the new-name file
+    # so the caller's failure does not leak a half-acquired lock.
+    if not _try_create_with_stale_reclaim(
+        legacy_path, payload, warnings, label=LEGACY_LOCK_FILENAME,
+    ):
+        existing = _read_lock_record(legacy_path) or {}
+        # Roll back the new-name acquisition. Best-effort: a vanish
+        # between create and unlink is benign (someone reaped it).
+        try:
+            os.unlink(new_path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            # Leaking the new-name file is preferable to crashing the
+            # caller; the next acquirer's stale check will reap it
+            # when our PID disappears.
+            pass
+        raise LockContention(
+            f"legacy-interop lock at {legacy_path} is held by another "
+            "process (likely a pre-Set-036 close_session); refusing "
+            "to acquire the lifecycle lock until the legacy holder "
+            "releases",
+            record=existing,
+        )
+
+    return LockHandle(
+        path=new_path,
+        pid=pid,
+        worker_id=worker,
+        acquired_at=payload["acquired_at"],
+        warnings=warnings,
     )
+
+
+def acquire_lock_with_timeout(
+    session_set_dir: str,
+    *,
+    timeout_seconds: float = DEFAULT_ACQUIRE_TIMEOUT_SECONDS,
+    worker_id: Optional[str] = None,
+    poll_interval_seconds: float = _ACQUIRE_POLL_INTERVAL_SECONDS,
+) -> LockHandle:
+    """Acquire the lifecycle lock, polling up to *timeout_seconds*.
+
+    Set 036 Session 1 (Q5 hard requirement): ``start_session`` uses
+    this entry point so a normal sequential workflow that briefly
+    races a still-running ``close_session`` finishes cleanly instead
+    of producing an operator-visible failure. The poll interval is
+    short (250 ms) — lock holds are bounded by the duration of one
+    boundary write, so the typical resolution is sub-second.
+
+    Returns the :class:`LockHandle` on success. Raises
+    :class:`LockContention` after the timeout elapses without a
+    successful acquisition; the record on the exception is the last
+    observed holder (useful for the operator-facing error message).
+
+    A ``timeout_seconds <= 0`` short-circuits to a single immediate
+    attempt — equivalent to :func:`acquire_lock` — and is the recipe
+    for tests that want to assert "no waiting" semantics.
+    """
+    if timeout_seconds <= 0:
+        return acquire_lock(session_set_dir, worker_id=worker_id)
+
+    deadline = time.monotonic() + timeout_seconds
+    last_record: dict = {}
+    last_message = ""
+    while True:
+        try:
+            return acquire_lock(session_set_dir, worker_id=worker_id)
+        except LockContention as exc:
+            last_record = exc.record or {}
+            last_message = str(exc)
+            now = time.monotonic()
+            if now >= deadline:
+                raise LockContention(
+                    f"{last_message} (waited {timeout_seconds:.1f}s)",
+                    record=last_record,
+                ) from None
+            remaining = deadline - now
+            time.sleep(min(poll_interval_seconds, remaining))
+
+
+def _release_one(path: str, owner_pid: int) -> None:
+    """Best-effort unlink of *path* if we still own it.
+
+    A missing file is ignored (someone else already cleaned up). A
+    file whose recorded PID differs from *owner_pid* is left in
+    place (reclaimed by a peer; removing it would be incorrect). A
+    junk record (parse failure) is removed under the same assumption
+    the existing single-file release used to make — we believed we
+    held the lock when this function was called, so a malformed
+    record is most likely ours-but-corrupt.
+    """
+    if not os.path.isfile(path):
+        return
+    record = _read_lock_record(path)
+    if record is None:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return
+    if record.get("pid") != owner_pid:
+        return
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
 
 
 def release_lock(handle: LockHandle) -> None:
     """Release the lock identified by *handle*.
 
+    Set 036 Session 1 dual-release: removes BOTH the new
+    ``.lifecycle.lock`` and the legacy ``.close_session.lock``
+    filenames acquired by :func:`acquire_lock`. New file first so a
+    crash between the two removals leaves only the legacy file
+    behind — the next acquirer's stale-check reaps it via TTL or
+    dead-PID probe.
+
     Best-effort: a missing lock file is ignored (someone else already
     cleaned up). A lock file with a different PID is *not* removed —
     that means the lock has been reclaimed by a peer and removing it
-    would be incorrect. Any other ``OSError`` propagates.
+    would be incorrect.
     """
-    if not os.path.isfile(handle.path):
-        return
-    record = _read_lock_record(handle.path)
-    if record is None:
-        # Junk file; remove it since we believed we held the lock.
-        try:
-            os.unlink(handle.path)
-        except OSError:
-            pass
-        return
-    if record.get("pid") != handle.pid:
-        # Reclaimed by someone else; do not touch.
-        return
-    try:
-        os.unlink(handle.path)
-    except FileNotFoundError:
-        pass
+    _release_one(handle.path, handle.pid)
+    # ``handle.path`` is the new-name file by contract; the legacy
+    # file lives in the same directory under the legacy filename.
+    legacy_path = os.path.join(
+        os.path.dirname(handle.path), LEGACY_LOCK_FILENAME,
+    )
+    _release_one(legacy_path, handle.pid)
 
 
 @contextmanager

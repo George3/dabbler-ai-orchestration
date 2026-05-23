@@ -1,0 +1,97 @@
+{
+  "sessionSetName": "036-chatsessionid-and-watcher-scope-implementation",
+  "createdDate": "2026-05-23",
+  "totalSessions": 7,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/schema-delta-applied",
+      "dateTime": "2026-05-23T10:30:00-04:00",
+      "description": "Extended the orchestrator block in session-state.json with the chatSessionId field. Implemented via the strict-on-write contract in ai_router/session_state.py:register_session_start — every new write populates the key, with value None when neither --chat-session-id nor $CHAT_SESSION_ID supplies one. Downstream readers use key presence + None vs. key absence to tell Set-036+ from pre-Set-036 state files.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/start-session-refined",
+      "dateTime": "2026-05-23T10:40:00-04:00",
+      "description": "Refined ai_router/start_session.py with the H4 composite-identity predicate (engine + provider + chatSessionId). Added --chat-session-id CLI arg with $CHAT_SESSION_ID env fallback via _resolve_chat_session_id(); the H3 refusal message now names both holders' chatSessionIds via the expanded _identity_label(). Force-override audit-log line carries both chatSessionIds. Tolerant-on-read predicates: prior block missing the chatSessionId key (legacy) OR with key present and value None (Set 036+ no-ID-at-write-time) is treated as same-holder for engine+provider matches.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/lifecycle-lock-introduced",
+      "dateTime": "2026-05-23T10:50:00-04:00",
+      "description": "Renamed close_lock.py's LOCK_FILENAME from '.close_session.lock' to '.lifecycle.lock'; added LEGACY_LOCK_FILENAME for the R1 alias-on-read window. Both start_session and close_session now acquire the same lock — start_session via a new acquire_lock_with_timeout() polling variant (default 30s; sub-second resolution on the typical race) that raises LockContention only after the deadline. EXIT_LOCK_CONTENTION=5 wired to start_session (close_session keeps its existing exit 3 contract). Updated ai_router/gate_checks.py:_WORKING_TREE_IGNORE_PATTERNS to ignore both lock filenames during close-out.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/close-session-event-payload-extended",
+      "dateTime": "2026-05-23T11:00:00-04:00",
+      "description": "Q4 audit-trail extension: close_session.py snapshots the orchestrator block via the new _peek_orchestrator_identity() helper BEFORE _flip_state_to_closed nulls the block, then merges chatSessionId + engine + provider + model into the closeout_succeeded event payload via **-unpacking. Legacy state files with no orchestrator block produce an empty dict — the payload degrades to the pre-Set-036 shape rather than emitting empty-string identity fields. session_events.py's closeout_succeeded docstring updated to document the four new payload keys and the legacy-degradation behavior.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/legacy-tolerance-wired",
+      "dateTime": "2026-05-23T11:10:00-04:00",
+      "description": "Tolerant-on-read paths wired in both ai_router/session_state.py:register_session_start (the same_holder predicate for checkedOutAt preservation) and ai_router/start_session.py (the H3 refusal predicate). The two predicates use identical logic so a force-override never preserves checkedOutAt incorrectly. The branches: (a) prior 'chatSessionId' key absent (pre-Set-036 writer) — tolerated for engine+provider matches; (b) prior 'chatSessionId' present and None — tolerated; (c) prior 'chatSessionId' present and string matches caller's — match; (d) anything else — refusal.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/unit-tests-green",
+      "dateTime": "2026-05-23T11:25:00-04:00",
+      "description": "Added ai_router/tests/test_chatsessionid_writer.py with 17 unit tests covering all branches the spec called out plus three branches the Round A/B verifications surfaced: (a) fresh write — explicit value, env fallback, None default; (b) same-composite re-attach idempotent + checkedOutAt preserved; (c) chatSessionId mismatch refused with both IDs named; (d) legacy-state refusal names 'no chat session ID recorded'; (e) --force rewrites + writer-log records both IDs; (f) legacy block (key absent) tolerated + populated; (g) prior None tolerated + populated (Round B addition); (h) lock contention returns EXIT_LOCK_CONTENTION; (i) clean acquire/release; (j) closeout_succeeded payload carries identity (string + None variants); (k) live legacy lock blocks new acquisition (Round A blocker fix); (l) dual-acquire creates both files; (m) explicit --chat-session-id '' clears env (Round A major fix); (n) stale legacy lock swept. Full ai_router unit suite: 649 passed + 1 skipped. e2e suite: 8 passed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/round-a-verification",
+      "dateTime": "2026-05-23T11:45:00-04:00",
+      "description": "Round A verification routed via session-verification task type — selected gpt-5-4 (complexity_score=67, tier 3); 254s elapsed; $0.339635. Three findings: (1) Blocker — read-only legacy-lock sweep is insufficient against a live pre-Set-036 close_session; dual-acquire required. Fix: acquire_lock() now dual-acquires both .lifecycle.lock and .close_session.lock atomically; if either fails, roll back and raise LockContention. (2) Major — _resolve_chat_session_id() did not honor explicit --chat-session-id '' to clear an inherited env var. Fix: 'args.chat_session_id is None' is the only fall-through-to-env path; any other CLI value (including empty string, which collapses to None in the return) is authoritative. (3) Minor — close_lock.py module docstring asserted exit code 3 for lock contention but start_session now uses 5. Fix: docstring now documents per-caller mapping (start_session → 5, close_session → 3). All three addressed.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.339635,
+          "input_tokens": null,
+          "output_tokens": null,
+          "round": "A"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/round-b-verification",
+      "dateTime": "2026-05-23T12:05:00-04:00",
+      "description": "Round B verification routed via session-verification — gpt-5-4; $0.2883275. Confirmed Round A fixes hold (no must-fix on the dual-acquire, empty-string CLI, or docstring fixes). Three Minor findings: (1) missing test for prior chatSessionId: null tolerance branch (key present, value None) — covered by the predicate but the test file only exercised the key-absent variant. Added test_prior_chat_session_id_null_tolerated_then_populated. (2) close-out.md referenced close_session_lock (the @contextmanager wrapper); replaced with acquire_lock (the primary entry point) plus mention of the context-manager helper. (3) closeout_succeeded payload Q4 contract has no test for the 'chatSessionId key present with value None' case. Added test_closeout_succeeded_payload_when_chat_session_id_is_none. All three Round B findings addressed.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "cost_usd": 0.2883275,
+          "input_tokens": null,
+          "output_tokens": null,
+          "round": "B"
+        }
+      ]
+    }
+  ]
+}
