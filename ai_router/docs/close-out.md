@@ -77,7 +77,21 @@ have to recover, never prevent.
 | `lifecycleState`       | `"work_in_progress"`                         | `"closed"`                                   |
 | `completedAt`          | unchanged (null)                             | now                                          |
 | `verificationVerdict`  | latest verdict / unchanged                   | latest verdict / unchanged                   |
+| `orchestrator`         | cleared to `null` (Set 033 S6 check-in)      | cleared to `null` (Set 033 S6 check-in)      |
 | Events ledger          | `closeout_requested` + `closeout_succeeded`  | `closeout_requested` + `closeout_succeeded`  |
+
+The `closeout_succeeded` event payload (Set 036 Q4 audit-trail
+extension) carries the holder identity that was just released —
+`chatSessionId`, `engine`, `provider`, and `model` — snapshotted
+from the orchestrator block before the block-clear runs. Legacy
+state files with no orchestrator block degrade gracefully: the
+payload omits the four identity fields rather than emitting
+empty-string values, so a forensic walk of the events ledger can
+tell "pre-Set-036 close" from "Set-036+ close with no chat ID
+recorded" (the latter emits `chatSessionId: null`). See
+[`docs/session-state-schema.md`](../../docs/session-state-schema.md)
+"Check-out / check-in (Set 033)" for the chatSessionId source-of-
+truth contract.
 
 Final-session detection uses
 `len(completedSessions) == totalSessions` post-append; `change-log.md`
@@ -269,7 +283,10 @@ close on a set whose block is already `null` (the previous holder
 force-released, or the session was closed via a path that already
 cleared it) lands the same write and reports `succeeded`. This
 applies to Full tier and Lightweight tier alike (Lightweight humans
-write `orchestrator: null` by hand at the same boundary). See
+write `orchestrator: null` by hand at the same boundary). The
+chatSessionId (Set 036 Q1) lives inside the orchestrator block, so
+it clears together with the rest of the holder identity — no
+separate field-level wipe is needed. See
 [`docs/session-state-schema.md`](../../docs/session-state-schema.md)
 "Check-out / check-in (Set 033)" for the full schema and the
 holder-identity rule.
@@ -337,7 +354,14 @@ returns the corresponding exit code without touching downstream state.
      flips `session-state.json` from `in-progress` to `complete`,
      records the verdict + `completedAt` ISO timestamp, **and clears
      the `orchestrator` block to `null`** (Set 033 Session 6
-     check-in; cross-tier; idempotent on already-null).
+     check-in; cross-tier; idempotent on already-null). The Set
+     036 `chatSessionId` field lives inside the block, so it
+     clears together with the rest of the holder identity — no
+     separate field-level wipe needed. The orchestrator-identity
+     snapshot for the `closeout_succeeded` event payload (Section
+     0 close-side table — `chatSessionId + engine + provider +
+     model`, Q4 audit trail) is taken BEFORE this clear so the
+     payload reflects the holder that was released.
    - Append the next-orchestrator recommendation to `ai-assignment.md`
      (every session except the last).
    - Last session only: write `change-log.md` and append the
@@ -419,15 +443,25 @@ running `close_session` ends up with an `orchestrator` block on
 close-out gate failure — `close_session` never even started — but it
 shows up at the next `start_session` call from a different
 orchestrator, which refuses with the H3 hard-coordination error
-naming the now-stranded holder. Two recovery paths, both audit-trail
-preserving:
+naming the now-stranded holder. The same recovery applies whether
+the stranded composite differs from the would-be next holder on
+`engine + provider` OR on just the `chatSessionId` (Set 036 Q1) —
+a stale chatSessionId (e.g., a Claude chat that was force-killed
+mid-session) blocks the slot just as a stranded `engine + provider`
+does. Two recovery paths, both audit-trail preserving:
 
 - **`start_session --force`** from the would-be next holder. The
   H3 refusal message itself names this path. The writer appends a
   single line to `~/.dabbler/orchestrator-writer.log` recording the
-  prior holder, the new holder, and an ISO timestamp; `checkedOutAt`
-  is rewritten to now. Use this when the new holder is at the
-  command line and ready to start the next session immediately.
+  prior holder, the new holder, an ISO timestamp, AND both
+  composites' chatSessionIds (or `<no chat session ID recorded>`
+  for legacy state); `checkedOutAt` is rewritten to now. Use this
+  when the new holder is at the command line and ready to start
+  the next session immediately. When the only difference is the
+  chatSessionId and the would-be holder is on an interactive TTY,
+  `start_session` also surfaces an inline Take Over / Read-Only /
+  Cancel prompt before falling through to refusal — the CLI mirror
+  of the extension's takeover modal (Set 036 Q3).
 - **"Release Check-Out" Command Palette action** (extension v0.18.x
   onward). Wraps the same `--force` invocation with a confirmation
   prompt; appropriate when an operator is in VS Code and wants to

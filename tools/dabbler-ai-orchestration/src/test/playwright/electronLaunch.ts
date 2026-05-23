@@ -272,7 +272,22 @@ export function attemptStartSession(
     model: string;
     effort?: string;
   },
-  opts: { force?: boolean; homeOverride?: string } = {},
+  opts: {
+    force?: boolean;
+    homeOverride?: string;
+    // Set 036 Session 5: forward --chat-session-id when present.
+    // The Q1 chatSessionId refinement to H4 needs this surface so
+    // Layer-3 scenarios can drive the writer with two distinct
+    // chats (different chatSessionIds, same engine + provider).
+    // Pass null to deliberately omit the arg (lets the writer fall
+    // through to the env var when set, otherwise to None).
+    chatSessionId?: string | null;
+    // Set 036 Session 5: extra env vars layered onto the filtered
+    // base env. Used by new-chat-id-cli-flow.spec.ts to set
+    // $CHAT_SESSION_ID so start_session's env-fallback branch
+    // populates the orchestrator block.
+    env?: Record<string, string>;
+  } = {},
 ): StartSessionAttemptResult {
   const args = [
     "-m", "ai_router.start_session",
@@ -284,6 +299,9 @@ export function attemptStartSession(
     "--effort", identity.effort ?? "medium",
   ];
   if (opts.force) args.push("--force");
+  if (typeof opts.chatSessionId === "string") {
+    args.push("--chat-session-id", opts.chatSessionId);
+  }
 
   const env = _filteredEnv();
   if (opts.homeOverride) {
@@ -291,6 +309,9 @@ export function attemptStartSession(
     // POSIX; setting both keeps the redirect cross-platform.
     env.HOME = opts.homeOverride;
     env.USERPROFILE = opts.homeOverride;
+  }
+  if (opts.env) {
+    for (const [k, v] of Object.entries(opts.env)) env[k] = v;
   }
 
   const proc = cp.spawnSync(PYTHON, args, {
@@ -333,13 +354,21 @@ export function seedOrchestratorBlock(
     effort: string;
     checkedOutAt: string;
     lastActivityAt: string;
+    // Set 036 Session 5: chatSessionId. Three meaningful shapes:
+    //   - key omitted entirely  → legacy pre-Set-036 state file
+    //   - key present, value null → Set 036 writer that had no ID
+    //   - key present, string    → Set 036 writer with explicit ID
+    // The "in" operator distinguishes omitted from explicit-null
+    // so callers can seed any of the three; the writer's tolerant-
+    // on-read predicate has distinct branches for the first two.
+    chatSessionId: string | null;
   }> = {},
 ): void {
   const statePath = path.join(h.set_dir, "session-state.json");
   const raw = fs.readFileSync(statePath, "utf8");
   const state = JSON.parse(raw) as Record<string, unknown>;
   const now = new Date().toISOString();
-  state.orchestrator = {
+  const block: Record<string, unknown> = {
     engine: "claude",
     provider: "anthropic",
     model: "claude-opus-4-7",
@@ -348,6 +377,15 @@ export function seedOrchestratorBlock(
     lastActivityAt: now,
     ...overrides,
   };
+  // The spread above copies chatSessionId only when explicitly in
+  // overrides — Partial's optional key is included via "in" if the
+  // caller wrote it, and excluded if they didn't. We keep that
+  // shape verbatim so the omitted-key vs. null-value distinction
+  // survives to the writer's predicate.
+  if (!("chatSessionId" in overrides)) {
+    delete (block as { chatSessionId?: unknown }).chatSessionId;
+  }
+  state.orchestrator = block;
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 

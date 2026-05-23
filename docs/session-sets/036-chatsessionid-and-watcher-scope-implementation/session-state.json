@@ -25,7 +25,7 @@
     {
       "number": 5,
       "title": "Layer-3 Playwright coverage + cross-tier docs + cross-repo notice",
-      "status": "not-started"
+      "status": "in-progress"
     },
     {
       "number": 6,
@@ -38,7 +38,7 @@
       "status": "not-started"
     }
   ],
-  "currentSession": null,
+  "currentSession": 5,
   "totalSessions": 7,
   "completedSessions": [
     1,
@@ -48,8 +48,16 @@
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-23T15:14:40.134789-04:00",
+  "startedAt": "2026-05-23T17:24:58.785469-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": null
+  "orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "chatSessionId": null,
+    "checkedOutAt": "2026-05-23T17:24:55.788913-04:00",
+    "lastActivityAt": "2026-05-23T17:24:58.785469-04:00"
+  }
 }

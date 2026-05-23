@@ -89,6 +89,7 @@ fields:
     "provider": "...",
     "model": "...",
     "effort": "...",
+    "chatSessionId": "<string | null>",
     "checkedOutAt": "<ISO 8601 timestamp>",
     "lastActivityAt": "<ISO 8601 timestamp>"
   } | null,
@@ -111,7 +112,7 @@ fields:
 | `startedAt` | ISO 8601 or null | First session start time. |
 | `completedAt` | ISO 8601 or null | Final session completion time. |
 | `verificationVerdict` | `"VERIFIED"` or null | Set by `close_session` after all gates pass. |
-| `orchestrator` | object or null | Engine / provider / model / effort + check-out timestamps for the holder. Null when `status != "in-progress"`. Null for hand-driven Lightweight runs that have not started a session. See **Check-out / check-in** below. |
+| `orchestrator` | object or null | Engine / provider / model / effort + chatSessionId + check-out timestamps for the holder. Null when `status != "in-progress"`. Null for hand-driven Lightweight runs that have not started a session. See **Check-out / check-in** below. |
 | `sessions` | array of objects | The canonical progress ledger. See below. |
 
 ### `sessions[]` — the canonical progress ledger
@@ -144,36 +145,98 @@ verdicts). Two nested timestamp fields capture the lifecycle:
 | `lastActivityAt` | Every write. Mirrors `checkedOutAt` on a fresh check-out. | Every same-holder re-attach or in-state holder update. |
 
 **Holder identity (H4):** the equality predicate is the
-`engine + provider` composite. Two orchestrators with the same
-`engine + provider` but different `model` (e.g.,
+`engine + provider + chatSessionId` composite (Set 036 Q1
+refinement of the Set 033 `engine + provider` base composite). Two
+orchestrators with the same triple but different `model` (e.g.,
 `claude-opus-4-7` and `claude-sonnet-4-6` both running through the
-`claude + anthropic` identity) are treated as the **same holder**.
-Model and effort are mutable fields inside the block; they update
-in place on a same-holder re-attach without resetting
-`checkedOutAt`.
+same Claude chat) are treated as the **same holder**; model and
+effort are mutable fields inside the block and update in place on
+a same-holder re-attach without resetting `checkedOutAt`. Two
+distinct chats (different `chatSessionId`) on the same
+`engine + provider` are treated as **different holders** even
+though the engine and provider match — the chatSessionId is the
+discriminator the takeover UX (see below) keys on.
+
+**`chatSessionId`** is a per-chat identifier sourced at write time
+in one of two ways:
+
+- **Claude Code chats** — the SessionStart hook invoker
+  (`scripts/claude-session-start-invoker.js`) extracts
+  `session_id` from the hook payload and forwards it as
+  `--chat-session-id` to `start_session` automatically.
+- **All other orchestrators** (Codex CLI, Gemini Code Assist,
+  GitHub Copilot, manual Lightweight) — the operator runs
+  `python -m ai_router.new_chat_id --export --shell <bash|powershell|fish>`
+  in their shell once per chat and `eval`/`Invoke-Expression`/`source`s
+  the output. The resulting `$CHAT_SESSION_ID` env var is the
+  default for `start_session --chat-session-id` (env-fallback
+  branch). The wizard's "Configure Orchestrator" toast for
+  Gemini / Copilot links to this workflow.
+
+**Tolerant-on-read.** A prior `orchestrator` block missing the
+`chatSessionId` key entirely (pre-Set-036 writer) or with the key
+present and `null` (Set 036 writer that had no ID at the time of
+write — e.g., a Claude chat without a hook-payload `session_id`,
+or an operator who skipped the `new_chat_id` workflow) is treated
+as a match against any caller-supplied chatSessionId for
+`engine + provider` equality. The first new write **populates the
+field strictly** with whatever the caller supplied (or `null` if
+nothing was supplied) — every new write under the Set 036+ writer
+includes the key.
 
 **Hard coordination (H3):** `start_session` REFUSES to write when
 the existing `orchestrator` block names a different
-`engine + provider` than the caller, unless `--force` is set. The
-refusal error names both (a) the current holder and (b) the two
+`engine + provider + chatSessionId` composite than the caller,
+unless `--force` is set. The refusal error names both (a) the
+current holder's full composite (including the chatSessionId or
+`<no chat session ID recorded>` for legacy state) and (b) the two
 release paths — `--force` and the "Release Check-Out" Command
 Palette action — so the operator can act on it without consulting
-external docs.
+external docs. When the only difference is the chatSessionId
+(same `engine + provider`, different chat) and the caller is
+running on an interactive TTY, `start_session` ALSO surfaces an
+inline three-option prompt to stderr (Take Over / Open in
+Read-Only Mode / Cancel) before falling through to the standard
+refusal text — the operator-facing CLI mirror of the extension's
+Q3-locked takeover modal.
 
 **Force-override (`--force`)** is an authority handoff, not a
 state-machine transition. The writer appends a single line to
 `~/.dabbler/orchestrator-writer.log` (best-effort; failure to write
 the log does not block the override) and proceeds with the write;
+the line carries both holders' full composites including both
+chatSessionIds (or `<no chat session ID recorded>` for the legacy
+case) so a forensic walk can correlate the handoff to the chats.
 `checkedOutAt` is rewritten to now and `lastActivityAt` mirrors
 it. The lifecycle invariant — at most one `in-progress` session
 per set, top-level status agreement with `sessions[]` — is
 unchanged.
 
+**Per-set lifecycle lock (Set 036 Q5).** Both `start_session` and
+`close_session` acquire `<session-set-dir>/.lifecycle.lock` for
+the duration of their read/check/write window so a hybrid
+migration — one orchestrator opening a new session while another
+is mid-close-out on the same set — never interleaves writes. The
+lock dual-acquires the canonical `.lifecycle.lock` and the legacy
+`.close_session.lock` filename atomically for one release window
+per the R1 alias-on-read contract; both files carry `pid`,
+`worker_id`, and `acquired_at`, and stale locks on either path
+are reaped automatically. `start_session` polls for up to 30s on
+contention before exiting `EXIT_LOCK_CONTENTION=5`;
+`close_session` keeps its existing immediate-failure contract
+(exit 3) so a stuck close-out surfaces fast rather than blocking
+under the poll window. See
+[`ai_router/docs/close-out.md`](../ai_router/docs/close-out.md)
+Section 3 step 3 for the lock contract end-to-end.
+
 **Block-null invariant:** when top-level `status` is anything other
 than `"in-progress"` (`"not-started"`, `"complete"`, or
 `"cancelled"`), the `orchestrator` block is `null`. The block lives
 exactly as long as a check-out does — the session boundary IS the
-release point.
+release point. Because the chatSessionId lives inside the block,
+it clears together with the rest of the holder identity on every
+successful close; the next holder's `start_session` populates the
+field fresh from their own chat-id source.
 
 The invariant is tier-symmetric:
 
@@ -493,6 +556,7 @@ release.
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "normal",
+    "chatSessionId": "5d3e9c2b-1f47-4a8b-9c61-2e7d8f4a1b3c",
     "checkedOutAt": "2026-05-11T14:30:00-04:00",
     "lastActivityAt": "2026-05-11T16:42:18-04:00"
   },
@@ -509,7 +573,10 @@ release.
 `completedSessions=[1]`, `isBetweenSessions=False`. The extension's
 tree view renders this as `1/4 · session 2 in flight`. `checkedOutAt`
 captures when this set was first checked out; `lastActivityAt`
-bumped on the most recent same-holder re-attach.
+bumped on the most recent same-holder re-attach. `chatSessionId`
+is the per-chat identifier from Claude Code's SessionStart hook
+payload — the H4 discriminator that lets the writer distinguish
+two Claude chats sharing `claude-code + anthropic`.
 
 ### Between sessions
 

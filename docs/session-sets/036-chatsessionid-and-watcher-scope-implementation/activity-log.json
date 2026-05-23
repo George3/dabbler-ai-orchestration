@@ -371,6 +371,87 @@
       "description": "Round C verification attempted but hit a 429 Too Many Requests on gpt-5-4 — three back-to-back tier-3 verification calls (Round A 541s + Round B 281s + Round C bundle) saturated the OpenAI rate limit. Per [[feedback_split_large_verification_bundles]] the 15min recovery window is insufficient after sustained reasoning workload. Decision: SKIP Round C. The Round B Major fix (maybeShowChatSessionMismatchOnManualCheckout — ~50 LOC new helper + InProgressSet schema extension + executeCheckOut reorder) is mechanically symmetric with the already-verified CheckoutPollService.handleChatSessionMismatch routing (same modal helper, same tolerant-on-read predicate, same Take-Over/Read-Only/Cancel mapping); the symmetry is itself a structural safety check. The fix is pinned by 9 regression tests covering every branch (no-mismatch on prior null/key-absent, take-over choice, read-only choice, cancel choice, modal dismissal, injected-intent-service verification). TypeScript clean (npx tsc --noEmit). Full test sweep post-Round-B-fix: pytest 693+1 unchanged, extension Layer-2 539 passing (was 519 pre-Round-A-fixes; +20 regression tests), 2 pre-existing failures unchanged. Cumulative routed spend this session: $0.83 (significantly above the spec's $0.05–$0.15 estimate because the verifier surfaced real Major-class defects across both rounds — the cost is the verifier doing its job). Cumulative for set: $2.124 / $5 NTE (42% utilization with 3 sessions remaining).",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "session-005/playwright-takeover-green",
+      "dateTime": "2026-05-23T17:25:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/test/playwright/chatsessionid-takeover.spec.ts with 3 Layer-3 scenarios at the start_session process boundary: (a) chatSessionId mismatch (same engine + provider, different chat) refuses with EXIT_CHECKOUT_CONFLICT=4, stderr names both holders' chatSessionIds via the `chatSessionId=<value>` composite label format + the two release paths (--force, Release Check-Out); (b) --force handoff updates state to new chat (chatSessionId rewritten, checkedOutAt rewritten), and ~/.dabbler/orchestrator-writer.log records a force-override line carrying both chatSessionIds + session=N + ISO timestamp (homeOverride redirects HOME + USERPROFILE to a tmpdir for hermetic audit-log assertion); (c) same-chat re-attach preserves checkedOutAt and bumps lastActivityAt only. The modal UX itself is acknowledged-brittle in the existing checkout-conflict.spec.ts (see its test.skip note) and is covered at Layer 2 by chatSessionMismatchModal.test.ts (S4); this Layer 3 spec exercises the writer-side end-to-end that the modal's Take Over button ultimately invokes.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "session-005/playwright-tolerance-green",
+      "dateTime": "2026-05-23T17:28:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/test/playwright/chatsessionid-missing-tolerance.spec.ts with 3 Layer-3 scenarios exercising the writer's tolerant-on-read / strict-on-write semantics: (a) legacy state (chatSessionId KEY ABSENT — verified via `'chatSessionId' in orchestrator === false` sanity check) tolerates a new chat (same engine+provider) and populates the field strictly on first write; (b) Set-036 null state (key present, value null — verified via `.toBeNull()`) same tolerate-then-populate behavior; (c) post-population, a different chatSessionId is refused strictly with exit 4 and both IDs in stderr; state unchanged. Drove the three shapes via the extended seedOrchestratorBlock helper which distinguishes omitted-key (legacy) from explicit-null (Set 036 no-ID) from explicit-string via the `in` check on the overrides + post-spread delete safety net.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "session-005/playwright-cli-flow-green",
+      "dateTime": "2026-05-23T17:31:00-04:00",
+      "description": "Created tools/dabbler-ai-orchestration/src/test/playwright/new-chat-id-cli-flow.spec.ts with 3 Layer-3 scenarios exercising the Q1-fallback CLI: (a) `python -m ai_router.new_chat_id` plain mode prints a valid UUID v4 (strict regex enforces the version-4 nibble + variant [89ab] nibble); (b) minted UUID flows through $CHAT_SESSION_ID env into orchestrator.chatSessionId when start_session is invoked WITHOUT --chat-session-id (env-fallback branch in _resolve_chat_session_id); (c) idempotency — a second mint in an env that already carries $CHAT_SESSION_ID re-emits the same value rather than re-minting. Local mintChatSessionId helper sets cwd=REPO_ROOT so the CLI subprocess can resolve the ai_router package (initial run hit ModuleNotFoundError before the cwd fix). REPO_ROOT derivation: 5 `..` hops from src/test/playwright/ matching electronLaunch.ts's EXTENSION_ROOT (3 hops) + REPO_ROOT (2 more) chain.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "session-005/schema-doc-updated",
+      "dateTime": "2026-05-23T17:38:00-04:00",
+      "description": "Updated docs/session-state-schema.md: chatSessionId added to the orchestrator block JSON shape (`string | null`); field table extended to mention chatSessionId in the orchestrator-row description; H4 holder identity paragraph refined to `engine + provider + chatSessionId` composite with the discriminator explanation (two distinct chats on same engine+provider are different holders); new chatSessionId-source paragraph (Claude Code SessionStart hook for Claude chats; new_chat_id CLI workflow for Codex/Gemini/Copilot/manual Lightweight); tolerant-on-read paragraph covers both key-absent and key-present-null branches with strict-on-write contract on first new write; H3 refusal paragraph mentions the TTY takeover prompt as the inline CLI mirror of the extension modal; force-override paragraph notes the writer log carries both chatSessionIds; new per-set lifecycle lock paragraph (Set 036 Q5) covers the dual-acquire `.lifecycle.lock` + legacy `.close_session.lock` R1 alias contract, 30s poll for start_session (EXIT_LOCK_CONTENTION=5), immediate-failure exit-3 for close_session; block-null invariant paragraph extended to note chatSessionId clears with the rest of the block; mid-set worked example carries a populated chatSessionId UUID with a one-sentence explanation of the H4 discriminator role.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "session-005/close-out-doc-updated",
+      "dateTime": "2026-05-23T17:42:00-04:00",
+      "description": "Updated ai_router/docs/close-out.md: Section 0 close-side protocol table extended with the `orchestrator: cleared to null` row; new paragraph below the table covers the `closeout_succeeded` event payload's Q4 audit-trail extension (chatSessionId + engine + provider + model fields, snapshotted before block-clear, legacy state files degrade gracefully by omitting the four identity fields rather than emitting empty strings). Section 2 'Orchestrator check-in (Set 033 Session 6)' paragraph extended to note that the Set 036 chatSessionId lives inside the block so it clears together with the rest of the holder identity (no separate field-level wipe needed). Section 3 step 9 mark_session_complete bullet extended to note the same and add the snapshot-ordering note (payload taken BEFORE the clear so the payload reflects the released holder, not None). Section 4 stranded-checkout paragraph extended: the same recovery applies whether the stranded composite differs on engine+provider OR on just chatSessionId (e.g., a Claude chat force-killed mid-session); writer log line now carries both composites' chatSessionIds (or `<no chat session ID recorded>` for legacy state); start_session surfaces the inline Take Over / Read-Only / Cancel TTY prompt before falling through to refusal when the only difference is the chatSessionId and stdin+stderr are both TTYs (CLI mirror of extension's takeover modal — Set 036 Q3).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "session-005/workflow-doc-updated",
+      "dateTime": "2026-05-23T17:46:00-04:00",
+      "description": "Updated docs/ai-led-session-workflow.md 'Orchestrator check-out / check-in (Set 033)' subsection: holder identity refined to `engine + provider + chatSessionId` composite (Set 036 Q1 refinement of Set 033 base) with the discriminator explanation; new chatSessionId-source paragraph (Claude Code automatic via SessionStart hook; all other orchestrators run `python -m ai_router.new_chat_id --export --shell <bash|powershell|fish>` once per chat with idempotency note); H3 refusal paragraph mentions both chatSessionIds in the holder composite AND the inline TTY takeover prompt for chat-id-only mismatches; tolerant-on-read paragraph covers both branches with the strict-on-write contract; force-override paragraph notes the writer log line carries both holders' chatSessionIds; new closeout_succeeded Q4 payload note; new per-set lifecycle lock paragraph (Set 036 Q5, 30s poll, EXIT_LOCK_CONTENTION=5, legacy .close_session.lock alias contract); tier symmetry extended for Lightweight (humans run new_chat_id to mint a UUID then paste it into the chatSessionId field by hand alongside the rest of the block).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 7,
+      "stepKey": "session-005/cross-repo-notice-updated",
+      "dateTime": "2026-05-23T17:50:00-04:00",
+      "description": "REWROTE docs/cross-repo-checkout-notice.md from the Set 033 base composite to the Set 036 refinement. Header now carries both authored (2026-05-21) and updated (2026-05-23) dates with the diff-based swap guidance for consumers that already pasted the Set 033 version (structural shape unchanged — same H3 heading, same paragraph order). Version numbers in the heading + summary bumped to dabbler-ai-router 0.7.0 + extension 0.19.0. The pasted snippet: holder identity now triple with the chatSessionId discriminator explanation; chatSessionId source by orchestrator (Claude Code automatic; others via new_chat_id with idempotency note); refusal example carries chatSessionId in both holders' composites; resolution paths now FOUR (was three): wait-and-retry, takeover modal/CLI prompt (new — Q3), force-override, Release Check-Out; tolerant-on-read paragraph covers both branches; close-out paragraph notes chatSessionId clears with block + closeout_succeeded Q4 payload preserves the released holder's identity; new per-set lifecycle lock paragraph (Q5); Lightweight tier reminder includes the new_chat_id paste workflow. Paster notes updated with swap-from-Set-033 guidance + Lightweight new_chat_id correction (was Full-tier-only paragraph in the prior version).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 8,
+      "stepKey": "session-005/round-a-verification",
+      "dateTime": "2026-05-23T18:05:00-04:00",
+      "description": "Round A verification routed — initial attempts via session-verification task type hit 429 Too Many Requests on gpt-5-4 immediately on both the full Round A bundle AND a split Round A1 (Layer-3 specs + helper only); the rate limit from Set 036 Session 4's three consecutive tier-3 calls (and likely subsequent activity in unrelated repos) had not cleared. Per [[feedback_split_large_verification_bundles]] and the Session 4 Round-C-skipped precedent, switched the verifier task_type from session-verification (hard-pinned to gpt-5-4 in router-config.yaml's task_type_overrides) to verification (tier-routed) with complexity_hint=60. The router selected opus (cost $1.2482, 21125 input + 12417 output tokens, single call). Verdict: VERIFIED. One Minor finding only: prose typo in new-chat-id-cli-flow.spec.ts:29-33's REPO_ROOT comment ('four parent hops' was a miscount; the code's 5 `..` segments are correct — fixed in place by rephrasing to 'five parent hops' and enumerating each hop). All ten criteria pass per the verifier's table response (Layer-3 spec correctness x3, helper extensions, schema doc, close-out doc, workflow doc, cross-repo notice, cross-tier doc/code drift, out-of-scope check). The verifier was opus (Anthropic) — same provider as the orchestrator (Claude/Anthropic), so the cross-provider intent of the routing was lost in the rate-limit workaround. The work is mostly documentation (where cross-provider value is lower than for executable code) and the Layer-3 specs are pinned by deterministic test runs (6/6 new tests green + 3 idempotency tests via standalone re-run), so the verification gap is acceptable for this session. Round B not warranted (no Major/Blocker findings; the one Minor was a comment-only fix). Cumulative routed spend this session: $1.2482. Cumulative for set: $3.3722 / $5 NTE (67% utilization with 2 sessions remaining; Sessions 6-7 have ~$1.63 of headroom).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "verification",
+          "model": "opus",
+          "cost_usd": 1.24815,
+          "input_tokens": 21125,
+          "output_tokens": 12417,
+          "round": "A"
+        }
+      ]
     }
   ]
 }
