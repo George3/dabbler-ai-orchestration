@@ -227,6 +227,106 @@ Not committed to Set 046 — flagged here so the next audit pass can
 decide whether to absorb it, spin it into its own set, or defer
 indefinitely.
 
+### Schema v4 — derive top-level state from `sessions[]`
+
+Surfaced during Set 045 / S3 close-out (2026-05-24). The current
+v3 schema denormalizes a half-dozen fields that are derivable from
+the `sessions[]` array if per-session timestamps and orchestrator
+are promoted into it. Concretely:
+
+| Top-level field | Derivation |
+|---|---|
+| `totalSessions` | `len(sessions)` |
+| `completedSessions` | `[s.number for s in sessions if s.status == "complete"]` |
+| `currentSession` | the (singleton) session with `status == "in-progress"`, else `null` |
+| `status` | all complete → `complete`; all not-started → `not-started`; any in-progress → `in-progress`; explicit cancellation marker remains |
+| `lifecycleState` | drop entirely; sub-states (`closeout_pending`, `closeout_blocked`) move to the events ledger |
+| `startedAt` (set) | `min(session.startedAt for s in sessions if s.startedAt)` |
+| `completedAt` (set) | `null` unless `status == "complete"`, else `max(session.completedAt)` |
+| `orchestrator` (set) | the orchestrator of the in-progress session (per-session field) |
+| `verificationVerdict` (set) | composite over per-session verdicts (today the top-level field is overwritten each close, losing history) |
+
+The redundancy is mostly historical baggage from the v0→v3
+migration. Today it generates real bugs: Set 036 S7 had to add a
+`fractionFor() → N/?` fallback because the writer can leave
+`totalSessions` null. Set 045 S3's final VERIFIED clobbered S2's
+VERIFIED in the snapshot (events ledger has both; snapshot
+doesn't).
+
+**This is audit-then-spec material**, not in-flight work. The
+migration touches: ai_router writers (start/close/mark_session_
+complete/cancel_lifecycle/register_session_start), readers
+(gate_checks/reconciler/session_lifecycle/joiner.parsers),
+extension consumers (fileSystem.ts:readSessionSets, fractionFor,
+cancellation reader from Set 035), every test, and every
+Lightweight-tier consumer repo (which currently lacks a canonical
+emission pattern and so invents ad-hoc shapes — see triage
+candidate below).
+
+**Cross-provider audit topics:**
+- Is the "promote timestamps + orchestrator + verdict to per-session"
+  shape the right v4 shape, or is there a different normalization
+  worth considering?
+- Cancellation marker: explicit set-level `cancelled: true` flag,
+  or every-session-cancelled-or-not-started inference?
+- Migration sequencing: reader-first (accept both v3 and v4)
+  then writer-second (emit v4) — or atomic flip with a v3→v4
+  migrator?
+- One-shot migrator for non-canonical v3 files emitted by
+  Lightweight orchestrators (see triage below).
+
+### Triage: "(needs migration)" indicator firing on fresh Lightweight repos
+
+Surfaced 2026-05-24: the Session Set Explorer's "(needs migration)"
+indicator fired immediately on `great-psalms-scroll-font`, a freshly-
+started Lightweight-tier repo. Root cause analysis during the same
+session showed:
+
+- That repo's orchestrator emitted a non-canonical v3 file: a
+  `sessionLog[]` array carrying per-session
+  `{ session, title, startedAt, completedAt, output, notes }`
+  entries — but no canonical `sessions[]` and no
+  `completedSessions[]`.
+- The Explorer's `fractionFor(state)` reads
+  `state.completedSessions.length`, so it rendered `0/5` instead
+  of the operator-expected `2/5`.
+- The "(needs migration)" detector almost certainly fires on the
+  *absence* of canonical v3 fields when `schemaVersion: 3` is
+  present — i.e., it's correctly flagging schema drift, just not
+  in an actionable way.
+
+This is the *same problem* the v4 audit above is trying to solve:
+the Lightweight tier doesn't have a clear canonical emission
+contract, so individual orchestrators invent shapes. A natural-
+emission pattern (per-session timestamps + notes) is exactly what
+the v4 schema would canonicalize.
+
+**In-set 046 deliverables (when this set runs):**
+
+1. **One-shot migrator** that recognizes the legacy `sessionLog[]`
+   shape (and any other non-canonical-but-near-conformant shape)
+   and rewrites the file canonically. Idempotent. Should run
+   on-demand via the "(needs migration)" indicator's click action
+   AND as part of a `python -m ai_router.migrate_session_state`
+   sweep.
+
+2. **Triage of which Lightweight orchestrators emit which shapes.**
+   If multiple orchestrators emit `sessionLog[]`, that's signal
+   that the schema doc isn't reaching them — fix is doc + canonical
+   template at https://raw.githubusercontent.com/.../session-state-schema.md.
+
+3. **"(needs migration)" indicator click action** — today the
+   indicator surfaces the problem but offers no remediation. The
+   click should open the migrator OR open the schema doc OR (the
+   v4-aware version) just-fix-it inline.
+
+The immediate operator-side workaround applied 2026-05-24 (manual
+edit of `great-psalms-scroll-font/docs/session-sets/001-discovery/
+session-state.json` to add the canonical `sessions[]` +
+`completedSessions[]`) is documented at that repo's CLAUDE.md
+"Session-state file shape" section so the next session there
+emits canonically.
+
 ---
 
 ## Note on this stub
