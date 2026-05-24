@@ -318,6 +318,98 @@
           "raw_output": "session-reviews/session-003-round-c.md"
         }
       ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/register-session-start",
+      "dateTime": "2026-05-24T09:00:00-04:00",
+      "description": "Ran python -m ai_router.start_session --session-set-dir docs/session-sets/045-log-harvest-implementation --session-number 4 --engine claude --provider anthropic --model claude-opus-4-7 --effort high. session-state.json flipped to currentSession=4 + in-progress + orchestrator block populated; work_started event appended to session-events.jsonl.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/narration-module-shipped",
+      "dateTime": "2026-05-24T09:20:00-04:00",
+      "description": "Authored ai_router/narration.py — canonical narration v1.1 module. Surface: MARKER_REGEX (anchored single-line per Set 044 narration-design.md §2.3, ASCII + 4 Unicode curly-quote variants supported), ParsedMarker dataclass + detect_marker() with the full §5.5 semantic-check enumeration (placeholder-leakage, unknown-phase, unknown-effort-enum, session-exceeds-total, non-integer-{session,total}, version skipped, incomplete), render_template(kind, set_slug, session_number, total_sessions, effort) with strict input validation that refuses to emit placeholder strings, project_state_for_template() reading session-state via the D13-compliant ai_router.progress.read_progress reader, and a CLI (python -m ai_router.narration) with --kind {claude,agents}, --state-file XOR (--set-slug + --session + --total), --effort, --output. Template prose obeys the four Q3 defensive rules verbatim — no harvest lexical family, no pretense self-disclosure, framed as project convention, minimal caps.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/claude-per-event-parser",
+      "dateTime": "2026-05-24T09:40:00-04:00",
+      "description": "Added read_claude_session_events() to ai_router/joiner/parsers.py (Set 045 S4 symmetric counterpart to S3's Copilot per-event parser). Maps Claude JSONL types to the canonical §5.1 enum: first user/assistant record → session_start (emitted once); each assistant record → turn; tool_use content blocks → tool_call (redacted via _summarize_claude_tool_args — preserves file_path/path/file/filename + line_count + Bash command_head only, strips old_string/new_string/argv body); assistant.message.usage → usage (tokens_in = input + cache_creation + cache_read; tokens_out = output); text blocks matching MARKER_REGEX → marker event with source='narration'. Noise types (queue-operation, ai-title, last-prompt, file-history-snapshot, attachment) are skipped. Sticky context (cwd, conv_id, model) propagates; provider defaults to 'anthropic' on first model sighting. Tolerant streaming: malformed JSONL lines skip, OSError yields nothing.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/native-events-dispatch-claude-branch",
+      "dateTime": "2026-05-24T09:45:00-04:00",
+      "description": "Wired the Claude branch into _native_events_for() dispatch in ai_router/joiner/schema.py — Copilot path unchanged; Claude path now invokes read_claude_session_events with the bound native's source_file + canonical cwd + conv_id (mirrors the Copilot branch precedent). The previous single session_start fallback for Claude is retired. Future engines without a per-event parser still hit the fallback path. Updated harvest() docstring to drop the S3-era 'Claude in S3 — S4 deliverable' language.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-004/extension-command-shipped",
+      "dateTime": "2026-05-24T10:00:00-04:00",
+      "description": "Authored tools/dabbler-ai-orchestration/src/commands/regenerateNarrationTemplates.ts — VS Code command 'Dabbler: Regenerate Narration Templates' (dabbler.regenerateNarrationTemplates). Picks the in-progress session set (auto-selects when exactly one is in-progress; quickpick otherwise via readAllSessionSets), shells out to python -m ai_router.narration twice (claude + agents kinds) inside a withProgress wrapper, writes outputs to <set-dir>/narration-templates/{CLAUDE.md,AGENTS.md}, then shows a toast with two actions: 'Open Rendered CLAUDE.md' (default) and 'Copy to consumer workspace…' (quickpick + showOpenDialog folder picker + fs.copyFileSync with overwrite confirm). Python resolver mirrors installAiRouterCommands + checkOutOrchestrator (dabblerSessionSets.pythonPath). Wired into extension.ts via safeRegister; declared in package.json contributes.commands. The withProgress + Copy-to-workspace polish were both Round-A nice-to-have refinements applied in-flight.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "session-004/narration-docs-authored",
+      "dateTime": "2026-05-24T10:10:00-04:00",
+      "description": "Authored docs/narration-templates.md — operator-facing reference doc. Sections: what a narration marker is + when to use the templates + how to regenerate (extension command + CLI), full marker anatomy table, the four defensive phrasing rules with cross-refs back to the Q3 ablation analysis, malformed-marker diagnostic-flag semantics, optional ablation pointer, cross-references to narration-design.md + joiner-spec.md + narration.py + parsers.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 7,
+      "stepKey": "session-004/layer-1-tests-authored",
+      "dateTime": "2026-05-24T10:20:00-04:00",
+      "description": "Authored 18 new Layer-1 tests: test_narration.py (TestMarkerRegex 3 cases + TestDetectMarker 9 semantic-flag cases incl. placeholder-leakage / session-exceeds-total / unknown-effort-enum / lenient-whitespace / case-insensitive keys + TestRenderTemplate 6 cases incl. defensive-rule prose audit + round-trip through detect_marker + TestProjectStateForTemplate 4 cases + CLI integration smoke 2 cases). Added 5 read_claude_session_events tests to test_joiner_parsers.py (canonical event stream + missing file + malformed lines + noise-only file + session_start-once invariant + Bash argv body redaction). Updated the S3 _write_claude_jsonl e2e fixture to write a proper type=user record (the previous no-type minimal record survived the old fallback but the new per-event parser correctly treats it as noise).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 8,
+      "stepKey": "session-004/pytest-smoke",
+      "dateTime": "2026-05-24T10:30:00-04:00",
+      "description": "Step 5 build/test: python -m pytest 808 passed, 1 skipped in 149.50s (S3 baseline 775 → +33 incl. 18 new Layer-1 plus pre-existing tests that were not run in S3's count). npx tsc --noEmit in tools/dabbler-ai-orchestration/ clean. npm run test:unit 531 passing, 2 pre-existing harness failures (configEditor-foundation TypeError reading 'One' on vscode.ViewColumn.One stub; notificationsSection 'wired in Set 026 Session 7' button assertion) — neither touched by S4. Watcher-inventory allowlist updated for the extension.ts line shift (146 → 147) caused by the new safeRegister entry.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 9,
+      "stepKey": "session-004/verification-round-a",
+      "dateTime": "2026-05-24T10:45:00-04:00",
+      "description": "Step 6 end-of-session verification — Round A. Wrote verify_session4.py per the S2/S3 pattern; bundled joiner-spec.md + open-question-resolution.md + narration.py + joiner/schema.py + joiner/parsers.py + test_narration.py + test_joiner_parsers.py + regenerateNarrationTemplates.ts + narration-templates.md (146,115 chars across 9 parts). Routed via ai_router.query(model='gemini-pro') — straight to gemini-pro per the standing GPT-5.4 429 cascade workaround. Verdict: VERIFIED no must-fix issues. Two nice-to-have refinements flagged (both applied in-flight per the operator's 'don't hide behind out-of-scope' directive before this log entry was written): wrap the two python invocations in vscode.window.withProgress + add a 'Copy to consumer workspace…' action button to the success toast. Verifier explicitly endorsed the four S4 design judgment calls: no synthetic session_end emission, sticky-cwd/overwriting-conv_id asymmetry, first-user-or-assistant session_start trigger, summed tokens_in incl. cache reads; plus the strict project_state_for_template fail-loud posture. Cost: $0.063053. Raw verdict at session-reviews/session-004.md. Cumulative routed Set 045 through S4: $0.024 (S1) + $0.053066 (S2) + $0.107 (S3) + $0.063 (S4) = $0.247 of $5 NTE.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "tier": 2,
+          "task_type": "session-verification",
+          "cost_usd": 0.0630525,
+          "input_tokens": 44410,
+          "output_tokens": 754,
+          "verdict": "VERIFIED",
+          "raw_output": "session-reviews/session-004.md"
+        }
+      ]
     }
   ]
 }

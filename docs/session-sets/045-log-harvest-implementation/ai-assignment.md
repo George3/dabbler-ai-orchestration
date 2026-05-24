@@ -271,3 +271,120 @@ S1 Q3 phrasing-trigger defensive rules in context. Rationale:
 S4 is the symmetric counterpart to S3's Copilot work — the
 hardest part is template-authoring, not parser-coding, and the
 defensive rules from S1 are local context Opus already has.
+
+---
+
+## Session 4: Claude parser + narration v1.1 template
+
+### Recommended orchestrator
+
+claude-opus-4-7 @ effort=high (the running orchestrator).
+
+### Self-authored disclaimer (Session 4)
+
+This block was authored by the orchestrator (Claude Opus 4.7)
+directly, not via `route(task_type="analysis")`. The standing
+operator directive ("AI router usage restricted to end-of-session
+verification — cost containment, until further notice") remains in
+force. Read the recommendations below with the
+orchestrator-self-opinion bias caveat in mind; the end-of-session
+verifier provides the independent cross-provider check.
+
+### Rationale
+
+S4 ships the Claude-side counterpart to S3's Copilot per-event
+parser work, plus the narration v1.1 template authoring (CLAUDE.md
++ AGENTS.md + extension command + operator-facing docs). The work
+is module-level Python coding + regex authoring + TypeScript
+command wiring + pytest fixture authoring — best handled by Opus
+in-process. No new API spend in this session (routed verification
+only at end-of-session). Cumulative routed spend coming in:
+**$0.184 of $5 NTE**.
+
+### Estimated routed cost
+
+Low — single routed `session-verification` call via gemini-pro
+(skipping GPT-5.4 per the standing 429-cascade workaround).
+Additional rounds within scope if surfacing must-fix items.
+
+| Step | Action | Routing Decision |
+|------|--------|------------------|
+| 1 | Author `ai_router/narration.py` — MARKER_REGEX + detect_marker + render_template + project_state_for_template + CLI | No routing |
+| 2 | Add `read_claude_session_events()` to `ai_router/joiner/parsers.py` — per-event HarvestRecord emission for Claude JSONL | No routing |
+| 3 | Wire Claude branch into `_native_events_for` dispatch (schema.py) | No routing |
+| 4 | Build `regenerateNarrationTemplates.ts` extension command + register in extension.ts + declare in package.json | No routing |
+| 5 | Author `docs/narration-templates.md` operator reference doc | No routing |
+| 6 | Layer-1 + Layer-2 test coverage (18 new tests) | No routing |
+| 7 | `python -m pytest` smoke + `npx tsc --noEmit` + extension `npm run test:unit` | No routing |
+| 8 | End-of-session cross-provider verification (Round A) | `route(model="gemini-pro", task_type="session-verification")` |
+| 9+ | Round B / C if Round A surfaces must-fix items | Same routing |
+
+### Carry-forward inputs from prior sessions (locked, do not relitigate)
+
+- Joiner location: Python at `ai_router.joiner` (Set 045 S1 Q4
+  lock).
+- Canonical Harvest Record §5 schema (joiner-spec.md §5) — the
+  Claude parser writes to it verbatim. `event_type ∈ {launch,
+  session_start, turn, tool_call, marker, usage, session_end}`.
+- §7 redaction posture — no raw tool args; `*_summary` only.
+- Q3 phrasing-trigger four defensive rules
+  (`open-question-resolution.md` §Q3) — no harvest lexical family,
+  no pretense self-disclosure, framed as project convention, minimal
+  caps. Templates round-trip through `detect_marker` cleanly.
+- Marker format from Set 044 narration-design.md §2.3 (canonical
+  regex including U+201x curly-quote variants) and §4.1 (required
+  keys: phase + set + session + total; optional effort).
+- S3's `_native_events_for` Copilot branch is the working pattern
+  for the Claude branch.
+
+### Actuals (filled after the session)
+
+- Orchestrator used: claude-opus-4-7 @ effort=high
+- Total routed cost: **$0.063** (single gemini-pro
+  session-verification call; VERIFIED Round A, no must-fix)
+- Deviations from recommendation: none. Two nice-to-have
+  refinements applied in-flight (extension command wraps the
+  two python invocations in `vscode.window.withProgress`; the
+  success toast now offers an explicit "Copy to consumer
+  workspace…" action with a file-picker + overwrite confirm) per
+  the operator's "don't hide behind out-of-scope" directive.
+- Notes for next-session calibration: (1) one-round verification
+  this session vs. three rounds in S3 — the §5 schema discipline
+  (Claude parser mirrors the Copilot parser pattern verbatim) and
+  the §2.3 regex tightness (round-trip tested) materially reduced
+  the verifier-catch surface. (2) S5 (Explorer integration)
+  inherits a working Claude per-event parser with marker detection
+  + a render-from-state CLI that the Explorer can shell out to
+  for "Generate Templates" affordances if the operator wants the
+  command surfaced beyond the Command Palette. (3) Verifier
+  explicitly endorsed the four S4 design judgment calls (no
+  synthetic session_end, sticky cwd / overwriting conv_id,
+  first-user-or-assistant session_start, summed tokens_in with
+  cache reads). (4) The two F-section follow-on questions worth
+  surfacing to the operator before S5: should Copilot-side marker
+  scanning of `gen_ai.output.messages` ship in S5 alongside the
+  Explorer wiring (the field exists when OTel content-capture is
+  enabled); should the Q3 optional ablation be run pre-S6 to
+  upgrade defensive posture before Marketplace release.
+- Cumulative routed spend across Set 045 entering S5:
+  $0.024 (S1) + $0.053066 (S2) + $0.107 (S3) + $0.063 (S4) =
+  **$0.247 of $5 NTE**.
+
+---
+
+**Next-session orchestrator recommendation (Session 5 — Explorer
+integration + Layer-3 coverage):**
+
+claude-opus-4-7 @ effort=high — but reroute through ai_router if
+the operator lifts the in-session router restriction by S5 start.
+S5 is the largest UI surface change in Set 045 (Session Set
+Explorer rows gain harvested-signal badges + conflict-warning
+surface; Layer-3 Playwright coverage for the new rendering). The
+TypeScript Explorer code lives in
+`tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts`
+and reads the joiner output via `python -m ai_router.joiner` CLI;
+Opus's careful-reasoning fit + retained Set 045 context outweighs
+a handoff to Codex/Gemini. Rationale: Layer-3 styling iteration
+(per memory `project_029_s6_html_preview_iteration`, operator wants
+~11 iterations for the visual surface) is best handled in-process
+with the joiner output flowing live.
