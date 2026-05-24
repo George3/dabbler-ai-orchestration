@@ -526,6 +526,7 @@ the CLI per `SessionSetsProvider.getChildren()` refresh.
 | 2 | What is the operator-perceived latency budget for `scan_conflicts()` at the Explorer's refresh cadence? | S5 (Layer-3 measurement) |
 | 3 | Does the bypass-observation log eventually feed back into a `CoverageSummary.bypass_observed_count` field, or stay separate? | S5 (Q1 bypass-rate computation lands) |
 | 4 | Codex / Gemini parser shims — extend `parsers.py` with new scrapers and an engine-extension registry? | Follow-on set after 045 |
+| 5 | `normalize_engine()` strips ``-code`` / ``-cli`` suffixes per §3.1's stated contract; vendor variants outside that pattern (e.g. ``anthropic-claude``, ``github-copilot``) would miss the join. Should canonicalization graduate to an explicit alias map? (Surfaced by Set 045 S3 Round-B verification.) | Follow-on once a real-world variant breaks a join — speculative variants don't justify expanding the §3.1 contract today |
 
 ---
 

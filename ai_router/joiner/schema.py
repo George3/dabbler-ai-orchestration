@@ -125,6 +125,87 @@ class HarvestRecord:
 DEFAULT_BIND_WINDOW = timedelta(seconds=30)
 
 
+def _native_events_for(native) -> list["HarvestRecord"]:
+    """Return per-event ``HarvestRecord`` projections for a NativeSession.
+
+    Engine-aware dispatch:
+
+    - **Copilot**: ``read_copilot_session_events`` (S3 hardened
+      per-event parser) yields the canonical event stream.
+    - **Claude**: per-event parser is the S4 deliverable per
+      joiner-spec.md §8.1. Until S4 ships, emit a single
+      ``session_start`` projection derived from the
+      session-level scrape.
+    - **Other engines**: emit only ``session_start`` (engine
+      handler not yet implemented).
+
+    Returns a list (not an iterator) so the caller can chain it
+    with ``records.append`` and sort the final stream by ``ts``.
+    """
+    from ai_router.joiner import parsers
+
+    if native.engine == "copilot":
+        return list(
+            parsers.read_copilot_session_events(
+                Path(native.source_file),
+                session_cwd_canonical=native.cwd_canonical,
+                fallback_conv_id=native.conv_id,
+            )
+        )
+    # Claude (and any future engine without a per-event parser yet)
+    # falls back to a single session_start projection.
+    return [
+        HarvestRecord(
+            ts=native.first_event_ts,
+            event_type="session_start",
+            source=f"{native.engine}-native",  # type: ignore[arg-type]
+            engine=native.engine,  # type: ignore[arg-type]
+            workspace_cwd=native.cwd_canonical,
+            workspace_cwd_canonical=native.cwd_canonical,
+            conv_id=native.conv_id,
+            raw_ref={"file": native.source_file, "field": "first-event"},
+        )
+    ]
+
+
+def _merge_launch_context(evt: "HarvestRecord", launch) -> "HarvestRecord":
+    """Return ``evt`` with the launch's set_slug + session_number merged in.
+
+    Implements joiner-spec.md §4's
+    ``HarvestRecord.from_native(launch, native_evt)``: a native
+    event carries no set_slug / session_number on its own
+    (native logs don't know about Dabbler session sets); when
+    bound to a wrapper launch, the launch's set context is
+    threaded onto the event so downstream consumers can group
+    by set.
+
+    Dataclasses are frozen, so we return a copy with the
+    relevant fields populated. Pre-existing values on the event
+    (rare; a narration marker would set them) win.
+    """
+    return HarvestRecord(
+        ts=evt.ts,
+        event_type=evt.event_type,
+        source=evt.source,
+        engine=evt.engine,
+        workspace_cwd=evt.workspace_cwd,
+        workspace_cwd_canonical=evt.workspace_cwd_canonical,
+        raw_ref=evt.raw_ref,
+        provider=evt.provider or launch.provider,
+        model=evt.model or launch.model,
+        conv_id=evt.conv_id,
+        set_slug=evt.set_slug or launch.set_slug,
+        session_number=evt.session_number or launch.session_number,
+        binding_state=evt.binding_state,
+        bound_candidates=evt.bound_candidates,
+        effort=evt.effort or launch.effort,
+        tool=evt.tool,
+        tool_args_summary=evt.tool_args_summary,
+        tokens_in=evt.tokens_in,
+        tokens_out=evt.tokens_out,
+    )
+
+
 def harvest(
     workspace_cwd: Optional[str] = None,
     since: Optional[datetime] = None,
@@ -138,16 +219,26 @@ def harvest(
 
     Applies the joiner-spec.md §4 positive-case join algorithm:
     each wrapper-launch record is matched to candidate native
-    sessions by engine + canonicalized cwd + ``bind_window``
-    timestamp delta. The result is emitted as a ``launch`` record
-    with ``binding_state ∈ {"bound", "unbound", "ambiguous"}``;
-    bound native sessions are emitted as a single ``session_start``
-    record (carrying the bound conv_id back to the launch).
+    sessions by ``normalize_engine``-canonicalized engine +
+    canonicalized cwd + ``bind_window`` timestamp delta. The
+    result is emitted as a ``launch`` record with ``binding_state
+    ∈ {"bound", "unbound", "ambiguous"}``.
+
+    When ``binding_state == "bound"`` and a per-event parser is
+    available for the bound engine (Copilot in S3), the full
+    native event stream is emitted with the launch's
+    ``set_slug`` / ``session_number`` merged in — this is §4's
+    ``HarvestRecord.from_native(launch, native_evt)``. For
+    backends whose per-event parser has not shipped yet (Claude
+    in S3 — S4 deliverable), a single ``session_start`` record is
+    emitted with the launch context merged.
 
     Native sessions that no launch claimed (free-running) are
     emitted as their own ``session_start`` records with no
     ``binding_state`` set — these are the bypass-channel data
-    points the Q1 self-observation supplements.
+    points the Q1 self-observation supplements. Bound natives
+    are NOT re-emitted here (they were emitted in-line with the
+    launch, with launch context merged).
 
     Args:
         workspace_cwd: optionally restrict to one workspace.
@@ -175,29 +266,39 @@ def harvest(
     bound_native_ids: set[tuple[str, str]] = set()
 
     for launch in launches:
-        candidates = [
-            ns for ns in natives
-            if ns.engine == launch.engine
-            and ns.cwd_canonical == launch.workspace_cwd_canonical
-            and abs(ns.first_event_ts - launch.launch_ts) <= bind_window
-        ]
+        # Apply filters BEFORE candidate matching so a filtered-out launch
+        # doesn't claim a native that should appear in the free-running
+        # loop (Round-B verifier finding).
         if cwd_filter and launch.workspace_cwd_canonical != cwd_filter:
             continue
         if since and launch.launch_ts < since:
             continue
+        launch_engine_norm = normalize_engine(launch.engine)
+        candidates = [
+            ns for ns in natives
+            # 1:1 binding invariant: a native already bound to an earlier
+            # launch is no longer a candidate (Round-B verifier finding).
+            if (ns.engine, ns.conv_id) not in bound_native_ids
+            and normalize_engine(ns.engine) == launch_engine_norm
+            and ns.cwd_canonical == launch.workspace_cwd_canonical
+            and abs(ns.first_event_ts - launch.launch_ts) <= bind_window
+        ]
         if len(candidates) == 0:
             binding_state: BindingState = "unbound"
             conv_id: Optional[str] = None
             bound_candidates: Optional[list[str]] = None
+            bound_native = None
         elif len(candidates) == 1:
             binding_state = "bound"
-            conv_id = candidates[0].conv_id
+            bound_native = candidates[0]
+            conv_id = bound_native.conv_id
             bound_candidates = None
-            bound_native_ids.add((candidates[0].engine, candidates[0].conv_id))
+            bound_native_ids.add((bound_native.engine, bound_native.conv_id))
         else:
             binding_state = "ambiguous"
             conv_id = None
             bound_candidates = [c.conv_id for c in candidates]
+            bound_native = None
         records.append(
             HarvestRecord(
                 ts=launch.launch_ts,
@@ -217,8 +318,13 @@ def harvest(
                 raw_ref=launch.raw_ref,
             )
         )
+        if bound_native is not None:
+            for evt in _native_events_for(bound_native):
+                records.append(_merge_launch_context(evt, launch))
 
     for native in natives:
+        if (native.engine, native.conv_id) in bound_native_ids:
+            continue
         if cwd_filter and native.cwd_canonical != cwd_filter:
             continue
         if since and native.first_event_ts < since:
