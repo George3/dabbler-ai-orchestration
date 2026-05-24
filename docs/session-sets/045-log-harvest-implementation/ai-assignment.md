@@ -81,3 +81,85 @@ prototype's edge cases, and the locked joiner-location decision.
 Rationale: joiner-spec authoring needs deep spec-context retention +
 schema-design care; Opus or GPT-5.4 are both reasonable; route the
 choice rather than self-opine.
+
+---
+
+## Session 2: Joiner design + canonical schema
+
+### Recommended orchestrator
+
+claude-opus-4-7 @ effort=high (the running orchestrator).
+
+### Self-authored disclaimer (Session 2)
+
+This block was authored by the orchestrator (Claude Opus 4.7)
+directly, not via `route(task_type="analysis")`. The standing
+operator directive ("AI router usage restricted to end-of-session
+verification — cost containment, until further notice") remains in
+force. Read the recommendations below with the
+orchestrator-self-opinion bias caveat in mind; the end-of-session
+verifier provides the independent cross-provider check.
+
+### Rationale
+
+S2 is the engineering center of gravity for the whole set per Set
+044's locked consensus: it specifies the joiner's conflict-
+detection semantics, derives the canonical Harvest Record schema
+FROM the joiner's needs (NOT the v0 §4.1 stub), and lands a real
+Python skeleton at `ai_router/joiner/` plus Layer-1 tests. The work
+is dense spec-authoring + careful Python module design + pytest-
+fixture authoring — best handled by Opus in-process without
+handoff. No new API spend in this session (routed verification
+only at end-of-session).
+
+### Estimated routed cost
+
+Low — single routed `session-verification` call at end-of-session.
+Given the GPT-5.4 429 cascade hit in S1 and across Set 036, expect
+to either start with `task_type='verification'` (tier-routed; the
+working pattern post-Set 036 S5) or pivot to Gemini Pro by
+in-process router-config monkey-patch if GPT-5.4 returns 429s
+again. Cumulative routed spend coming in: **$0.024 of $5 NTE**.
+
+| Step | Action | Routing Decision |
+|------|--------|------------------|
+| 1    | Author `joiner-spec.md` (conflict modes 1–3, resolution priorities, output shape) | No routing; orchestrator drafts directly with S1 + Set 044 §4.4 in context |
+| 2    | Derive canonical Harvest Record schema (joiner-needs-driven) and document in spec | No routing |
+| 3    | Implement Python joiner skeleton: `ai_router/joiner/__init__.py`, `schema.py`, `parsers.py`, `conflicts.py`, `cli.py` | No routing; orchestrator writes module code |
+| 4    | Layer-1 unit tests (pytest fixtures: synthetic state files + log fragments per mode); Layer-2 e2e where appropriate | No routing |
+| 5    | `python -m pytest` smoke pass (full suite plus targeted joiner tests) | No routing |
+| 6    | End-of-session cross-provider verification | `route(task_type="verification")` first; pivot to Gemini Pro via in-process override if 429 cascade reappears |
+
+### Carry-forward inputs from Session 1 (locked, do not relitigate)
+
+- Joiner lives in **Python** at `ai_router/joiner/` (Q4 lock).
+- Join keys: `(workspace_cwd canonical, time_window=30s, conv_id post-bind)` (Q2 evidence).
+- Native-log scrapers already prototyped at
+  `spike-prototypes/correlation_prototype.py` (Claude JSONL +
+  Copilot OTel JSONL). Promote and harden into
+  `ai_router/joiner/parsers.py`; do NOT re-derive the scan logic.
+- Conflict mode 1 (engine-mismatch) sketched in
+  `spike-prototypes/joiner_python_sketch.py`. Promote into
+  `ai_router/joiner/conflicts.py` and add modes 2 and 3.
+
+### Actuals (filled after the session)
+
+- Orchestrator used: claude-opus-4-7 @ effort=high
+- Total routed cost: **$0.053066** (single gemini-pro
+  session-verification call; went straight to gemini-pro per the
+  Set 036 + Set 045 S1 GPT-5.4 429 cascade history, no 429 cost
+  burned this session)
+- Deviations from recommendation: verifier model preselected as
+  gemini-pro rather than letting `task_type='verification'` route
+  through tier-routing first; rationale recorded in
+  `verify_session2.py` docstring (avoid known-broken path).
+- Notes for next-session calibration: (1) joiner-spec.md got two
+  nice-to-have doc refinements applied in-flight after the
+  verifier called them out (§3.2 staleness vs. CheckoutPollService
+  poll-timeout distinction; Mode B false-positive mitigation
+  rule clarified to include exact-match-on-root). Both are doc-
+  only edits; the code already handled both cases correctly.
+  (2) S3 inherits a fully-locked schema + conflict-detection
+  contract + 59 passing Layer-1 tests; the dabbler-launch wrapper
+  + Copilot OTel parser hardening should target the canonical
+  Harvest Record schema (§5 of joiner-spec.md) verbatim.
