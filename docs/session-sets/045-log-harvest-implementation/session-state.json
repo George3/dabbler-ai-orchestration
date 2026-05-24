@@ -25,7 +25,7 @@
     {
       "number": 5,
       "title": "Explorer integration + Layer-3 coverage",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 6,
@@ -33,26 +33,19 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 5,
+  "currentSession": null,
   "totalSessions": 6,
   "completedSessions": [
     1,
     2,
     3,
-    4
+    4,
+    5
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
   "startedAt": "2026-05-24T09:47:25.659186-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "high",
-    "chatSessionId": null,
-    "checkedOutAt": "2026-05-24T09:47:25.659186-04:00",
-    "lastActivityAt": "2026-05-24T09:47:25.659186-04:00"
-  }
+  "orchestrator": null
 }
