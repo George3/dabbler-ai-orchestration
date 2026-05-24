@@ -30,10 +30,10 @@
     {
       "number": 6,
       "title": "UAT + change-log + cross-tier docs + release",
-      "status": "not-started"
+      "status": "in-progress"
     }
   ],
-  "currentSession": null,
+  "currentSession": 6,
   "totalSessions": 6,
   "completedSessions": [
     1,
@@ -44,8 +44,16 @@
   ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-24T09:47:25.659186-04:00",
+  "startedAt": "2026-05-24T12:24:24.759544-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": null
+  "orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "chatSessionId": null,
+    "checkedOutAt": "2026-05-24T12:24:24.759544-04:00",
+    "lastActivityAt": "2026-05-24T12:24:24.759544-04:00"
+  }
 }
