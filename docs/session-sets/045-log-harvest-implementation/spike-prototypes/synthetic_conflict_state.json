@@ -42,7 +42,7 @@
   "completedAt": null,
   "verificationVerdict": null,
   "orchestrator": {
-    "engine": "claude-code",
+    "engine": "copilot",
     "provider": "anthropic",
     "model": "claude-opus-4-7",
     "effort": "high",

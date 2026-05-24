@@ -136,26 +136,61 @@ resolved before the joiner is designed:
 
 ### Session 1 of 6: Open-question spike + joiner location decision
 
+**Scope (locked at start-of-set 2026-05-24):** Spike-only. The
+objective is to resolve the four open empirical questions from
+Set 044 with enough evidence to lock S2–S6 implementation; **no
+production-grade `dabbler-launch` CLI is shipped in this session**
+(that ships in S3). Throwaway prototype code is acceptable here so
+long as it produces the evidence needed.
+
 **Steps:**
-1. Implement minimal `dabbler-launch` prototype (headless only,
-   one backend) that writes launch records to `~/.dabbler/`.
-2. Prove deterministic correlation between wrapper records and
-   AI-native log records on a battery of synthetic sessions.
-3. Run the Claude phrasing-trigger ablation against the synthetic-
-   set; isolate the specific trigger element(s).
-4. Start the bypass-rate self-observation log.
-5. Prototype the joiner in BOTH Python and TypeScript on a
-   minimal slice (one backend, one conflict scenario);
-   benchmark + measure IPC complexity; LOCK the joiner location.
-6. Cross-provider verification of the four resolutions.
+1. **Q2 (deterministic correlation prototype).** Write a minimal
+   throwaway Python script that simulates a `dabbler-launch` record
+   and joins it against an existing Claude
+   (`~/.claude/projects/<workspace>/<session-id>.jsonl`) log and an
+   existing Copilot OTel JSONL log on disk via
+   `(workspace_cwd, time_window, conv_id)` keys. Demonstrate the
+   join binds 1:1 on a sample of real records from prior session
+   sets. Document the result + edge cases.
+2. **Q3 (Claude phrasing-trigger ablation — analytical pass).**
+   Read Set 044 S4a (v1 refused) and S4b (v2 accepted) artifacts;
+   isolate the phrasing elements that differ between them; build
+   a hypothesis matrix of which element(s) are the likely
+   classifier triggers; document a follow-on ablation protocol the
+   operator can run in fresh Claude Code sessions in S4 or between
+   sets. **No new Claude API spend in this session.**
+3. **Q1 (bypass-rate self-observation log).** Design the schema for
+   `~/.dabbler/bypass-observation-log.jsonl`; write the first entry
+   recording the start-of-observation timestamp; document the
+   operator's day-to-day capture commitment so 1–2 weeks of real
+   data accumulates by the start of S5 (Explorer integration).
+4. **Q4 (joiner location decision via lightweight prototypes).**
+   Build minimal joiner sketches in BOTH Python (sibling to
+   `ai_router/`) and TypeScript (inside
+   `tools/dabbler-ai-orchestration/`) on one backend + one conflict
+   scenario. Benchmark on the correlation prototype's sample data.
+   Compare LOC, IPC complexity, debuggability, and Explorer-webview
+   integration surface. LOCK the joiner location with a written
+   rationale.
+5. **Cross-provider verification** of the four resolutions via the
+   end-of-session verifier (workflow Step 6).
 
 **Creates:**
-- `docs/session-sets/045-log-harvest-implementation/open-question-resolution.md`
-- `~/.dabbler/launch-log.jsonl` (operator-local; first records)
-- `joiner-location-decision.md`
+- `open-question-resolution.md` — the four resolutions + evidence.
+- `joiner-location-decision.md` — the locked location + rationale.
+- `~/.dabbler/bypass-observation-log.jsonl` — clock-started log
+  (operator-local; not committed to this repo).
+- Throwaway prototype scripts under
+  `docs/session-sets/045-log-harvest-implementation/spike-prototypes/`
+  (correlation prototype + Python joiner sketch + TypeScript joiner
+  sketch). Preserved for S2/S3 reference; not part of any shipping
+  surface.
 
-**Ends with:** four open questions resolved with empirical
-evidence; joiner location locked.
+**Ends with:** four open questions resolved (Q1 has the
+clock-started log; Q2 demonstrated end-to-end on real on-disk
+records; Q3 analytical hypothesis matrix + follow-on protocol; Q4
+location locked with rationale); the throwaway prototypes are
+preserved but not promoted to shipping code.
 
 ### Session 2 of 6: Joiner design + canonical schema
 
