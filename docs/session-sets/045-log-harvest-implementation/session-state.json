@@ -5,7 +5,7 @@
     {
       "number": 1,
       "title": "Open-question spike + joiner location decision",
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "number": 2,
@@ -33,21 +33,15 @@
       "status": "not-started"
     }
   ],
-  "currentSession": 1,
+  "currentSession": null,
   "totalSessions": 6,
-  "completedSessions": [],
+  "completedSessions": [
+    1
+  ],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
   "startedAt": "2026-05-24T06:31:48.306893-04:00",
   "completedAt": null,
   "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "high",
-    "chatSessionId": null,
-    "checkedOutAt": "2026-05-24T06:31:48.306893-04:00",
-    "lastActivityAt": "2026-05-24T06:31:48.306893-04:00"
-  }
+  "orchestrator": null
 }
