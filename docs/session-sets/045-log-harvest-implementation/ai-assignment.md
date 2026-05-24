@@ -163,3 +163,111 @@ again. Cumulative routed spend coming in: **$0.024 of $5 NTE**.
   contract + 59 passing Layer-1 tests; the dabbler-launch wrapper
   + Copilot OTel parser hardening should target the canonical
   Harvest Record schema (§5 of joiner-spec.md) verbatim.
+
+---
+
+## Session 3: Wrapper + Copilot parser
+
+### Recommended orchestrator
+
+claude-opus-4-7 @ effort=high (the running orchestrator).
+
+### Self-authored disclaimer (Session 3)
+
+This block was authored by the orchestrator (Claude Opus 4.7)
+directly, not via `route(task_type="analysis")`. The standing
+operator directive ("AI router usage restricted to end-of-session
+verification — cost containment, until further notice") remains in
+force. Read the recommendations below with the
+orchestrator-self-opinion bias caveat in mind; the end-of-session
+verifier provides the independent cross-provider check.
+
+### Rationale
+
+S3 ships the three producer-side gaps left after S2: the
+`dabbler-launch` wrapper that writes canonical Harvest Record §5
+records to disk, the Copilot OTel parser hardened to per-event
+emission, and the harvest() join wire-up that consumes both. The
+work is module-level Python coding + pytest fixture authoring +
+spec-fidelity checking against joiner-spec.md §4/§5 — best handled
+by Opus in-process. No new API spend in this session (routed
+verification only at end-of-session). Cumulative routed spend
+coming in: **$0.077 of $5 NTE**.
+
+### Estimated routed cost
+
+Low–medium — single routed `session-verification` call at end-of-
+session via gemini-pro (skipping the GPT-5.4 429 cascade history
+per Set 036 + Set 045 S1). Note: if the verifier surfaces must-fix
+issues, additional rounds are within scope; per the operator
+memory `feedback_dont_hide_behind_out_of_scope`, small in-flight
+fixes beat deferring.
+
+| Step | Action | Routing Decision |
+|------|--------|------------------|
+| 1 | Author `ai_router/dabbler_launch.py` — headless wrapper CLI, canonical §5 record emission, raw_ref.launch_id (uuid4) | No routing |
+| 2 | Harden Copilot OTel parser: add `read_copilot_session_events()` for per-event HarvestRecord emission; §7 redaction enforced | No routing |
+| 3 | Wire wrapper launches into `harvest()` join (§4 algorithm: bound / unbound / ambiguous) | No routing |
+| 4 | Layer-1 + Layer-2 test coverage of wrapper, parser, join | No routing |
+| 5 | `python -m pytest` smoke pass | No routing |
+| 6 | End-of-session cross-provider verification (Round A) | `route(model="gemini-pro", task_type="session-verification")` |
+| 7+ | Round B / C if Round A surfaces must-fix items | Same routing |
+
+### Carry-forward inputs from Session 2 (locked, do not relitigate)
+
+- Canonical Harvest Record §5 schema is the producer contract;
+  the wrapper writes that shape verbatim.
+- Conflict-detection windows (engine-mismatch 5min, staleness 2h,
+  writer-bypass ±2s) and join window (30s) are spec-locked.
+- LaunchRecord parser projection — the `target_backend` field
+  rename to `engine` happens at the parser layer; the on-disk
+  format follows §5.
+- §7 redaction posture (no raw tool_args; only summary) is the
+  producer-side commitment — the Copilot parser must enforce.
+
+### Actuals (filled after the session)
+
+- Orchestrator used: claude-opus-4-7 @ effort=high
+- Total routed cost: **$0.107** across three verification rounds
+  - Round A: gemini-pro session-verification, $0.053, REJECTED on
+    (1) normalize_engine missing from candidate predicate; (2)
+    bound-native event stream missing per §4 + dup session_start
+  - Round B: gemini-pro session-verification, $0.032, REJECTED on
+    (1) single-bind invariant; (2) filter ordering; (3)
+    normalize_engine breadth [deferred to spec §9]
+  - Round C: gemini-pro session-verification, $0.022, VERIFIED
+- Deviations from recommendation: three verification rounds
+  rather than the projected one. The verifier surfaced 5
+  must-fix issues across two rounds; all were addressed
+  in-flight per the operator's "don't hide behind out-of-scope"
+  directive. The third Round-B issue (normalize_engine breadth)
+  was deferred to spec §9 row 5 as the in-flight expansion
+  would have broadened the locked §3.1 contract without an
+  audit pass.
+- Notes for next-session calibration: (1) the multi-round
+  verification cycle was empirically valuable — Rounds A and B
+  caught real defects (vendor-variant join miss, double-bind,
+  filter-then-bind ordering) that Layer-1 tests didn't surface.
+  The cost ($0.107 cumulative) was within budget. (2) S4 (Claude
+  per-event parser) inherits a working `_native_events_for`
+  dispatch table; adding a Claude branch is a one-file change.
+  (3) The Round-C nice-to-have about pre-S5 spec audit for
+  vendor-prefix engine variants is worth surfacing to the
+  operator before S5 starts — see project memory.
+- Cumulative routed spend across Set 045 entering S4:
+  $0.024 (S1) + $0.053066 (S2) + $0.107 (S3) = $0.184 of $5 NTE.
+
+---
+
+**Next-session orchestrator recommendation (Session 4 — Claude
+parser + narration v1.1 template):**
+
+claude-opus-4-7 @ effort=high — but reroute through ai_router if
+the operator lifts the in-session router restriction by S4 start.
+S4's Claude per-event parser plugs into the existing
+`_native_events_for` engine-dispatch (the Copilot branch is the
+working pattern); the narration v1.1 template authoring needs the
+S1 Q3 phrasing-trigger defensive rules in context. Rationale:
+S4 is the symmetric counterpart to S3's Copilot work — the
+hardest part is template-authoring, not parser-coding, and the
+defensive rules from S1 are local context Opus already has.

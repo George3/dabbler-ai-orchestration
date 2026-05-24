@@ -177,6 +177,147 @@
           "raw_output": "session-reviews/session-002.md"
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/ai-assignment-authored",
+      "dateTime": "2026-05-24T10:30:00-04:00",
+      "description": "Authored Session 3 block in ai-assignment.md. Self-authored rather than routed (standing operator in-session router restriction). Recommended orchestrator: claude-opus-4-7 @ effort=high. Six steps planned: dabbler-launch wrapper → Copilot OTel hardening → harvest() join wire-up → Layer-1 + Layer-2 tests → pytest smoke → end-of-session verification (gemini-pro preselected to bypass GPT-5.4 429 cascade). Routing decisions all 'no routing' except the verifier rounds.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/register-session-start",
+      "dateTime": "2026-05-24T10:45:00-04:00",
+      "description": "Called python -m ai_router.start_session --session-set-dir docs/session-sets/045-log-harvest-implementation --session-number 3 --engine claude --model claude-opus-4-7 --effort high --provider anthropic. session-state.json flipped to currentSession=3 + in-progress + orchestrator block populated; work_started event appended to session-events.jsonl.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/wrapper-cli-shipped",
+      "dateTime": "2026-05-24T11:00:00-04:00",
+      "description": "Implemented ai_router/dabbler_launch.py — headless-mode wrapper CLI per Set 044 commitment 4. build_record() emits canonical Harvest Record §5 shape (event_type='launch', source='wrapper', engine+provider+model+effort + raw_ref.launch_id=uuid4). append_launch_record() does an atomic JSONL append BEFORE subprocess spawn so failed spawns still surface as unbound launches downstream. Engine validated against {claude, copilot, codex, gemini}; --dry-run for record-only invocations. parse_args strips leading '--' separator.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/copilot-otel-hardening",
+      "dateTime": "2026-05-24T11:15:00-04:00",
+      "description": "Added read_copilot_session_events() to ai_router/joiner/parsers.py: per-event HarvestRecord emission for session.start / session.end / turn.* / tool.* / usage event types (unknown types skipped, forward-compat). Sticky context (cwd, conv_id, model, provider) propagates from session.start through subsequent events. _summarize_tool_args() enforces §7 redaction — file path + line count + arg arity only, never raw payloads. The session-level _read_copilot_events scrape is preserved for the NativeSession projection used by the join's candidate matching.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/harvest-join-wire-up",
+      "dateTime": "2026-05-24T11:30:00-04:00",
+      "description": "Wired wrapper launches into ai_router.joiner.schema.harvest() per joiner-spec.md §4: 30s bind_window default, candidate matching by engine + cwd_canonical + time delta, three binding states (bound/unbound/ambiguous). Free-running natives still emit session_start records. LaunchRecord parser projection renamed target_backend→engine for §5 consistency; scan_launch_log reads both canonical and v0 stub field names.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/layer-1-and-2-tests",
+      "dateTime": "2026-05-24T11:45:00-04:00",
+      "description": "Authored 18 new tests: test_dabbler_launch.py (9 L1 tests covering build_record canonical shape + append_launch_record + run_launch dry-run + parse_args validation + main()), test_dabbler_launch_join_e2e.py (4 L2 e2e tests covering bound + unbound + ambiguous + free-running scenarios), test_joiner_parsers.py extensions (3 Copilot OTel per-event tests + 2 launch-log shape tests covering canonical + v0 backward-compat).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/pytest-smoke",
+      "dateTime": "2026-05-24T11:50:00-04:00",
+      "description": "Step 5 build/test: ran python -m pytest from repo root. 770 passed, 1 skipped in 148.46s (Session 2 baseline: 752 passed, 1 skipped → +18 wrapper + Copilot OTel + e2e tests added, zero regressions). Targeted joiner+wrapper suite (7 files) runs cleanly in 14.80s.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/verification-round-a",
+      "dateTime": "2026-05-24T12:00:00-04:00",
+      "description": "Step 6 end-of-session verification — Round A. Wrote verify_session3.py per the Set 044 + S2 pattern; bundled joiner-spec.md + dabbler_launch.py + joiner/{__init__,schema,parsers}.py + all 3 new/changed test files (89,872 chars across 8 parts). Routed via ai_router.query(model='gemini-pro') — straight to gemini-pro per GPT-5.4 429 cascade history. Verdict: REJECTED on two must-fix issues: (1) harvest() candidate predicate used raw engine equality instead of normalize_engine (vendor variants like 'claude-code' would miss the join); (2) bound natives emitted only session_start instead of the full per-event stream with launch context merged per §4 (HarvestRecord.from_native), and bound natives were re-emitted in the free-running loop causing duplicate session_start records. Cost: $0.053125. Raw verdict at session-reviews/session-003.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "tier": 2,
+          "task_type": "session-verification",
+          "cost_usd": 0.053125,
+          "input_tokens": 28540,
+          "output_tokens": 1745,
+          "verdict": "REJECTED",
+          "raw_output": "session-reviews/session-003.md"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 9,
+      "stepKey": "session-003/round-a-fixes-applied",
+      "dateTime": "2026-05-24T12:30:00-04:00",
+      "description": "Applied Round A fixes in ai_router/joiner/schema.py: candidate predicate now uses normalize_engine(ns.engine) == normalize_engine(launch.engine); added _native_events_for(native) helper that engine-dispatches to read_copilot_session_events for Copilot (full event stream) and falls back to session_start for Claude (per-event parser is S4 work); added _merge_launch_context(evt, launch) helper that threads set_slug + session_number + effort + provider + model onto each native event (pre-existing native values win); free-running emission loop now skips natives in bound_native_ids. Three new tests pin the fix: vendor-variant binding (claude vs claude-code via monkey-patched scan_claude_logs), Copilot bound event stream with launch context merged, no-duplicate-session_start invariant. Full suite: 773 passed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 10,
+      "stepKey": "session-003/verification-round-b",
+      "dateTime": "2026-05-24T13:00:00-04:00",
+      "description": "Round B verification — narrow re-check of Round A fixes. Wrote verify_session3_round_b.py bundling only the changed schema.py + parsers.py + test_dabbler_launch_join_e2e.py + joiner-spec.md (70,840 chars across 4 parts). Verdict: REJECTED on THREE new must-fix issues: (1) single-bind invariant violated — two launches could both claim a native, duplicating event stream and corrupting bypass-rate; (2) workspace_cwd / since filters applied AFTER binding, so a filtered launch could consume a native that should appear free-running; (3) normalize_engine too narrow for vendor variants like 'anthropic-claude' or 'github-copilot' outside the -code/-cli suffix pattern. Cost: $0.031689. Raw verdict at session-reviews/session-003-round-b.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "tier": 2,
+          "task_type": "session-verification",
+          "cost_usd": 0.031689,
+          "input_tokens": 21055,
+          "output_tokens": 537,
+          "verdict": "REJECTED",
+          "raw_output": "session-reviews/session-003-round-b.md"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 11,
+      "stepKey": "session-003/round-b-fixes-applied",
+      "dateTime": "2026-05-24T13:30:00-04:00",
+      "description": "Applied Round B fixes. Fix 1 (single-bind): candidates comprehension excludes natives already in bound_native_ids — first launch wins. Fix 2 (filter ordering): cwd_filter + since checks moved to TOP of per-launch loop, BEFORE candidate matching; a filtered launch hits `continue` and never reaches bound_native_ids. Deferral 3 (normalize_engine breadth): added joiner-spec.md §9 row 5 documenting that normalize_engine handles the -code/-cli suffix pattern per §3.1's stated contract; vendor variants outside that pattern (anthropic-claude, github-copilot) are a deferred follow-up. Expanding §3.1 in-flight would broaden the audited contract without a spec audit pass. Two new tests: test_two_launches_dont_both_claim_one_native (asserts bound/unbound split + native appears once), test_filtered_launch_does_not_consume_native (asserts free-running native isn't suppressed when its launch is filtered out). Full suite: 775 passed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 12,
+      "stepKey": "session-003/verification-round-c",
+      "dateTime": "2026-05-24T14:00:00-04:00",
+      "description": "Round C verification — narrow re-check of Round B fixes. Wrote verify_session3_round_c.py bundling schema.py + test_dabbler_launch_join_e2e.py + joiner-spec.md (56,601 chars across 3 parts). Verdict: VERIFIED no must-fix issues. One nice-to-have flagged: consider a pre-S5 spec audit for normalize_engine breadth (the §9 deferral may carry discovery cost into S5 if real-world vendor-prefix variants emerge). Cost: $0.022486. Cumulative S3 verification spend: $0.053 (A) + $0.032 (B) + $0.022 (C) = $0.107. Cumulative routed Set 045 through S3: $0.024 (S1) + $0.053 (S2) + $0.107 (S3) = $0.184 of $5 NTE. Raw verdict at session-reviews/session-003-round-c.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "tier": 2,
+          "task_type": "session-verification",
+          "cost_usd": 0.022486,
+          "input_tokens": 16965,
+          "output_tokens": 128,
+          "verdict": "VERIFIED",
+          "raw_output": "session-reviews/session-003-round-c.md"
+        }
+      ]
     }
   ]
 }
