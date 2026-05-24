@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Literal, Optional
 
@@ -122,33 +122,103 @@ class HarvestRecord:
 # ---------------------------------------------------------------------------
 
 
+DEFAULT_BIND_WINDOW = timedelta(seconds=30)
+
+
 def harvest(
     workspace_cwd: Optional[str] = None,
     since: Optional[datetime] = None,
+    *,
+    claude_root: Optional[Path] = None,
+    copilot_root: Optional[Path] = None,
+    launch_log: Optional[Path] = None,
+    bind_window: timedelta = DEFAULT_BIND_WINDOW,
 ) -> Iterable[HarvestRecord]:
     """Yield the joined Harvest Record stream from current producers.
 
-    S2 skeleton: produces the records the parsers can surface today
-    (native-log first-event records). The wrapper launch records
-    join in once S3 ships ``dabbler-launch``; until then the
-    ``binding_state`` field is None on emitted records (they are
-    surfaced as ``session_start`` events from the native side
-    only).
+    Applies the joiner-spec.md §4 positive-case join algorithm:
+    each wrapper-launch record is matched to candidate native
+    sessions by engine + canonicalized cwd + ``bind_window``
+    timestamp delta. The result is emitted as a ``launch`` record
+    with ``binding_state ∈ {"bound", "unbound", "ambiguous"}``;
+    bound native sessions are emitted as a single ``session_start``
+    record (carrying the bound conv_id back to the launch).
+
+    Native sessions that no launch claimed (free-running) are
+    emitted as their own ``session_start`` records with no
+    ``binding_state`` set — these are the bypass-channel data
+    points the Q1 self-observation supplements.
 
     Args:
         workspace_cwd: optionally restrict to one workspace.
         since: optionally restrict to events after this timestamp.
+        claude_root / copilot_root: parser-root overrides (testing).
+        launch_log: override the wrapper launch log path.
+        bind_window: launch ↔ native-session timestamp tolerance.
 
     Yields:
         ``HarvestRecord`` instances in chronological order.
     """
-    # Local import to avoid a circular import at package init time.
+    # Local imports avoid a circular package-init dependency.
     from ai_router.joiner import parsers
 
     cwd_filter = canonicalize_cwd(workspace_cwd) if workspace_cwd else None
-    records: list[HarvestRecord] = []
+    natives = list(
+        parsers.scan_native_sessions(
+            claude_root=claude_root,
+            copilot_root=copilot_root,
+        )
+    )
+    launches = list(parsers.scan_launch_log(launch_log))
 
-    for native in parsers.scan_native_sessions():
+    records: list[HarvestRecord] = []
+    bound_native_ids: set[tuple[str, str]] = set()
+
+    for launch in launches:
+        candidates = [
+            ns for ns in natives
+            if ns.engine == launch.engine
+            and ns.cwd_canonical == launch.workspace_cwd_canonical
+            and abs(ns.first_event_ts - launch.launch_ts) <= bind_window
+        ]
+        if cwd_filter and launch.workspace_cwd_canonical != cwd_filter:
+            continue
+        if since and launch.launch_ts < since:
+            continue
+        if len(candidates) == 0:
+            binding_state: BindingState = "unbound"
+            conv_id: Optional[str] = None
+            bound_candidates: Optional[list[str]] = None
+        elif len(candidates) == 1:
+            binding_state = "bound"
+            conv_id = candidates[0].conv_id
+            bound_candidates = None
+            bound_native_ids.add((candidates[0].engine, candidates[0].conv_id))
+        else:
+            binding_state = "ambiguous"
+            conv_id = None
+            bound_candidates = [c.conv_id for c in candidates]
+        records.append(
+            HarvestRecord(
+                ts=launch.launch_ts,
+                event_type="launch",
+                source="wrapper",
+                engine=launch.engine,  # type: ignore[arg-type]
+                workspace_cwd=launch.workspace_cwd,
+                workspace_cwd_canonical=launch.workspace_cwd_canonical,
+                set_slug=launch.set_slug,
+                session_number=launch.session_number,
+                conv_id=conv_id,
+                provider=launch.provider,
+                model=launch.model,
+                effort=launch.effort,
+                binding_state=binding_state,
+                bound_candidates=bound_candidates,
+                raw_ref=launch.raw_ref,
+            )
+        )
+
+    for native in natives:
         if cwd_filter and native.cwd_canonical != cwd_filter:
             continue
         if since and native.first_event_ts < since:

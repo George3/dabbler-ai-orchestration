@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
 
-from ai_router.joiner.schema import canonicalize_cwd, parse_iso
+from ai_router.joiner.schema import HarvestRecord, canonicalize_cwd, parse_iso
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +156,156 @@ def scan_copilot_logs(root: Optional[Path] = None) -> Iterable[NativeSession]:
         session = _read_copilot_events(events, session_dir.name)
         if session is not None:
             yield session
+
+
+_COPILOT_EVENT_TYPE_TO_HARVEST = {
+    "session.start": "session_start",
+    "session.end": "session_end",
+    "turn.start": "turn",
+    "turn.end": "turn",
+    "tool.call": "tool_call",
+    "tool.invoke": "tool_call",
+    "usage": "usage",
+}
+
+
+def _summarize_tool_args(args: object) -> Optional[dict]:
+    """Reduce raw tool arguments to a redacted summary.
+
+    The joiner MUST NOT expose raw payloads (joiner-spec.md §7).
+    We retain file paths and arity (line counts, arg counts) only.
+    """
+    if not isinstance(args, dict):
+        return None
+    summary: dict[str, object] = {}
+    for key in ("file", "path", "filename"):
+        if key in args and isinstance(args[key], str):
+            summary["file"] = args[key]
+            break
+    for key in ("line_count", "lines", "count"):
+        if key in args and isinstance(args[key], (int, float)):
+            summary["lines"] = int(args[key])
+            break
+    if "args" in args and isinstance(args["args"], (list, tuple)):
+        summary["arg_count"] = len(args["args"])
+    if summary:
+        return summary
+    return {"arg_keys": sorted(k for k in args.keys() if isinstance(k, str))}
+
+
+def _copilot_event_engine_meta(rec: dict) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Return (provider, model, conv_id) hints from a Copilot event."""
+    data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+    provider = data.get("provider") or rec.get("provider")
+    model = data.get("model") or rec.get("model")
+    conv_id = (
+        data.get("sessionId")
+        or data.get("session_id")
+        or rec.get("sessionId")
+        or rec.get("session_id")
+    )
+    return provider, model, conv_id
+
+
+def read_copilot_session_events(
+    events_path: Path,
+    *,
+    session_cwd_canonical: Optional[str] = None,
+    fallback_conv_id: Optional[str] = None,
+) -> Iterable[HarvestRecord]:
+    """Yield canonical ``HarvestRecord`` objects per Copilot session event.
+
+    Hardened replacement for the Set 045 / Session 1 spike scrape.
+    Maps known Copilot OTel event types to the canonical
+    ``event_type`` enum (joiner-spec.md §5.1):
+
+    - ``session.start`` → ``session_start``
+    - ``session.end``   → ``session_end``
+    - ``turn.start`` / ``turn.end`` → ``turn``
+    - ``tool.call`` / ``tool.invoke`` → ``tool_call``
+    - ``usage`` → ``usage``
+
+    Unknown event types are skipped (forward-compatible with new
+    Copilot OTel revisions). The redaction posture from §7 is
+    enforced: tool args are passed through
+    :func:`_summarize_tool_args` so no raw payloads escape.
+    """
+    if not events_path.exists():
+        return
+    sticky_conv_id: Optional[str] = fallback_conv_id
+    sticky_cwd: Optional[str] = session_cwd_canonical
+    sticky_model: Optional[str] = None
+    sticky_provider: Optional[str] = None
+    try:
+        with open(events_path, "r", encoding="utf-8", errors="replace") as f:
+            for line_idx, line in enumerate(f, 1):
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                evt_type = rec.get("type")
+                harvest_type = _COPILOT_EVENT_TYPE_TO_HARVEST.get(evt_type)
+                if harvest_type is None:
+                    continue
+                ts_str = (
+                    rec.get("timestamp")
+                    or (rec.get("data") or {}).get("startTime")
+                    or (rec.get("data") or {}).get("endTime")
+                )
+                if not ts_str:
+                    continue
+                try:
+                    ts = parse_iso(ts_str)
+                except ValueError:
+                    continue
+                provider, model, conv_id = _copilot_event_engine_meta(rec)
+                if provider:
+                    sticky_provider = provider
+                if model:
+                    sticky_model = model
+                if conv_id:
+                    sticky_conv_id = conv_id
+                if evt_type == "session.start":
+                    data = rec.get("data") or {}
+                    ctx_cwd = (data.get("context") or {}).get("cwd")
+                    if ctx_cwd:
+                        sticky_cwd = canonicalize_cwd(ctx_cwd)
+                data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+                tool_name: Optional[str] = None
+                tool_args_summary: Optional[dict] = None
+                tokens_in: Optional[int] = None
+                tokens_out: Optional[int] = None
+                if harvest_type == "tool_call":
+                    tool_name = data.get("tool") or data.get("name")
+                    tool_args_summary = _summarize_tool_args(data.get("args") or data.get("arguments") or data)
+                if harvest_type == "usage":
+                    tokens_in = data.get("inputTokens") or data.get("tokens_in")
+                    tokens_out = data.get("outputTokens") or data.get("tokens_out")
+                    if not isinstance(tokens_in, int):
+                        tokens_in = None
+                    if not isinstance(tokens_out, int):
+                        tokens_out = None
+                cwd_for_record = sticky_cwd or ""
+                yield HarvestRecord(
+                    ts=ts,
+                    event_type=harvest_type,  # type: ignore[arg-type]
+                    source="copilot-native",
+                    engine="copilot",
+                    workspace_cwd=cwd_for_record,
+                    workspace_cwd_canonical=cwd_for_record,
+                    raw_ref={"file": str(events_path), "line": line_idx, "type": evt_type},
+                    provider=sticky_provider,
+                    model=sticky_model,
+                    conv_id=sticky_conv_id,
+                    tool=tool_name,
+                    tool_args_summary=tool_args_summary,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                )
+    except OSError:
+        return
 
 
 def _read_copilot_events(events_path: Path, fallback_id: str) -> Optional[NativeSession]:
@@ -295,14 +445,25 @@ def scan_session_states(root: Path) -> Iterable[SessionStateView]:
 
 @dataclass(frozen=True)
 class LaunchRecord:
+    """Parser-internal projection of a launch-log line.
+
+    The on-disk format is the canonical Harvest Record schema
+    (joiner-spec.md §5); this dataclass is the joiner's working
+    view for the join algorithm in §4. The wrapper writes records
+    with ``event_type="launch"`` / ``source="wrapper"`` and the
+    parser flattens to ``LaunchRecord``.
+    """
+
     launch_ts: datetime
     workspace_cwd: str
     workspace_cwd_canonical: str
     set_slug: Optional[str]
     session_number: Optional[int]
-    target_backend: str
+    engine: str
     launch_id: str
     effort: Optional[str]
+    provider: Optional[str]
+    model: Optional[str]
     raw_ref: dict
 
 
@@ -313,9 +474,15 @@ def default_launch_log() -> Path:
 def scan_launch_log(path: Optional[Path] = None) -> Iterable[LaunchRecord]:
     """Yield launch records from the wrapper's append-only JSONL.
 
-    S2 returns an empty iterable when the log doesn't exist (the
-    S3 wrapper hasn't shipped yet). Once S3 lands, this scanner
-    becomes the wrapper-side join source.
+    Reads the canonical Harvest Record schema (joiner-spec.md §5):
+    ``ts`` + ``engine`` fields. For backward compatibility with the
+    v0 stub shape that predated the schema lock, also accepts
+    ``launch_ts`` (alias for ``ts``) and ``target_backend`` (alias
+    for ``engine``); the wrapper writes the canonical names.
+
+    Lines without a parseable timestamp or with neither engine
+    field are skipped (defensive: the joiner emits records as
+    unbound rather than aborting on garbage).
     """
     actual = path or default_launch_log()
     if not actual.exists():
@@ -329,7 +496,7 @@ def scan_launch_log(path: Optional[Path] = None) -> Iterable[LaunchRecord]:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                ts_str = rec.get("launch_ts") or rec.get("ts")
+                ts_str = rec.get("ts") or rec.get("launch_ts")
                 if not ts_str:
                     continue
                 try:
@@ -337,16 +504,31 @@ def scan_launch_log(path: Optional[Path] = None) -> Iterable[LaunchRecord]:
                 except ValueError:
                     continue
                 cwd = rec.get("workspace_cwd", "")
+                cwd_canonical = (
+                    rec.get("workspace_cwd_canonical")
+                    or canonicalize_cwd(cwd)
+                )
+                engine = rec.get("engine") or rec.get("target_backend") or "unknown"
+                raw_ref_payload = dict(rec.get("raw_ref") or {})
+                launch_id = (
+                    raw_ref_payload.get("launch_id")
+                    or rec.get("launch_id")
+                    or ""
+                )
+                raw_ref_payload.setdefault("file", str(actual))
+                raw_ref_payload.setdefault("line", idx)
                 yield LaunchRecord(
                     launch_ts=ts,
                     workspace_cwd=cwd,
-                    workspace_cwd_canonical=canonicalize_cwd(cwd),
+                    workspace_cwd_canonical=cwd_canonical,
                     set_slug=rec.get("set_slug"),
                     session_number=rec.get("session_number"),
-                    target_backend=rec.get("target_backend", "unknown"),
-                    launch_id=rec.get("launch_id", ""),
+                    engine=engine,
+                    launch_id=launch_id,
                     effort=rec.get("effort"),
-                    raw_ref={"file": str(actual), "line": idx},
+                    provider=rec.get("provider"),
+                    model=rec.get("model"),
+                    raw_ref=raw_ref_payload,
                 )
     except OSError:
         return

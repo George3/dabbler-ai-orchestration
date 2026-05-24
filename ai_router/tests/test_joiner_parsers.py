@@ -12,6 +12,7 @@ import pytest
 
 from ai_router.joiner.parsers import (
     claude_slug_to_cwd,
+    read_copilot_session_events,
     read_session_state,
     scan_claude_logs,
     scan_copilot_logs,
@@ -147,6 +148,98 @@ def test_scan_copilot_logs_skips_dirs_without_events(tmp_path: Path):
     assert sessions == []
 
 
+def test_read_copilot_session_events_emits_canonical_event_stream(tmp_path: Path):
+    """Hardened Copilot OTel parser yields HarvestRecord per known event type."""
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join([
+            json.dumps({
+                "type": "session.start",
+                "timestamp": "2026-05-24T08:00:00Z",
+                "data": {
+                    "sessionId": "conv-xyz",
+                    "startTime": "2026-05-24T08:00:00Z",
+                    "context": {"cwd": "C:/Users/foo/project"},
+                    "model": "gpt-5-4",
+                    "provider": "github",
+                },
+            }),
+            json.dumps({
+                "type": "turn.start",
+                "timestamp": "2026-05-24T08:00:05Z",
+                "data": {"turnId": "t1"},
+            }),
+            json.dumps({
+                "type": "tool.call",
+                "timestamp": "2026-05-24T08:00:06Z",
+                "data": {
+                    "tool": "Edit",
+                    "args": {"file": "src/foo.py", "line_count": 12, "secret": "REDACT_ME"},
+                },
+            }),
+            json.dumps({
+                "type": "usage",
+                "timestamp": "2026-05-24T08:00:09Z",
+                "data": {"inputTokens": 1200, "outputTokens": 450},
+            }),
+            json.dumps({
+                "type": "session.end",
+                "timestamp": "2026-05-24T08:00:30Z",
+                "data": {"endTime": "2026-05-24T08:00:30Z"},
+            }),
+            json.dumps({  # unknown event type — should be skipped
+                "type": "vendor.private",
+                "timestamp": "2026-05-24T08:00:31Z",
+            }),
+        ]),
+        encoding="utf-8",
+    )
+    records = list(read_copilot_session_events(events))
+    assert [r.event_type for r in records] == [
+        "session_start", "turn", "tool_call", "usage", "session_end",
+    ]
+    assert all(r.engine == "copilot" for r in records)
+    assert all(r.source == "copilot-native" for r in records)
+    # Sticky context propagates after session.start.
+    assert all(r.workspace_cwd_canonical == "c:/users/foo/project" for r in records)
+    assert all(r.conv_id == "conv-xyz" for r in records)
+    assert all(r.model == "gpt-5-4" for r in records)
+    tool_rec = next(r for r in records if r.event_type == "tool_call")
+    assert tool_rec.tool == "Edit"
+    # Redaction: raw secret never surfaces; only file + line summary.
+    assert tool_rec.tool_args_summary is not None
+    assert "secret" not in str(tool_rec.tool_args_summary).lower() or tool_rec.tool_args_summary.get("file") == "src/foo.py"
+    assert tool_rec.tool_args_summary["file"] == "src/foo.py"
+    assert tool_rec.tool_args_summary["lines"] == 12
+    usage_rec = next(r for r in records if r.event_type == "usage")
+    assert usage_rec.tokens_in == 1200
+    assert usage_rec.tokens_out == 450
+
+
+def test_read_copilot_session_events_missing_file_returns_empty(tmp_path: Path):
+    records = list(read_copilot_session_events(tmp_path / "no-such.jsonl"))
+    assert records == []
+
+
+def test_read_copilot_session_events_tolerates_malformed_lines(tmp_path: Path):
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "not-json\n"
+        + json.dumps({
+            "type": "session.start",
+            "timestamp": "2026-05-24T08:00:00Z",
+            "data": {"sessionId": "abc", "startTime": "2026-05-24T08:00:00Z", "context": {"cwd": "/x"}},
+        }) + "\n"
+        + "more-garbage\n"
+        + json.dumps({"type": "turn.start", "timestamp": "2026-05-24T08:00:05Z"}) + "\n",
+        encoding="utf-8",
+    )
+    records = list(read_copilot_session_events(events))
+    assert len(records) == 2
+    assert records[0].event_type == "session_start"
+    assert records[1].event_type == "turn"
+
+
 def test_scan_copilot_logs_skips_when_first_record_not_session_start(tmp_path: Path):
     root = tmp_path / "copilot"
     sess = root / "conv-bad"
@@ -233,17 +326,23 @@ def test_scan_launch_log_missing_file_returns_empty(tmp_path: Path):
     assert records == []
 
 
-def test_scan_launch_log_parses_records(tmp_path: Path):
+def test_scan_launch_log_parses_canonical_harvest_record_shape(tmp_path: Path):
+    """The S3 wrapper writes canonical Harvest Record §5 shape (ts + engine)."""
     log = tmp_path / "launch-log.jsonl"
     log.write_text(
         json.dumps({
-            "launch_ts": "2026-05-24T08:00:00Z",
+            "ts": "2026-05-24T08:00:00Z",
+            "event_type": "launch",
+            "source": "wrapper",
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
             "workspace_cwd": "C:/Users/foo/project",
+            "workspace_cwd_canonical": "c:/users/foo/project",
             "set_slug": "045-log-harvest-implementation",
-            "session_number": 2,
-            "target_backend": "claude",
-            "launch_id": "uuid-1",
+            "session_number": 3,
             "effort": "high",
+            "raw_ref": {"launch_id": "uuid-canonical"},
         }) + "\n",
         encoding="utf-8",
     )
@@ -252,19 +351,47 @@ def test_scan_launch_log_parses_records(tmp_path: Path):
     r = records[0]
     assert r.set_slug == "045-log-harvest-implementation"
     assert r.workspace_cwd_canonical == "c:/users/foo/project"
-    assert r.target_backend == "claude"
+    assert r.engine == "claude"
+    assert r.provider == "anthropic"
+    assert r.model == "claude-opus-4-7"
+    assert r.session_number == 3
     assert r.effort == "high"
+    assert r.launch_id == "uuid-canonical"
     assert r.raw_ref["line"] == 1
+    assert r.raw_ref["launch_id"] == "uuid-canonical"
+
+
+def test_scan_launch_log_v0_stub_field_names_backward_compat(tmp_path: Path):
+    """Reader tolerates the v0 stub field names (launch_ts, target_backend)."""
+    log = tmp_path / "launch-log.jsonl"
+    log.write_text(
+        json.dumps({
+            "launch_ts": "2026-05-24T08:00:00Z",
+            "workspace_cwd": "C:/Users/foo/project",
+            "set_slug": "045-log-harvest-implementation",
+            "session_number": 2,
+            "target_backend": "claude",
+            "launch_id": "uuid-legacy",
+            "effort": "high",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    records = list(scan_launch_log(log))
+    assert len(records) == 1
+    r = records[0]
+    assert r.engine == "claude"
+    assert r.launch_id == "uuid-legacy"
 
 
 def test_scan_launch_log_skips_malformed_and_missing_ts(tmp_path: Path):
     log = tmp_path / "launch-log.jsonl"
     log.write_text(
         "not-json\n"
-        + json.dumps({"set_slug": "no-ts"}) + "\n"  # no launch_ts → skip
-        + json.dumps({"launch_ts": "2026-05-24T08:00:00Z", "workspace_cwd": "/foo"}) + "\n",
+        + json.dumps({"set_slug": "no-ts"}) + "\n"  # no ts/launch_ts → skip
+        + json.dumps({"ts": "2026-05-24T08:00:00Z", "workspace_cwd": "/foo", "engine": "claude"}) + "\n",
         encoding="utf-8",
     )
     records = list(scan_launch_log(log))
     assert len(records) == 1
     assert records[0].workspace_cwd_canonical == "/foo"
+    assert records[0].engine == "claude"
