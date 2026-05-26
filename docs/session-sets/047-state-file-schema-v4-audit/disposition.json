@@ -27,8 +27,8 @@
     "model": "claude-opus-4-7",
     "effort": "high",
     "reason": {
-      "code": "next-session-same-set",
-      "specifics": "Set 047 Session 2 is the reader-first phase of the v4 schema migration. It adds the _normalize_to_v4_shape(state) shim to Python and TypeScript readers and establishes a performance benchmark for readSessionSets() against all historical state files. Per the scope-locked spec.md §4 row 2. Claude Opus 4.7 high-effort is appropriate for the cross-language shim authoring and the establish-baseline benchmark work."
+      "code": "continue-current-trajectory",
+      "specifics": "Set 047 Session 2 is the reader-first phase of the v4 schema migration per the scope-locked spec.md §4. It adds the _normalize_to_v4_shape(state) shim to Python and TypeScript readers, routes every existing reader (readSessionSets, readCancellationState, fractionFor, gate_checks, reconciler) through it, and establishes a performance benchmark for readSessionSets() against all historical state files. Claude Opus 4.7 high-effort is the same orchestrator that closed S1 and is appropriate for the cross-language shim authoring and the establish-baseline benchmark work."
     }
   },
   "blockers": []
