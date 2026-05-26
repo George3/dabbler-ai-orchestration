@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "sessionSetName": "047-state-file-schema-v4-audit",
   "currentSession": 1,
-  "totalSessions": null,
+  "totalSessions": 6,
   "completedSessions": [],
   "status": "in-progress",
   "lifecycleState": "work_in_progress",
@@ -17,5 +17,37 @@
     "chatSessionId": null,
     "checkedOutAt": "2026-05-26T07:27:06.095672-04:00",
     "lastActivityAt": "2026-05-26T07:27:06.095672-04:00"
-  }
+  },
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Audit pass + scope-lock",
+      "status": "in-progress"
+    },
+    {
+      "number": 2,
+      "title": "Reader-first phase: normalize-to-v4 shim + reader updates + perf benchmark",
+      "status": "not-started"
+    },
+    {
+      "number": 3,
+      "title": "Migrator phase: migrate_v3_to_v4 CLI + MigrateV3ToV4 TS command + rollback procedure",
+      "status": "not-started"
+    },
+    {
+      "number": 4,
+      "title": "Writer-flip phase part 1: Python writers emit v4",
+      "status": "not-started"
+    },
+    {
+      "number": 5,
+      "title": "Writer-flip phase part 2: TS writers + Explorer prerequisites rendering + UAT",
+      "status": "not-started"
+    },
+    {
+      "number": 6,
+      "title": "Schema-doc + authoring-guide revision + close-out + publish",
+      "status": "not-started"
+    }
+  ]
 }
