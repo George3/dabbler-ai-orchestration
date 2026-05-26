@@ -10,26 +10,19 @@
     {
       "number": 2,
       "title": "Writer-side totalSessions:null + Explorer pre-flight + close-out (reduced scope)",
-      "status": "in-progress"
+      "status": "complete"
     }
   ],
-  "currentSession": 2,
+  "currentSession": null,
   "totalSessions": 2,
   "completedSessions": [
-    1
+    1,
+    2
   ],
-  "status": "in-progress",
-  "lifecycleState": "work_in_progress",
+  "status": "complete",
+  "lifecycleState": "closed",
   "startedAt": "2026-05-26T05:19:52.342166-04:00",
-  "completedAt": null,
+  "completedAt": "2026-05-26T07:18:07.738741-04:00",
   "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "high",
-    "chatSessionId": "ecdc00b8-6830-4aa6-8679-f2eab9f154ee",
-    "checkedOutAt": "2026-05-26T05:19:40.871816-04:00",
-    "lastActivityAt": "2026-05-26T05:19:52.342166-04:00"
-  }
+  "orchestrator": null
 }
