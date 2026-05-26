@@ -365,6 +365,41 @@ def _build_parser() -> argparse.ArgumentParser:
             "drift. Without --repair, has no effect."
         ),
     )
+    # Set 048 Session 2: --no-router mode flag. Highest-precedence
+    # source for runtime_mode.resolve_no_router_mode (CLI > env >
+    # spec tier > default). Under --no-router, close_session skips
+    # routed verification calls and accepts a pre-supplied
+    # verificationVerdict (default "manual") for the session's record.
+    # See Set 048 §3.1 A3 + §3.5 for the close-out short-circuit
+    # contract.
+    p.add_argument(
+        "--no-router",
+        action="store_true",
+        dest="no_router",
+        help=(
+            "Run in Lightweight tier --no-router mode: skip routed "
+            "verification calls; accept a pre-supplied verdict (default "
+            "'manual'). Highest-precedence activation source per Set "
+            "048 §3.1 (overrides env var DABBLER_NO_ROUTER and "
+            "spec.md tier field)."
+        ),
+    )
+    # Set 048 Session 2: --accept-suggestions forces non-interactive
+    # behavior for the external-verification.md soft gate (Set 048
+    # §3.5). Useful for batch / CI invocations that want the soft-
+    # gate emit-to-stderr branch without a TTY prompt.
+    p.add_argument(
+        "--accept-suggestions",
+        action="store_true",
+        dest="accept_suggestions",
+        help=(
+            "Force non-interactive behavior for the external-"
+            "verification.md soft gate (Set 048 §3.5). When the gate "
+            "fires and this flag is set, the close-out emits a stderr "
+            "warning and proceeds without prompting, regardless of "
+            "TTY status."
+        ),
+    )
     return p
 
 
@@ -1519,6 +1554,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+    # Set 048 Session 2: resolve --no-router mode at entry-point start
+    # so verification short-circuit + soft-gate logic downstream can
+    # read the cached resolution. Side-effect: emits a log.info line.
+    try:
+        from runtime_mode import resolve_no_router_mode
+
+        ssd = getattr(args, "session_set_dir", None)
+        resolve_no_router_mode(
+            cli_flag=bool(getattr(args, "no_router", False)),
+            session_set_dir=Path(ssd) if ssd else None,
+        )
+    except Exception:  # noqa: BLE001
+        # Resolution must never block close_session; full-tier is safe default.
+        pass
     outcome = run(args)
     _emit_output(outcome, json_mode=args.json)
     return outcome.exit_code

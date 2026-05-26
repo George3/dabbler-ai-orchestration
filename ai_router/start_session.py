@@ -106,6 +106,7 @@ import argparse
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -299,6 +300,25 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "entry to ~/.dabbler/orchestrator-writer.log and "
             "proceeds. Does not override other boundary checks "
             "(in-flight session, closed-session re-open, skip-ahead)."
+        ),
+    )
+    # Set 048 Session 2: --no-router mode flag. Highest precedence
+    # source for runtime_mode.resolve_no_router_mode (CLI flag > env
+    # var DABBLER_NO_ROUTER > spec.md tier field > default full mode).
+    # Under --no-router, the start_session writer behaves identically
+    # (state file flip and orchestrator block are tier-agnostic per
+    # premise P1); the flag is plumbed through to the resolver so
+    # downstream verification calls in close_session can short-circuit.
+    p.add_argument(
+        "--no-router",
+        action="store_true",
+        dest="no_router",
+        help=(
+            "Run in Lightweight tier --no-router mode: suppress all "
+            "AI router runtime calls (no LLM API hits, no auto-"
+            "verification) for this invocation. Highest-precedence "
+            "activation source per Set 048 §3.1 (overrides env var "
+            "DABBLER_NO_ROUTER and spec.md tier field)."
         ),
     )
     return p
@@ -815,6 +835,23 @@ def _run_under_lock(args: argparse.Namespace) -> int:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    # Set 048 Session 2: resolve --no-router mode at entry-point start
+    # so downstream code (verification calls in close_session, lazy
+    # imports in route/verify) can read the cached resolution. Side-
+    # effect: emits a log.info line noting the source that won.
+    try:
+        from runtime_mode import resolve_no_router_mode
+
+        resolve_no_router_mode(
+            cli_flag=bool(getattr(args, "no_router", False)),
+            session_set_dir=Path(args.session_set_dir)
+            if getattr(args, "session_set_dir", None)
+            else None,
+        )
+    except Exception:  # noqa: BLE001
+        # Runtime-mode resolution must never block start_session; full-tier
+        # default is the safe fallback if anything goes wrong here.
+        pass
     return run(args)
 
 
