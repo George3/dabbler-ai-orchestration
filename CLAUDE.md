@@ -39,23 +39,50 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.20.0** (Set 036 — chatSessionId identity refinement
-  + MVVM watcher-scope discipline; H4 holder-identity composite
-  refined from `engine + provider` to
-  `engine + provider + chatSessionId` so two distinct chats on the
-  same engine are recognized as different holders; new
-  `new_chat_id` CLI workflow for orchestrators without native
-  per-chat metadata; takeover modal in IDE / TTY prompt in
-  terminal for chatSessionId-only mismatches; per-set lifecycle
-  lock (`.lifecycle.lock`) serializes start/close; Codex config-
-  toml watcher RETIRED entirely (D1 watcher-scope discipline);
-  `signalKind` enum + clock-overlay + multi-branch tooltip
-  variants RETIRED; orphan source from Set 034's per-row accordion
-  retirement DELETED (`OrchestratorAccordion.ts` +
-  `detectOrchestrators.ts` + media/orchestrator-indicator/);
-  watcher-inventory convention test enforces D1 at code-review
-  time). Companion PyPI release: `dabbler-ai-router` 0.7.0. The
-  version walk:
+- Current: **v0.21.0** (Set 045 — log-harvest implementation;
+  dual-primary observability surface per Set 044's
+  consensus-locked proposal v1 shipped end-to-end across 6
+  sessions; Session Set Explorer rows gain
+  harvested-signal badges (W / N / M / B for wrapper-launched
+  / native-log / narration-marker / writer-bypass) plus
+  coordination-conflict pills (engine-mismatch / bare-touch /
+  stale-checkout-touch / writer-bypass) fed by an async
+  shell-out to the new `python -m ai_router.joiner` CLI in the
+  companion `dabbler-ai-router 0.8.0`; new `Dabbler:
+  Regenerate Narration Templates` Command Palette action
+  writes canonical CLAUDE.md / AGENTS.md files with the
+  Set-044-spec'd session-start attribution marker an operator
+  can drop into a free-running consumer workspace; one-time
+  setup warning toast with `Open settings` action when
+  `dabbler-ai-router` is not installed in the active venv
+  (otherwise the surface keeps rendering all rows but the
+  badge / pill columns stay empty); IBM colorblind-safe palette
+  for badge colors; CSS custom-property indent for the conflict-
+  pill column so it tracks the fraction column above through
+  font-size changes; new `CONTRIBUTING.md` at repo root with
+  per-test-layer scope guidance + the rebuild-trap note
+  (invoke through `npm run test:playwright` not bare
+  `npx playwright test`); new
+  `docs/cross-repo-harvest-notice.md` for cross-tier consumer-
+  repo paste-in). Companion PyPI release: `dabbler-ai-router`
+  0.8.0. The version walk:
+  - **0.20.0** (Set 036) — chatSessionId identity refinement +
+    MVVM watcher-scope discipline; H4 holder-identity composite
+    refined from `engine + provider` to
+    `engine + provider + chatSessionId` so two distinct chats on
+    the same engine are recognized as different holders; new
+    `new_chat_id` CLI workflow for orchestrators without native
+    per-chat metadata; takeover modal in IDE / TTY prompt in
+    terminal for chatSessionId-only mismatches; per-set lifecycle
+    lock (`.lifecycle.lock`) serializes start/close; Codex
+    config-toml watcher RETIRED entirely (D1 watcher-scope
+    discipline); `signalKind` enum + clock-overlay + multi-branch
+    tooltip variants RETIRED; orphan source from Set 034's
+    per-row accordion retirement DELETED
+    (`OrchestratorAccordion.ts` + `detectOrchestrators.ts` +
+    media/orchestrator-indicator/); watcher-inventory convention
+    test enforces D1 at code-review time. Companion PyPI
+    release: `dabbler-ai-router` 0.7.0.
   - **0.19.0** (Set 034) — Session Set Explorer honesty pass;
     per-row orchestrator-tracking accordion + ActionRegistry
     orchestrator group RETIRED from the UI surface, replaced by a
@@ -69,7 +96,12 @@ is a required duplicate — `vsce package` expects the file alongside
     block) to the cancellation lifecycle. See below for the prior
     Set 035 description.
 
-- Previous: **v0.18.1** (Set 035 — state-file sole truth for
+- Previous: **v0.20.0** (Set 036 — chatSessionId identity refinement
+  + MVVM watcher-scope discipline. Companion PyPI release:
+  `dabbler-ai-router 0.7.0`). Full description preserved below
+  for posterity.
+
+- Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
   cancellation/restoration; Marketplace publish gated on operator
   confirmation). No companion PyPI release this set
   (`ai_router/session_lifecycle.py` verified byte-equivalent with the

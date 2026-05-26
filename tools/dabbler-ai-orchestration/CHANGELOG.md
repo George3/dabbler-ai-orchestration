@@ -5,6 +5,131 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-05-25 (Set 045 — log-harvest implementation)
+
+Ships the user-facing surface for the dual-primary log-harvest
+observability architecture locked by Set 044's consensus-audited
+proposal v1. The Session Set Explorer now surfaces per-row harvested-
+signal badges (wrapper-launched / native-log / narration-marker /
+writer-bypass) and conflict-warning pills (engine-mismatch / bare-
+touch / stale-checkout-touch / writer-bypass) fed by an async
+shell-out to the new `python -m ai_router.joiner` CLI in the
+companion `dabbler-ai-router 0.8.0` PyPI release. Adds the
+`Dabbler: Regenerate Narration Templates` Command Palette action
+that writes canonical CLAUDE.md / AGENTS.md files containing a
+single Set-044-spec'd session-start attribution marker an operator
+can drop into a free-running consumer workspace to make the
+assistant's native-log emissions correlatable back to a Dabbler
+session set.
+
+### Added
+
+- **Harvest signal badges** (`media/session-sets-tree/client.js`,
+  `media/session-sets-tree/tree.css`) — four single-letter badges
+  (W / N / M / B) per Explorer row showing what evidence the joiner
+  found for that set. Each lights independently; off-state is dim.
+  IBM colorblind-safe palette per the operator's prior
+  `gauges_sizing_followup` preference (blue / purple / orange /
+  magenta).
+- **Conflict pills** (same files) — separate row below the signal
+  strip with one pill per detected coordination conflict.
+  `data-kind` and `data-severity` attributes drive color
+  (magenta / orange / yellow severity scale); hover for the
+  joiner's note. Indent uses `calc(12px +
+  var(--row-fraction-width) + var(--row-fraction-margin-right))`
+  so the pill column tracks the fraction column above through
+  font-size changes.
+- **HarvestService** (`src/providers/HarvestService.ts`, NEW;
+  281 LOC) — async shell-out to `python -m ai_router.joiner
+  --coverage --json` and `--conflicts --json` from
+  `CustomSessionSetsView.postSnapshot`. 30s TTL cache with
+  `onUpdate` callback triggers a re-render when fresh data lands.
+  Graceful-fail when both shell-outs fail. Dev-mode PYTHONPATH
+  discovery walks up from `extensionUri.fsPath` looking for an
+  `ai_router/__init__.py` sibling (present under
+  `--extensionDevelopmentPath`; absent in Marketplace install).
+  `SpawnResult.diagnostic` field distinguishes
+  `missing-ai-router` / `spawn-failed` / `non-zero-exit` /
+  `json-parse` failure modes.
+- **Missing-dependency setup warning** — when `HarvestService`
+  detects `dabbler-ai-router` is not installed (via stderr regex
+  on `ModuleNotFoundError.*ai_router` /
+  `No module named ['"]ai_router['"]`), fires a one-time
+  `vscode.window.showWarningMessage` with an `Open settings`
+  action that navigates to `dabblerSessionSets.pythonPath`.
+  Sticky per-session via `missingDependencyNotified` flag.
+- **`Dabbler: Regenerate Narration Templates`**
+  (`src/commands/regenerateNarrationTemplates.ts`, NEW) —
+  Command Palette action. Picks the in-progress session set
+  (auto-selects when exactly one is in-progress; quickpick
+  otherwise via `readAllSessionSets`), shells out to
+  `python -m ai_router.narration` twice (claude + agents kinds)
+  inside a `vscode.window.withProgress` wrapper, writes outputs
+  to `<set-dir>/narration-templates/{CLAUDE.md,AGENTS.md}`, then
+  surfaces a toast with `Open Rendered CLAUDE.md` + `Copy to
+  consumer workspace…` actions. Copy-to-workspace presents a
+  quickpick + `showOpenDialog` folder picker + `fs.copyFileSync`
+  with overwrite confirm.
+- **`RowPayload` extensions**
+  (`src/types/sessionSetsWebviewProtocol.ts`) — new
+  `harvestSignals: HarvestSignalsPayload | null` and
+  `conflicts: ConflictPayload[]` fields. Type unions for
+  `ConflictKind` (`'engine-mismatch' | 'bare-touch' |
+  'stale-checkout-touch' | 'writer-bypass'`) and
+  `ConflictSeverity` (`'high' | 'medium' | 'low'`).
+
+### Documentation
+
+- `CONTRIBUTING.md` (NEW at repo root) — per-test-layer scope
+  guidance and the Set 045 rebuild-trap note: invoke through
+  `npm run test:playwright` (not bare `npx playwright test`) so
+  the `npm run compile` step rebuilds the extension bundle
+  before Playwright loads it. A stale `dist/extension.js`
+  silently produces assertion failures that look like
+  regressions.
+- `docs/cross-repo-harvest-notice.md` (NEW) — cross-tier
+  consumer-repo notice covering wrapper install + narration
+  template usage + Explorer badge / pill semantics. Parallel
+  structure to the existing `cross-repo-checkout-notice.md`;
+  operator pulls the snippet into each consumer's CLAUDE.md
+  manually.
+- `docs/narration-templates.md` (shipped in Set 045 S4; pointer
+  here for completeness) — operator reference for the narration
+  v1.1 surface.
+- `docs/session-sets/045-log-harvest-implementation/joiner-spec.md`
+  (shipped in Set 045 S2) — canonical joiner contract: conflict
+  modes, Harvest Record schema §5, CoverageSummary fields,
+  ConflictReport fields, §7 redaction posture.
+
+### Companion release
+
+`dabbler-ai-router 0.8.0` ships the producer + joiner side:
+
+- `ai_router.dabbler_launch` — headless `dabbler-launch` CLI
+  wrapper (Set 045 S3) writing canonical Harvest Record §5
+  shape to `~/.dabbler/launches.jsonl`.
+- `ai_router.joiner` — joiner package (S2/S3/S4/S5) with
+  Claude + Copilot per-event JSONL parsers, conflict-detection
+  semantics across the three modes, CoverageSummary +
+  ConflictReport surfaces, and the `python -m ai_router.joiner`
+  CLI.
+- `ai_router.narration` — narration v1.1 module (S4) with
+  `MARKER_REGEX`, `detect_marker`, `render_template`,
+  `project_state_for_template`, and the
+  `python -m ai_router.narration` CLI.
+
+### Notes
+
+- The harvest surface is **observation-only** — it never writes
+  to `session-state.json` and never modifies the orchestrator
+  block. Set 036's check-out / check-in model remains the sole
+  writer.
+- The Set 045 architectural commitments (dual-primary channels;
+  session-start-only narration; wrapper in `ai_router/`;
+  headless-first; ungated-default; LaunchAdapter retirement;
+  joiner as engineering center of gravity) are Set 044
+  consensus-locked and were not relitigated within Set 045.
+
 ## [0.20.0] — 2026-05-24 (Set 036 — chatSessionId identity refinement + watcher-scope discipline)
 
 Ships the user-facing surface for the chatSessionId-refined

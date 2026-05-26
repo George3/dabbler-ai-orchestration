@@ -513,3 +513,168 @@ Additional rounds within scope if surfacing must-fix items.
 - Cumulative routed spend across Set 045 entering S6:
   $0.024 (S1) + $0.053066 (S2) + $0.107 (S3) + $0.063 (S4) +
   $0.0707 (S5) = **$0.3177 of $5 NTE**.
+
+---
+
+**Next-session orchestrator recommendation (Session 6 — UAT +
+change-log + cross-tier docs + release):**
+
+claude-opus-4-7 @ effort=high — the running orchestrator. S6 is
+the release-and-documentation close-out of Set 045: it ships the
+UAT checklist for the Explorer harvest surface added in S5, the
+operator-facing dual-channel setup walkthrough (wrapper invocation
++ narration template usage), the cross-tier docs update for the
+three consumer repos, the dual-registry version bump (extension
+0.20.0 → 0.21.0 + ai_router 0.7.0 → 0.8.0), and the gated PyPI +
+Marketplace publish. The work is doc-authoring + version-bump
+mechanics + UAT-checklist authoring + release-publish ceremony —
+best handled by Opus in-process with the full Set 045 design + S4
+narration + S5 Explorer surface fresh in context. No new API
+spend mid-session (routed verification only at end-of-session).
+Rationale: a handoff would force the new orchestrator to re-load
+the full S1–S5 chain to write honest release notes; the cost of
+that re-load outweighs the bias caveat.
+
+---
+
+## Session 6: UAT + change-log + cross-tier docs + release
+
+### Recommended orchestrator
+
+claude-opus-4-7 @ effort=high (the running orchestrator).
+
+### Self-authored disclaimer (Session 6)
+
+This block was authored by the orchestrator (Claude Opus 4.7)
+directly, not via `route(task_type="analysis")`. The standing
+operator directive ("AI router usage restricted to end-of-session
+verification — cost containment, until further notice") remains in
+force. Read the recommendations below with the
+orchestrator-self-opinion bias caveat in mind; the end-of-session
+verifier provides the independent cross-provider check.
+
+### Rationale
+
+S6 closes Set 045 with the release-and-documentation suite:
+ad-hoc UAT checklist for the Explorer harvest surface, change-log
+authoring, cross-tier consumer-repo docs update covering the
+wrapper install + narration template usage, dual-registry version
+bump (extension 0.20.0 → 0.21.0 + ai_router 0.7.0 → 0.8.0), then
+the gated PyPI + Marketplace publish after VERIFIED. The work is
+doc-authoring + UAT-checklist authoring + version-bump mechanics
++ release-publish ceremony — best handled by Opus in-process.
+Cumulative routed spend coming in: **$0.3177 of $5 NTE**.
+
+### Pre-S6 operator decisions (recorded 2026-05-25)
+
+The three S5-deferred Round-A recommendations were surfaced at
+S6 start. Operator picked option #1 (fold in only the
+CONTRIBUTING.md note) on my recommendation:
+
+1. **CONTRIBUTING.md rebuild-trap note — FOLD IN.** Doc-only,
+   ~5 min, prevents the exact stale-bundle false-positive S5
+   hit. New top-level `CONTRIBUTING.md` (none currently exists)
+   covers the `npm run test:playwright` rebuild ordering plus
+   any other quick onboarding notes.
+2. **Singleton HarvestService refactor — DEFER.** No current
+   pain point. The per-call instantiation loses the 30s TTL
+   cache between `postSnapshot` calls (one redundant Python
+   shell-out per snapshot), but only matters once a second
+   consumer view exists — which it doesn't. CLAUDE.md says
+   "don't refactor beyond what the task requires."
+3. **Missing-events-ledger ConflictKind — DEFER.** Audit-touching
+   (changes Set 044-locked spec §3). Per the audit-then-spec
+   memory, substantive spec changes need a new audit pass, not
+   an in-session orchestrator-judgment call. Marketplace
+   download count is 3, so deferring costs almost nothing —
+   ship the gap as a follow-on set if real-world feedback wants
+   it.
+
+### Release posture (operator-confirmed 2026-05-25)
+
+**Publish at end of S6 after verifier VERIFIES** (Recommended;
+matches Set 036 release pattern). Run end-of-session verification
+first; on VERIFIED Round A/B, request explicit operator go-ahead,
+then publish both PyPI (`dabbler-ai-router 0.8.0`) and Marketplace
+(`dabbler-ai-orchestration 0.21.0`).
+
+### Plan
+
+| Step | Action | Routing Decision |
+|------|--------|------------------|
+| 1 | Author top-level `CONTRIBUTING.md` (S5 rebuild-trap note + minimal onboarding scaffolding) | No routing |
+| 2 | Author `docs/session-sets/045-log-harvest-implementation/045-log-harvest-implementation-uat-checklist.json` — ad-hoc UAT scenarios for Explorer signal badges + conflict pills + missing-dep degradation toast + narration template regeneration | No routing |
+| 3 | Author `docs/session-sets/045-log-harvest-implementation/change-log.md` — per-session summaries + verification rounds + actuals vs. forecast | No routing |
+| 4 | Update `docs/cross-repo-checkout-notice.md` OR author `docs/cross-repo-harvest-notice.md` — cross-tier consumer-repo update covering wrapper install (`pip install dabbler-ai-router>=0.8.0`) + narration template usage + Explorer signal badges | No routing |
+| 5 | Bump extension `0.20.0` → `0.21.0` (`tools/dabbler-ai-orchestration/package.json`) | No routing |
+| 6 | Bump `dabbler-ai-router` `0.7.0` → `0.8.0` (`pyproject.toml`) | No routing |
+| 7 | Update root `CLAUDE.md` extension-versioning block — promote 0.20.0 to "Previous" + add 0.21.0 as "Current" with the Set 045 walk summary | No routing |
+| 8 | Update `tools/dabbler-ai-orchestration/CHANGELOG.md` — new `[0.21.0]` section under "Unreleased" | No routing |
+| 9 | Full test suite: `python -m pytest` + `npx tsc --noEmit` + `npm run test:unit` + `npm run test:playwright` | No routing |
+| 10 | End-of-session cross-provider verification (Round A) | `route(model="gemini-pro", task_type="session-verification")` |
+| 11+ | Round B / C if Round A surfaces must-fix items | Same routing |
+| 12 | **Operator gate** — request explicit go-ahead before publish | No routing |
+| 13 | PyPI publish — `python -m build` + `twine upload dist/dabbler-ai-router-0.8.0*` | No routing (external publish) |
+| 14 | Marketplace publish — `cd tools/dabbler-ai-orchestration && npx vsce publish --pat $env:AZURE_VSCODE_MARKETPLACE_TOKEN` | No routing (external publish) |
+| 15 | close_session → push | No routing |
+
+### Carry-forward inputs from prior sessions (locked, do not relitigate)
+
+- Set 045 architectural commitments (proposal v1 §"Locked
+  architectural commitments") — dual-primary channels,
+  session-start-only narration, wrapper in `ai_router/`,
+  headless-first, ungated-default, retired LaunchAdapter contract,
+  joiner as engineering center of gravity.
+- Joiner Python location at `ai_router/joiner/` (S1 Q4 lock).
+- Canonical Harvest Record §5 schema (joiner-spec.md §5) — the
+  producer contract; S3 wrapper, S3 Copilot parser, and S4 Claude
+  parser all write to it.
+- Q3 four defensive rules (no harvest lexical family / no pretense
+  self-disclosure / framed as project convention / minimal caps);
+  applied to all narration templates in S4.
+- The pre-S5 deferrals (Copilot-side marker scanning of
+  `gen_ai.output.messages`; Q3 A2-A8 ablation pre-S6 Marketplace
+  release) remain DEFERRED.
+- Q1 bypass-rate fraction NOT computed in S6 — the observation
+  log only started 2026-05-24; needs 1–2 weeks of data before a
+  meaningful fraction renders. S5 wires the badge infrastructure;
+  the fraction computation lands as a follow-on patch when the
+  log has accumulated enough data.
+
+### Actuals (filled after the session)
+
+- Orchestrator used: claude-opus-4-7 @ effort=high
+- Total routed cost: **$0.068716** (single gemini-pro
+  session-verification call; VERIFIED Round A no must-fix; one
+  nice-to-have on CONTRIBUTING.md applied in-flight per the
+  'don't hide behind out-of-scope' directive — the
+  `Running everything` snippet duplicated
+  `cd tools/dabbler-ai-orchestration` across two commands;
+  collapsed into a single `cd` followed by two relative
+  commands.)
+- Deviations from recommendation: none. Round A verified on
+  first pass; no Round B needed. The verifier endorsed: the
+  change-log per-session shipped lists matching the actual
+  artifacts; the CHANGELOG.md [0.21.0] entry recognizable to an
+  operator opening 0.21.0; the CLAUDE.md version-walk fidelity;
+  the 27 UAT scenarios covering the user-visible surface; the
+  cross-repo-harvest-notice paste-readiness; the CONTRIBUTING.md
+  test-layer guidance accuracy (modulo the duplicate cd).
+- Notes for next-set calibration: (1) Set 045's per-session
+  verifier-catch trend was steeply downward — S3 needed three
+  rounds with five must-fix issues; S4 + S5 needed one round
+  each (S5 had two must-fix); S6 needed zero. The discipline
+  improvement traces to the joiner-spec.md §5 schema lockdown +
+  the per-session "carry-forward inputs (locked, do not
+  relitigate)" block at the top of each ai-assignment session
+  entry. Worth preserving for Set 046. (2) The dual-schema UAT
+  checklist (Passes/Feedback + Result) was a small in-flight
+  decision to bridge the UAT Checklist Editor and the Dabbler
+  extension parser; the parser schema gap is real and worth
+  reconciling in a future doc / extension session.
+  (3) Total Set 045 routed spend: $0.024 + $0.053066 + $0.107 +
+  $0.063 + $0.0707 + $0.068716 = $0.386482 of $5 NTE
+  (~7.7% of the ceiling).
+- Cumulative routed spend across Set 045 entering set close:
+  $0.024 (S1) + $0.053066 (S2) + $0.107 (S3) + $0.063 (S4) +
+  $0.0707 (S5) + $0.068716 (S6) = **$0.386482 of $5 NTE**.
