@@ -1,14 +1,60 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "048-lightweight-tier-parity",
-  "currentSession": null,
-  "totalSessions": null,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null,
-  "sessions": [],
-  "completedSessions": []
+  "status": "in-progress",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Audit pass + scope-lock",
+      "status": "complete",
+      "startedAt": "2026-05-26T16:45:56.054453-04:00",
+      "completedAt": "2026-05-26T17:19:45.432266-04:00",
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "max",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-26T16:45:56.054453-04:00",
+        "lastActivityAt": "2026-05-26T16:45:56.054453-04:00"
+      },
+      "verificationVerdict": "manual_attestation"
+    },
+    {
+      "number": 2,
+      "title": "--no-router mode + tri-state schema/runtime + soft gate",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Copyable-prompt commands + Context-menu IA refresh (COMBINED per audit Bias 7 flip)",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 4,
+      "title": "Doc revision + per-consumer migrator + bootstrap tier-branch",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 5,
+      "title": "UAT + change-log + version bumps + publish",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
 }
