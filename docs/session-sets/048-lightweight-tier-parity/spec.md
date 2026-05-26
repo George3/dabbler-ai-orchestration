@@ -103,6 +103,16 @@ The set delivers:
 - **L3.** Remove "Open AI Assignment" from right-click context menu.
 - **L4.** Context-menu popup must dismiss on focus-loss / Escape
   and/or expose explicit close-button affordance.
+- **L5.** Left-click on a Session Set Explorer row ALWAYS opens
+  `spec.md` in an editor tab (current behavior preserved). When the
+  set is not in a terminal state (not `complete` and not `cancelled`),
+  the left-click ALSO copies `Start the next session of \`<slug>\`.`
+  to the clipboard and shows a one-line information toast
+  (`Copied: Start the next session of <slug>`) so the non-obvious
+  clipboard action is discoverable. Terminal-state rows skip the
+  clipboard write and toast (spec.md opens only). The same
+  "start-next-session" clipboard action is also exposed in the
+  right-click QuickPick under `Copy Eval ▸ Start Next Session`.
 
 ---
 
@@ -198,6 +208,7 @@ respect gained.
 | `Copy Eval ▸` (submenu) | Evaluate Specification → `dabbler.copySpecReviewPrompt` |
 | | Evaluate Most Recent Session → `dabbler.copySessionAccomplishmentsPrompt` |
 | | Evaluate Session Set → `dabbler.copySetAccomplishmentsPrompt` |
+| | Start Next Session → `dabbler.copyStartNextSessionPrompt` (disabled on terminal-state rows; mirrors the left-click clipboard action per L5) |
 | Flat actions | Set Orchestrator… (gated to in-progress rows) |
 | | Open Orchestrator Writer Log |
 | | Migrate to v4 schema (Set 047 S3 action) |
@@ -217,6 +228,17 @@ level shows `Open File ▸` / `Copy Eval ▸` / flat actions; selecting
 a `▸` item opens a second QuickPick with the submenu items) is the
 standard pattern. Cancellation in the second-level QuickPick returns
 to the first level; Escape from the first level dismisses entirely.
+
+**Left-click action (per L5):** the existing left-click → opens
+`spec.md` behavior is preserved. Additionally, when the row's set
+is not in a terminal state (not `complete` and not `cancelled`), the
+left-click ALSO writes `Start the next session of \`<slug>\`.` to
+the clipboard via `vscode.env.clipboard.writeText()` and shows a
+one-line information toast (`Copied: Start the next session of <slug>`).
+Terminal-state rows skip the clipboard write and toast entirely
+(spec.md opens only). This dual-action left-click is the operator's
+high-frequency starting-shortcut; the right-click `Copy Eval ▸ Start
+Next Session` exposes the same clipboard action for discoverability.
 
 ### 3.4 Tri-state `requiresUAT` / `requiresE2E` runtime (D4)
 
