@@ -13,6 +13,15 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    # load_config() validates that API-key env vars exist for every
+    # enabled provider in router-config.yaml (anthropic / gemini /
+    # openai). The tests don't make real provider calls — the load
+    # validator just checks for env presence. Dummy values are
+    # sufficient and avoid leaking real credentials through CI logs.
+    env:
+      ANTHROPIC_API_KEY: ci-dummy-anthropic-key
+      GEMINI_API_KEY: ci-dummy-gemini-key
+      OPENAI_API_KEY: ci-dummy-openai-key
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +42,15 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    # Same dummy API-key envs the python-tests job uses. Several
+    # Layer-3 specs shell out to `python -m ai_router.start_session`
+    # / `ai_router.new_chat_id` / `ai_router.close_session` via
+    # electronLaunch.ts's harness_cli helper, and those CLIs import
+    # config.load_config() at startup which validates the env is set.
+    env:
+      ANTHROPIC_API_KEY: ci-dummy-anthropic-key
+      GEMINI_API_KEY: ci-dummy-gemini-key
+      OPENAI_API_KEY: ci-dummy-openai-key
     steps:
       - uses: actions/checkout@v4
 
@@ -41,12 +59,39 @@ jobs:
         with:
           node-version: "20"
 
+      # Several Layer-3 specs shell out to `python -m ai_router.*`
+      # CLIs (start_session, close_session, new_chat_id) via the
+      # harness_cli helper in electronLaunch.ts. The ai_router
+      # package must be importable on the Playwright job's runner —
+      # the separate python-tests job's install does not carry
+      # across.
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install ai_router (importable by python -m ai_router.* shell-outs)
+        run: pip install -e .
+
       - name: Install extension dependencies
         run: npm ci
         working-directory: tools/dabbler-ai-orchestration
 
       - name: Install Chromium for Playwright
         run: npx playwright install chromium
+        working-directory: tools/dabbler-ai-orchestration
+
+      # src/test/playwright/electronLaunch.ts findCodeBinary() looks
+      # for a VS Code binary cached under .vscode-test/ (the canonical
+      # @vscode/test-electron download location). On local dev that
+      # directory gets populated the first time you run `npm test`,
+      # which CI does NOT invoke (the @vscode/test-electron Layer-2
+      # harness is broken on Windows 11 + VS Code 1.120). Without this
+      # step Layer 3 throws "No VS Code binary found and .vscode-test
+      # does not exist" before any test body runs. The script just
+      # downloads + extracts the binary; it does not run any tests.
+      - name: Download VS Code for Playwright (populates .vscode-test/)
+        run: node -e "require('@vscode/test-electron').downloadAndUnzipVSCode()"
         working-directory: tools/dabbler-ai-orchestration
 
       - name: Run Playwright tests (Linux with xvfb)
