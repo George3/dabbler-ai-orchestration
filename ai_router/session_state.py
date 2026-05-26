@@ -63,6 +63,7 @@ import yaml
 # which side (read or write) detected the violation.
 try:
     from progress import (  # type: ignore[import-not-found]
+        SCHEMA_VERSION_V4,
         SESSION_STATUS_COMPLETE,
         SESSION_STATUS_IN_PROGRESS,
         SESSION_STATUS_NOT_STARTED,
@@ -70,11 +71,13 @@ try:
         SessionStateInvariantError,
         canonicalize_status,
         extract_session_titles_from_spec,
+        normalize_to_v4_shape,
         synthesize_v3_from_v2,
         validate_invariants,
     )
 except ImportError:
     from .progress import (  # type: ignore[no-redef]
+        SCHEMA_VERSION_V4,
         SESSION_STATUS_COMPLETE,
         SESSION_STATUS_IN_PROGRESS,
         SESSION_STATUS_NOT_STARTED,
@@ -82,13 +85,49 @@ except ImportError:
         SessionStateInvariantError,
         canonicalize_status,
         extract_session_titles_from_spec,
+        normalize_to_v4_shape,
         synthesize_v3_from_v2,
         validate_invariants,
     )
 
 
 SESSION_STATE_FILENAME = "session-state.json"
-SCHEMA_VERSION = 3
+# Set 047 Session 4: writer-flip phase (Python). Writers now emit v4
+# on-disk shape — top-level state (currentSession, totalSessions,
+# completedSessions, orchestrator, startedAt, completedAt,
+# verificationVerdict, lifecycleState) is derived from a per-session
+# ``sessions[]`` ledger by the reader-shim (Session 2's
+# :func:`progress.normalize_to_v4_shape`). The v3-shim reader stays in
+# place for one release cycle so legacy v3 files on disk read
+# transparently; the Session 3 migrator upgrades v3 files to v4 on
+# demand. Per the audit-locked spec at
+# ``docs/session-sets/047-state-file-schema-v4-audit/spec.md`` §3.1.
+SCHEMA_VERSION = SCHEMA_VERSION_V4
+# Set 047 Session 4: per-session metadata fields each ``sessions[]``
+# entry carries on v4 writes (mirrors :data:`progress._V4_PER_SESSION_KEYS`).
+# The writer initializes these to ``None`` for not-started sessions, and
+# preserves them across boundary writes by reading the existing
+# normalized v4 view (which captures both fresh v4 input and the
+# shim's v3-promoted view of legacy files).
+_V4_PER_SESSION_METADATA_KEYS = (
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+)
+# Set 047 Session 4: top-level keys dropped from the v4 on-disk shape
+# (mirrors :data:`migrate_v3_to_v4._V4_TOP_LEVEL_DROPPED_KEYS`). The
+# shim re-derives these at read time from the per-session ledger.
+_V4_TOP_LEVEL_DROPPED_KEYS = (
+    "lifecycleState",
+    "currentSession",
+    "totalSessions",
+    "completedSessions",
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+)
 
 
 _logger = logging.getLogger("ai_router.session_state")
@@ -264,6 +303,85 @@ def _spec_titles_for_set(session_set_dir: str) -> dict:
     """
     spec_path = Path(session_set_dir) / "spec.md"
     return {n: t for n, t in extract_session_titles_from_spec(spec_path)}
+
+
+def _read_prior_v4_metadata(
+    existing: Optional[dict],
+    session_set_dir: str,
+) -> dict:
+    """Return ``{session_number: {startedAt, completedAt, orchestrator, verificationVerdict}}``.
+
+    Set 047 Session 4 helper for the writer flip: pull per-session
+    metadata from the existing on-disk state so boundary writes
+    preserve session-N's startedAt / completedAt / orchestrator /
+    verificationVerdict across the rewrite. Routes through
+    :func:`progress.normalize_to_v4_shape` so v3 input (top-level
+    fields promoted onto the in-progress / most-recently-completed
+    session) and v4 input (per-session fields are authoritative) yield
+    the same shape.
+
+    Returns an empty dict for unparseable / not-yet-existing state.
+    Best-effort: malformed sessions[] entries (missing ``number`` or
+    non-dict shape) are dropped silently because the writer's
+    invariant validator runs against the fresh sessions[] array, not
+    the prior one.
+    """
+    if not isinstance(existing, dict):
+        return {}
+    spec_md_path = Path(session_set_dir) / "spec.md"
+    try:
+        normalized = normalize_to_v4_shape(existing, spec_md_path)
+    except (TypeError, ValueError, SessionStateInvariantError):
+        return {}
+    out: dict = {}
+    for entry in normalized.get("sessions") or []:
+        if not isinstance(entry, dict):
+            continue
+        number = entry.get("number")
+        if type(number) is not int or number <= 0:
+            continue
+        out[number] = {
+            key: entry.get(key) for key in _V4_PER_SESSION_METADATA_KEYS
+        }
+    return out
+
+
+def _apply_v4_per_session_metadata(
+    sessions: List[dict],
+    prior_v4_metadata: dict,
+) -> None:
+    """Mutate *sessions* in place to add per-session v4 metadata fields.
+
+    Each entry gains :data:`_V4_PER_SESSION_METADATA_KEYS` defaulted to
+    ``None``. For entries whose number appears in *prior_v4_metadata*,
+    the prior values are carried forward — preserving startedAt /
+    completedAt / orchestrator / verificationVerdict across boundary
+    writes. Callers override fields on the in-flight / closing session
+    after this helper runs.
+    """
+    for entry in sessions:
+        number = entry.get("number")
+        prior = (
+            prior_v4_metadata.get(number)
+            if isinstance(number, int)
+            else None
+        )
+        for key in _V4_PER_SESSION_METADATA_KEYS:
+            if isinstance(prior, dict):
+                entry[key] = prior.get(key)
+            else:
+                entry[key] = None
+
+
+def _strip_v4_dropped_top_level_keys(state: dict) -> None:
+    """Drop the derived/legacy top-level keys from a v4 state dict in place.
+
+    Used at write time so the on-disk file matches the v4 contract per
+    spec §3.1: top-level state is derived from ``sessions[]`` by the
+    reader, never independently maintained at the top level.
+    """
+    for key in _V4_TOP_LEVEL_DROPPED_KEYS:
+        state.pop(key, None)
 
 
 def _build_sessions_array(
@@ -461,8 +579,17 @@ def register_session_start(
     # ledger so the very first start_session call after the upgrade
     # heals the snapshot. The backfill is intentionally same-tier as
     # the close_session writer's backfill — both use the same helper.
+    # Set 047 Session 4: read the raw on-disk state so the writer's
+    # totalSessions / sessions[] / completedSessions[] backfills see
+    # the literal v3 or v4 shape rather than the shim's derived view
+    # (which would inflate v3 plan-less totalSessions to match the
+    # synthesized sessions[]). Per-session metadata for the v4 write
+    # is read via :func:`_read_prior_v4_metadata` which DOES route
+    # through the shim — that helper needs the v4-promoted view to
+    # collect per-session orchestrator / startedAt that v3 inputs
+    # stored at the top level.
     prior_completed: List[int] = []
-    existing = read_session_state(session_set)
+    existing = read_raw_session_state(session_set)
     if isinstance(existing, dict):
         prior_completed = compute_effective_completed_sessions(session_set)
 
@@ -497,6 +624,19 @@ def register_session_start(
             prior_total = existing.get("totalSessions")
             if isinstance(prior_total, int) and prior_total > 0:
                 effective_total = prior_total
+    # Set 047 Session 4 (verifier Critical 1): v4 input drops top-
+    # level ``totalSessions`` — the authoritative count is
+    # ``len(sessions[])`` on disk. Before falling through to spec.md
+    # signals, derive the total from the prior v4 ledger when
+    # present. Without this, a re-attach against a v4 file that lost
+    # its spec.md (or never had one) would be misclassified as
+    # plan-less and would refuse the rewrite once prior_completed is
+    # non-empty.
+    if not (isinstance(effective_total, int) and effective_total > 0):
+        if isinstance(existing, dict):
+            prior_sessions = existing.get("sessions")
+            if isinstance(prior_sessions, list) and prior_sessions:
+                effective_total = len(prior_sessions)
     if not (isinstance(effective_total, int) and effective_total > 0):
         spec_total = _read_total_sessions_from_spec(session_set)
         if isinstance(spec_total, int) and spec_total > 0:
@@ -617,21 +757,19 @@ def register_session_start(
         if not already_emitted:
             append_event(session_set, "work_started", session_number)
 
-    if sessions is None:
-        # Set 046 Session 2 plan-less write: ``sessions[]`` is omitted,
-        # so the derivation fallback uses the boundary inputs directly.
-        # ``currentSession`` is the in-flight number, ``totalSessions``
-        # stays ``None`` (the Explorer signal the operator sees as
-        # ``?``), and ``completedSessions`` is empty by construction
-        # (the plan-less branch above refuses input with any closed
-        # sessions).
-        derived_current, derived_total, derived_completed = (
-            session_number,
-            None,
-            [],
-        )
-    else:
-        derived_current, derived_total, derived_completed = _derive_legacy_fields(sessions)
+    # Set 047 Session 4: writer-flip phase. The orchestrator block
+    # lives on the in-progress session's per-session record under v4
+    # (not at the top level — top-level orchestrator was the v3 model
+    # cleared on every close). Same-holder re-attach reads the prior
+    # orchestrator from the in-progress session's record in the
+    # normalized v4 view so v3 input files (top-level orchestrator
+    # promoted onto the in-progress session by the shim) and v4 input
+    # files (per-session orchestrator authoritative) both flow through
+    # the same code path. Per-session metadata for prior-completed
+    # sessions is preserved across the rewrite so close-out timestamps
+    # / verdicts / orchestrators that closed those sessions survive.
+    now = _now_iso()
+    prior_v4_metadata = _read_prior_v4_metadata(existing, session_set)
 
     # Set 033 Session 1 (H3 + H4 + OQ1) + Set 036 Session 1 (Q5):
     # compute checkedOutAt and lastActivityAt from the existing
@@ -654,8 +792,51 @@ def register_session_start(
     # different ``chatSessionId``, which the CLI's H3 refusal logic
     # only lets through on ``--force``), ``checkedOutAt`` is set to
     # now. ``lastActivityAt`` bumps on every write.
-    now = _now_iso()
-    prior_orch = existing.get("orchestrator") if isinstance(existing, dict) else None
+    #
+    # Set 047 Session 4: the prior orchestrator is sourced from the
+    # session_number we are about to start — but only if the prior
+    # file had that session in-progress (re-attach). Falling back to
+    # the top-level orchestrator on a between-sessions / closed prior
+    # file is intentionally NOT done: under v4 the per-session
+    # orchestrator on closed sessions is preserved as a historical
+    # record, and treating it as "still checked out" would defeat the
+    # check-in semantic. A fresh check-out of a new session number is
+    # always a different holder by construction.
+    # Set 047 Session 4: same-holder re-attach detection looks at
+    # the prior in-progress session's orchestrator. Under v3 input
+    # that's the top-level ``orchestrator`` field paired with a
+    # matching top-level ``currentSession``; under v4 input it's the
+    # per-session record for ``session_number`` when its status is
+    # ``in-progress``. Either way, the question is the same: "did
+    # the prior file have THIS session number checked out?" If yes,
+    # that orchestrator block is the candidate; if no, fresh
+    # check-out (different holder by construction).
+    prior_orch_for_holder_check = None
+    if isinstance(existing, dict):
+        # v3 path: top-level currentSession + orchestrator pair.
+        prior_current = existing.get("currentSession")
+        if (
+            isinstance(prior_current, int)
+            and not isinstance(prior_current, bool)
+            and prior_current == session_number
+        ):
+            candidate = existing.get("orchestrator")
+            if isinstance(candidate, dict):
+                prior_orch_for_holder_check = candidate
+        # v4 path: per-session record with status=in-progress.
+        if prior_orch_for_holder_check is None:
+            for entry in existing.get("sessions") or []:
+                if (
+                    isinstance(entry, dict)
+                    and entry.get("number") == session_number
+                    and entry.get("status") == SESSION_STATUS_IN_PROGRESS
+                ):
+                    candidate = entry.get("orchestrator")
+                    if isinstance(candidate, dict):
+                        prior_orch_for_holder_check = candidate
+                    break
+
+    prior_orch = prior_orch_for_holder_check
     if isinstance(prior_orch, dict):
         prior_chat_session_id = prior_orch.get("chatSessionId")
         prior_has_chat_session_field = "chatSessionId" in prior_orch
@@ -696,34 +877,7 @@ def register_session_start(
     # was Set 036+ aware but had no chatSessionId to record" apart
     # from "this writer pre-dated Set 036" (the latter omits the key
     # entirely).
-    state: dict = {
-        "schemaVersion": SCHEMA_VERSION,
-        "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
-    }
-    # Set 046 Session 2: the plan-less branch omits ``sessions`` entirely
-    # rather than writing ``"sessions": null``. The v3 reader's tolerant
-    # path (``read_progress`` checks ``state.get("sessions") is not
-    # None``) routes a missing-vs-present-null distinction through the
-    # v2 synthesis path, which would re-derive from the legacy triple
-    # and could produce a ``sessions: []`` that violates rule 1. The
-    # absent-key form is the documented carve-out for "no plan known"
-    # — same shape ``_not_started_payload`` already produces when
-    # spec.md has no configuration block.
-    if sessions is not None:
-        state["sessions"] = sessions
-    # Dual-write legacy triple per spec D5. Always derived from
-    # ``sessions[]`` by :func:`_derive_legacy_fields`; never
-    # independently maintained. The plan-less write writes
-    # ``totalSessions: None`` here so the Explorer renders ``0/?``.
-    state["currentSession"] = derived_current
-    state["totalSessions"] = derived_total
-    state["completedSessions"] = derived_completed
-    state["status"] = SESSION_STATUS_IN_PROGRESS
-    state["lifecycleState"] = SessionLifecycleState.WORK_IN_PROGRESS.value
-    state["startedAt"] = now
-    state["completedAt"] = None
-    state["verificationVerdict"] = None
-    state["orchestrator"] = {
+    orchestrator_block = {
         "engine": orchestrator_engine,
         "provider": orchestrator_provider,
         "model": orchestrator_model,
@@ -732,10 +886,74 @@ def register_session_start(
         "checkedOutAt": checked_out_at,
         "lastActivityAt": now,
     }
-    path = _state_path(session_set)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
-        f.write("\n")
+
+    if sessions is None:
+        # Set 046 Session 2 plan-less write carve-out, Set 047 Session
+        # 4 v4-compatible form: the writer cannot emit a per-session
+        # orchestrator block when sessions[] is unknown — there is
+        # nowhere to attach it. Keep the top-level orchestrator /
+        # startedAt as a documented v4 carve-out for the plan-less
+        # case ONLY. The shim's normalize_to_v4_shape sees a missing
+        # sessions[] (under v4 input semantics), routes through
+        # synthesize_v3_from_v2 to produce an empty sessions[], then
+        # returns the v4 read-view with derived top-level fields. The
+        # operator-visible "0/?" fraction the Set 046 Session 2 fix
+        # restored stays intact (Explorer's fractionFor renders
+        # ``0/?`` when totalSessions is null). Once a plan lands
+        # (either via spec.md totalSessions or via a close that fills
+        # the count from the events ledger), the next register /
+        # close write emits the canonical v4 shape with sessions[].
+        state: dict = {
+            "schemaVersion": SCHEMA_VERSION,
+            "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
+            "status": SESSION_STATUS_IN_PROGRESS,
+            # Plan-less carve-out: top-level passthroughs the shim
+            # consults when sessions[] is absent. Spec §3.1's "drop
+            # top-level orchestrator/startedAt" applies to the canonical
+            # known-plan v4 shape; the plan-less branch keeps them so a
+            # plan-less in-flight session is still attributable.
+            "startedAt": now,
+            "orchestrator": orchestrator_block,
+        }
+        path = _state_path(session_set)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+            f.write("\n")
+    else:
+        # Set 047 Session 4 canonical v4 write. The orchestrator
+        # block lives on the in-progress session record. Prior-
+        # completed sessions retain their per-session metadata
+        # (startedAt / completedAt / orchestrator / verdict) so the
+        # historical record of who did each session survives the
+        # rewrite.
+        _apply_v4_per_session_metadata(sessions, prior_v4_metadata)
+        for entry in sessions:
+            if entry.get("number") == session_number:
+                entry["startedAt"] = now
+                entry["completedAt"] = None
+                entry["orchestrator"] = orchestrator_block
+                entry["verificationVerdict"] = None
+                break
+
+        state = {
+            "schemaVersion": SCHEMA_VERSION,
+            "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
+            "status": SESSION_STATUS_IN_PROGRESS,
+            "sessions": sessions,
+        }
+        # Preserve passthrough fields (forceClosed, preCancelStatus)
+        # if the prior file carried them — opaque to the v4 schema
+        # but consumed by the cancellation reader (Set 035) and the
+        # FORCED badge.
+        if isinstance(existing, dict):
+            for passthrough_key in ("forceClosed", "preCancelStatus"):
+                if passthrough_key in existing:
+                    state[passthrough_key] = existing[passthrough_key]
+
+        path = _state_path(session_set)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+            f.write("\n")
 
     # Propagate to activity-log.json. Historically, activity-log.json was
     # created with totalSessions=0 by the SessionLog constructor and was
@@ -798,8 +1016,15 @@ def compute_effective_completed_sessions(session_set_dir: str) -> List[int]:
     "what session is next?" without depending on the snapshot's
     ``currentSession`` field being correct (mixed-mode drift could
     have left it stale).
+
+    Set 047 Session 4: reads via :func:`read_raw_session_state` so the
+    function inspects the literal on-disk shape (top-level
+    ``completedSessions`` under v3, sessions[] under v4) rather than
+    the shim's derived view. The fallback chain handles both
+    schemas — v3 input lands on the top-level field; v4 input lands
+    on the sessions[] fallback below.
     """
-    state = read_session_state(session_set_dir) or {}
+    state = read_raw_session_state(session_set_dir) or {}
 
     def _valid_session_number(x: object) -> bool:
         return (
@@ -813,6 +1038,24 @@ def compute_effective_completed_sessions(session_set_dir: str) -> List[int]:
         ints = sorted({c for c in completed if _valid_session_number(c)})
         if ints:
             return ints
+
+    # Set 047 Session 4: v4 fallback — v4 writers drop the top-level
+    # completedSessions[] field and let the reader derive it from
+    # sessions[]. Consult the per-session ledger before reaching for
+    # the events-ledger fallback so v4 input files don't pay the
+    # cost of walking session-events.jsonl for a signal that's
+    # already in the snapshot.
+    sessions = state.get("sessions")
+    if isinstance(sessions, list):
+        derived = sorted({
+            entry.get("number")
+            for entry in sessions
+            if isinstance(entry, dict)
+            and canonicalize_status(entry.get("status")) == SESSION_STATUS_COMPLETE
+            and _valid_session_number(entry.get("number"))
+        })
+        if derived:
+            return derived
 
     # Lazy import to avoid the session_events ↔ session_state cycle
     # (session_events imports SessionLifecycleState from this module).
@@ -874,22 +1117,42 @@ def _flip_state_to_closed(
     if not os.path.isfile(path):
         return None
     with open(path, "r", encoding="utf-8") as f:
-        state = json.load(f)
+        existing = json.load(f)
     # Migrate v1 → v2 in-memory before rewriting, so the on-disk file
     # comes out as at least v2 on the next write (per the schema
-    # migration contract). The v3 promotion (with sessions[] backfill)
-    # happens below.
-    state = _migrate_v1_to_v2_inplace(state)
+    # migration contract). Set 047 Session 4: v3 → v4 transition is
+    # handled by reading raw fields where the v3 writer left them
+    # (currentSession at top level) AND falling back to the per-
+    # session ledger where v4 input drops the top-level fields.
+    existing = _migrate_v1_to_v2_inplace(existing)
 
-    # Set 022 / Set 030 Session 2: maintain completedSessions[] AND
-    # sessions[] on every close. The legacy helper
-    # ``compute_effective_completed_sessions`` is the canonical signal
-    # for "what sessions are already closed"; we then append the
-    # currentSession to that set, build the new v3 sessions[] (with
-    # the close applied), and let :func:`_derive_legacy_fields`
-    # produce the legacy triple from the result. Single source of
-    # truth → no parity drift between v3 and legacy.
-    current_session = state.get("currentSession")
+    # Set 047 Session 4: pull per-session metadata from the existing
+    # state so the per-session startedAt / orchestrator on prior
+    # sessions survive across the rewrite. The shim handles v3 input
+    # (top-level fields promoted onto in-progress / most-recently-
+    # completed session) and v4 input (per-session fields are
+    # authoritative) uniformly.
+    prior_v4_metadata = _read_prior_v4_metadata(existing, session_set)
+
+    # Set 022 / Set 030 Session 2 / Set 047 Session 4: maintain the
+    # canonical per-session ledger on every close. Determine the
+    # closing session number from the top-level currentSession (v3
+    # input) or the sessions[] in-progress entry (v4 input, where
+    # currentSession is derived not stored).
+    current_session = existing.get("currentSession")
+    if not (
+        isinstance(current_session, int)
+        and not isinstance(current_session, bool)
+    ):
+        for entry in existing.get("sessions") or []:
+            if (
+                isinstance(entry, dict)
+                and entry.get("status") == SESSION_STATUS_IN_PROGRESS
+                and type(entry.get("number")) is int
+                and entry["number"] > 0
+            ):
+                current_session = entry["number"]
+                break
 
     effective_completed_before = compute_effective_completed_sessions(session_set)
     if (
@@ -919,7 +1182,11 @@ def _flip_state_to_closed(
     # raise SessionStateInvariantError rather than fall through to
     # an unvalidated legacy-only write — the previous v2 fallback
     # silently produced a snapshot that no v3 reader could parse.
-    total_sessions = state.get("totalSessions")
+    #
+    # Set 047 Session 4: v4 input drops top-level totalSessions; the
+    # backfill chain below reaches it via spec.md and existing
+    # sessions[] without an explicit v4 special case.
+    total_sessions = existing.get("totalSessions")
     if not (
         isinstance(total_sessions, int)
         and not isinstance(total_sessions, bool)
@@ -928,7 +1195,7 @@ def _flip_state_to_closed(
         spec_titles = _spec_titles_for_set(session_set)
         max_spec = max(spec_titles.keys()) if spec_titles else 0
         max_closed = max(new_completed) if new_completed else 0
-        existing_records = _existing_sessions_records(state)
+        existing_records = _existing_sessions_records(existing)
         max_existing = max(
             (r.number for r in existing_records), default=0
         )
@@ -948,7 +1215,7 @@ def _flip_state_to_closed(
     )
     is_last_session = forced or (sessions_done and change_log_present)
 
-    # Build the v3 sessions[] reflecting the post-close state.
+    # Build the v4 sessions[] reflecting the post-close state.
     #
     # Two paths diverge on ``forced``:
     #
@@ -993,9 +1260,8 @@ def _flip_state_to_closed(
         total=total_sessions,
         completed_numbers=completed_for_array,
         in_progress_number=None,
-        prior_state=state,
+        prior_state=existing,
     )
-    state["sessions"] = sessions
 
     # Writer-side invariant enforcement (spec D6, fail loud). For
     # natural last-session close this is the asserter: if
@@ -1008,47 +1274,88 @@ def _flip_state_to_closed(
         lifecycle_state=lifecycle_after,
     )
 
-    # Derive legacy triple from the v3 ledger; this is the only
-    # path that materializes those fields.
-    derived_current, derived_total, derived_completed = _derive_legacy_fields(
-        sessions
-    )
-    state["currentSession"] = derived_current
-    state["totalSessions"] = derived_total
-    state["completedSessions"] = derived_completed
-
-    state["schemaVersion"] = SCHEMA_VERSION
-    if is_last_session:
-        state["status"] = SESSION_STATUS_COMPLETE
-        state["lifecycleState"] = SessionLifecycleState.CLOSED.value
-        state["completedAt"] = _now_iso()
-    if verification_verdict is not None:
-        state["verificationVerdict"] = verification_verdict
+    # Set 047 Session 4: apply per-session v4 metadata. Prior
+    # metadata (startedAt / completedAt / orchestrator / verdict)
+    # for sessions that were already closed before this call is
+    # preserved verbatim. The session that just closed (this
+    # boundary's currentSession, when known) gets ``completedAt =
+    # now`` and the verification verdict if supplied. Its
+    # orchestrator block is preserved — under v4 the per-session
+    # orchestrator is the historical record of who closed the
+    # session, not a check-out flag, so no clearing on the just-
+    # closed session.
+    _apply_v4_per_session_metadata(sessions, prior_v4_metadata)
+    now_iso = _now_iso()
+    if isinstance(current_session, int) and not isinstance(current_session, bool):
+        for entry in sessions:
+            if entry.get("number") == current_session:
+                entry["completedAt"] = now_iso
+                if verification_verdict is not None:
+                    entry["verificationVerdict"] = verification_verdict
+                break
+    # Forced last-session close promotes every session to complete
+    # (see the forced-path comment above). Sessions other than
+    # ``current_session`` that get force-promoted to complete need a
+    # completedAt timestamp too — same boundary time is the closest
+    # honest signal we have. Their orchestrator is left as prior
+    # state recorded it (preserving the historical record where
+    # known; leaving null where the session was never claimed).
     if forced:
-        state["forceClosed"] = True
-    # Set 033 Session 6 (H1 + H3): cross-tier check-in. The session
-    # boundary is the release point — once the close-out gate passes,
-    # the orchestrator block is cleared so the next session can be
-    # taken by any holder (same or different) via start_session.
-    # Applies to Full AND Lightweight tiers identically, per the
-    # operator's "Lightweight doesn't excuse skipping the lock"
-    # clarification mid-Set-029-S6. Idempotent: a block that is
-    # already None (force-released, or a no-op close) lands the same
-    # write. ``closeout_succeeded`` in the events ledger is the
-    # ``work_checked_in`` alias (OQ2 — doc-only aliasing; no schema
-    # change).
-    #
-    # The clear is UNCONDITIONAL within this function — any caller
-    # that reaches ``_flip_state_to_closed`` gets the check-in
-    # automatically. New writer paths (a hypothetical force-recover
-    # CLI, a repair path that flips a snapshot, etc.) inherit the
-    # check-in without needing to opt in. Do NOT gate this on
-    # ``forced``, ``is_last_session``, or any caller-supplied flag;
-    # the spec contract is "every successful close releases the
-    # check-out".
-    state["orchestrator"] = None
+        for entry in sessions:
+            if (
+                entry.get("status") == SESSION_STATUS_COMPLETE
+                and entry.get("completedAt") is None
+            ):
+                entry["completedAt"] = now_iso
+
+    # Build the v4 on-disk shape from scratch (per spec §3.1):
+    # schemaVersion / sessionSetName / status / sessions are the only
+    # canonical top-level keys; preCancelStatus / forceClosed ride
+    # along as passthrough when present. Derived top-level fields
+    # (currentSession / totalSessions / completedSessions /
+    # orchestrator / startedAt / completedAt / verificationVerdict /
+    # lifecycleState) are dropped — the reader re-derives them.
+    set_status_after = (
+        SESSION_STATUS_COMPLETE if is_last_session else SESSION_STATUS_IN_PROGRESS
+    )
+    new_state: dict = {
+        "schemaVersion": SCHEMA_VERSION,
+        "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
+        "status": set_status_after,
+        "sessions": sessions,
+    }
+    # Set 9 Session 3 (D-2): forceClosed marker on the snapshot drives
+    # the FORCED badge in the Session Set Explorer. Passthrough key
+    # under v4 — the Explorer reads it from the top level.
+    if forced:
+        new_state["forceClosed"] = True
+    elif "forceClosed" in existing:
+        # Preserve a pre-existing forceClosed flag across a non-
+        # forced repair flip so a previously-forced set doesn't
+        # silently lose its badge.
+        new_state["forceClosed"] = existing["forceClosed"]
+    # Set 035 cancellation passthrough: preCancelStatus rides along
+    # opaque under v4 if a prior cancellation captured it.
+    if "preCancelStatus" in existing:
+        new_state["preCancelStatus"] = existing["preCancelStatus"]
+    # Set 033 Session 6 (H1 + H3): cross-tier check-in. Under v3 this
+    # was implemented by clearing the top-level orchestrator block on
+    # every close. Under v4 the orchestrator lives per-session and
+    # the per-session block on the just-closed session is preserved
+    # as a historical record (who closed which session is part of
+    # the audit trail). The "no current holder" state is implicit:
+    # set-level status moves off ``in-progress``, so the shim's
+    # derivation of top-level orchestrator returns the most-recently-
+    # completed session's orchestrator (Set 047 Session 2 shim
+    # contract). The ``closeout_succeeded`` event in
+    # ``session-events.jsonl`` remains the ``work_checked_in`` alias
+    # (OQ2 — doc-only aliasing; no schema change). Cross-tier
+    # check-in is still UNCONDITIONAL under v4 — every caller
+    # that reaches ``_flip_state_to_closed`` gets the implicit
+    # release via the status flip off ``in-progress`` and the
+    # absence of any in-progress session in ``sessions[]``.
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
+        json.dump(new_state, f, indent=2)
         f.write("\n")
 
     # On the last session, finalize activity-log totalSessions from
@@ -1108,12 +1415,26 @@ def mark_session_complete(
     if not os.path.isfile(_state_path(session_set)):
         return None
 
-    state_before = read_session_state(session_set)
+    # Set 047 Session 4: read raw so we see the literal v3 top-level
+    # currentSession when present (Set 022 lifecycle), and fall back
+    # to scanning sessions[] for the in-progress entry under v4 input
+    # where the top-level field has been dropped.
+    state_before = read_raw_session_state(session_set)
     session_number = (
         state_before.get("currentSession")
         if isinstance(state_before, dict)
         else None
     )
+    if not isinstance(session_number, int) and isinstance(state_before, dict):
+        for entry in state_before.get("sessions") or []:
+            if (
+                isinstance(entry, dict)
+                and entry.get("status") == SESSION_STATUS_IN_PROGRESS
+                and type(entry.get("number")) is int
+                and entry["number"] > 0
+            ):
+                session_number = entry["number"]
+                break
     if not isinstance(session_number, int):
         session_number = 0
 
@@ -1270,6 +1591,44 @@ def read_session_state(session_set_dir: str) -> Optional[dict]:
 
     Lazily migrates v1 files to v2 shape in the returned dict (does not
     rewrite the file — see module docstring).
+
+    Set 047 Session 4: routes the parsed state through
+    :func:`progress.normalize_to_v4_shape` so callers consuming legacy
+    top-level fields (``currentSession``, ``totalSessions``,
+    ``completedSessions``, ``orchestrator``, ``startedAt``,
+    ``completedAt``, ``verificationVerdict``, ``lifecycleState``) read
+    a v4 on-disk file (where the writer dropped those fields)
+    transparently. The shim is idempotent on v4 input and
+    deterministic on v3 input — readers don't need to know which
+    schema version the writer landed on.
+
+    Callers that need the raw on-disk bytes use
+    :func:`read_raw_session_state` below; the only legitimate use
+    cases are the migrator (schemaVersion gate), the writer itself
+    (which works against the raw sessions[] ledger), and
+    schema-validation tools.
+    """
+    raw = read_raw_session_state(session_set_dir)
+    if raw is None:
+        return None
+    spec_md_path = Path(session_set_dir) / "spec.md"
+    try:
+        return normalize_to_v4_shape(raw, spec_md_path)
+    except (TypeError, ValueError, SessionStateInvariantError):
+        # Defensive fallback: a malformed state file falls through to
+        # the raw dict so consumers can still pull individual fields
+        # rather than failing closed on the entire read.
+        return raw
+
+
+def read_raw_session_state(session_set_dir: str) -> Optional[dict]:
+    """Return the literal on-disk ``session-state.json`` dict.
+
+    Set 047 Session 4: companion to :func:`read_session_state`. Used
+    by the writers (which rebuild the on-disk shape from raw
+    sessions[] without the shim's derived top-level fields) and by
+    schema-validation tools. Production readers should prefer
+    :func:`read_session_state`.
     """
     path = _state_path(session_set_dir)
     if not os.path.isfile(path):
@@ -1381,33 +1740,44 @@ def _read_total_sessions_from_spec(session_set_dir: str) -> Optional[int]:
 def _not_started_payload(session_set_dir: str) -> dict:
     """Return the canonical not-started ``session-state.json`` dict.
 
-    All session-tracking fields are ``null``: no session has started, so
-    there is no current session, no start time, no orchestrator. The
-    ``totalSessions`` field is best-effort populated from the spec.
+    Set 047 Session 4: emits v4 shape. Top-level keys are
+    ``schemaVersion`` / ``sessionSetName`` / ``status`` /
+    ``sessions[]``; the dropped v3 top-level fields
+    (``currentSession``, ``totalSessions``, ``completedSessions``,
+    ``startedAt``, ``completedAt``, ``orchestrator``,
+    ``verificationVerdict``, ``lifecycleState``) are derived by the
+    reader via :func:`progress.normalize_to_v4_shape`. Each session
+    entry carries v4 per-session metadata fields defaulted to
+    ``None``.
 
-    Set 030 Session 2: when ``totalSessions`` is known from the spec,
-    the payload also carries a v3 ``sessions[]`` array — every entry
-    ``not-started``, titles from ``spec.md`` headings when present, the
-    ``Session N`` fallback otherwise. When ``totalSessions`` is
-    unknown (no spec config block, or a spec without a numeric
-    ``totalSessions`` field), ``sessions[]`` is left absent — a
-    not-started shape without a known plan is one of the few cases v3
-    invariant rule 1 explicitly allows (the rule guards "any set with
-    a known plan"). The next legitimate write (register_session_start)
-    will materialize ``sessions[]`` when the total is known.
+    When ``totalSessions`` is unknown (no spec config block, or a
+    spec without a numeric ``totalSessions`` field), ``sessions[]``
+    is left absent — a not-started shape without a known plan is one
+    of the few cases v3 invariant rule 1 explicitly allows (the rule
+    guards "any set with a known plan"). The next legitimate write
+    (register_session_start) will materialize ``sessions[]`` when
+    the total is known.
     """
     total = _read_total_sessions_from_spec(session_set_dir)
+    # Set 047 Session 4 (verifier Critical 2): when spec.md has no
+    # Session Set Configuration totalSessions, fall back to the
+    # ``### Session N`` headings — same "headings are an explicit
+    # plan signal" semantic register_session_start uses. Without
+    # this, a headings-only spec produced the plan-less carve-out
+    # at synth time and ensure_session_state_file inherited the
+    # mistake (legacy folders with headings + activity-log /
+    # change-log could be misclassified as not-started instead of
+    # materializing canonical v4 sessions[]).
+    if not (isinstance(total, int) and total > 0):
+        spec_titles = _spec_titles_for_set(session_set_dir)
+        if spec_titles:
+            max_heading = max(spec_titles.keys())
+            if max_heading > 0:
+                total = max_heading
     payload: dict = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": os.path.basename(session_set_dir.rstrip("/\\")),
-        "currentSession": None,
-        "totalSessions": total,
         "status": NOT_STARTED_STATUS,
-        "lifecycleState": None,
-        "startedAt": None,
-        "completedAt": None,
-        "verificationVerdict": None,
-        "orchestrator": None,
     }
     if isinstance(total, int) and total > 0:
         sessions = _build_sessions_array(
@@ -1427,11 +1797,8 @@ def _not_started_payload(session_set_dir: str) -> dict:
             top_status=SESSION_STATUS_NOT_STARTED,
             lifecycle_state=None,
         )
+        _apply_v4_per_session_metadata(sessions, {})
         payload["sessions"] = sessions
-        # Derived legacy fields. completedSessions is always an empty
-        # list for the not-started shape; currentSession stays None
-        # (no in-flight session) per Decision D5's dual-write rule.
-        payload["completedSessions"] = []
     return payload
 
 
@@ -1582,9 +1949,14 @@ def _backfill_payload(session_set_dir: str) -> dict:
         if not isinstance(base.get("sessions"), list):
             return base
         base["status"] = COMPLETE_STATUS
-        base["lifecycleState"] = SessionLifecycleState.CLOSED.value
-        base["completedAt"] = _change_log_mtime_iso(session_set_dir)
         # Promote every session in the ledger to complete (rule 7).
+        # Set 047 Session 4: per-session completedAt + verdict are
+        # left None on a backfilled complete shape — the change-log
+        # mtime is a heuristic for set-level "when did this finish",
+        # not for which session boundary the timestamp belongs to.
+        # The shim's read-time derivation will surface the change-
+        # log mtime via the explorer if needed; under v4 it's not a
+        # writer responsibility to invent per-session timestamps.
         for entry in base["sessions"]:
             entry["status"] = SESSION_STATUS_COMPLETE
         _validate_sessions_or_raise(
@@ -1592,8 +1964,6 @@ def _backfill_payload(session_set_dir: str) -> dict:
             top_status=SESSION_STATUS_COMPLETE,
             lifecycle_state=SessionLifecycleState.CLOSED.value,
         )
-        _, _, derived_completed = _derive_legacy_fields(base["sessions"])
-        base["completedSessions"] = derived_completed
         return base
 
     if os.path.isfile(os.path.join(session_set_dir, "activity-log.json")):
@@ -1604,22 +1974,21 @@ def _backfill_payload(session_set_dir: str) -> dict:
         if not isinstance(base.get("sessions"), list) or not base["sessions"]:
             return base
         base["status"] = IN_PROGRESS_STATUS
-        base["lifecycleState"] = SessionLifecycleState.WORK_IN_PROGRESS.value
-        base["startedAt"] = _earliest_activity_log_timestamp(session_set_dir)
         # Conservatively promote session 1 to in-progress (rule 6
         # allows exactly one in-progress session; session 1 is the
-        # safest assumption for a legacy folder).
+        # safest assumption for a legacy folder). Set 047 Session 4:
+        # write the earliest activity-log timestamp onto session 1's
+        # per-session startedAt so the v4 read-view derives a non-
+        # None startedAt for the in-flight session.
         base["sessions"][0]["status"] = SESSION_STATUS_IN_PROGRESS
+        earliest = _earliest_activity_log_timestamp(session_set_dir)
+        if earliest is not None:
+            base["sessions"][0]["startedAt"] = earliest
         _validate_sessions_or_raise(
             base["sessions"],
             top_status=SESSION_STATUS_IN_PROGRESS,
             lifecycle_state=SessionLifecycleState.WORK_IN_PROGRESS.value,
         )
-        derived_current, _, derived_completed = _derive_legacy_fields(
-            base["sessions"]
-        )
-        base["currentSession"] = derived_current
-        base["completedSessions"] = derived_completed
         return base
 
     return base

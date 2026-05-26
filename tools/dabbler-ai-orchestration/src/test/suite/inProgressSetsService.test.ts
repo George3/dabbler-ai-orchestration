@@ -128,6 +128,8 @@ function fakeSet(
     root: "/tmp",
     needsMigration: false,
     migrationTargetSchemaVersion: null,
+    prerequisites: null,
+    blockedByPrereqs: false,
   };
 }
 

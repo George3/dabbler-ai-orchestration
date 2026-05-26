@@ -93,35 +93,62 @@ _FIELD_COMMENTS = {
 
 
 def build_example_state() -> dict:
-    """Return a fully-populated v2 ``session-state.json`` dict.
+    """Return a fully-populated v4 ``session-state.json`` dict.
 
-    The return value is the canonical example: every field carries a
-    realistic, human-readable value (no ``null`` placeholders for fields
-    that the schema permits to be non-null). ``completedAt`` and
-    ``verificationVerdict`` are populated to show the *closed* shape;
-    consumers reading mid-session shapes should refer to the
-    :func:`session_state.register_session_start` writer instead.
+    Set 047 Session 4: the canonical example is now v4 — top-level
+    state (currentSession, totalSessions, completedSessions,
+    orchestrator, startedAt, completedAt, verificationVerdict,
+    lifecycleState) is derived from a per-session ``sessions[]``
+    ledger by the reader. The example shows a final-session close
+    where every session record carries its per-session metadata.
 
-    Built from the live schema constants — :data:`SCHEMA_VERSION` and
-    :class:`SessionLifecycleState` — so a constant-renaming refactor
-    surfaces here on the next ``--check`` rather than going silent.
+    Built from the live schema constants — :data:`SCHEMA_VERSION`
+    and :class:`SessionLifecycleState` — so a constant-renaming
+    refactor surfaces here on the next ``--check`` rather than going
+    silent.
     """
+    s1_orch = {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": None,
+        "checkedOutAt": "2026-04-30T13:00:00-04:00",
+        "lastActivityAt": "2026-04-30T13:50:00-04:00",
+    }
+    s2_orch = {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": None,
+        "checkedOutAt": "2026-04-30T14:00:00-04:00",
+        "lastActivityAt": "2026-04-30T14:30:00-04:00",
+    }
     return {
         "schemaVersion": SCHEMA_VERSION,
         "sessionSetName": "example-session-set",
-        "currentSession": 2,
-        "totalSessions": 4,
         "status": "complete",
-        "lifecycleState": SessionLifecycleState.CLOSED.value,
-        "startedAt": "2026-04-30T13:00:00-04:00",
-        "completedAt": "2026-04-30T14:30:00-04:00",
-        "verificationVerdict": "VERIFIED",
-        "orchestrator": {
-            "engine": "claude-code",
-            "provider": "anthropic",
-            "model": "claude-opus-4-7",
-            "effort": "high",
-        },
+        "sessions": [
+            {
+                "number": 1,
+                "title": "First session: scoping + scaffolding",
+                "status": "complete",
+                "startedAt": "2026-04-30T13:00:00-04:00",
+                "completedAt": "2026-04-30T13:50:00-04:00",
+                "orchestrator": s1_orch,
+                "verificationVerdict": "VERIFIED",
+            },
+            {
+                "number": 2,
+                "title": "Second session: implementation + close-out",
+                "status": "complete",
+                "startedAt": "2026-04-30T14:00:00-04:00",
+                "completedAt": "2026-04-30T14:30:00-04:00",
+                "orchestrator": s2_orch,
+                "verificationVerdict": "VERIFIED",
+            },
+        ],
         "nextOrchestrator": {
             "engine": "claude-code",
             "provider": "anthropic",

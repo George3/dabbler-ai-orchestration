@@ -1,6 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import {
+  SCHEMA_VERSION_V4,
+  extractSessionTitlesFromSpec,
+} from "./progress";
+
 // Canonical status strings carried by session-state.json under the Set 7
 // invariant. The Python side defines the same set in
 // ai_router/session_state.py; the two writers must stay in lockstep.
@@ -10,21 +15,30 @@ export type CanonicalStatus =
   | "complete"
   | "cancelled";
 
-// Set 030 Session 2 (Python) / Session 3 (TS) bumped writers to schema
-// v3 with dual-write: legacy currentSession / totalSessions /
-// completedSessions are still emitted (derived from sessions[]) until a
-// future set retires legacy emission.
-const SCHEMA_VERSION = 3;
+// Set 047 Session 5 (TS) / Session 4 (Python): writers emit canonical
+// v4 on-disk shape per spec §3.1. Top-level state (currentSession,
+// totalSessions, completedSessions, orchestrator, startedAt,
+// completedAt, verificationVerdict, lifecycleState) is dropped on disk
+// and derived at read time via normalizeToV4Shape. Each session entry
+// carries per-session startedAt / completedAt / orchestrator /
+// verificationVerdict.
+const SCHEMA_VERSION = SCHEMA_VERSION_V4;
 const SESSION_STATE_FILENAME = "session-state.json";
 
-// Per-session ledger entry used by the v3 writer paths below. Mirrors
-// ai_router/progress.py's SessionRecord. Lazy-synth on a folder with
-// a spec.md inferring totalSessions=N produces sessions[1..N] with
-// statuses set by the inferred top-status (see buildSessions below).
+// Per-session ledger entry under the v4 contract. Mirrors the entry
+// shape produced by _build_sessions_array + _apply_v4_per_session_metadata
+// in ai_router/session_state.py. Per-session metadata fields default
+// to null for not-started / freshly-promoted sessions; the writers
+// (register_session_start / mark_session_complete on the Python side)
+// override them at the boundary they own.
 type LazySessionRecord = {
   number: number;
   title: string;
   status: "not-started" | "in-progress" | "complete";
+  startedAt: string | null;
+  completedAt: string | null;
+  orchestrator: Record<string, unknown> | null;
+  verificationVerdict: string | null;
 };
 
 function buildSessions(
@@ -47,7 +61,15 @@ function buildSessions(
       // session 1 to in-progress so the snapshot satisfies rule 6.
       status = "in-progress";
     }
-    out.push({ number: n, title: `Session ${n}`, status });
+    out.push({
+      number: n,
+      title: `Session ${n}`,
+      status,
+      startedAt: null,
+      completedAt: null,
+      orchestrator: null,
+      verificationVerdict: null,
+    });
   }
   return out;
 }
@@ -72,6 +94,13 @@ function canonicalizeStatus(raw: string): string {
 // the regex here to keep this module self-contained for the
 // lazy-synthesis path (which is only ever exercised when a session
 // set has a spec.md but no state file).
+//
+// Set 047 Session 5 (mirrors Python S4 verifier Critical 2): when the
+// Session Set Configuration block has no numeric totalSessions, fall
+// back to the highest ``### Session N`` heading in the spec body. A
+// headings-only spec is a legitimate plan signal (the audit
+// proposals + recurring-session specs are authored this way before
+// the configuration block lands).
 function readTotalSessionsFromSpec(sessionSetDir: string): number | null {
   const specPath = path.join(sessionSetDir, "spec.md");
   if (!fs.existsSync(specPath)) return null;
@@ -86,36 +115,44 @@ function readTotalSessionsFromSpec(sessionSetDir: string): number | null {
   );
   const block = headingMatch ? headingMatch[1] : text.slice(0, 4000);
   const totalMatch = block.match(/^\s*totalSessions\s*:\s*(\d+)\s*$/im);
-  if (!totalMatch) return null;
-  const value = Number.parseInt(totalMatch[1], 10);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return value;
+  if (totalMatch) {
+    const value = Number.parseInt(totalMatch[1], 10);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  // Headings fallback: max(N) over `### Session N — ...` headings.
+  const titles = extractSessionTitlesFromSpec(specPath);
+  if (titles.length === 0) return null;
+  const maxN = titles.reduce((m, t) => (t.number > m ? t.number : m), 0);
+  return maxN > 0 ? maxN : null;
 }
 
-// Mirror of _not_started_payload in Python. Must produce byte-identical
-// content to the Python writer for any folder, since either side may be
-// the one that lazy-synthesizes during a sweep. Set 030 Session 3
-// (mirroring Python Session 2): writes v3 dual-write shape — sessions[]
-// when totalSessions is known, plus the legacy progress triple derived
-// from it.
+// Mirror of _not_started_payload in Python. Must produce structurally
+// identical content to the Python writer for any folder, since either
+// side may be the one that lazy-synthesizes during a sweep.
+//
+// Set 047 Session 5 (mirrors Python S4): emits canonical v4 on-disk
+// shape per spec §3.1. Top-level keys are ``schemaVersion`` /
+// ``sessionSetName`` / ``status`` / ``sessions[]``; the dropped v3
+// top-level fields (currentSession, totalSessions, completedSessions,
+// startedAt, completedAt, orchestrator, verificationVerdict,
+// lifecycleState) are derived by the reader via normalizeToV4Shape.
+// Each session entry carries per-session metadata defaulted to null.
+//
+// When totalSessions is unknown (no spec config block, no headings),
+// ``sessions[]`` is left absent — a not-started shape without a known
+// plan is one of the few cases the invariant rule 1 explicitly allows.
+// The next legitimate write (register_session_start) materializes
+// ``sessions[]`` when the total is known.
 function notStartedPayload(sessionSetDir: string): Record<string, unknown> {
   const totalSessions = readTotalSessionsFromSpec(sessionSetDir);
   const sessions = buildSessions(totalSessions, "not-started");
   const base: Record<string, unknown> = {
     schemaVersion: SCHEMA_VERSION,
     sessionSetName: path.basename(sessionSetDir.replace(/[\\/]+$/, "")),
-    currentSession: null,
-    totalSessions,
     status: "not-started",
-    lifecycleState: null,
-    startedAt: null,
-    completedAt: null,
-    verificationVerdict: null,
-    orchestrator: null,
   };
   if (sessions !== undefined) {
     base.sessions = sessions;
-    base.completedSessions = [];
   }
   return base;
 }
@@ -141,55 +178,56 @@ function notStartedPayload(sessionSetDir: string): Record<string, unknown> {
 function backfillPayload(sessionSetDir: string): Record<string, unknown> {
   // Set 030 Session 3 (mirroring Python Session 2): re-derive
   // sessions[] from the inferred top-status so the snapshot satisfies
-  // the v3 invariants. change-log present -> all complete;
+  // the invariants. change-log present -> all complete;
   // activity-log only -> session 1 in-progress; neither -> all
   // not-started (the notStartedPayload default).
   //
-  // Round A fix: when totalSessions is unknown (no spec.md or no
-  // Session Set Configuration block), buildSessions returns undefined
-  // and we CANNOT escalate to complete/in-progress without violating
-  // rule 1 (sessions[] required for any set with a known plan). In
-  // that case the backfill stays at the not-started shape — the
-  // operator's intent (signaled by change-log.md presence) is
-  // preserved via the file presence itself; the next boundary write
-  // with a spec.md plan will re-promote.
-  const totalSessions = readTotalSessionsFromSpec(sessionSetDir);
+  // Set 047 Session 5 (mirrors Python S4): v4 emission. Top-level
+  // status drives bucketing; per-session metadata carries the
+  // boundary timestamps. The change-log branch leaves per-session
+  // completedAt at null — the change-log mtime is a set-level
+  // "when did this finish" heuristic, not a per-session boundary;
+  // the shim's read-time derivation surfaces it for the explorer if
+  // needed. The activity-log branch writes the earliest log
+  // timestamp onto sessions[0].startedAt so the v4 read-view derives
+  // a non-null top-level startedAt for the in-flight session.
+  //
+  // When totalSessions is unknown (no spec config + no headings),
+  // buildSessions returns undefined and we CANNOT escalate to
+  // complete/in-progress without violating rule 1 (sessions[]
+  // required for any set with a known plan). In that case the
+  // backfill stays at the not-started shape — the operator's intent
+  // (signaled by file presence) is preserved via the file presence
+  // itself; the next boundary write with a known plan will re-promote.
 
   const changelogPath = path.join(sessionSetDir, "change-log.md");
   if (fs.existsSync(changelogPath)) {
-    const sessions = buildSessions(totalSessions, "complete");
-    if (sessions === undefined) {
+    const base = notStartedPayload(sessionSetDir);
+    if (!Array.isArray(base.sessions)) {
       // No spec plan — cannot emit a reader-valid `complete` snapshot.
       // Fall through to the not-started shape; preserves operator
       // intent without producing an invariant-violating file.
-      return notStartedPayload(sessionSetDir);
+      return base;
     }
-    const base = notStartedPayload(sessionSetDir);
     base.status = "complete";
-    base.lifecycleState = "closed";
-    try {
-      const stat = fs.statSync(changelogPath);
-      base.completedAt = new Date(stat.mtime).toISOString();
-    } catch {
-      base.completedAt = null;
+    const sessions = base.sessions as LazySessionRecord[];
+    for (const entry of sessions) {
+      entry.status = "complete";
     }
-    base.sessions = sessions;
-    base.completedSessions = sessions.map((s) => s.number);
-    base.currentSession = null;
     return base;
   }
 
   const activityPath = path.join(sessionSetDir, "activity-log.json");
   if (fs.existsSync(activityPath)) {
-    const sessions = buildSessions(totalSessions, "in-progress");
-    if (sessions === undefined) {
+    const base = notStartedPayload(sessionSetDir);
+    if (!Array.isArray(base.sessions) || base.sessions.length === 0) {
       // No spec plan — cannot emit a reader-valid `in-progress`
       // snapshot. Fall through to not-started.
-      return notStartedPayload(sessionSetDir);
+      return base;
     }
-    const base = notStartedPayload(sessionSetDir);
     base.status = "in-progress";
-    base.lifecycleState = "work_in_progress";
+    const sessions = base.sessions as LazySessionRecord[];
+    sessions[0].status = "in-progress";
     try {
       const data = JSON.parse(fs.readFileSync(activityPath, "utf8")) as {
         entries?: Array<{ dateTime?: unknown }>;
@@ -199,13 +237,13 @@ function backfillPayload(sessionSetDir: string): Record<string, unknown> {
         if (typeof e.dateTime === "string") timestamps.push(e.dateTime);
       }
       timestamps.sort();
-      base.startedAt = timestamps[0] ?? null;
+      const earliest = timestamps[0];
+      if (earliest !== undefined) {
+        sessions[0].startedAt = earliest;
+      }
     } catch {
-      base.startedAt = null;
+      /* leave per-session startedAt at null */
     }
-    base.sessions = sessions;
-    base.completedSessions = [];
-    base.currentSession = 1;
     return base;
   }
 

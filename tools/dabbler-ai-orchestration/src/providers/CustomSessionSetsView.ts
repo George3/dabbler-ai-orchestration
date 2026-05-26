@@ -32,6 +32,7 @@ import { SessionSet } from "../types";
 import { ScanState } from "./scanState";
 import {
   bucketSets,
+  blockedByPrereqsBadge,
   forceClosedBadge,
   ICON_FILES,
   isCurrentSessionInFlight,
@@ -105,6 +106,9 @@ function contextValueFor(set: SessionSet): string {
   if (set.config?.requiresUAT) parts.push("uat");
   if (set.config?.requiresE2E) parts.push("e2e");
   if (set.needsMigration) parts.push("needs-migration");
+  if (set.blockedByPrereqs && set.state !== "complete" && set.state !== "cancelled") {
+    parts.push("blocked-by-prereqs");
+  }
   return parts.join(":");
 }
 
@@ -124,6 +128,7 @@ function descriptionFor(set: SessionSet): string {
     uatBadge(set),
     forceClosedBadge(set),
     needsMigrationBadge(set),
+    blockedByPrereqsBadge(set),
   ].filter(Boolean);
   bits.push(...extras);
   return bits.join("  ·  ");

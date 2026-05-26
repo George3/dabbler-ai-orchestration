@@ -33,6 +33,8 @@ function ssStub(over: Partial<SessionSet> = {}): SessionSet {
     root: "/tmp",
     needsMigration: false,
     migrationTargetSchemaVersion: null,
+    prerequisites: null,
+    blockedByPrereqs: false,
     ...over,
   };
 }

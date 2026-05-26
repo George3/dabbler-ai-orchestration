@@ -53,6 +53,7 @@ from session_state import (
     register_session_start,
     synthesize_not_started_state,
 )
+from progress import normalize_to_v4_shape
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -101,6 +102,24 @@ def spec_md(session_set_dir: str) -> str:
 
 
 def _read(session_set_dir: str) -> dict:
+    """Return the v4 normalized read-view of session-state.json.
+
+    Set 047 Session 4: routes through :func:`normalize_to_v4_shape`
+    so a v4 on-disk file (no derived top-level fields) reads
+    identically to the v3 form for assertion convenience. Use
+    :func:`_read_raw` when the test cares about literal on-disk
+    bytes (schemaVersion, presence of top-level keys).
+    """
+    raw = _read_raw(session_set_dir)
+    spec_md = Path(session_set_dir) / "spec.md"
+    try:
+        return normalize_to_v4_shape(raw, spec_md)
+    except Exception:
+        return raw
+
+
+def _read_raw(session_set_dir: str) -> dict:
+    """Return the literal on-disk session-state.json contents."""
     with open(
         os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8",
     ) as f:
@@ -113,8 +132,11 @@ def _read(session_set_dir: str) -> dict:
 
 
 class TestSchemaVersion:
-    def test_schema_version_is_three(self):
-        assert SCHEMA_VERSION == 3
+    def test_schema_version_is_four(self):
+        # Set 047 Session 4 bumped the writer's emission to v4. The
+        # shim continues to read v3 fixtures transparently for
+        # backward compatibility.
+        assert SCHEMA_VERSION == 4
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +307,7 @@ class TestRegisterSessionStartV3:
         )
         data = _read(session_set_dir)
         # v3 fields
-        assert data["schemaVersion"] == 3
+        assert data["schemaVersion"] == 4
         assert isinstance(data["sessions"], list)
         assert len(data["sessions"]) == 3
         assert data["sessions"][0]["number"] == 1
@@ -541,15 +563,17 @@ class TestScaffoldingWritesV3:
     def test_synthesize_not_started_includes_sessions_array(
         self, session_set_dir, spec_md,
     ):
-        path = synthesize_not_started_state(session_set_dir)
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
-        assert data["status"] == "not-started"
-        assert data["lifecycleState"] is None
-        assert isinstance(data["sessions"], list)
-        assert len(data["sessions"]) == 3
-        assert all(s["status"] == "not-started" for s in data["sessions"])
-        # Derived legacy
+        synthesize_not_started_state(session_set_dir)
+        raw = _read_raw(session_set_dir)
+        assert raw["schemaVersion"] == 4
+        assert raw["status"] == "not-started"
+        # v4 drops top-level lifecycleState (derived by the shim).
+        assert "lifecycleState" not in raw
+        assert isinstance(raw["sessions"], list)
+        assert len(raw["sessions"]) == 3
+        assert all(s["status"] == "not-started" for s in raw["sessions"])
+        # Derived view via the shim (current sessions[] is canonical).
+        data = _read(session_set_dir)
         assert data["completedSessions"] == []
         assert data["currentSession"] is None
         assert data["totalSessions"] == 3
@@ -559,12 +583,11 @@ class TestScaffoldingWritesV3:
     ):
         # No spec.md → totalSessions unknown. sessions[] absent
         # (rule 1 explicitly allows "no plan yet").
-        path = synthesize_not_started_state(session_set_dir)
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
-        assert data["status"] == "not-started"
-        assert "sessions" not in data
-        assert data["totalSessions"] is None
+        synthesize_not_started_state(session_set_dir)
+        raw = _read_raw(session_set_dir)
+        assert raw["schemaVersion"] == 4
+        assert raw["status"] == "not-started"
+        assert "sessions" not in raw
 
     def test_synthesize_not_started_idempotent(
         self, session_set_dir, spec_md,
@@ -583,17 +606,20 @@ class TestScaffoldingWritesV3:
         self, session_set_dir, spec_md,
     ):
         # Legacy folder with a change-log.md → backfill should produce
-        # status=complete, lifecycle=closed, sessions[] all complete.
+        # status=complete, sessions[] all complete. lifecycleState is
+        # derived by the shim (closed) under v4.
         with open(
             os.path.join(session_set_dir, "change-log.md"), "w", encoding="utf-8",
         ) as f:
             f.write("# Change log\n")
-        path = ensure_session_state_file(session_set_dir)
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
-        assert data["status"] == "complete"
+        ensure_session_state_file(session_set_dir)
+        raw = _read_raw(session_set_dir)
+        assert raw["schemaVersion"] == 4
+        assert raw["status"] == "complete"
+        assert all(s["status"] == "complete" for s in raw["sessions"])
+        # Shim-derived view: lifecycleState and completedSessions.
+        data = _read(session_set_dir)
         assert data["lifecycleState"] == "closed"
-        assert all(s["status"] == "complete" for s in data["sessions"])
         assert data["completedSessions"] == [1, 2, 3]
 
     def test_backfill_payload_change_log_without_spec_total_stays_not_started(
@@ -617,18 +643,21 @@ class TestScaffoldingWritesV3:
         (session_set_dir_ / "change-log.md").write_text(
             "# Change log\n", encoding="utf-8",
         )
-        path = ensure_session_state_file(str(session_set_dir_))
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
+        ensure_session_state_file(str(session_set_dir_))
+        raw = json.loads(
+            (session_set_dir_ / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
+        )
+        assert raw["schemaVersion"] == 4
         # Must NOT escalate to complete without per-session evidence.
-        assert data["status"] == "not-started"
-        assert data["lifecycleState"] is None
+        assert raw["status"] == "not-started"
+        # v4 drops top-level lifecycleState (shim derives it).
+        assert "lifecycleState" not in raw
         # readProgress must accept the snapshot (no rule-1/rule-7 fail).
         # An empty sessions[] case (totalSessions unknown) means
         # sessions[] is omitted entirely; readProgress falls into the
         # v2 synthesis path which produces an all-not-started view —
         # consistent with status=not-started.
-        assert "sessions" not in data
+        assert "sessions" not in raw
 
     def test_backfill_payload_activity_log_without_spec_total_stays_not_started(
         self, tmp_path: Path,
@@ -643,11 +672,13 @@ class TestScaffoldingWritesV3:
             json.dumps({"entries": [{"sessionNumber": 1, "dateTime": "2026-05-17T10:00:00-04:00"}]}),
             encoding="utf-8",
         )
-        path = ensure_session_state_file(str(session_set_dir_))
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
-        assert data["status"] == "not-started"
-        assert "sessions" not in data
+        ensure_session_state_file(str(session_set_dir_))
+        raw = json.loads(
+            (session_set_dir_ / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
+        )
+        assert raw["schemaVersion"] == 4
+        assert raw["status"] == "not-started"
+        assert "sessions" not in raw
 
     def test_backfill_payload_activity_log_only_marks_session_one_in_progress(
         self, session_set_dir, spec_md,
@@ -672,21 +703,22 @@ class TestScaffoldingWritesV3:
                     },
                 ],
             }, f)
-        path = ensure_session_state_file(session_set_dir)
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        assert data["schemaVersion"] == 3
-        assert data["status"] == "in-progress"
-        assert data["lifecycleState"] == "work_in_progress"
-        assert data["sessions"][0]["status"] == "in-progress"
+        ensure_session_state_file(session_set_dir)
+        raw = _read_raw(session_set_dir)
+        assert raw["schemaVersion"] == 4
+        assert raw["status"] == "in-progress"
+        assert raw["sessions"][0]["status"] == "in-progress"
         assert all(
-            s["status"] == "not-started" for s in data["sessions"][1:]
+            s["status"] == "not-started" for s in raw["sessions"][1:]
         )
-        # Derived current session
+        # Shim-derived view: currentSession + lifecycleState.
+        data = _read(session_set_dir)
         assert data["currentSession"] == 1
+        assert data["lifecycleState"] == "work_in_progress"
 
     def test_bulk_backfill_writes_v3_to_legacy_folders(self, tmp_path: Path):
         # docs/session-sets/<slug>/spec.md but no session-state.json
-        # — backfill walks the directory and writes v3 shape.
+        # — backfill walks the directory and writes v4 shape (Set 047 S4).
         base = tmp_path / "session-sets"
         base.mkdir()
         slug = base / "001-test"
@@ -704,7 +736,7 @@ class TestScaffoldingWritesV3:
         data = json.loads(
             (slug / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
         )
-        assert data["schemaVersion"] == 3
+        assert data["schemaVersion"] == 4
         assert len(data["sessions"]) == 2
         assert data["sessions"][0]["title"] == "First"
         assert data["sessions"][1]["title"] == "Second"

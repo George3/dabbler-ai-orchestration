@@ -110,15 +110,12 @@ class TestRegisterSessionStartV2:
         path = os.path.join(session_set_dir, SESSION_STATE_FILENAME)
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        # Set 030 Session 2: schemaVersion is now 3; dual-write keeps
-        # the legacy triple alongside ``sessions[]``.
-        assert data["schemaVersion"] == 3 == SCHEMA_VERSION
-        assert data["lifecycleState"] == "work_in_progress"
-        assert data["status"] == "in-progress"  # backward-compat field
-        assert data["currentSession"] == 1
-        assert data["completedSessions"] == []  # fresh set always has empty array
-        assert data["totalSessions"] == 5
-        # v3 ledger present, all five entries, session 1 in-progress.
+        # Set 047 Session 4: writers now emit v4 on disk; the per-
+        # session ledger is the canonical source. The shim-routed
+        # read_session_state surfaces the derived legacy triple +
+        # lifecycleState for downstream readers.
+        assert data["schemaVersion"] == 4 == SCHEMA_VERSION
+        assert data["status"] == "in-progress"
         assert isinstance(data["sessions"], list)
         assert len(data["sessions"]) == 5
         assert data["sessions"][0]["number"] == 1
@@ -126,6 +123,12 @@ class TestRegisterSessionStartV2:
         assert all(
             s["status"] == "not-started" for s in data["sessions"][1:]
         )
+        # Shim-derived view: legacy triple + lifecycleState.
+        derived = read_session_state(session_set_dir) or {}
+        assert derived["lifecycleState"] == "work_in_progress"
+        assert derived["currentSession"] == 1
+        assert derived["completedSessions"] == []
+        assert derived["totalSessions"] == 5
 
     def test_register_session_start_emits_work_started(self, session_set_dir):
         """Set 014 Session 1 (a): a fresh ``register_session_start`` call
@@ -313,19 +316,22 @@ class TestMarkSessionCompleteV2:
         path = os.path.join(session_set_dir, SESSION_STATE_FILENAME)
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        # Set 030 Session 2: schemaVersion is now 3.
-        assert data["schemaVersion"] == 3
-        assert data["lifecycleState"] == "closed"
+        # Set 047 Session 4: writers emit v4 on disk; per-session
+        # metadata carries completedAt / verdict / orchestrator.
+        assert data["schemaVersion"] == 4
         assert data["status"] == "complete"
-        assert data["verificationVerdict"] == "VERIFIED"
-        assert data["completedAt"] is not None
-        # v3 ledger reflects both sessions complete.
-        assert data["sessions"] == [
-            {"number": 1, "title": "Session 1", "status": "complete"},
-            {"number": 2, "title": "Session 2", "status": "complete"},
-        ]
-        assert data["completedSessions"] == [1, 2]
-        assert data["currentSession"] is None  # no session in flight
+        # Per-session metadata on the closed sessions.
+        assert isinstance(data["sessions"], list)
+        assert len(data["sessions"]) == 2
+        assert all(s["status"] == "complete" for s in data["sessions"])
+        assert all(s["completedAt"] is not None for s in data["sessions"])
+        # Shim-derived view for the legacy triple.
+        derived = read_session_state(session_set_dir) or {}
+        assert derived["lifecycleState"] == "closed"
+        assert derived["verificationVerdict"] == "VERIFIED"
+        assert derived["completedAt"] is not None
+        assert derived["completedSessions"] == [1, 2]
+        assert derived["currentSession"] is None  # no session in flight
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +343,11 @@ class TestLazyMigrationOnRead:
         _write_v1_state(session_set_dir, status="in-progress")
         state = read_session_state(session_set_dir)
         assert state is not None
-        assert state["schemaVersion"] == 2
+        # Set 047 Session 4: read_session_state now routes through the
+        # v4 shim, so v1 → v2 → v4 in-memory normalization. The
+        # derived lifecycleState is computed from the canonical
+        # top-level status by the shim.
+        assert state["schemaVersion"] == 4
         assert state["lifecycleState"] == "work_in_progress"
         # Original status field preserved (consumers may still read it)
         assert state["status"] == "in-progress"
@@ -351,7 +361,7 @@ class TestLazyMigrationOnRead:
         )
         state = read_session_state(session_set_dir)
         assert state is not None
-        assert state["schemaVersion"] == 2
+        assert state["schemaVersion"] == 4
         assert state["lifecycleState"] == "closed"
 
     def test_read_does_not_rewrite_file(self, session_set_dir):
@@ -382,17 +392,21 @@ class TestLazyMigrationOnRead:
         )
         with open(os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8") as f:
             data = json.load(f)
-        assert data["schemaVersion"] == 3
-        # Forced close → top-status complete, lifecycle closed, EVERY
-        # session in the ledger promoted to complete.
+        # Set 047 Session 4: writers emit v4. Forced close → top-
+        # status complete with every per-session record promoted to
+        # complete. The derived top-level lifecycle / completedSessions
+        # surface via the shim.
+        assert data["schemaVersion"] == 4
         assert data["status"] == "complete"
-        assert data["lifecycleState"] == "closed"
         assert isinstance(data["sessions"], list)
         assert len(data["sessions"]) == 5
         assert all(s["status"] == "complete" for s in data["sessions"])
-        assert data["completedSessions"] == [1, 2, 3, 4, 5]
-        # Forensic marker per Set 9 Session 3 / D-2.
+        # Forensic marker per Set 9 Session 3 / D-2 (passthrough under v4).
         assert data.get("forceClosed") is True
+        # Shim-derived view: lifecycle + completedSessions triple.
+        derived = read_session_state(session_set_dir) or {}
+        assert derived["lifecycleState"] == "closed"
+        assert derived["completedSessions"] == [1, 2, 3, 4, 5]
 
     def test_v3_file_passes_through_unchanged(self, session_set_dir):
         register_session_start(
@@ -406,8 +420,8 @@ class TestLazyMigrationOnRead:
             os.path.join(session_set_dir, SESSION_STATE_FILENAME), encoding="utf-8"
         ).read()
         state = read_session_state(session_set_dir)
-        # Writer now emits schemaVersion 3 (Set 030 Session 2).
-        assert state["schemaVersion"] == 3
+        # Set 047 Session 4: writer now emits schemaVersion 4 directly.
+        assert state["schemaVersion"] == 4
         # Reading the current-schema file should not perturb the
         # on-disk content either.
         after = open(
@@ -419,8 +433,12 @@ class TestLazyMigrationOnRead:
         """Unknown status should not crash — defaults to work_in_progress."""
         _write_v1_state(session_set_dir, status="something-weird")
         state = read_session_state(session_set_dir)
+        # The shim canonicalize_status returns None for unknown
+        # statuses, so derived_lifecycle (None → no derivation) stays
+        # at the in-memory v1→v2 default work_in_progress that
+        # _migrate_v1_to_v2_inplace wrote.
         assert state["lifecycleState"] == "work_in_progress"
-        assert state["schemaVersion"] == 2
+        assert state["schemaVersion"] == 4
 
     def test_malformed_json_returns_none(self, session_set_dir):
         path = os.path.join(session_set_dir, SESSION_STATE_FILENAME)

@@ -47,11 +47,22 @@ from session_state import (
 
 
 def _fresh_set(tmp_path: Path, total_sessions: int = 3) -> Path:
-    """Create a not-started session set directory with a spec.md."""
+    """Create a not-started session set directory with a spec.md.
+
+    Set 047 Session 4: the spec.md gains a proper ``## Session Set
+    Configuration`` heading so the v4 writer materializes a
+    sessions[] ledger of length ``total_sessions``. The previous
+    fixture used a bare ``yaml`` fence with no heading, which the
+    config-block parser rejected — under v3 this produced a plan-
+    less write that conveniently happened to keep the orchestrator
+    at the top level. Under v4 the orchestrator lives per-session,
+    so we need a real sessions[] to attach it to.
+    """
     set_dir = tmp_path / "test-set-checkout"
     set_dir.mkdir()
     (set_dir / "spec.md").write_text(
         "# spec\n\n"
+        "## Session Set Configuration\n\n"
         "```yaml\n"
         f"totalSessions: {total_sessions}\n"
         "requiresUAT: false\n"
@@ -86,14 +97,7 @@ def _seed_in_flight(
     """
     state_path = set_dir / "session-state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["completedSessions"] = []
-    state["currentSession"] = session_number
     state["status"] = "in-progress"
-    state["lifecycleState"] = "work_in_progress"
-    state["startedAt"] = checked_out_at or "2026-05-20T08:00:00-04:00"
-    for entry in state.get("sessions", []):
-        if entry.get("number") == session_number:
-            entry["status"] = "in-progress"
     orch: dict = {
         "engine": engine,
         "provider": provider,
@@ -104,8 +108,21 @@ def _seed_in_flight(
         orch["checkedOutAt"] = checked_out_at
     if last_activity_at is not None:
         orch["lastActivityAt"] = last_activity_at
-    state["orchestrator"] = orch
+    # Set 047 Session 4: under v4 the orchestrator + startedAt live
+    # on the in-progress session's per-session record. The shim
+    # derives the legacy top-level view at read time.
+    for entry in state.get("sessions", []):
+        if entry.get("number") == session_number:
+            entry["status"] = "in-progress"
+            entry["startedAt"] = checked_out_at or "2026-05-20T08:00:00-04:00"
+            entry["orchestrator"] = orch
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    # For test-assertion convenience, return a dict that mirrors the
+    # legacy top-level orchestrator view (so existing assertions
+    # ``seeded["orchestrator"]["checkedOutAt"]`` keep working). This
+    # is purely a return-value convenience; the on-disk file carries
+    # only per-session orchestrator under v4.
+    state["orchestrator"] = orch
     return state
 
 

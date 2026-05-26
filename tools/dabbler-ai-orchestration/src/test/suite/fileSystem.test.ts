@@ -431,10 +431,10 @@ suite("fileSystem — readSessionSets", () => {
   // ensureSessionStateFile, mirroring the Python helper.
 
   test("lazy-synth infers 'complete' from legacy change-log.md presence (with spec totalSessions)", () => {
-    // Set 030 Session 3: lazy-synth now writes v3 sessions[] when
-    // the spec declares totalSessions. Without totalSessions, the
-    // synthesized snapshot would lack per-session evidence and the
-    // v3 invariants would downgrade it to in-progress.
+    // Set 030 Session 3: lazy-synth writes sessions[] when the spec
+    // declares totalSessions. Set 047 Session 5 flipped the writer
+    // to v4 emission: top-level lifecycleState is dropped (the shim
+    // re-derives it on read from status); schemaVersion is 4.
     const dir = makeTmpDir();
     const setDir = path.join(dir, "docs", "session-sets", "legacy-done");
     fs.mkdirSync(setDir, { recursive: true });
@@ -451,21 +451,21 @@ suite("fileSystem — readSessionSets", () => {
       fs.readFileSync(path.join(setDir, "session-state.json"), "utf8")
     );
     assert.strictEqual(written.status, "complete");
-    assert.strictEqual(written.lifecycleState, "closed");
-    assert.strictEqual(written.schemaVersion, 3);
+    assert.strictEqual(written.schemaVersion, 4);
+    assert.ok(!("lifecycleState" in written), "v4 drops top-level lifecycleState");
     assert.ok(Array.isArray(written.sessions));
     assert.strictEqual(written.sessions.length, 2);
+    for (const entry of written.sessions) {
+      assert.strictEqual(entry.status, "complete");
+    }
     fs.rmSync(dir, { recursive: true });
   });
 
   test("lazy-synth with change-log.md but NO spec totalSessions stays not-started (Round A fix)", () => {
-    // Round-A regression (Set 030 Session 3 verifier): when spec.md
-    // has no Session Set Configuration totalSessions, buildSessions
-    // returns undefined and the writer cannot emit a reader-valid
-    // status=complete snapshot. The backfill must fall through to
-    // not-started rather than write {status: "complete"} with no
-    // sessions[] / completedSessions[] (which would fail rule 1 +
-    // rule 7 on the next readProgress call).
+    // Round-A regression (Set 030 Session 3 verifier): without a
+    // known plan, the writer cannot emit a reader-valid complete
+    // snapshot. The backfill falls through to not-started. Set 047
+    // Session 5: shape is v4 (no top-level lifecycleState).
     const dir = makeTmpDir();
     const setDir = path.join(dir, "docs", "session-sets", "plan-less");
     fs.mkdirSync(setDir, { recursive: true });
@@ -479,7 +479,8 @@ suite("fileSystem — readSessionSets", () => {
       fs.readFileSync(path.join(setDir, "session-state.json"), "utf8")
     );
     assert.strictEqual(written.status, "not-started");
-    assert.strictEqual(written.lifecycleState, null);
+    assert.strictEqual(written.schemaVersion, 4);
+    assert.ok(!("lifecycleState" in written));
     assert.strictEqual(written.sessions, undefined);
     fs.rmSync(dir, { recursive: true });
   });
@@ -504,10 +505,13 @@ suite("fileSystem — readSessionSets", () => {
       fs.readFileSync(path.join(setDir, "session-state.json"), "utf8")
     );
     assert.strictEqual(written.status, "in-progress");
-    assert.strictEqual(written.startedAt, "2026-01-01T00:00:00-04:00");
-    assert.strictEqual(written.schemaVersion, 3);
+    // Set 047 S5: top-level startedAt dropped; per-session startedAt
+    // carries the earliest activity-log timestamp.
+    assert.ok(!("startedAt" in written), "v4 drops top-level startedAt");
+    assert.strictEqual(written.schemaVersion, 4);
     assert.ok(Array.isArray(written.sessions));
     assert.strictEqual(written.sessions[0].status, "in-progress");
+    assert.strictEqual(written.sessions[0].startedAt, "2026-01-01T00:00:00-04:00");
     fs.rmSync(dir, { recursive: true });
   });
 

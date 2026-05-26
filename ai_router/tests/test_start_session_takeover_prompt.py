@@ -70,23 +70,23 @@ def _seed_in_flight(
 ) -> None:
     state_path = set_dir / "session-state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["completedSessions"] = []
-    state["currentSession"] = 1
     state["status"] = "in-progress"
-    state["lifecycleState"] = "work_in_progress"
-    state["startedAt"] = "2026-05-20T08:00:00-04:00"
+    # Set 047 Session 4: under v4 the orchestrator lives on the in-
+    # progress session's per-session record. The shim derives the
+    # legacy top-level view when callers read via read_session_state.
     for entry in state.get("sessions", []):
         if entry.get("number") == 1:
             entry["status"] = "in-progress"
-    state["orchestrator"] = {
-        "engine": engine,
-        "provider": provider,
-        "model": "claude-opus-4-7",
-        "effort": "medium",
-        "chatSessionId": chat_session_id,
-        "checkedOutAt": "2026-05-20T08:00:00-04:00",
-        "lastActivityAt": "2026-05-20T08:05:00-04:00",
-    }
+            entry["startedAt"] = "2026-05-20T08:00:00-04:00"
+            entry["orchestrator"] = {
+                "engine": engine,
+                "provider": provider,
+                "model": "claude-opus-4-7",
+                "effort": "medium",
+                "chatSessionId": chat_session_id,
+                "checkedOutAt": "2026-05-20T08:00:00-04:00",
+                "lastActivityAt": "2026-05-20T08:05:00-04:00",
+            }
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 

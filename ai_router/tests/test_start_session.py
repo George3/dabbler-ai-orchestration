@@ -29,6 +29,7 @@ import start_session
 from session_events import read_events
 from session_state import (
     compute_effective_completed_sessions,
+    read_raw_session_state,
     read_session_state,
     register_session_start,
     synthesize_not_started_state,
@@ -425,18 +426,27 @@ def test_planless_session_1_writes_totalsessions_null(tmp_path: Path):
     rc = start_session.run(_args(set_dir))
     assert rc == start_session.EXIT_OK
 
+    # Raw on-disk shape: plan-less write omits sessions[] and keeps
+    # orchestrator + startedAt at the top level as the documented v4
+    # carve-out (Set 047 Session 4 — no per-session record to attach
+    # them to when totalSessions is unknown).
+    raw = read_raw_session_state(str(set_dir)) or {}
+    assert raw.get("status") == "in-progress"
+    assert raw.get("schemaVersion") == 4
+    assert "sessions" not in raw, (
+        "plan-less write must omit sessions[] entirely; the carve-out "
+        "for 'no plan known' is the absent-key form, not "
+        "present-with-null or present-with-empty-array"
+    )
+
+    # Shim-derived view: totalSessions stays null (Set 046's 0/? signal)
+    # and currentSession reads as 1 via the plan-less fallback.
     state = read_session_state(str(set_dir)) or {}
-    assert state.get("currentSession") == 1
     assert state.get("totalSessions") is None, (
         "plan-less write must keep totalSessions: null so the "
         "Explorer renders 0/? per Set 046 deliverable (a)"
     )
     assert state.get("completedSessions") == []
-    assert "sessions" not in state, (
-        "plan-less write must omit sessions[] entirely; the v3 reader's "
-        "carve-out for 'no plan known' is the absent-key form, not "
-        "present-with-null or present-with-empty-array"
-    )
     assert state.get("status") == "in-progress"
     assert state.get("lifecycleState") == "work_in_progress"
 
@@ -524,9 +534,13 @@ def test_planless_state_round_trips_through_read_progress(tmp_path: Path):
     set_dir = _planless_set(tmp_path)
     start_session.run(_args(set_dir))
 
+    # Raw on-disk shape: plan-less write omits sessions[] entirely
+    # under v4 too (carve-out for "no plan known"). The shim view
+    # adds an empty sessions[] for the canonical v4 read contract.
+    raw = read_raw_session_state(str(set_dir)) or {}
+    assert "sessions" not in raw
     state = read_session_state(str(set_dir)) or {}
     assert state.get("totalSessions") is None
-    assert "sessions" not in state
 
     # Read side: the v3 synthesizer should NOT inflate total to 1
     # from currentSession alone (Set 046 Session 2 progress.py
@@ -534,5 +548,5 @@ def test_planless_state_round_trips_through_read_progress(tmp_path: Path):
     # and totalSessions=null, the candidates set is empty and the
     # synthesized sessions[] is also empty — which trips rule 1.
     with pytest.raises(SessionStateInvariantError) as excinfo:
-        read_progress(state, _Path(set_dir) / "spec.md")
+        read_progress(raw, _Path(set_dir) / "spec.md")
     assert excinfo.value.rule == 1

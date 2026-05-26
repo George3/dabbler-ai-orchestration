@@ -396,7 +396,14 @@ suite("cancelLifecycle — writer parity (Set 035 Session 2)", () => {
     );
   });
 
-  test("cancel writes only status + preCancelStatus, leaving sibling keys untouched", async () => {
+  test("cancel emits canonical v4 on-disk shape with status flipped + preCancelStatus captured", async () => {
+    // Set 047 Session 5: cancel writer now emits v4 on-disk shape
+    // (top-level derived keys dropped, per-session metadata
+    // authoritative). The Python mirror at
+    // ai_router/session_lifecycle.cancel_session_set does the same.
+    // The shim promotes legacy top-level orchestrator / startedAt
+    // onto the in-progress / most-recently-completed session before
+    // the v4 trim runs.
     const dir = makeTmpDir();
     const baseline = {
       schemaVersion: 3,
@@ -419,14 +426,13 @@ suite("cancelLifecycle — writer parity (Set 035 Session 2)", () => {
     writeState(dir, baseline);
     await cancelSessionSet(dir, "writer-parity");
     const after = readState(dir);
-    // Two deltas only — status + preCancelStatus.
+    // Canonical v4 deltas.
+    assert.strictEqual(after.schemaVersion, 4);
+    assert.strictEqual(after.sessionSetName, "parity-test");
     assert.strictEqual(after.status, "cancelled");
     assert.strictEqual(after.preCancelStatus, "in-progress");
-    // Every other key preserved verbatim.
+    // V4 drops derived top-level keys; the shim re-derives them on read.
     for (const key of [
-      "schemaVersion",
-      "sessionSetName",
-      "sessions",
       "currentSession",
       "totalSessions",
       "completedSessions",
@@ -436,12 +442,18 @@ suite("cancelLifecycle — writer parity (Set 035 Session 2)", () => {
       "verificationVerdict",
       "orchestrator",
     ] as const) {
-      assert.deepStrictEqual(
-        after[key],
-        (baseline as Record<string, unknown>)[key],
-        `cancel writer must not mutate ${key}`
+      assert.ok(
+        !(key in after),
+        `v4 cancel writer must drop top-level ${key} (shim re-derives on read)`
       );
     }
+    // Per-session metadata is now authoritative; the shim promoted
+    // the legacy top-level orchestrator + startedAt onto session 1.
+    const sessions = after.sessions as Array<Record<string, unknown>>;
+    assert.strictEqual(sessions.length, 1);
+    assert.strictEqual(sessions[0].number, 1);
+    assert.strictEqual(sessions[0].startedAt, "2026-05-21T06:00:00-04:00");
+    assert.deepStrictEqual(sessions[0].orchestrator, baseline.orchestrator);
     fs.rmSync(dir, { recursive: true });
   });
 

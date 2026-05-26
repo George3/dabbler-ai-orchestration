@@ -1,17 +1,43 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "example-session-set",
   "status": "complete",
-  "lifecycleState": "closed",
-  "startedAt": "2026-04-30T13:00:00-04:00",
-  "completedAt": "2026-04-30T14:30:00-04:00",
-  "verificationVerdict": "VERIFIED",
-  "orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "high"
-  },
+  "sessions": [
+    {
+      "number": 1,
+      "title": "First session: scoping + scaffolding",
+      "status": "complete",
+      "startedAt": "2026-04-30T13:00:00-04:00",
+      "completedAt": "2026-04-30T13:50:00-04:00",
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-04-30T13:00:00-04:00",
+        "lastActivityAt": "2026-04-30T13:50:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED"
+    },
+    {
+      "number": 2,
+      "title": "Second session: implementation + close-out",
+      "status": "complete",
+      "startedAt": "2026-04-30T14:00:00-04:00",
+      "completedAt": "2026-04-30T14:30:00-04:00",
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-04-30T14:00:00-04:00",
+        "lastActivityAt": "2026-04-30T14:30:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED"
+    }
+  ],
   "nextOrchestrator": {
     "engine": "claude-code",
     "provider": "anthropic",
@@ -19,32 +45,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Set 2 verified clean; the same orchestrator is well-positioned to continue."
+      "specifics": "Session 2 verified clean; the same orchestrator is well-positioned to continue with Session 3."
     }
-  },
-  "sessions": [
-    {
-      "number": 1,
-      "title": "Inventory + scaffold",
-      "status": "complete"
-    },
-    {
-      "number": 2,
-      "title": "Implement + verify",
-      "status": "complete"
-    },
-    {
-      "number": 3,
-      "title": "Migrate + bulk run",
-      "status": "complete"
-    },
-    {
-      "number": 4,
-      "title": "Migration UX + release",
-      "status": "complete"
-    }
-  ],
-  "currentSession": 4,
-  "totalSessions": 4,
-  "completedSessions": [1, 2, 3, 4]
+  }
 }

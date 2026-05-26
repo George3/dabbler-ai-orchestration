@@ -27,7 +27,31 @@ import json
 import os
 import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+
+# Set 047 Session 4: cancel / restore writers emit canonical v4
+# on-disk shape just like register_session_start /
+# _flip_state_to_closed. The shim normalize_to_v4_shape produces a
+# v4 read-view that the cancel/restore writers re-trim to the
+# canonical v4 on-disk shape (drop derived top-level keys, preserve
+# passthroughs). The cancellation lifecycle is otherwise unchanged
+# per spec §3.2: top-level ``status: "cancelled"`` token is
+# preserved; the readCancellationState Set 035 reader contract is
+# unchanged; ``CANCELLED.md`` markdown audit-history artifact
+# remains.
+try:
+    from progress import (  # type: ignore[import-not-found]
+        SCHEMA_VERSION_V4,
+        SessionStateInvariantError,
+        normalize_to_v4_shape,
+    )
+except ImportError:
+    from .progress import (  # type: ignore[no-redef]
+        SCHEMA_VERSION_V4,
+        SessionStateInvariantError,
+        normalize_to_v4_shape,
+    )
 
 
 CANCELLED_FILENAME = "CANCELLED.md"
@@ -35,6 +59,20 @@ RESTORED_FILENAME = "RESTORED.md"
 SESSION_STATE_FILENAME = "session-state.json"
 
 HISTORY_HEADER = "# Cancellation history"
+
+# Set 047 Session 4: top-level keys dropped from the v4 on-disk
+# shape (mirrors session_state._V4_TOP_LEVEL_DROPPED_KEYS and
+# migrate_v3_to_v4._V4_TOP_LEVEL_DROPPED_KEYS).
+_V4_TOP_LEVEL_DROPPED_KEYS = (
+    "lifecycleState",
+    "currentSession",
+    "totalSessions",
+    "completedSessions",
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+)
 
 
 def _now_iso_seconds() -> str:
@@ -149,6 +187,80 @@ def _write_session_state(session_set_dir: str, state: dict) -> None:
     _atomic_write_text(state_path, json.dumps(state, indent=2) + "\n")
 
 
+def _to_v4_on_disk_shape(state: dict, session_set_dir: str) -> dict:
+    """Project *state* to the canonical v4 on-disk shape.
+
+    Set 047 Session 4 writer-flip: cancel / restore re-emit the state
+    file in v4 shape so the writer surface is uniform across
+    register / close / cancel / restore. The shim normalizes any v1
+    / v2 / v3 / v4 input to a v4 read-view (sessions[] with per-
+    session metadata + derived top-level fields); this helper drops
+    the derived top-level fields so the on-disk file matches the v4
+    contract per spec §3.1.
+
+    Plan-less carve-out (Set 047 Session 4 verifier Critical 3):
+    when the input had no ``sessions[]`` at all (plan-less in-progress
+    write), preserve that absence on output — writing
+    ``sessions: []`` would convert a "plan unknown" file into a
+    "zero-session" file. The top-level ``orchestrator`` /
+    ``startedAt`` carve-out keys also ride through cancel/restore so
+    the restored set lands on the same plan-less shape it started
+    from.
+
+    Falls back to the input dict unchanged if the shim raises on
+    malformed input — the cancel/restore lifecycle is best-effort
+    and should not block on schema-validation failures (an operator
+    cancelling a broken state file is a fair use case).
+    """
+    spec_md_path = Path(session_set_dir) / "spec.md"
+    try:
+        normalized = normalize_to_v4_shape(state, spec_md_path)
+    except (TypeError, ValueError, SessionStateInvariantError):
+        return state
+    out: dict = {
+        "schemaVersion": SCHEMA_VERSION_V4,
+        "sessionSetName": normalized.get("sessionSetName")
+        or state.get("sessionSetName")
+        or os.path.basename(session_set_dir.rstrip("/\\")),
+        "status": normalized.get("status") or state.get("status"),
+    }
+    # Plan-less carve-out detection: the input file omitted sessions[]
+    # entirely AND the synthesizer couldn't produce one. Preserve
+    # the absent-key form on output and carry top-level orchestrator
+    # / startedAt through as the documented plan-less passthrough.
+    input_has_sessions = isinstance(state.get("sessions"), list)
+    normalized_sessions = normalized.get("sessions")
+    is_planless = (
+        not input_has_sessions
+        and (not isinstance(normalized_sessions, list) or not normalized_sessions)
+    )
+    if is_planless:
+        for carveout_key in ("orchestrator", "startedAt"):
+            if isinstance(state.get(carveout_key), (dict, str)):
+                out[carveout_key] = state[carveout_key]
+    elif isinstance(normalized_sessions, list):
+        out["sessions"] = normalized_sessions
+    # Cancellation lifecycle passthroughs that the shim already
+    # carries through the normalized read-view. Persist them at the
+    # top level so the cancellation reader (Set 035) sees the same
+    # shape it has always seen.
+    for passthrough_key in ("preCancelStatus", "forceClosed"):
+        if passthrough_key in normalized:
+            out[passthrough_key] = normalized[passthrough_key]
+        elif passthrough_key in state:
+            out[passthrough_key] = state[passthrough_key]
+    # Defensively strip any derived top-level keys the shim added
+    # to its read-view but the on-disk shape drops. The plan-less
+    # carve-out keys (orchestrator, startedAt) are RE-ADDED above
+    # only when the input was plan-less, so the strip below is a
+    # no-op for those keys in that branch.
+    for key in _V4_TOP_LEVEL_DROPPED_KEYS:
+        if is_planless and key in ("orchestrator", "startedAt"):
+            continue
+        out.pop(key, None)
+    return out
+
+
 def _infer_status_from_files(session_set_dir: str) -> str:
     """Inferred status from current file presence — Set 7 backfill rules."""
     if os.path.isfile(os.path.join(session_set_dir, "change-log.md")):
@@ -196,7 +308,14 @@ def cancel_session_set(session_set_dir: str, reason: str = "") -> None:
         if state.get("status") != "cancelled":
             state["preCancelStatus"] = state.get("status")
         state["status"] = "cancelled"
-        _write_session_state(session_set_dir, state)
+        # Set 047 Session 4: emit canonical v4 on-disk shape so a
+        # cancel rewrite of a legacy v3 file lands on v4 just like
+        # register / close. The shim's normalize promotes the
+        # legacy top-level orchestrator / startedAt onto the
+        # in-progress / most-recently-completed session before the
+        # write trims the derived top-level keys.
+        v4_state = _to_v4_on_disk_shape(state, session_set_dir)
+        _write_session_state(session_set_dir, v4_state)
 
 
 def restore_session_set(session_set_dir: str, reason: str = "") -> None:
@@ -243,7 +362,11 @@ def restore_session_set(session_set_dir: str, reason: str = "") -> None:
             restored = _infer_status_from_files(session_set_dir)
         state["status"] = restored
         state.pop("preCancelStatus", None)
-        _write_session_state(session_set_dir, state)
+        # Set 047 Session 4: emit canonical v4 on-disk shape so a
+        # restore rewrite of a legacy v3 file lands on v4 just like
+        # the cancel write above.
+        v4_state = _to_v4_on_disk_shape(state, session_set_dir)
+        _write_session_state(session_set_dir, v4_state)
 
     # Best-effort source removal as the final step. If this fails (or
     # the process crashes before reaching here), CANCELLED.md lingers

@@ -63,36 +63,38 @@ class TestBuildExampleState:
         state = build_example_state()
         assert state["schemaVersion"] == SCHEMA_VERSION
 
-    def test_lifecycle_state_uses_live_enum_value(self):
+    def test_per_session_status_uses_canonical_tokens(self):
+        # Set 047 Session 4: lifecycle sub-states moved to the events
+        # ledger. The example v4 shape carries per-session status
+        # tokens that match the canonical 4-value set.
         state = build_example_state()
-        # Must be one of the live enum values, not a hand-typed string —
-        # if the enum is renamed, this test fails before the example
-        # silently goes stale.
-        assert state["lifecycleState"] in {
-            s.value for s in SessionLifecycleState
-        }
+        for entry in state["sessions"]:
+            assert entry["status"] in {
+                "not-started", "in-progress", "complete", "cancelled"
+            }
 
     def test_all_top_level_keys_present(self):
+        # Set 047 Session 4: v4 canonical top-level keys only. The
+        # legacy top-level fields (currentSession / totalSessions /
+        # completedSessions / startedAt / completedAt /
+        # verificationVerdict / orchestrator / lifecycleState) are
+        # derived by the shim — they do not appear on disk.
         state = build_example_state()
         expected = {
             "schemaVersion",
             "sessionSetName",
-            "currentSession",
-            "totalSessions",
             "status",
-            "lifecycleState",
-            "startedAt",
-            "completedAt",
-            "verificationVerdict",
-            "orchestrator",
+            "sessions",
             "nextOrchestrator",
         }
         assert set(state.keys()) == expected
 
-    def test_orchestrator_block_is_complete(self):
-        block = build_example_state()["orchestrator"]
-        assert set(block.keys()) == {"engine", "provider", "model", "effort"}
-        assert all(isinstance(v, str) and v for v in block.values())
+    def test_per_session_orchestrator_block_is_complete(self):
+        # Set 047 Session 4: orchestrator now lives per-session.
+        for entry in build_example_state()["sessions"]:
+            block = entry["orchestrator"]
+            assert isinstance(block, dict)
+            assert {"engine", "provider", "model", "effort"} <= set(block.keys())
 
     def test_next_orchestrator_passes_live_validator(self):
         # The next-orchestrator rubric in session_state.py has a 30-char
@@ -103,13 +105,14 @@ class TestBuildExampleState:
         passed, errors = validate_next_orchestrator(candidate)
         assert passed, f"validator rejected example: {errors}"
 
-    def test_no_null_completion_fields(self):
+    def test_per_session_completion_fields_populated(self):
         # The example documents the *closed* shape (mark_session_complete
-        # has flipped it). Both fields must be non-null so a reader sees
-        # what the closed envelope looks like, not the in-progress one.
+        # has flipped it). Every per-session record carries non-null
+        # completedAt + verificationVerdict for the closed-shape view.
         state = build_example_state()
-        assert state["completedAt"] is not None
-        assert state["verificationVerdict"] is not None
+        for entry in state["sessions"]:
+            assert entry["completedAt"] is not None
+            assert entry["verificationVerdict"] is not None
 
     def test_returned_dict_is_independent_per_call(self):
         # Mutation safety: callers that edit the result must not affect
@@ -117,9 +120,9 @@ class TestBuildExampleState:
         # dict-of-dicts shape makes shared-reference bugs easy.
         a = build_example_state()
         b = build_example_state()
-        a["orchestrator"]["model"] = "mutated"
+        a["sessions"][0]["orchestrator"]["model"] = "mutated"
         a["nextOrchestrator"]["reason"]["code"] = "other"
-        assert b["orchestrator"]["model"] != "mutated"
+        assert b["sessions"][0]["orchestrator"]["model"] != "mutated"
         assert b["nextOrchestrator"]["reason"]["code"] != "other"
 
 

@@ -785,8 +785,20 @@ def test_close_session_orchestrator_clear_is_idempotent_tier_agnostic(
     state_a = json.loads((set_dir_a / "session-state.json").read_text(
         encoding="utf-8"
     ))
-    assert state_a["orchestrator"] is None, (
-        "writer must clear orchestrator block when it was populated"
+    # Set 047 Session 4: under v4 the writer drops top-level
+    # orchestrator entirely (dropped derived field). The check-in
+    # semantic is satisfied by status moving off "in-progress" — the
+    # shim derives a top-level orchestrator of None between sessions
+    # because no session is in-progress.
+    assert "orchestrator" not in state_a, (
+        "v4 writer must drop top-level orchestrator block on close "
+        "(check-in is implicit via status off in-progress)"
+    )
+    from progress import normalize_to_v4_shape
+    derived_a = normalize_to_v4_shape(state_a, set_dir_a / "spec.md")
+    assert derived_a["orchestrator"] is None, (
+        "shim-derived top-level orchestrator must be None between "
+        "sessions — preserves the v3 H1/H3 check-in semantic"
     )
 
     # ---- Case 2: orchestrator block already None -> stays None ----
@@ -819,6 +831,10 @@ def test_close_session_orchestrator_clear_is_idempotent_tier_agnostic(
     state_b = json.loads((set_dir_b / "session-state.json").read_text(
         encoding="utf-8"
     ))
-    assert state_b["orchestrator"] is None, (
-        "idempotent: null -> null is a no-op write that lands cleanly"
+    # Set 047 Session 4: same as case A — the v4 on-disk shape drops
+    # top-level orchestrator entirely. Null-input → no-key-output is
+    # idempotent at the shape level (was null, now absent — both
+    # parse to None via the shim).
+    assert "orchestrator" not in state_b, (
+        "v4 writer drops top-level orchestrator (idempotent null → absent)"
     )

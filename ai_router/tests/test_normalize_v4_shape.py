@@ -245,7 +245,14 @@ class TestV4InputNormalize:
         # Reader-compat: top-level fields are derived from sessions[].
         assert out["orchestrator"] == _ORCH
         assert out["startedAt"] == "2026-05-26T12:00:00-04:00"
-        assert out["completedAt"] == "2026-05-26T11:00:00-04:00"
+        # Set 047 Session 4: top-level completedAt is derived ONLY when
+        # the SET status is ``complete`` (preserves the v3 semantic
+        # where ``completedAt`` is the SET-completion timestamp, not
+        # the last-session-close timestamp). Mid-set with one session
+        # closed → top-level completedAt stays None; the per-session
+        # ``sessions[0].completedAt`` carries the close timestamp.
+        assert out["completedAt"] is None
+        assert out["sessions"][0]["completedAt"] == "2026-05-26T11:00:00-04:00"
         assert out["currentSession"] == 2
         assert out["completedSessions"] == [1]
 

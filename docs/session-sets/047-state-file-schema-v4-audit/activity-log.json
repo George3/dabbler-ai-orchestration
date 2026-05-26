@@ -324,6 +324,240 @@
       "description": "Applied in-flight fixes for all 4 verifier IMPORTANT items (per memory feedback_dont_hide_behind_out_of_scope): (1) tightened docs/v3-to-v4-rollback-procedure.md to exclude would-violate and no-bak failed-backup from the rollback trigger conditions; branched migrateSetV4.ts's failed-backup notification on whether result.backupPath is set; (2) hoisted the needsMigration + migrationTargetSchemaVersion block in fileSystem.ts to run BEFORE normalizeToV4Shape so a normalize failure no longer eats the badge; (3) added explicit parity-contract docstring to migrateSessionStateV4.ts narrowing the Python\u2194TS lockstep to on-disk shape + backup filename + action enum values (excludes internal field names); (4) added 2 new Python tests (state-write-failure-after-backup distinguishing the rollback-needed subcase + done-alias canonicalization) and 2 new TS tests (backup-write-failure using directory-at-bak-path trick to force renameSync failure + done-alias). Split the Python CLI's [BACKUP-FAILED] line into [BACKUP-FAILED:rollback-needed] vs [BACKUP-FAILED:no-bak] subtypes. Deferred: cross-language golden parity fixture (substantial test-infra; better designed alongside Sessions 4-5 writer flip). Final test posture: 881 Python (+2 new), 593 TS (+2 new); same 2 pre-existing baseline failures unchanged.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/register-session-start",
+      "dateTime": "2026-05-26T10:51:40-04:00",
+      "description": "Invoked python -m ai_router.start_session with engine=claude, provider=anthropic, model=claude-opus-4-7, effort=high. State-file flipped from between-sessions to in-progress with the orchestrator block populated; currentSession=4; sessions[4].status=in-progress; cumulative S1+S2+S3 spend $0.88022 of $10 NTE (8.8%) carried forward. Per memory feedback_budget_question_scope, did not re-ask the budget at session start.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/writer-surface-grounding",
+      "dateTime": "2026-05-26T11:00:00-04:00",
+      "description": "Surveyed the four Python writer surfaces (register_session_start, _flip_state_to_closed, mark_session_complete, cancel_session_set) + supporting writers (_not_started_payload, _backfill_payload) + the v4 shape contract from migrate_v3_to_v4.py build_v4_on_disk_shape + the shim normalize_to_v4_shape derivation rules. Confirmed top-level dropped vs preserved key sets, same-holder reattach logic, and the plan-less Set 046 carve-out.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/v4-helpers-implementation",
+      "dateTime": "2026-05-26T11:15:00-04:00",
+      "description": "Bumped SCHEMA_VERSION = 4 in session_state.py (re-exported from progress.SCHEMA_VERSION_V4). Added _V4_PER_SESSION_METADATA_KEYS + _V4_TOP_LEVEL_DROPPED_KEYS constants. Authored three helpers: _read_prior_v4_metadata (normalize prior state via shim to extract per-session startedAt/completedAt/orchestrator/verificationVerdict), _apply_v4_per_session_metadata (default + preserve per-session fields across sessions[] rewrite), _strip_v4_dropped_top_level_keys (defensive drop).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/register-session-start-flip",
+      "dateTime": "2026-05-26T11:30:00-04:00",
+      "description": "Flipped register_session_start to emit v4 on-disk shape per spec section 3.1. Same-holder reattach reads the existing in-progress session per-session orchestrator (v4) or top-level orchestrator (v3) - both paths supported during the transition window. In-progress session record gets startedAt + orchestrator block (engine, provider, model, effort, chatSessionId, checkedOutAt, lastActivityAt). Prior-completed sessions preserve their metadata via _apply_v4_per_session_metadata + prior_v4_metadata lookup. Top-level dropped keys are absent. Plan-less carve-out keeps top-level orchestrator + startedAt for the documented absent-sessions[] case.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-004/flip-state-to-closed-flip",
+      "dateTime": "2026-05-26T11:45:00-04:00",
+      "description": "Flipped _flip_state_to_closed to emit v4. Reads raw existing state; falls back to sessions[] scan for in-progress entry when v4 input drops top-level currentSession. Closing session gets per-session completedAt + verificationVerdict; per-session orchestrator preserved as historical record (the v3 clear top-level orchestrator on close semantic now implicit in status moving off in-progress). Forced last-session promotion sets completedAt on every newly-promoted complete session. Top-level forceClosed + preCancelStatus passthroughs preserved. compute_effective_completed_sessions extended with sessions[] fallback for v4 input; mark_session_complete extended with sessions[]-scan currentSession fallback.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "session-004/cancel-restore-not-started-backfill-flip",
+      "dateTime": "2026-05-26T11:55:00-04:00",
+      "description": "Flipped cancel_session_set + restore_session_set (session_lifecycle.py) via new _to_v4_on_disk_shape helper that projects any v1/v2/v3/v4 input through the shim and trims to the v4 contract. Updated _not_started_payload to emit v4 shape (drop top-level lifecycleState/currentSession/etc; per-session metadata defaulted to null). Updated _backfill_payload change-log and activity-log branches to write per-session startedAt on session 1 of the activity-log branch (rather than top-level startedAt).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 7,
+      "stepKey": "session-004/read-session-state-shim-route",
+      "dateTime": "2026-05-26T12:00:00-04:00",
+      "description": "Routed read_session_state through normalize_to_v4_shape so all downstream consumers (gate_checks, reconciler, CLI, tests) see a derived v3-style top-level view transparently regardless of whether the on-disk file is v3 or v4. Added read_raw_session_state companion for the writer-side / migrator-side raw-bytes accessor. Confirmed register_session_start + _flip_state_to_closed + mark_session_complete now use read_raw_session_state where they need the literal shape and read_session_state where they want the derived view.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 8,
+      "stepKey": "session-004/shim-extensions",
+      "dateTime": "2026-05-26T12:15:00-04:00",
+      "description": "Extended progress.normalize_to_v4_shape with five backward-compat derivations: (a) lifecycleState derived from canonical top-level status when input drops the field; (b) derived_total_sessions returns None when input was plan-less AND synthesized sessions[] is empty (preserves Set 046 0/? signal under v4); (c) plan-less step-4 fallback uses top-level orchestrator + startedAt when sessions[] is empty AND status is in-progress; (d) top-level completedAt derives ONLY when set-level status is complete (preserves v3 SET-completion timestamp semantic vs the last-session-close timestamp); (e) shim no longer falls back to last_completed.orchestrator for derived top-level (preserves v3 H1/H3 check-in semantic released between sessions).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 9,
+      "stepKey": "session-004/unit-test-flip-and-batch-update",
+      "dateTime": "2026-05-26T12:30:00-04:00",
+      "description": "Authored new test_session_state_v4_writers.py (12 baseline tests covering schemaVersion 4, dropped top-level keys absent, per-session metadata population/preservation, plan-less carve-out, cancel/restore v4 shape, force-promotion). Batch-updated 11 existing test files for v4 emission: test_session_state_v2.py + v3.py (schemaVersion bumps + shim-routed derived-view assertions), test_chatsessionid_writer.py + checkout_writer + takeover_prompt (seed helpers write per-session orchestrator; v3-style return-dict convenience for assertion compatibility), test_start_session.py (plan-less raw vs shim split), test_close_session_snapshot_flip.py (orchestrator-clear assertions updated to assert top-level absent on disk + shim derives None), test_read_status.py (lazy-synth raw vs shim split), test_normalize_v4_shape.py (status-gated completedAt update), e2e/fixtures.py (read_state shim-routed + read_raw_state raw), e2e/test_register_session_start_regression.py (completedSessions read via shim).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 10,
+      "stepKey": "session-004/schema-dump-example-regen",
+      "dateTime": "2026-05-26T12:40:00-04:00",
+      "description": "Rewrote scripts/dump_session_state_schema.py build_example_state() to produce v4 example (per-session metadata; dropped top-level keys); updated scripts/test_dump_session_state_schema.py to assert the new top-level key set + per-session shape. Regenerated docs/session-state-schema-example.json.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 11,
+      "stepKey": "session-004/full-regression",
+      "dateTime": "2026-05-26T12:55:00-04:00",
+      "description": "Full Python regression: pytest 893 passed (881 prior baseline + 12 new v4 writer tests), 1 skipped (pre-existing), 0 failed. e2e marker (pytest -m e2e): 8 passed. All four writer surfaces emit v4 on-disk shape; all downstream consumers transparently read both v3 and v4 input via the shim-routed read_session_state.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 12,
+      "stepKey": "session-004/cross-provider-verification-round-a",
+      "dateTime": "2026-05-26T13:15:00-04:00",
+      "description": "Ran routed cross-provider verification via docs/session-sets/047-state-file-schema-v4-audit/run_s4_verification.py. Bundle: session_state.py + session_lifecycle.py + progress.py + test_session_state_v4_writers.py + 7 updated test files + e2e/fixtures.py (372197 chars total). task_type=session-verification routed to gpt-5-4 tier 3. Verdict: ISSUES_FOUND with 3 Critical + 1 Important + 3 Nice-to-have. Cost: 263.3s, $0.4570. Cumulative S1+S2+S3+S4 routed cost: $1.337 of $10 NTE (13.4%).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "tier": 3,
+          "cost_usd": 0.4570375,
+          "tokens_in": 36000,
+          "tokens_out": 9000,
+          "phase": "round-a-verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 13,
+      "stepKey": "session-004/in-flight-fixes-for-verifier-criticals",
+      "dateTime": "2026-05-26T13:30:00-04:00",
+      "description": "Applied in-flight fixes for all 3 Critical verifier items + 1 Important (per memory feedback_dont_hide_behind_out_of_scope): (1) register_session_start now derives effective_total from prior v4 sessions[] ledger BEFORE falling through to spec/headings, so re-attach against a v4-only file (no spec) lands correctly; (2) _not_started_payload + _backfill_payload now consult ### Session N headings as a fallback when spec.md has no Session Set Configuration totalSessions block - mirrors register_session_start headings fallback; (3) _to_v4_on_disk_shape now detects the plan-less carve-out (input had no sessions[] AND normalized sessions[] is empty) and preserves the absent-sessions[] form + top-level orchestrator/startedAt across cancel/restore; (4) read_raw_state in e2e/fixtures.py now actually calls read_raw_session_state instead of the shim-routed read_session_state. Added TestVerifierCriticalFixes class to test_session_state_v4_writers.py with 3 regression tests pinning each Critical fix shut. Final test posture: 896 Python tests passed (12 baseline v4-writer + 3 verifier-fix regression + 881 prior), 1 skipped, 0 failed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "session-005/register-session-start",
+      "dateTime": "2026-05-26T12:56:14-04:00",
+      "description": "Invoked python -m ai_router.start_session with engine=claude, provider=anthropic, model=claude-opus-4-7, effort=high. State-file flipped from between-sessions to in-progress with the orchestrator block populated; currentSession=5; sessions[5].status=in-progress; cumulative S1+S2+S3+S4 spend $1.337 of $10 NTE (13.4%) carried forward. Per memory feedback_budget_question_scope, did not re-ask the budget at session start. Per disposition.json next_orchestrator from S4: continuing claude-opus-4-7 high (same orchestrator that closed S1-S4 knows the v4 contract end-to-end; S5 is the TS mirror of S4's Python writer flip plus the new UX surface).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "session-005/ts-writer-surface-grounding",
+      "dateTime": "2026-05-26T13:05:00-04:00",
+      "description": "Delegated grounding research to an Explore subagent. Subagent reported: (1) synthesizeNotStartedState at sessionState.ts:267 + notStartedPayload at :101 emit v3 dual-write shape today (currentSession/totalSessions/lifecycleState/startedAt/completedAt/verificationVerdict/orchestrator at top level + sessions[] when totalSessions known). (2) ensureSessionStateFile at :288 + backfillPayload at :141 use the same v3 helpers and infer status from change-log.md / activity-log.json presence. (3) cancelSessionSet at cancelLifecycle.ts:321 reads/writes via plain JSON-passthrough — no v4 shape projection. (4) Canonical v4 contract from S3's migrator at migrateSessionStateV4.ts:117-145 (buildV4OnDiskShape + V4_TOP_LEVEL_DROPPED_KEYS/PRESERVED_KEYS/PASSTHROUGH_KEYS); same shape mirrors Python session_state._V4_TOP_LEVEL_DROPPED_KEYS / session_lifecycle._to_v4_on_disk_shape from S4. (5) normalizeToV4Shape shim at progress.ts:272 already does v1/v2/v3/v4 → v4 read-view. (6) readSessionSets at fileSystem.ts:248 builds SessionSet records; insertion point for blockedByPrereqs derivation is the post-loop pass at ~line 591. (7) SessionSet interface at types.ts:97 — extend with prerequisites + blockedByPrereqs. (8) parseSessionSetConfig at fileSystem.ts:186 already parses the yaml block; new parsePrerequisites function added alongside. (9) Explorer renderer descriptionFor at CustomSessionSetsView.ts:117 — extra badges concatenate via .filter(Boolean). (10) Layer-3 Playwright pattern at cancellation-state-file.spec.ts + session-sets-tree.spec.ts (electronLaunch helpers + makeSet + openSessionSetsView + treeitemTexts). (11) Python parity reference at session_lifecycle._to_v4_on_disk_shape (190-261). (12) No existing prereq/blocked logic — greenfield.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "session-005/ts-writer-flip-v4",
+      "dateTime": "2026-05-26T13:20:00-04:00",
+      "description": "Flipped the four TS writer surfaces to emit canonical v4 on-disk shape. sessionState.ts: SCHEMA_VERSION imported from progress.ts as SCHEMA_VERSION_V4 (4); LazySessionRecord extended with v4 per-session metadata fields (startedAt/completedAt/orchestrator/verificationVerdict, all defaulted to null in buildSessions); notStartedPayload trims to v4 shape (just schemaVersion/sessionSetName/status/sessions); backfillPayload's change-log branch promotes all sessions to status: complete (per-session completedAt stays null per Python parity), activity-log branch promotes sessions[0].status=in-progress and writes the earliest activity-log timestamp onto sessions[0].startedAt; readTotalSessionsFromSpec falls back on ### Session N headings when the config block has no numeric totalSessions (mirrors Python S4 verifier Critical 2). cancelLifecycle.ts: new toV4OnDiskShape helper projects v1/v2/v3/v4 input through normalizeToV4Shape and trims to the v4 contract; plan-less carve-out detection (input had no sessions[] AND normalized sessions[] is empty → preserve absent form + top-level orchestrator/startedAt passthrough); both cancelSessionSet and restoreSessionSet wrap their final writeSessionState call through toV4OnDiskShape. tsc --noEmit clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "session-005/prerequisites-field-schema",
+      "dateTime": "2026-05-26T13:30:00-04:00",
+      "description": "Added SessionSetPrerequisite type to types.ts ({slug: string, condition: 'complete'}). Extended SessionSet record with prerequisites (parsed from spec.md) + blockedByPrereqs (derived). parsePrerequisites added to fileSystem.ts as a lightweight regex parser (no YAML lib dependency): returns null when field absent, [] when explicit prerequisites:[], or the parsed list otherwise; tolerant of operator typos. readSessionSets cross-references each set's prereqs against the target set's state via a post-loop pass that builds setsByName map first; ANY unsatisfied prereq blocks the row, unknown target slug also blocks (typo / missing-set must not silently unblock). Updated 5 test-fixture files (actionRegistry, flagDecisionForReview, forceClosedBadge, inProgressSetsService, sessionSetsProvider) to include the new fields with null/false defaults.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "session-005/explorer-badge-rendering",
+      "dateTime": "2026-05-26T13:40:00-04:00",
+      "description": "Added blockedByPrereqsBadge predicate to SessionSetsModel.ts: returns '[BLOCKED BY PREREQS]' on non-terminal rows where set.blockedByPrereqs=true; suppressed on complete/cancelled rows (once a set is closed, its dependency status is no longer actionable). Wired into CustomSessionSetsView.descriptionFor's extras .filter(Boolean) chain alongside touchedDate/uatBadge/forceClosedBadge/needsMigrationBadge. Also extended contextValueFor to append :blocked-by-prereqs on non-terminal rows so future right-click menu actions can gate on it.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "session-005/unit-test-coverage",
+      "dateTime": "2026-05-26T13:55:00-04:00",
+      "description": "Authored sessionStateV4Writers.test.ts (12 tests across the four writer surfaces' v4 emission + plan-less carve-out + cancel/restore round-trip — covers schemaVersion=4, dropped top-level keys absent, per-session metadata defaulting, headings fallback, change-log vs activity-log branches, plan-less cancel/restore preservation). Authored prerequisites.test.ts (10 tests covering parsePrerequisites shape variants + readSessionSets cross-reference + blockedByPrereqsBadge predicate). Updated baseline tests for v4 emission: cancelLifecycle.test.ts (writer-parity test → v4 cancel shape with dropped top-level keys + per-session orchestrator preserved on session 1), fileSystem.test.ts (3 lazy-synth tests now assert schemaVersion=4 / no top-level lifecycleState / per-session startedAt for activity-log branch). Discovered + fixed parsePrerequisites entry-regex bug: lookahead /\\s*$/ truncated multi-line entries at first whitespace-only EOL; switched to split-based extraction.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 7,
+      "stepKey": "session-005/layer-3-playwright",
+      "dateTime": "2026-05-26T14:00:00-04:00",
+      "description": "Authored blocked-by-prereqs.spec.ts as 3 Layer-3 Playwright scenarios (later expanded to 4 in the verifier-fix step): (1) dependant renders [BLOCKED BY PREREQS] when prereq target is in-progress, (2) badge clears when prereq target flipped to complete, (3) badge absent when prerequisites field is not declared. Each scenario builds a two-set fixture via the harness's makeSet + appendPrerequisitesToSpec helper (inline regex replacement to inject prereqs into the existing yaml block), then launches Electron VS Code and asserts the rendered row description text. setStatusToComplete helper for scenario 2 forges a v4-shape complete state on disk.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 8,
+      "stepKey": "session-005/uat-checklist-authored",
+      "dateTime": "2026-05-26T14:05:00-04:00",
+      "description": "Authored docs/session-sets/047-state-file-schema-v4-audit/047-state-file-schema-v4-audit-uat-checklist.json with 13 items: 6 for the prerequisites badge surface (rendering on in-progress prereq, clearing on prereq complete, unknown-slug stays blocked, terminal-row suppression, absent-field default, multi-prereq ANY-unsatisfied), 5 for TS writer v4 emission (lazy-synth not-started/complete/in-progress shapes, cancel + restore writes), 2 for mixed v3/v4 reader compatibility (legacy v3 sets still render correctly, needs-migration chip still surfaces). Schema dual-keyed (Passes + Result) for the UAT Editor app + the Dabbler extension's pending-count parser.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 9,
+      "stepKey": "session-005/full-regression-pre-verification",
+      "dateTime": "2026-05-26T14:10:00-04:00",
+      "description": "Full regression checks: (a) tsc --noEmit clean. (b) npm run test:unit — 620 passed (553 baseline + 28 from S2 shim + 28 from S3 migrator + new from S5), 2 pre-existing baseline failures unchanged (configEditor-foundation ViewColumn stub + notificationsSection disabled-button assertion). (c) python -m pytest — 896 passed, 1 skipped, 0 failed (unchanged from S4 close). All four user-visible deliverables from spec §4 row 5 shipped: TS writers emit v4, blockedByPrereqs derivation lands, prerequisites field schema is parsed, badge renders in the Explorer description.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 10,
+      "stepKey": "session-005/cross-provider-verification-round-a",
+      "dateTime": "2026-05-26T14:25:00-04:00",
+      "description": "Ran routed cross-provider verification via docs/session-sets/047-state-file-schema-v4-audit/run_s5_verification.py. Bundle: sessionState.ts + cancelLifecycle.ts + fileSystem.ts + types.ts + SessionSetsModel.ts + CustomSessionSetsView.ts + 2 new TS test files + 2 updated baseline TS test files + blocked-by-prereqs.spec.ts + UAT checklist + session_lifecycle.py for parity reference (242262 chars total). task_type=session-verification routed to gpt-5-4 tier 3. Verdict: ISSUES_FOUND with 0 Critical + 2 Important + 2 Nice-to-have. Cost: 413.6s, $0.47171. Cumulative S1+S2+S3+S4+S5 routed cost: $1.80897 of $10 NTE (18.1%).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "tier": 3,
+          "cost_usd": 0.47170749999999995,
+          "tokens_in": 60565,
+          "tokens_out": 5000,
+          "phase": "round-a-verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 11,
+      "stepKey": "session-005/in-flight-fixes-for-verifier-importants",
+      "dateTime": "2026-05-26T14:40:00-04:00",
+      "description": "Applied in-flight fixes for all 4 verifier items (per memory feedback_dont_hide_behind_out_of_scope): (1) Important 1 — parsePrerequisites now strips YAML inline comments from scalar values (slug + condition) and distinguishes 'no condition key present → default complete' from 'condition key present but unparseable → drop entry'; added 2 regression tests covering inline-comment handling and present-but-bad-condition rejection. (2) Important 2 — factored cross-reference into deriveBlockedByPrereqs(sets) helper; per-root call inside readSessionSets preserved + new call at the merged-list boundary in readAllSessionSets so a prereq target discovered in a different root / worktree still resolves the dependency. (3) Nice-to-have 1 — added regression test pinning that explicit sessions: [] (zero-session, NOT plan-less) round-trips unchanged on cancel — the carve-out applies only to ABSENT sessions, not explicit empty. (4) Nice-to-have 2 — added 4th Playwright scenario covering terminal-state badge suppression (dependant is complete on disk + prereq target stays not-started → badge absent on the complete row). Final test posture: 623 TS pass (+3 over pre-fix), 2 pre-existing baseline failures unchanged.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

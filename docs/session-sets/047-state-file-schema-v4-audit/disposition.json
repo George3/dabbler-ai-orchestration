@@ -1,38 +1,35 @@
 {
   "status": "completed",
-  "summary": "Set 047 Session 3 shipped the migrator phase of the v4 schema migration: the Python `python -m ai_router.migrate_v3_to_v4` CLI subcommand (dry-run + apply, idempotent, writes session-state.v3.bak.json alongside on apply, 8 action enum values including the rollback-vs-fix-and-retry split on failed-backup), the in-process TypeScript mirror (migrateOneSetV4 + dabblerSessionSets.migrateToV4 right-click command — Lightweight-tier consumer repos that never install dabbler-ai-router can migrate too), the formal rollback procedure doc (docs/v3-to-v4-rollback-procedure.md), the deferred-from-S2 needsMigration detector expansion (canonical v3 files now flag with target=4; ActionRegistry surfaces 'Migrate to v4 schema' instead of 'Migrate to v3 schema'), and a Layer-3 Playwright smoke for the v3 → v4 badge. New SessionSet.migrationTargetSchemaVersion field carries the target so the menu picks the right command. Cross-provider verification ran one round against gpt-5-4 tier 3 ($0.288 total) and returned VERIFIED with no must-fix critical items; 4 IMPORTANT items were all addressed in-flight per memory feedback_dont_hide_behind_out_of_scope (rollback-doc scope tightened; detector hoisted above normalize so a normalize failure no longer eats the badge; parity-contract docstring scope clarified; 4 additional regression tests added). Real-world dry-run against the repo's 48 historical session-sets: 47 would migrate cleanly; 1 (048-lightweight-tier-parity, an audit-stub with empty sessions[]) refused via would-violate — proving the new get_progress-validation step works as designed. All 881 Python tests pass (+31 new). All 593 TS unit tests pass (+30 new); same 2 pre-existing baseline failures unchanged. Cumulative S1+S2+S3 routed cost: $0.88022 of $10 NTE (8.8%).",
+  "summary": "Set 047 Session 5 shipped the writer-flip phase part 2 of the v4 schema migration: all four TypeScript writer surfaces — synthesizeNotStartedState / notStartedPayload, ensureSessionStateFile / backfillPayload, cancelSessionSet, restoreSessionSet — now emit canonical v4 on-disk shape per spec section 3.1, mirroring the Python S4 flip byte-for-byte on the v4 contract. The new helper toV4OnDiskShape in cancelLifecycle.ts projects any v1/v2/v3/v4 input through the normalizeToV4Shape shim and trims to the v4 contract, preserving the plan-less carve-out (absent sessions[] + top-level orchestrator/startedAt passthrough) across cancel/restore — identical semantic to Python session_lifecycle._to_v4_on_disk_shape. notStartedPayload's readTotalSessionsFromSpec falls back on ### Session N headings when the config block lacks a numeric totalSessions (mirrors Python S4 verifier Critical 2). backfillPayload writes per-session startedAt onto sessions[0] for the activity-log branch and promotes all sessions to status: complete for the change-log branch, leaving per-session completedAt at null (the change-log mtime is a set-level heuristic, not a per-session boundary — matches Python parity). Explorer prerequisites surface (spec §3.3): new SessionSetPrerequisite type, SessionSet.prerequisites field parsed from spec.md, SessionSet.blockedByPrereqs derived via the new deriveBlockedByPrereqs helper (runs in readSessionSets per-root AND in readAllSessionSets against the merged map so cross-root prereq resolution works — S5 verifier Important-2 fix), parsePrerequisites lightweight regex parser tolerant of YAML inline comments and operator typos (S5 verifier Important-1 fix), blockedByPrereqsBadge predicate suppressed on terminal-state rows, contextValueFor gating blocked-by-prereqs on non-terminal state. Cross-provider verification ran one round against gpt-5-4 tier 3 ($0.4717) and returned ISSUES_FOUND with 0 Critical + 2 Important + 2 Nice-to-have items; all 4 items addressed in-flight per memory feedback_dont_hide_behind_out_of_scope: parsePrerequisites condition handling distinguishes 'absent → default complete' from 'present-but-bad → drop' with YAML inline-comment stripping, blockedByPrereqs cross-reference factored into deriveBlockedByPrereqs and re-invoked at the merged-list boundary, explicit sessions: [] preservation pinned by new regression test, terminal-row badge suppression added as Layer-3 scenario 3. 13 new TS tests in sessionStateV4Writers.test.ts + 12 new in prerequisites.test.ts + 4 Layer-3 Playwright scenarios in blocked-by-prereqs.spec.ts + 13-item UAT checklist. Final: 623 TS unit tests pass (vs 553 pre-S5 baseline) with 2 pre-existing baseline failures unchanged; 896 Python tests pass + 1 skipped + 0 failed. Cumulative S1+S2+S3+S4+S5 routed cost: $1.809 of $10 NTE (18.1%). 13 new TS tests in sessionStateV4Writers.test.ts.",
   "verification_method": "manual",
   "files_changed": [
-    "ai_router/migrate_v3_to_v4.py",
-    "ai_router/tests/test_migrate_v3_to_v4.py",
-    "tools/dabbler-ai-orchestration/src/utils/migrateSessionStateV4.ts",
-    "tools/dabbler-ai-orchestration/src/commands/migrateSetV4.ts",
-    "tools/dabbler-ai-orchestration/src/extension.ts",
-    "tools/dabbler-ai-orchestration/package.json",
-    "tools/dabbler-ai-orchestration/src/types.ts",
+    "tools/dabbler-ai-orchestration/src/utils/sessionState.ts",
+    "tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts",
     "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
-    "tools/dabbler-ai-orchestration/src/providers/ActionRegistry.ts",
+    "tools/dabbler-ai-orchestration/src/types.ts",
+    "tools/dabbler-ai-orchestration/src/providers/SessionSetsModel.ts",
     "tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/migrateSessionStateV4.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/sessionStateV4Writers.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/prerequisites.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/cancelLifecycle.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/actionRegistry.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/flagDecisionForReview.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/forceClosedBadge.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/inProgressSetsService.test.ts",
     "tools/dabbler-ai-orchestration/src/test/suite/sessionSetsProvider.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/playwright/migration-cta-v4.spec.ts",
-    "docs/v3-to-v4-rollback-procedure.md",
+    "tools/dabbler-ai-orchestration/src/test/playwright/blocked-by-prereqs.spec.ts",
     "docs/session-sets/047-state-file-schema-v4-audit/spec.md",
     "docs/session-sets/047-state-file-schema-v4-audit/activity-log.json",
     "docs/session-sets/047-state-file-schema-v4-audit/session-events.jsonl",
     "docs/session-sets/047-state-file-schema-v4-audit/session-state.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/s3-close-reason.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/s3-verification-prompt.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/s3-verification-result.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/s3-verification-transcript.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/run_s3_verification.py",
-    "docs/session-sets/047-state-file-schema-v4-audit/disposition.json"
+    "docs/session-sets/047-state-file-schema-v4-audit/disposition.json",
+    "docs/session-sets/047-state-file-schema-v4-audit/047-state-file-schema-v4-audit-uat-checklist.json",
+    "docs/session-sets/047-state-file-schema-v4-audit/s5-close-reason.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-prompt.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-result.json",
+    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-transcript.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/run_s5_verification.py"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -42,7 +39,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Set 047 Session 4 is the writer-flip phase part 1 (Python writers emit v4) per the scope-locked spec.md §4: all Python writers — register_session_start, _flip_state_to_closed, mark_session_complete, cancel_session_set — emit v4 shape. v3-shim reader stays in place; readers continue to handle both. Python test fixtures updated; v3 fixtures retained for shim coverage. Claude Opus 4.7 high-effort is the same orchestrator that closed S1, S2, and S3 and is the right pick for the cross-cutting writer touch — every Python writer site needs to drop the derived top-level fields and switch to per-session metadata writes, preserving the dual-write contract for the reader-first phase."
+      "specifics": "Set 047 Session 6 is the schema-doc + authoring-guide revision + close-out + publish session per the scope-locked spec.md section 4: rewrite docs/session-state-schema.md to canonical v4, update docs/planning/session-set-authoring-guide.md to document the prerequisites field, generate change-log.md for the set, run a final cross-provider verification of the bundled set, and dual-publish (dabbler-ai-router minor bump + extension Marketplace minor bump). docs/adoption-bootstrap.md revision is DEFERRED to Set 048 per spec section 4. Claude Opus 4.7 high-effort is the right pick — the same orchestrator that closed S1-S5 knows the v4 contract end-to-end, and S6 is a docs-and-release wrap-up where consistency of voice matters more than fresh perspective."
     }
   },
   "blockers": []

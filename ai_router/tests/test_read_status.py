@@ -131,13 +131,16 @@ def test_lazy_synth_writes_not_started_when_file_absent(
     # The synthesized file must match what synthesize_not_started_state
     # would have produced — verify by parsing and checking the canonical
     # fields. (Calling synthesize_not_started_state again is a no-op and
-    # confirms idempotency.)
+    # confirms idempotency.) Set 047 Session 4: v4 on-disk shape drops
+    # top-level currentSession / startedAt / orchestrator; those keys
+    # are absent rather than null. The shim-derived view (read_session_state)
+    # surfaces them as None.
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     assert on_disk["status"] == "not-started"
     assert on_disk["schemaVersion"] == SCHEMA_VERSION
-    assert on_disk["currentSession"] is None
-    assert on_disk["startedAt"] is None
-    assert on_disk["orchestrator"] is None
+    assert "currentSession" not in on_disk
+    assert "startedAt" not in on_disk
+    assert "orchestrator" not in on_disk
 
 
 def test_lazy_synth_classifies_legacy_changelog_as_complete(
@@ -170,7 +173,12 @@ def test_lazy_synth_classifies_legacy_changelog_as_complete(
     assert state_path.exists()
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     assert on_disk["status"] == "complete"
-    assert on_disk["lifecycleState"] == "closed"
+    # Set 047 Session 4: v4 drops top-level lifecycleState. The shim
+    # derives "closed" from status=complete.
+    assert "lifecycleState" not in on_disk
+    from session_state import read_session_state
+    derived = read_session_state(str(set_dir)) or {}
+    assert derived["lifecycleState"] == "closed"
 
 
 def test_lazy_synth_classifies_legacy_activity_log_as_in_progress(
@@ -201,9 +209,16 @@ def test_lazy_synth_classifies_legacy_activity_log_as_in_progress(
         (set_dir / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
     )
     assert on_disk["status"] == "in-progress"
-    assert on_disk["lifecycleState"] == "work_in_progress"
-    # startedAt picked the earliest timestamp, not just any.
-    assert on_disk["startedAt"] == "2026-01-15T10:00:00-04:00"
+    # Set 047 Session 4: v4 drops top-level lifecycleState + startedAt;
+    # the shim-derived view surfaces both. startedAt now lives on
+    # session 1's per-session record (the in-progress session).
+    assert "lifecycleState" not in on_disk
+    assert "startedAt" not in on_disk
+    assert on_disk["sessions"][0]["startedAt"] == "2026-01-15T10:00:00-04:00"
+    from session_state import read_session_state
+    derived = read_session_state(str(set_dir)) or {}
+    assert derived["lifecycleState"] == "work_in_progress"
+    assert derived["startedAt"] == "2026-01-15T10:00:00-04:00"
 
 
 def test_lazy_synth_branch_canonicalizes_aliased_status(

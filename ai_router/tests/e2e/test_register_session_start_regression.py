@@ -25,6 +25,7 @@ from pathlib import Path
 
 from session_state import (  # type: ignore[import-not-found]
     SCHEMA_VERSION,
+    read_session_state,
     register_session_start,
 )
 
@@ -93,8 +94,10 @@ def test_register_session_start_preserves_completed_sessions(tmp_path: Path) -> 
         orchestrator_provider="anthropic",
     )
 
-    with open(set_dir / "session-state.json", "r", encoding="utf-8") as f:
-        state = json.load(f)
+    # Set 047 Session 4: v4 derives completedSessions from sessions[].
+    # Read via the shim so the legacy completedSessions[] view is
+    # surfaced for the regression assertion.
+    state = read_session_state(str(set_dir)) or {}
 
     assert state.get("completedSessions") == [1], (
         "register_session_start wiped completedSessions[] on rewrite — "
@@ -132,8 +135,8 @@ def test_register_session_start_preserves_multi_session_history(tmp_path: Path) 
         orchestrator_provider="anthropic",
     )
 
-    with open(set_dir / "session-state.json", "r", encoding="utf-8") as f:
-        state = json.load(f)
+    # Set 047 Session 4: completedSessions derived from sessions[] via shim.
+    state = read_session_state(str(set_dir)) or {}
 
     assert state.get("completedSessions") == [1, 2, 3]
 
@@ -161,8 +164,13 @@ def test_fresh_set_has_empty_completed_sessions(tmp_path: Path) -> None:
         orchestrator_provider="anthropic",
     )
 
-    with open(set_dir / "session-state.json", "r", encoding="utf-8") as f:
-        state = json.load(f)
+    # Set 047 Session 4: v4 drops top-level completedSessions; the
+    # shim-derived view surfaces it as an empty list for a fresh set
+    # (no sessions are complete in sessions[] yet). The original
+    # invariant the test pins — "the reader can ALWAYS get a
+    # completedSessions list for a Lightweight-tier consumer that
+    # appends to it" — is preserved by the shim's derivation.
+    state = read_session_state(str(set_dir)) or {}
 
-    assert "completedSessions" in state, "completedSessions key must be present"
+    assert "completedSessions" in state, "completedSessions key must be present in shim view"
     assert state["completedSessions"] == [], "fresh set must have empty completedSessions array"

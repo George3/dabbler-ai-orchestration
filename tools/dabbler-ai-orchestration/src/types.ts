@@ -50,6 +50,18 @@ export interface SessionSetConfig {
   uatScope: string;
 }
 
+// Set 047 Session 5: prerequisites field schema landed by spec §3.3.
+// Authored under the ``Session Set Configuration`` YAML block; the
+// reader cross-references each set's prereqs against the target
+// set's ``status`` to derive the ``blockedByPrereqs`` flag on
+// SessionSet below. ``condition`` is an enum with one value today
+// (``"complete"``) but is kept as a string field so a future spec
+// can add (e.g.) ``"started"`` without rewriting consumers.
+export interface SessionSetPrerequisite {
+  slug: string;
+  condition: "complete";
+}
+
 export interface UatSummary {
   totalItems: number;
   pendingItems: number;
@@ -131,6 +143,21 @@ export interface SessionSet {
   // → no migration needed (already at v4 or no state file to act on).
   // Reading the badge: `needsMigration === (migrationTargetSchemaVersion !== null)`.
   migrationTargetSchemaVersion: 3 | 4 | null;
+  // Set 047 Session 5 (spec §3.3): prerequisites authored under the
+  // set's ``spec.md`` ``Session Set Configuration`` block. `null`
+  // when the field is absent (no dependency declared); empty array
+  // when the spec wrote `prerequisites: []` explicitly. Carried on
+  // the SessionSet record so the renderer can surface the slug list
+  // in tooltips / decorations without re-parsing the spec.
+  prerequisites: SessionSetPrerequisite[] | null;
+  // Set 047 Session 5 (spec §3.3): derived by `readSessionSets` —
+  // `true` iff at least one prerequisite's target set has a `status`
+  // that does not satisfy the declared `condition`. A `complete`
+  // condition is satisfied by `state === "complete"`; everything
+  // else is "still blocking". Unknown prereq slugs (typo, missing
+  // set) keep `blockedByPrereqs: true` so a typo doesn't silently
+  // unblock the row. False when `prerequisites` is null or empty.
+  blockedByPrereqs: boolean;
 }
 
 export interface MetricsEntry {

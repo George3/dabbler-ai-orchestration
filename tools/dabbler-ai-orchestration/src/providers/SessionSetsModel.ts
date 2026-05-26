@@ -92,6 +92,19 @@ export function forceClosedBadge(set: SessionSet): string {
   return set.liveSession?.forceClosed === true ? "[FORCED]" : "";
 }
 
+// Set 047 Session 5 (spec §3.3): badge surfaced on rows whose spec.md
+// declares ``prerequisites:`` and at least one prereq's condition is
+// not yet satisfied (target set is not ``state: "complete"`` for the
+// ``condition: complete`` enum). Suppressed on terminal-state rows —
+// once a set is itself ``complete`` or ``cancelled``, the dependency
+// status is no longer actionable (an operator viewing a closed row
+// doesn't need to start work behind a now-irrelevant prereq).
+export function blockedByPrereqsBadge(set: SessionSet): string {
+  if (!set.blockedByPrereqs) return "";
+  if (set.state === "complete" || set.state === "cancelled") return "";
+  return "[BLOCKED BY PREREQS]";
+}
+
 // modeBadge kept as a no-op stub for existing imports / tests. Set 026
 // Session 1 removed the outsource-last path; there is no longer any
 // mode distinction to badge.

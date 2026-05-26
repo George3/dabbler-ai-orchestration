@@ -100,14 +100,7 @@ def _seed_in_flight(
     """
     state_path = set_dir / "session-state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    state["completedSessions"] = []
-    state["currentSession"] = session_number
     state["status"] = "in-progress"
-    state["lifecycleState"] = "work_in_progress"
-    state["startedAt"] = "2026-05-20T08:00:00-04:00"
-    for entry in state.get("sessions", []):
-        if entry.get("number") == session_number:
-            entry["status"] = "in-progress"
     orch: dict = {
         "engine": engine,
         "provider": provider,
@@ -118,7 +111,15 @@ def _seed_in_flight(
     }
     if chat_session_id != "<unset>":
         orch["chatSessionId"] = chat_session_id
-    state["orchestrator"] = orch
+    # Set 047 Session 4: seed under v4 shape. The orchestrator and
+    # startedAt live on the in-progress session's per-session record;
+    # the shim derives the top-level view when callers read via
+    # read_session_state.
+    for entry in state.get("sessions", []):
+        if entry.get("number") == session_number:
+            entry["status"] = "in-progress"
+            entry["startedAt"] = "2026-05-20T08:00:00-04:00"
+            entry["orchestrator"] = orch
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
     return state
 

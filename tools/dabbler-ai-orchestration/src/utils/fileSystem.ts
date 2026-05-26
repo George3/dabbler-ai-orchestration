@@ -9,6 +9,7 @@ import {
   SessionSet,
   SessionState,
   SessionSetConfig,
+  SessionSetPrerequisite,
   UatSummary,
   LiveSession,
 } from "../types";
@@ -212,6 +213,125 @@ export function parseSessionSetConfig(specPath: string): SessionSetConfig {
   const scope = block.match(stringRe("uatScope"));
   if (scope) config.uatScope = scope[1];
   return config;
+}
+
+/**
+ * Set 047 Session 5: parse the optional ``prerequisites:`` field from
+ * the spec's ``Session Set Configuration`` YAML block.
+ *
+ * Expected shape (per spec §3.3):
+ *
+ * ```yaml
+ * prerequisites:
+ *   - slug: 046-some-other-set
+ *     condition: complete
+ *   - slug: 044-another-set
+ *     condition: complete
+ * ```
+ *
+ * Returns ``null`` when the field is absent (no dependency declared).
+ * Returns ``[]`` when ``prerequisites: []`` is written explicitly.
+ * Returns the parsed list otherwise. Tolerant of operator typos:
+ * entries missing ``slug`` are dropped; unrecognized ``condition``
+ * values are dropped (only ``"complete"`` is in the enum today, per
+ * spec §3.3).
+ *
+ * The parser is intentionally lightweight (regex, not a YAML parser)
+ * so this module stays dependency-free and so a stray indentation
+ * issue in the spec doesn't fail-closed across the entire Explorer.
+ * A full YAML round-trip lives in the config-editor module; readers
+ * here only need to recognize the array form.
+ */
+export function parsePrerequisites(
+  specPath: string,
+): SessionSetPrerequisite[] | null {
+  if (!fs.existsSync(specPath)) return null;
+  let text: string;
+  try {
+    text = fs.readFileSync(specPath, "utf8");
+  } catch {
+    return null;
+  }
+  const headingMatch = text.match(
+    /##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i
+  );
+  const block = headingMatch ? headingMatch[1] : text;
+  // Detect the key first — distinguishes "field absent" from
+  // "field present with empty list".
+  const keyRe = /^\s*prerequisites\s*:(.*)$/im;
+  const keyMatch = block.match(keyRe);
+  if (!keyMatch) return null;
+  const inlineRest = keyMatch[1].trim();
+  // Inline empty: ``prerequisites: []`` — distinct from absent.
+  if (inlineRest === "[]") return [];
+  // Locate the list body following the key. Each entry begins with
+  // ``- slug: ...`` followed (in any order) by ``condition: ...``.
+  const keyIndex = block.search(keyRe);
+  if (keyIndex < 0) return null;
+  const after = block.slice(keyIndex + keyMatch[0].length);
+  // Stop at the next top-level (or shallower) key. We allow nested
+  // (indented) lines until we hit a non-indented non-empty line.
+  const lines = after.split(/\r?\n/);
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    if (line.trim() === "") {
+      bodyLines.push(line);
+      continue;
+    }
+    if (!/^\s/.test(line)) break; // next top-level key
+    bodyLines.push(line);
+  }
+  const body = bodyLines.join("\n");
+  // Split the body on the YAML list-item marker (``\n  - ``) so each
+  // chunk holds one entry's key/value pairs. Splitting (rather than
+  // matching with a lookahead) avoids a subtle regex-end-of-line bug
+  // where `(?=...\\s*$)` truncated multi-line entries at the first
+  // whitespace-only EOL inside the entry.
+  const chunks = body.split(/\r?\n[ \t]*-[ \t]+/);
+  // chunks[0] is the pre-list text (typically blank/whitespace);
+  // each subsequent chunk is one entry's body.
+  const out: SessionSetPrerequisite[] = [];
+  // Strip a YAML inline comment from a scalar value
+  // (``slug: 046-foo # comment`` → ``046-foo``). Comments are stripped
+  // before matching so an operator-friendly annotation does not drop
+  // the entry. Per the YAML spec a ``#`` mid-value requires a
+  // preceding whitespace to start a comment; we honor that to avoid
+  // mangling values like ``slug: foo#bar`` (unusual, but valid).
+  const stripComment = (s: string): string =>
+    s.replace(/\s+#.*$/, "").trim();
+  // S5 verifier-fix Important-1: distinguish "no condition key
+  // present → default to complete" from "condition key present but
+  // invalid → drop the entry". The earlier all-in-one ``\S+`` capture
+  // collapsed the two cases by treating an unparseable condition
+  // (e.g., with an inline comment that broke the ``\S+`` capture) as
+  // if it were absent.
+  for (const chunk of chunks.slice(1)) {
+    // Match the slug line; tolerate a trailing YAML comment on the
+    // value via stripComment(). Slug is mandatory.
+    const slugLineMatch = chunk.match(/^\s*slug\s*:\s*(.+)$/im);
+    if (!slugLineMatch) continue;
+    const slug = stripComment(slugLineMatch[1]);
+    if (!slug) continue;
+    // Detect presence of the ``condition`` key first; parse its
+    // value (with comment-strip) afterwards. Presence-with-bad-value
+    // is the drop case; absence is the default-to-"complete" case.
+    const condLineMatch = chunk.match(/^\s*condition\s*:\s*(.*)$/im);
+    let condition: "complete";
+    if (condLineMatch) {
+      const raw = stripComment(condLineMatch[1]);
+      if (raw === "complete") {
+        condition = "complete";
+      } else {
+        // Present but not in the enum → drop per spec §3.3.
+        continue;
+      }
+    } else {
+      // Absent → default to "complete".
+      condition = "complete";
+    }
+    out.push({ slug, condition });
+  }
+  return out;
 }
 
 export function parseUatChecklist(checklistPath: string): UatSummary | null {
@@ -547,6 +667,7 @@ export function readSessionSets(root: string): SessionSet[] {
 
     const config = parseSessionSetConfig(specPath);
     const uatSummary = config.requiresUAT ? parseUatChecklist(uatChecklistPath) : null;
+    const prerequisites = parsePrerequisites(specPath);
 
     sets.push({
       name: entry.name,
@@ -567,8 +688,22 @@ export function readSessionSets(root: string): SessionSet[] {
       root,
       needsMigration,
       migrationTargetSchemaVersion,
+      prerequisites,
+      // Default false; the cross-reference pass below overwrites this
+      // once every set's `state` is known so each prereq can resolve
+      // against an up-to-date snapshot. Sets without declared
+      // prerequisites stay at false in both passes.
+      blockedByPrereqs: false,
     });
   }
+
+  // Set 047 Session 5 (spec §3.3): per-root cross-reference for the
+  // single-root caller. `readAllSessionSets()` recomputes against the
+  // merged map below so prereqs that resolve to a set discovered in a
+  // different worktree / root still find their target. Single-root
+  // callers (tests, isolated workspace scans) get the right answer
+  // here without needing the merge step.
+  deriveBlockedByPrereqs(sets);
   // Diagnostic: one-line summary in the dev console showing how the
   // extension bucketed each root. Useful for spotting UI/cache bugs vs.
   // state-derivation bugs without needing a breakpoint.
@@ -592,6 +727,45 @@ export function readSessionSets(root: string): SessionSet[] {
   return sets;
 }
 
+/**
+ * Set 047 Session 5 (spec §3.3): mutate each set in *sets* to set
+ * ``blockedByPrereqs`` against the in-memory map of the same list.
+ *
+ * Cross-references each set's ``prerequisites`` (the parsed
+ * spec.md field) against the target set's bucketed ``state`` and
+ * sets the boolean accordingly. ANY unsatisfied prereq blocks the
+ * row; an unknown prereq slug also blocks (typo / missing set must
+ * surface, not silently unblock).
+ *
+ * Idempotent: callable on a `sets` array that has been merged
+ * across roots in `readAllSessionSets`, so cross-root prerequisites
+ * resolve against the merged view rather than the per-root scan
+ * (S5 verifier Important-2 fix).
+ */
+function deriveBlockedByPrereqs(sets: SessionSet[]): void {
+  const setsByName = new Map<string, SessionSet>();
+  for (const s of sets) setsByName.set(s.name, s);
+  for (const s of sets) {
+    if (!s.prerequisites || s.prerequisites.length === 0) {
+      s.blockedByPrereqs = false;
+      continue;
+    }
+    let blocked = false;
+    for (const prereq of s.prerequisites) {
+      const target = setsByName.get(prereq.slug);
+      if (!target) {
+        blocked = true;
+        break;
+      }
+      if (prereq.condition === "complete" && target.state !== "complete") {
+        blocked = true;
+        break;
+      }
+    }
+    s.blockedByPrereqs = blocked;
+  }
+}
+
 export function readAllSessionSets(): SessionSet[] {
   const merged = new Map<string, SessionSet>();
   for (const root of discoverRoots()) {
@@ -607,5 +781,11 @@ export function readAllSessionSets(): SessionSet[] {
       }
     }
   }
-  return Array.from(merged.values());
+  const mergedList = Array.from(merged.values());
+  // S5 verifier Important-2 fix: re-derive blockedByPrereqs against
+  // the merged map so a prereq target discovered in a different root
+  // / worktree still resolves. The per-root pass inside
+  // readSessionSets() handles the single-root case.
+  deriveBlockedByPrereqs(mergedList);
+  return mergedList;
 }

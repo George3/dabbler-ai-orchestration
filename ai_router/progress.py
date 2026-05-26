@@ -353,11 +353,20 @@ def normalize_to_v4_shape(state: dict, spec_md_path: Path) -> dict:
     if state is None:
         raise TypeError("normalize_to_v4_shape: state is None")
 
+    # Set 047 Session 4: track whether the on-disk state had a
+    # sessions[] array at all. The plan-less carve-out
+    # (totalSessions unknown, no plan committed yet) writes a state
+    # file with no sessions[] key. The derived totalSessions for
+    # such a file is ``None`` (not ``0``) so the Explorer's
+    # ``fractionFor()`` renders ``0/?`` instead of ``0/0`` — the
+    # Set 046 Session 2 fix carries through to v4.
+    sessions_present_in_input = state.get("sessions") is not None
+
     # Step 1: ensure sessions[] is present (synthesize from v2 if missing).
     # synthesize_v3_from_v2 returns a NEW dict; for v3/v4 inputs we make
     # our own shallow copy so we can mutate without touching the caller's
     # dict.
-    if state.get("sessions") is None:
+    if not sessions_present_in_input:
         v3_state = synthesize_v3_from_v2(state, spec_md_path)
     else:
         v3_state = dict(state)
@@ -478,10 +487,19 @@ def normalize_to_v4_shape(state: dict, spec_md_path: Path) -> dict:
     ]
     if completed_v4:
         last_completed = completed_v4[-1]
-        derived_completed = last_completed.get("completedAt")
         derived_verdict = last_completed.get("verificationVerdict")
-        if derived_orchestrator is None:
-            derived_orchestrator = last_completed.get("orchestrator")
+        # Set 047 Session 4: do NOT fall back to last_completed's
+        # orchestrator for the derived top-level field. Under v3 the
+        # H1/H3 check-in semantic was "close clears the top-level
+        # orchestrator block" — the absence of a block signaled "no
+        # current holder". Under v4 the per-session orchestrator on
+        # closed sessions is a historical record; the shim preserves
+        # the same operator-visible behavior by deriving top-level
+        # orchestrator only from the IN-PROGRESS session. Between
+        # sessions (no in-progress), derived_orchestrator stays
+        # ``None`` — matching the v3 close-out clear. Consumers that
+        # want the historical "who closed session N" read it from
+        # sessions[N-1].orchestrator directly.
         if derived_started is None:
             # Prefer the most-recently-completed session's startedAt
             # over the earliest session's. Earlier draft scanned
@@ -497,19 +515,84 @@ def normalize_to_v4_shape(state: dict, spec_md_path: Path) -> dict:
 
     canonical_top_status = canonicalize_status(state.get("status"))
 
+    # Set 047 Session 4: under v3 the top-level ``completedAt`` was
+    # the SET completion timestamp (only written on the last-session
+    # close; left None on mid-set closes). The shim preserves the
+    # same semantic: derive top-level completedAt from the
+    # last-completed session's completedAt ONLY when the SET status
+    # is ``complete``. Mid-set closes (status=in-progress with one
+    # session done) keep top-level completedAt=None even though the
+    # last_completed session has a per-session completedAt timestamp.
+    if canonical_top_status == SESSION_STATUS_COMPLETE and completed_v4:
+        derived_completed = completed_v4[-1].get("completedAt")
+
+    # Set 047 Session 4: v4 plan-less carve-out fallback. The writer
+    # for a plan-less in-progress set (no totalSessions, no sessions[]
+    # — typical of stub sets created before the operator commits a
+    # plan) keeps the orchestrator + startedAt at the top level
+    # because there is no per-session record to attach them to. The
+    # shim's normal v4 derivation produces ``None`` here (no in-
+    # progress session in sessions_v4 → no derived orchestrator); use
+    # the top-level values as the final fallback so callers consuming
+    # the derived view still see an attribution for in-flight plan-
+    # less work. This branch is a no-op for canonical v4 input where
+    # sessions[] is the source of truth — the per-session orchestrator
+    # is already set.
+    if (
+        derived_orchestrator is None
+        and not sessions_v4
+        and canonical_top_status == SESSION_STATUS_IN_PROGRESS
+    ):
+        top_orch = state.get("orchestrator")
+        if isinstance(top_orch, dict):
+            derived_orchestrator = top_orch
+    if (
+        derived_started is None
+        and not sessions_v4
+        and canonical_top_status == SESSION_STATUS_IN_PROGRESS
+    ):
+        top_started = state.get("startedAt")
+        if isinstance(top_started, str) and top_started:
+            derived_started = top_started
+
+    # Set 047 Session 4: derive lifecycleState from the canonical
+    # status when the top-level field is absent (v4 input drops the
+    # field; the spec moves lifecycle sub-states to the events
+    # ledger). The two-value mapping below covers the only sub-states
+    # the writer ever produced via this field (work_in_progress at
+    # register; closed at last-session close); cancellation and not-
+    # started both surface as ``None`` for lifecycle. Tests that want
+    # the finer sub-states (closeout_pending / closeout_blocked /
+    # work_verified) read the events ledger directly.
+    derived_lifecycle = state.get("lifecycleState")
+    if derived_lifecycle is None:
+        if canonical_top_status == SESSION_STATUS_IN_PROGRESS:
+            derived_lifecycle = LIFECYCLE_STATE_WORK_IN_PROGRESS
+        elif canonical_top_status == SESSION_STATUS_COMPLETE:
+            derived_lifecycle = LIFECYCLE_STATE_CLOSED
+
+    # Set 047 Session 4 plan-less carve-out: when the on-disk input
+    # had no sessions[] AND the synthesizer couldn't derive one,
+    # surface totalSessions as ``None`` rather than ``0`` so callers
+    # consuming the derived view see "plan unknown" (the operator-
+    # facing ``0/?`` signal Set 046 Session 2 introduced).
+    derived_total_sessions = len(sessions_v4)
+    if not sessions_present_in_input and not sessions_v4:
+        derived_total_sessions = None
+
     out: dict = {
         "schemaVersion": SCHEMA_VERSION_V4,
         "sessionSetName": state.get("sessionSetName"),
         "sessions": sessions_v4,
         "status": canonical_top_status,
         "currentSession": current_session,
-        "totalSessions": len(sessions_v4),
+        "totalSessions": derived_total_sessions,
         "completedSessions": completed_numbers,
         "orchestrator": derived_orchestrator,
         "startedAt": derived_started,
         "completedAt": derived_completed,
         "verificationVerdict": derived_verdict,
-        "lifecycleState": state.get("lifecycleState"),
+        "lifecycleState": derived_lifecycle,
     }
     # Preserve passthrough fields that callers (cancellation reader,
     # forceClosed display, Set 035 preCancelStatus) still consume from

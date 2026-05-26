@@ -641,8 +641,68 @@ def read_state(handle: HarnessHandle) -> Dict[str, Any]:
     Returns an empty dict when the file is missing (the helper is
     typed for the in-flight case; missing-file assertions should
     use ``handle.set_dir`` directly to check existence).
+
+    Set 047 Session 4: routes through :func:`progress.normalize_to_v4_shape`
+    so a v4 on-disk file (where the v3 top-level fields like
+    ``currentSession`` / ``totalSessions`` / ``completedSessions`` /
+    ``orchestrator`` / ``startedAt`` / ``completedAt`` /
+    ``verificationVerdict`` are dropped) reads identically to a v3
+    file for tests that assert against the derived top-level
+    view. Tests that want to inspect the raw on-disk bytes use
+    :func:`read_raw_state` below.
     """
     state = read_session_state(str(handle.set_dir))
+    if not isinstance(state, dict):
+        return {}
+    try:
+        # Lazy import to avoid bringing progress in if the helper is
+        # called against a missing or unreadable file.
+        try:
+            from progress import normalize_to_v4_shape  # type: ignore[import-not-found]
+        except ImportError:
+            from ai_router.progress import normalize_to_v4_shape  # type: ignore[no-redef]
+        spec_md_path = Path(handle.set_dir) / "spec.md"
+        return normalize_to_v4_shape(state, spec_md_path)
+    except Exception:
+        return state
+
+
+def read_raw_state(handle: HarnessHandle) -> Dict[str, Any]:
+    """Return the raw on-disk ``session-state.json`` for the fixture.
+
+    Set 047 Session 4 companion to :func:`read_state` — bypasses the
+    v4 normalize shim so tests can assert against the literal v4
+    on-disk shape (no derived top-level fields). Use this when the
+    test cares about the exact bytes on disk; use :func:`read_state`
+    when the test cares about the logical state regardless of the
+    schema version the writer happened to land on.
+
+    Set 047 Session 4 verifier Important 1 fix: the initial draft
+    of this helper called :func:`read_session_state` (the shim-routed
+    reader), which would have masked any v4-on-disk-shape regression.
+    Route through :func:`read_raw_session_state` instead so the
+    helper actually delivers what its name promises.
+    """
+    try:
+        try:
+            from session_state import read_raw_session_state  # type: ignore[import-not-found]
+        except ImportError:
+            from ai_router.session_state import read_raw_session_state  # type: ignore[no-redef]
+    except ImportError:
+        # Fallback: the helper exists in every Set 047+ checkout but
+        # is absent from pre-Set-047 trees. Fall back to a direct
+        # JSON read in that case so the fixture still works against
+        # historical checkouts.
+        import json as _json
+        path = handle.set_dir / "session-state.json"
+        if not path.is_file():
+            return {}
+        try:
+            data = _json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+    state = read_raw_session_state(str(handle.set_dir))
     return state if isinstance(state, dict) else {}
 
 
