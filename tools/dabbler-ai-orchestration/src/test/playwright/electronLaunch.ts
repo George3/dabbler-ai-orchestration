@@ -494,9 +494,18 @@ function findCodeBinary(): string {
   }
   // Numeric version sort, descending. Avoids the lex-sort bug where
   // "archive-1.99.0" would sort ahead of "archive-1.120.0".
+  //
+  // Note: the filter accepts any `vscode-*` entry rather than
+  // requiring the "archive" segment that Windows downloads carry.
+  // @vscode/test-electron names Windows downloads
+  // `vscode-win32-x64-archive-X.Y.Z` (the zip-archive layout)
+  // but Linux downloads `vscode-linux-x64-X.Y.Z` (no "archive"
+  // segment, because Linux ships as a tarball). macOS uses
+  // `vscode-darwin-x64-X.Y.Z` or `vscode-darwin-arm64-X.Y.Z`.
+  // Filtering on "archive" would exclude Linux/macOS, breaking CI.
   const entries = fs
     .readdirSync(vsTestDir)
-    .filter((e) => e.startsWith("vscode-") && e.includes("archive"))
+    .filter((e) => e.startsWith("vscode-"))
     .sort((a, b) => _cmpVersion(_parseCachedVersion(a), _parseCachedVersion(b)));
   for (const dir of entries) {
     const candidate =
