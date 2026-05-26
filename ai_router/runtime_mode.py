@@ -103,8 +103,23 @@ def resolve_no_router_mode(
 
     Logging: when a higher-precedence source contradicts a lower one,
     emits an ``INFO`` log line naming the source that won.
+
+    **Idempotency**: subsequent invocations of this function are no-ops
+    that return the cached value (Set 048 S2 Round-A verifier-flagged
+    Major #4 fix — silent cache overwrite was a footgun for entry points
+    that resolve twice). If a test or harness needs to re-resolve,
+    call ``reset_for_tests()`` first.
     """
     global _NO_ROUTER_MODE
+
+    if _NO_ROUTER_MODE is not None:
+        # Already resolved; return cached. Don't re-log or re-evaluate
+        # precedence — that would be misleading on the second call.
+        logger.debug(
+            "resolve_no_router_mode called again (cached=%s); returning cache",
+            _NO_ROUTER_MODE,
+        )
+        return _NO_ROUTER_MODE
 
     env_says = _env_var_truthy()
     tier = _spec_tier(session_set_dir)  # "lightweight" | "full" | None

@@ -305,18 +305,19 @@ def route(
         RouteResult with the AI response and metadata.
         The caller is responsible for logging via SessionLog.log_step().
     """
-    # Set 048 Session 2: --no-router short-circuit. Defensive safety net
-    # for callers that didn't check is_no_router_mode() first. Returns a
-    # zero-cost stub WITHOUT calling _init() (no config load, no
-    # credential check, no LLM SDK touch).
-    try:
-        from runtime_mode import is_no_router_mode
+    # Set 048 Session 2 §3.1 A3: --no-router short-circuit. Defensive
+    # safety net for callers that didn't check is_no_router_mode() first.
+    # Returns a zero-cost stub WITHOUT calling _init() (no config load,
+    # no credential check, no LLM SDK touch).
+    #
+    # Set 048 S2 Round-A verifier-flagged Critical #1 (fail-open to full
+    # mode under exception was a safety bug): the runtime-mode lookup
+    # is now fail-CLOSED. If the check itself raises, we re-raise rather
+    # than silently issue a live LLM call.
+    from runtime_mode import is_no_router_mode
 
-        if is_no_router_mode():
-            return _build_no_router_route_stub()
-    except Exception:  # noqa: BLE001
-        # Runtime-mode lookup must never block route(); proceed normally.
-        pass
+    if is_no_router_mode():
+        return _build_no_router_route_stub()
 
     _init()
 
@@ -609,17 +610,16 @@ def verify(
     Returns:
         VerificationResult with verdict, issues, and cost.
     """
-    # Set 048 Session 2: --no-router short-circuit. Same safety-net
-    # contract as route() above.
-    try:
-        from runtime_mode import is_no_router_mode
+    # Set 048 Session 2 §3.1 A3: --no-router short-circuit. Same safety-net
+    # contract as route() above. Round-A verifier-flagged Critical #1
+    # made this fail-CLOSED — runtime-mode lookup failures re-raise
+    # rather than silently promote to a live LLM verification call.
+    from runtime_mode import is_no_router_mode
 
-        if is_no_router_mode():
-            return _build_no_router_verification_stub(
-                generator_model=route_result.model_name
-            )
-    except Exception:  # noqa: BLE001
-        pass
+    if is_no_router_mode():
+        return _build_no_router_verification_stub(
+            generator_model=route_result.model_name
+        )
 
     _init()
 

@@ -148,6 +148,45 @@ def test_config_is_frozen() -> None:
         cfg.tier = "lightweight"  # type: ignore[misc]
 
 
+# ---------- Round-A verifier regression: false-positive tier detection ----------
+
+
+def test_tier_from_free_form_prose_is_ignored(tmp_path: Path) -> None:
+    """Set 048 S2 Round-A Important #5: a spec mentioning ``tier: lightweight``
+    in free-form prose (not inside the canonical YAML block) MUST default
+    to ``full`` rather than silently activate --no-router mode."""
+    body = (
+        "# Some Spec\n\n"
+        "Design note: we considered using `tier: lightweight` here but\n"
+        "decided against it. Implementation will follow Full discipline.\n"
+        "\n"
+        "(No `## Session Set Configuration` block exists in this spec.)\n"
+    )
+    cfg = parse_session_set_config(_write_spec(tmp_path, body))
+    assert cfg.tier == "full", (
+        "Free-form prose mentioning 'tier: lightweight' must NOT activate "
+        "Lightweight tier; only declarations inside the canonical YAML block count."
+    )
+
+
+def test_requiresUAT_in_plain_text_still_parses_set015_compat(tmp_path: Path) -> None:
+    """Set 015 Session 3 compat: when no canonical heading exists but
+    a yaml fence is present elsewhere, requiresUAT IS still parsed (the
+    plain-text fallback applies to UAT/E2E/uatScope but NOT to tier)."""
+    body = (
+        "# Some Spec\n\n"
+        "## UAT scope\n\n"
+        "```yaml\nrequiresUAT: true\nrequiresE2E: false\nuatScope: full\n```\n"
+    )
+    cfg = parse_session_set_config(_write_spec(tmp_path, body))
+    # Plain-text fallback applies to UAT/E2E/uatScope: requiresUAT was found.
+    assert cfg.requires_uat is True
+    assert cfg.requires_e2e is False
+    assert cfg.uat_scope == "full"
+    # But tier is fail-safe to "full" when no canonical block exists.
+    assert cfg.tier == "full"
+
+
 # ---------- real-world: Set 048 spec.md ----------
 
 

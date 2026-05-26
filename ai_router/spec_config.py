@@ -92,14 +92,30 @@ def parse_session_set_config(spec_md_path: Path) -> SessionSetConfig:
         return _DEFAULT
 
     block_match = _CONFIG_BLOCK_RE.search(text)
-    block = block_match.group(1) if block_match else text
+    # Set 048 S2 Round-A verifier-flagged Important #5 (false-positive
+    # tier detection): the ``tier`` field is parsed ONLY from inside the
+    # canonical ``Session Set Configuration`` YAML block, never from
+    # free-form prose. Without this guard, a pre-Set-048 spec that
+    # mentions "tier: lightweight" in design notes or a quoted example
+    # could silently activate --no-router mode for the whole set.
+    # requiresUAT/E2E/uatScope retain the Set 015 Session 3 plain-text
+    # fallback (when the heading is absent but a yaml fence is present
+    # elsewhere in the file) for backwards compatibility with existing
+    # spec.md layouts.
+    if block_match:
+        block = block_match.group(1)
+        block_for_tier = block_match.group(1)  # strict — only inside the canonical block
+    else:
+        block = text  # legacy fallback for UAT/E2E/uatScope
+        block_for_tier = None
 
     tier: SessionSetTier = "full"
-    tier_match = _string_re("tier").search(block)
-    if tier_match:
-        v = tier_match.group(1).lower()
-        if v in ("full", "lightweight"):
-            tier = v  # type: ignore[assignment]
+    if block_for_tier is not None:
+        tier_match = _string_re("tier").search(block_for_tier)
+        if tier_match:
+            v = tier_match.group(1).lower()
+            if v in ("full", "lightweight"):
+                tier = v  # type: ignore[assignment]
 
     uat = _parse_tri(_tri_state_re("requiresUAT").search(block))
     e2e = _parse_tri(_tri_state_re("requiresE2E").search(block))
