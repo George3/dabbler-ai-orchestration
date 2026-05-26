@@ -225,6 +225,105 @@
       "description": "Full regression checks: (a) Python pytest \u2014 850 passed (818 baseline + 32 new shim tests), 1 skipped (pre-existing), 0 failed. (b) Python e2e (ai_router/tests/e2e/) \u2014 11 passed. (c) Python e2e marker tests \u2014 8 passed. (d) TS npm run test:unit \u2014 563 passed (553 baseline + 10 shim baseline + 9 regression + 1 perf benchmark), 2 failed (pre-existing failures unchanged from baseline: configEditor-foundation ViewColumn stub issue + notificationsSection disabled-button assertion, both last-touched in Set 026 \u2014 unrelated to v4 work). Perf baseline emitted: readSessionSets(47 sets) \u00d7 20 iterations: mean=21.8ms p50=21.2ms p95=32.5ms max=32.5ms.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/register-session-start",
+      "dateTime": "2026-05-26T09:40:26-04:00",
+      "description": "Invoked python -m ai_router.start_session with engine=claude, provider=anthropic, model=claude-opus-4-7, effort=high. State-file flipped from between-sessions to in-progress with the orchestrator block populated; currentSession=3; sessions[3].status=in-progress; cumulative S1+S2 spend $0.59202 of $10 NTE (5.9%) carried forward. Per memory feedback_budget_question_scope, did not re-ask the budget at session start \u2014 confirmed continuation under existing $10 NTE.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/surface-grounding-v2-to-v3-migrator",
+      "dateTime": "2026-05-26T09:55:00-04:00",
+      "description": "Surveyed the existing v2\u2192v3 migrator code as the template for the v3\u2192v4 module: ai_router/migrate_session_state.py (Python bulk CLI with regex/generic/ai/interactive strategies, MigrationResult dataclass, _atomic_write_json via tempfile.mkstemp + os.replace), tools/dabbler-ai-orchestration/src/utils/migrateSessionState.ts (TS mirror with same MigrationResult shape), tools/dabbler-ai-orchestration/src/commands/migrateSet.ts (right-click command for dabblerSessionSets.migrate). Confirmed normalize_to_v4_shape contract from S2: shim handles v1/v2/v3/v4 input, returns v4 read-view with per-session metadata + derived top-level fields. Decision: v3\u2192v4 migrator is much simpler than v2\u2192v3 because v3 already has sessions[] titles \u2014 no strategy choice needed. Migrator becomes a thin wrapper around normalize_to_v4_shape that strips the derived top-level fields before writing.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/python-migrator-implementation",
+      "dateTime": "2026-05-26T10:20:00-04:00",
+      "description": "Authored ai_router/migrate_v3_to_v4.py with migrate_one_set (idempotent + dry-run + apply modes, writes session-state.v3.bak.json BEFORE replacing state file), build_v4_on_disk_shape (drops 8 derived top-level keys: lifecycleState, currentSession, totalSessions, completedSessions, startedAt, completedAt, orchestrator, verificationVerdict; preserves schemaVersion=4, sessionSetName, status, sessions; passthrough preCancelStatus + forceClosed when present in original; canonicalizes status alias on the way out), discover_session_sets, migrate_all, _atomic_write_json (tempfile.mkstemp + os.replace mirrored from v2\u2192v3), _atomic_copy_json (re-parse + re-emit so .bak gets indent=2 formatting), main CLI (--scan, --in-place, --only, --verbose, --json). Eight action enum values: migrated, skipped-v4, skipped-not-v3, skipped-no-state, skipped-malformed, skipped-future-schema, would-violate, failed-backup. Validation: normalize_to_v4_shape output passes through get_progress() to enforce the 8 invariants \u2014 a v3 file with status=complete but a not-started session surfaces as would-violate rather than silently producing an invalid v4 file.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/typescript-migrator-implementation",
+      "dateTime": "2026-05-26T10:45:00-04:00",
+      "description": "Mirrored migrate_v3_to_v4.py as tools/dabbler-ai-orchestration/src/utils/migrateSessionStateV4.ts (migrateOneSetV4, buildV4OnDiskShape, atomicWriteJson, atomicCopyJson). Same action enum string values + same backup filename + same write order so the rollback procedure works regardless of which migrator wrote the .bak. Per-language naming convention preserved: snake_case in Python (set_dir, backup_path), camelCase in TS (setDir, backupPath) \u2014 these internal API fields are explicitly OUT of the parity contract per the module docstring. Added the dabblerSessionSets.migrateToV4 right-click command at src/commands/migrateSetV4.ts: modal confirm before migration; branched failed-backup messaging (rollback-needed vs no-bak); progress notification during the migration; refresh on success.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/needsmigration-detector-expansion-and-actionregistry-split",
+      "dateTime": "2026-05-26T11:05:00-04:00",
+      "description": "Added migrationTargetSchemaVersion: 3 | 4 | null field to SessionSet type. Expanded the fileSystem.ts needsMigration detector to flag canonical v3 files with target=4 (the deferred-from-S2 fix); broken-v3 / v1/v2 / missing-schema with target=3; v4+ files don't flag; future-schema (> 4) doesn't flag (no downgrade). Updated ActionRegistry to split the predicate: needsMigrationToV3 (group 801, 'Migrate to v3 schema') and needsMigrationToV4 (group 802, 'Migrate to v4 schema') \u2014 mutually exclusive by construction. Registered the new command in extension.ts (safeRegister) + package.json (contributes.commands) + COMMAND_ALLOWLIST in CustomSessionSetsView.ts. Updated test fixtures across actionRegistry, flagDecisionForReview, forceClosedBadge, inProgressSetsService, sessionSetsProvider to include the new field with null default.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/rollback-procedure-doc",
+      "dateTime": "2026-05-26T11:25:00-04:00",
+      "description": "Authored docs/v3-to-v4-rollback-procedure.md covering: when to use (4 trigger conditions including partial-failure dispositions, post-migration read-side regressions, pre-shim toolchain versions, operator preference); what the migrator wrote (session-state.json v4 + session-state.v3.bak.json); 3 procedure options (single-set via shell, single-set via VS Code right-click + rename, all-sets-at-once via shell loop with bash + PowerShell variants); 5-point validation checklist after rollback; failure modes during rollback itself; re-running the migration after rollback (idempotent so just re-run). Cross-references to spec.md, migrator source files, and canonical schema doc.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/unit-tests-python-and-ts",
+      "dateTime": "2026-05-26T11:50:00-04:00",
+      "description": "Authored ai_router/tests/test_migrate_v3_to_v4.py (29 tests baseline) covering happy-path (in-progress / completed v3 \u2192 v4 with per-session promotion + dropped top-level keys, status alias canonicalization, passthrough preservation, round-trip equivalence through the shim), idempotence (v4 skipped + apply-then-skip), refusals (v2 \u2192 not-v3, missing schema \u2192 not-v3, broken v3 \u2192 malformed, future \u2192 future-schema, missing file \u2192 no-state, unparseable JSON, non-object top-level, invariant violation \u2192 would-violate), backup behavior (apply writes .bak with original content, dry-run touches nothing, backup-write-failure aborts), build_v4_on_disk_shape pure function, discover_session_sets + migrate_all + CLI smoke. Mirrored in tools/dabbler-ai-orchestration/src/test/suite/migrateSessionStateV4.test.ts (20 tests baseline). Added 6 needsMigration + migrationTargetSchemaVersion tests in fileSystem.test.ts. Added 3 ActionRegistry mutex / count-bump tests in actionRegistry.test.ts.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/full-regression-and-sanity-dryrun",
+      "dateTime": "2026-05-26T12:10:00-04:00",
+      "description": "Full regression: (a) Python pytest \u2014 879 passed (850 baseline + 29 new migrator tests), 1 skipped, 0 failed. (b) TS npm run test:unit \u2014 591 passed (563 baseline + ~28 new tests), 2 pre-existing failures unchanged. (c) Watcher-inventory test caught a line-number drift after the extension.ts safeRegister block insertion (147 \u2192 148); updated WATCHER_ALLOWLIST. (d) Real-world dry-run: python -m ai_router.migrate_v3_to_v4 --scan docs/session-sets --json over this repo's 48 historical session-set directories \u2014 47 would migrate cleanly; 1 (048-lightweight-tier-parity) returned would-violate due to its empty sessions[] stub state file, consistent with the recurring v3-bug-tax observation from S1. Migrator's get_progress validation step working as designed.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 9,
+      "stepKey": "session-003/cross-provider-verification-round-a",
+      "dateTime": "2026-05-26T12:45:00-04:00",
+      "description": "Ran routed cross-provider verification via docs/session-sets/047-state-file-schema-v4-audit/run_s3_verification.py. Bundle: migrate_v3_to_v4.py + migrateSessionStateV4.ts + migrateSetV4.ts + fileSystem.ts + ActionRegistry.ts + types.ts + v3-to-v4-rollback-procedure.md + 4 test files (152540 chars total). task_type='session-verification' routed to gpt-5-4 tier 3. Verdict: VERIFIED with 0 must-fix critical items, 4 IMPORTANT items, 2 NICE-TO-HAVE items. Cost: 209.1s, $0.2882. Cumulative S1+S2+S3 routed cost: $0.88022 of $10 NTE (8.8%). VERIFIED on Round 1 \u2014 a step up from S2's two ISSUES_FOUND rounds; reflects the more straightforward scope of the migrator phase (thin wrapper around the audited-in-S2 shim).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "tier": 3,
+          "cost_usd": 0.2882,
+          "tokens_in": 36000,
+          "tokens_out": 6000,
+          "phase": "round-a-verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 10,
+      "stepKey": "session-003/in-flight-fixes-for-verifier-importants",
+      "dateTime": "2026-05-26T13:00:00-04:00",
+      "description": "Applied in-flight fixes for all 4 verifier IMPORTANT items (per memory feedback_dont_hide_behind_out_of_scope): (1) tightened docs/v3-to-v4-rollback-procedure.md to exclude would-violate and no-bak failed-backup from the rollback trigger conditions; branched migrateSetV4.ts's failed-backup notification on whether result.backupPath is set; (2) hoisted the needsMigration + migrationTargetSchemaVersion block in fileSystem.ts to run BEFORE normalizeToV4Shape so a normalize failure no longer eats the badge; (3) added explicit parity-contract docstring to migrateSessionStateV4.ts narrowing the Python\u2194TS lockstep to on-disk shape + backup filename + action enum values (excludes internal field names); (4) added 2 new Python tests (state-write-failure-after-backup distinguishing the rollback-needed subcase + done-alias canonicalization) and 2 new TS tests (backup-write-failure using directory-at-bak-path trick to force renameSync failure + done-alias). Split the Python CLI's [BACKUP-FAILED] line into [BACKUP-FAILED:rollback-needed] vs [BACKUP-FAILED:no-bak] subtypes. Deferred: cross-language golden parity fixture (substantial test-infra; better designed alongside Sessions 4-5 writer flip). Final test posture: 881 Python (+2 new), 593 TS (+2 new); same 2 pre-existing baseline failures unchanged.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

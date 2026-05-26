@@ -127,6 +127,7 @@ function fakeSet(
     uatSummary: null,
     root: "/tmp",
     needsMigration: false,
+    migrationTargetSchemaVersion: null,
   };
 }
 

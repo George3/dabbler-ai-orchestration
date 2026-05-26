@@ -46,6 +46,7 @@ function fakeSet(liveSession: LiveSession | null): SessionSet {
     uatSummary: null,
     root: "/x",
     needsMigration: false,
+    migrationTargetSchemaVersion: null,
   };
 }
 

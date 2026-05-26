@@ -32,6 +32,7 @@ function fakeSet(
     uatSummary: null,
     root: "/x",
     needsMigration: false,
+    migrationTargetSchemaVersion: null,
     ...over,
   };
 }
@@ -44,13 +45,19 @@ function ids(set: SessionSet, supports: ActionSupports): string[] {
 }
 
 suite("ActionRegistry", () => {
-  test("ROW_ACTIONS exposes the 14 non-orchestrator actions (Set 034 retired the orchestrator group)", () => {
+  test("ROW_ACTIONS exposes the 15 non-orchestrator actions (Set 047 added migrateToV4)", () => {
     // Set 034: orchestrator group (dabbler.checkOutOrchestrator,
     // dabbler.releaseCheckOut, dabbler.openOrchestratorWriterLog)
     // removed from the right-click menu in lockstep with the per-row
     // orchestrator-tracking accordion retiring. The commands stay
     // registered in extension.ts (Command Palette access preserved)
     // but no longer appear in this typed registry.
+    //
+    // Set 047 Session 3: dabblerSessionSets.migrateToV4 added so the
+    // right-click menu surfaces "Migrate to v4 schema" on canonical
+    // v3 rows. Mutually exclusive with the v3 entry — a single row
+    // shows at most one of them at a time (see the
+    // migrationTargetSchemaVersion predicate split in ActionRegistry).
     const expected = new Set([
       "dabblerSessionSets.openSpec",
       "dabblerSessionSets.openActivityLog",
@@ -64,12 +71,13 @@ suite("ActionRegistry", () => {
       "dabblerSessionSets.copyStartCommand.parallel",
       "dabblerSessionSets.copySlug",
       "dabblerSessionSets.migrate",
+      "dabblerSessionSets.migrateToV4",
       "dabblerSessionSets.cancel",
       "dabblerSessionSets.restore",
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 14);
+    assert.strictEqual(ROW_ACTIONS.length, 15);
   });
 
   test("orchestrator group is NOT exposed by the registry (Set 034 retirement)", () => {
@@ -150,11 +158,54 @@ suite("ActionRegistry", () => {
     }
   });
 
-  test("migrate appears only when set.needsMigration is true", () => {
-    const needs = fakeSet("complete", { needsMigration: true });
+  test("migrate (v3) appears only when needsMigration + target=3 (v1/v2 or broken-v3)", () => {
+    const needsV3 = fakeSet("complete", {
+      needsMigration: true,
+      migrationTargetSchemaVersion: 3,
+    });
+    const needsV4 = fakeSet("complete", {
+      needsMigration: true,
+      migrationTargetSchemaVersion: 4,
+    });
     const ok = fakeSet("complete");
-    assert.ok(ids(needs, ALL_SUPPORTED).includes("dabblerSessionSets.migrate"));
+    assert.ok(ids(needsV3, ALL_SUPPORTED).includes("dabblerSessionSets.migrate"));
+    assert.ok(!ids(needsV3, ALL_SUPPORTED).includes("dabblerSessionSets.migrateToV4"),
+      "v3-target row should not surface the v4 migrator");
+    assert.ok(!ids(needsV4, ALL_SUPPORTED).includes("dabblerSessionSets.migrate"),
+      "v4-target row should not surface the v3 migrator");
     assert.ok(!ids(ok, ALL_SUPPORTED).includes("dabblerSessionSets.migrate"));
+    assert.ok(!ids(ok, ALL_SUPPORTED).includes("dabblerSessionSets.migrateToV4"));
+  });
+
+  test("migrateToV4 appears only when needsMigration + target=4 (canonical v3 with sessions[])", () => {
+    const needsV4 = fakeSet("complete", {
+      needsMigration: true,
+      migrationTargetSchemaVersion: 4,
+    });
+    const needsV3 = fakeSet("complete", {
+      needsMigration: true,
+      migrationTargetSchemaVersion: 3,
+    });
+    const ok = fakeSet("complete");
+    assert.ok(ids(needsV4, ALL_SUPPORTED).includes("dabblerSessionSets.migrateToV4"));
+    assert.ok(!ids(needsV3, ALL_SUPPORTED).includes("dabblerSessionSets.migrateToV4"));
+    assert.ok(!ids(ok, ALL_SUPPORTED).includes("dabblerSessionSets.migrateToV4"));
+  });
+
+  test("v3 and v4 migrate entries are mutually exclusive — never both at once", () => {
+    // A SessionSet can have at most one migration target; ensure no
+    // pathological combination of flags surfaces both menu entries.
+    for (const target of [3, 4, null] as const) {
+      const set = fakeSet("complete", {
+        needsMigration: target !== null,
+        migrationTargetSchemaVersion: target,
+      });
+      const got = ids(set, ALL_SUPPORTED);
+      const both =
+        got.includes("dabblerSessionSets.migrate") &&
+        got.includes("dabblerSessionSets.migrateToV4");
+      assert.ok(!both, `both migrate entries appeared for target=${target}`);
+    }
   });
 
   test("result is sorted by group ascending so menu order is deterministic", () => {
@@ -162,6 +213,7 @@ suite("ActionRegistry", () => {
       fakeSet("in-progress", {
         config: { requiresUAT: true, requiresE2E: true, uatScope: "" },
         needsMigration: true,
+        migrationTargetSchemaVersion: 4,
       }),
       ALL_SUPPORTED,
     );

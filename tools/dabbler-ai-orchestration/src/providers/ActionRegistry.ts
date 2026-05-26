@@ -40,7 +40,16 @@ const cancellable = (s: SessionSet): boolean =>
 
 const isCancelled = (s: SessionSet): boolean => s.state === "cancelled";
 
-const needsMigration = (s: SessionSet): boolean => s.needsMigration;
+// Set 047 Session 3: split the migration predicate by target version.
+// `needsMigrationToV3` covers v1/v2 + broken-v3 (the operator runs
+// "Migrate to v3 schema" first); `needsMigrationToV4` covers canonical
+// v3 with sessions[] (the new "Migrate to v4 schema" affordance).
+// A set has at most one migration target at a time — the two
+// predicates are mutually exclusive by construction.
+const needsMigrationToV3 = (s: SessionSet): boolean =>
+  s.needsMigration && s.migrationTargetSchemaVersion === 3;
+const needsMigrationToV4 = (s: SessionSet): boolean =>
+  s.needsMigration && s.migrationTargetSchemaVersion === 4;
 
 // Ordered list — `group` controls QuickPick / context-menu sort.
 // Anything in group 1xx is "open", 2xx is "navigate", 3xx is "copy
@@ -72,7 +81,8 @@ export const ROW_ACTIONS: RowAction[] = [
   // a power-user / recovery affordance. Re-enable here when Set 036+
   // lands a real chatSessionId-backed signal so the manual override
   // surface has something to coordinate with.
-  { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",               group: 801, when: needsMigration },
+  { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",               group: 801, when: needsMigrationToV3 },
+  { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",               group: 802, when: needsMigrationToV4 },
   { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",                 group: 901,
     when: (s) => cancellable(s) },
   { id: "dabblerSessionSets.restore",           label: "Restore Session Set",                group: 902,

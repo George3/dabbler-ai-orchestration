@@ -46,6 +46,7 @@ function fakeSet(over: Partial<SessionSet> = {}): SessionSet {
     uatSummary: null,
     root: "/x",
     needsMigration: false,
+    migrationTargetSchemaVersion: null,
     ...over,
   };
 }

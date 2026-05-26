@@ -111,13 +111,26 @@ export interface SessionSet {
   config: SessionSetConfig;
   uatSummary: UatSummary | null;
   root: string;
-  // Set 030 Session 5: true when this set's session-state.json is
-  // v2 (schemaVersion missing or != 3, OR schemaVersion == 3 but
-  // sessions[] absent). The tree renders a "(needs migration)" badge
-  // and exposes a context-menu "Migrate to v3 schema" command. Default
-  // false; absent / broken state files do not flag (the v3 reader's
-  // tolerant path already handles missing-file display).
+  // Set 030 Session 5: true when this set's session-state.json needs
+  // a one-shot migration to the next canonical schema. The tree
+  // renders a "(needs migration)" badge and exposes a context-menu
+  // migrate command. Default false; absent / broken state files do
+  // not flag (the v3 reader's tolerant path already handles
+  // missing-file display).
+  //
+  // Set 047 Session 3: extended to flag v3 → v4 migrations too. The
+  // overall `needsMigration` boolean drives the badge (which is the
+  // same colored chip regardless of target version); the
+  // `migrationTargetSchemaVersion` field tells the ActionRegistry
+  // which migrate command to surface in the right-click menu.
   needsMigration: boolean;
+  // Set 047 Session 3: which canonical schema version is the
+  // migration target. 3 → operator needs to run "Migrate to v3
+  // schema" first (v1/v2 source, or broken-v3 with no sessions[]).
+  // 4 → "Migrate to v4 schema" (canonical v3 with sessions[]). null
+  // → no migration needed (already at v4 or no state file to act on).
+  // Reading the badge: `needsMigration === (migrationTargetSchemaVersion !== null)`.
+  migrationTargetSchemaVersion: 3 | 4 | null;
 }
 
 export interface MetricsEntry {

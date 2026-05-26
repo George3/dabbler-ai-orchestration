@@ -4,6 +4,7 @@ import * as path from "path";
 import { CustomSessionSetsView } from "./providers/CustomSessionSetsView";
 import { ScanState } from "./providers/scanState";
 import { registerMigrateSetCommand } from "./commands/migrateSet";
+import { registerMigrateSetV4Command } from "./commands/migrateSetV4";
 import { discoverRoots, readAllSessionSets } from "./utils/fileSystem";
 import { registerOpenFileCommands } from "./commands/openFile";
 import { registerCopyCommands } from "./commands/copyCommand";
@@ -234,6 +235,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("registerMigrateSetCommand", () =>
     registerMigrateSetCommand(context, { refreshView: refreshAll }),
+  );
+  safeRegister("registerMigrateSetV4Command", () =>
+    registerMigrateSetV4Command(context, { refreshView: refreshAll }),
   );
 
   // Set 029 Session 4: the dedicated dabblerOrchestratorIndicator view

@@ -213,6 +213,12 @@
         "icon": "$(arrow-up)"
       },
       {
+        "command": "dabblerSessionSets.migrateToV4",
+        "title": "Migrate to v4 schema",
+        "category": "Dabbler",
+        "icon": "$(arrow-up)"
+      },
+      {
         "command": "dabbler.installOrchestratorHook.claudeCode",
         "title": "Install Orchestrator Hook (Claude Code)",
         "category": "Dabbler"

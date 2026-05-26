@@ -89,6 +89,7 @@ const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
   "dabblerSessionSets.copyStartCommand.parallel",
   "dabblerSessionSets.copySlug",
   "dabblerSessionSets.migrate",
+  "dabblerSessionSets.migrateToV4",
   "dabblerSessionSets.cancel",
   "dabblerSessionSets.restore",
   // Set 034: the orchestrator-control commands (checkOutOrchestrator /

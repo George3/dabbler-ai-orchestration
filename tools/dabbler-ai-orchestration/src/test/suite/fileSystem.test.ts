@@ -914,3 +914,146 @@ suite("fileSystem — countDistinctCloseoutSessions", () => {
     fs.rmSync(dir, { recursive: true });
   });
 });
+
+// Set 047 Session 3: extend the needsMigration detector so canonical
+// v3 files flag for the new v3 → v4 migrator. The earlier detector
+// only flagged v1/v2 (or broken v3); the new behavior surfaces a
+// migration affordance on every canonical v3 file so the (needs
+// migration) badge stays accurate after the migrator ships.
+suite("fileSystem — readSessionSets needsMigration + migrationTargetSchemaVersion", () => {
+  test("canonical v3 with sessions[] flags needsMigration target=4", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "canonical-v3");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# canonical-v3\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        sessionSetName: "canonical-v3",
+        status: "in-progress",
+        sessions: [
+          { number: 1, title: "t1", status: "in-progress" },
+          { number: 2, title: "t2", status: "not-started" },
+        ],
+        currentSession: 1,
+        totalSessions: 2,
+        completedSessions: [],
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, true);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, 4);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("v4 file does NOT flag (already current)", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "already-v4");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# already-v4\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 4,
+        sessionSetName: "already-v4",
+        status: "in-progress",
+        sessions: [
+          {
+            number: 1,
+            title: "t1",
+            status: "in-progress",
+            startedAt: null,
+            completedAt: null,
+            orchestrator: null,
+            verificationVerdict: null,
+          },
+        ],
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, false);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, null);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("v2 file flags needsMigration target=3", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "v2-set");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# v2-set\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        sessionSetName: "v2-set",
+        status: "in-progress",
+        currentSession: 1,
+        totalSessions: 2,
+        completedSessions: [],
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, true);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("broken v3 (schemaVersion=3, no sessions[]) flags needsMigration target=3", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "broken-v3");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# broken-v3\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        sessionSetName: "broken-v3",
+        status: "in-progress",
+        // sessions[] intentionally missing
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, true);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("schemaVersion missing flags needsMigration target=3", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "no-schema");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# no-schema\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        sessionSetName: "no-schema",
+        status: "not-started",
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, true);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test("future schema (> 4) does NOT flag — refuses to downgrade", () => {
+    const dir = makeTmpDir();
+    const setDir = path.join(dir, "docs", "session-sets", "future");
+    fs.mkdirSync(setDir, { recursive: true });
+    fs.writeFileSync(path.join(setDir, "spec.md"), "# future\n");
+    fs.writeFileSync(
+      path.join(setDir, "session-state.json"),
+      JSON.stringify({
+        schemaVersion: 99,
+        sessionSetName: "future",
+        status: "in-progress",
+        sessions: [{ number: 1, title: "t1", status: "in-progress" }],
+      }),
+    );
+    const sets = readSessionSets(dir);
+    assert.strictEqual(sets[0].needsMigration, false);
+    assert.strictEqual(sets[0].migrationTargetSchemaVersion, null);
+    fs.rmSync(dir, { recursive: true });
+  });
+});

@@ -321,7 +321,15 @@ export function readSessionSets(root: string): SessionSet[] {
     // sessions[] is missing (a broken v3 shape that the bulk migrator
     // refuses to rewrite — see migrate_session_state.py's
     // ACTION_SKIPPED_MALFORMED case for the same heuristic).
+    //
+    // Set 047 Session 3: expanded so canonical v3 files (schemaVersion=3
+    // with sessions[]) also flag — the migration target in that case
+    // is v4, and the ActionRegistry surfaces "Migrate to v4 schema"
+    // instead of "Migrate to v3 schema". `migrationTargetSchemaVersion`
+    // carries the target so the ActionRegistry can pick the right
+    // command without re-reading the file.
     let needsMigration = false;
+    let migrationTargetSchemaVersion: 3 | 4 | null = null;
     const eventsPath = path.join(dir, "session-events.jsonl");
 
     // Activity log is a step log, not a count source. The activity-log
@@ -361,6 +369,53 @@ export function readSessionSets(root: string): SessionSet[] {
           sessions?: unknown;
           completedSessions?: unknown;
         };
+
+        // Set 030 Session 5 + Set 047 Session 3: needs-migration detection.
+        // Computed FIRST — before normalize/progress reads — so the
+        // badge surfaces even when the downstream shim/reader rejects
+        // the file (e.g., an invariant violation in `normalizeToV4Shape`
+        // would otherwise jump straight to the outer catch and lose
+        // the migration affordance entirely, leaving the operator
+        // unable to either fix or migrate the row). The S3 verifier
+        // flagged the prior ordering as a coupling bug; this block
+        // depends only on the parsed `rawSd`, not on any derived
+        // value, so it's safe to run first.
+        //
+        // The criteria match the bulk migrators' "would migrate" rule
+        // so the badge and the CLIs agree set-for-set:
+        //   - schemaVersion === 4 (or higher): already current, no
+        //     migration needed.
+        //   - canonical v3 (schemaVersion === 3 with sessions[]): the
+        //     `migrate_v3_to_v4` migrator's target — flag with
+        //     target=4 so the ActionRegistry surfaces "Migrate to v4
+        //     schema".
+        //   - schemaVersion === 3 but sessions[] missing: broken-v3
+        //     shape neither migrator will rewrite. Operator must
+        //     hand-repair to canonical v3 (then re-run the v4
+        //     migrator). Flag with target=3 so the menu offers
+        //     "Migrate to v3 schema" — the v2→v3 migrator's
+        //     same-shaped branch will also skip, which is the right
+        //     "hand-repair, then come back" UX.
+        //   - schemaVersion absent or < 3: legacy v1/v2; the v2→v3
+        //     migrator's target. Flag with target=3.
+        if (rawSd && typeof rawSd === "object" && !Array.isArray(rawSd)) {
+          const sv = rawSd.schemaVersion;
+          if (typeof sv === "number" && sv >= 4) {
+            needsMigration = false;
+            migrationTargetSchemaVersion = null;
+          } else if (sv === 3) {
+            if (Array.isArray(rawSd.sessions)) {
+              needsMigration = true;
+              migrationTargetSchemaVersion = 4;
+            } else {
+              needsMigration = true;
+              migrationTargetSchemaVersion = 3;
+            }
+          } else if (typeof sv !== "number" || sv < 3) {
+            needsMigration = true;
+            migrationTargetSchemaVersion = 3;
+          }
+        }
 
         // Set 030 Session 3 v2-compat pre-processing: if the snapshot
         // is v2-shape (no sessions[]) and lacks a non-empty
@@ -405,44 +460,6 @@ export function readSessionSets(root: string): SessionSet[] {
           schemaVersion?: number;
           sessions?: unknown;
         };
-
-        // Set 030 Session 5: v2 detection. The criteria match the
-        // bulk migrator's "would migrate" rule so the badge and the
-        // CLI agree set-for-set:
-        //   - schemaVersion absent or not the literal 3: legacy v2.
-        //   - schemaVersion === 3 but sessions[] missing or not an
-        //     array: broken-v3 shape the migrator refuses to rewrite
-        //     (operator must hand-repair) — still a needs-attention
-        //     signal in the tree.
-        // Files with schemaVersion > 3 are future-schema and treated
-        // as already-current (the migrator refuses to downgrade them
-        // for the same reason).
-        //
-        // Set 047 Session 2: read `rawSd` (NOT the normalized `sd`)
-        // because the shim unconditionally bumps `schemaVersion` to 4
-        // — that bump would mask the v3-needs-migration signal here.
-        // The detection rule itself is unchanged; the read source
-        // shifts to the pre-normalize parse so the signal stays honest.
-        //
-        // DEFERRED to Set 047 Session 3 (migrator phase): extend the
-        // detector to also flag raw v3 files as needing v4 migration
-        // once `python -m ai_router.migrate_v3_to_v4` ships. Adding
-        // the v3 flag in Session 2 (this session) would light up the
-        // badge on 47+ historical sets with no remediation action
-        // available — pure UI noise. The badge gains an actionable
-        // meaning the moment the migrator lands. (Cross-provider
-        // verifier flagged this in the S2 review; ack with the
-        // sequencing rationale above.)
-        if (rawSd && typeof rawSd === "object" && !Array.isArray(rawSd)) {
-          const sv = rawSd.schemaVersion;
-          if (sv === 3) {
-            if (!Array.isArray(rawSd.sessions)) {
-              needsMigration = true;
-            }
-          } else if (typeof sv !== "number" || sv < 3) {
-            needsMigration = true;
-          }
-        }
 
         // Set 030 Session 3: route progress reads through the v3/v4
         // helper. `readProgress` itself runs through `normalizeToV4Shape`
@@ -549,6 +566,7 @@ export function readSessionSets(root: string): SessionSet[] {
       uatSummary,
       root,
       needsMigration,
+      migrationTargetSchemaVersion,
     });
   }
   // Diagnostic: one-line summary in the dev console showing how the
