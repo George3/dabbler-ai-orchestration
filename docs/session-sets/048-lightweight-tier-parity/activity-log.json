@@ -1,0 +1,131 @@
+{
+  "sessionSetName": "048-lightweight-tier-parity",
+  "createdDate": "2026-05-26",
+  "totalSessions": 5,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/budget-and-scope-confirmation",
+      "dateTime": "2026-05-26T16:40:00-04:00",
+      "description": "Operator opened Set 048 STUB spec and requested next session. Confirmed prerequisites: Set 047 CLOSED 2026-05-26 (state file v4, status complete, 6 of 6 sessions). Operator answers via AskUserQuestion: (1) NTE budget $10 for Set 048 (matches Set 047 scale; audit-then-spec with 4-6 sessions room for routed verification rounds), (2) Absorb-into-audit-then-run-consensus pattern (operator's four new directives L1-L4 to be folded into spec.md BEFORE the routed audit pass runs). Set 048 spec was a stub authored at Set 047 S1 close-out per the audit-then-spec discipline.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/operator-directives-absorbed-into-spec",
+      "dateTime": "2026-05-26T16:43:00-04:00",
+      "description": "Absorbed four operator-locked directives into docs/session-sets/048-lightweight-tier-parity/spec.md: (L1) Copyable prompts MUST reference file paths from repo root, NOT embed file contents (revises B2). Rationale: works with any path-aware IDE agent; dodges clipboard-size limits; avoids stale-paste drift. (L2) Hierarchical right-click context menu with Open File and Copy Eval submenus. (L3) Remove 'Open AI Assignment' from right-click context menu. (L4) Context-menu popup must dismiss on focus-loss / Escape and/or expose explicit close-button. Also added new deliverable B7 (context-menu IA refresh per L2+L3+L4); added open audit topics 9 (cursor-anchored popup vs showQuickPick vs hybrid rendering) and 10 (review-criteria customization storage); bumped estimated session arc from 4-6 to 5-7; added Session Set Configuration placeholder with totalSessions=1 (audit-only S1) + prerequisites + tier=full + uatStyle=ad-hoc + effort=high.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/register-session-start",
+      "dateTime": "2026-05-26T16:45:56-04:00",
+      "description": "Invoked python -m ai_router.start_session --session-set-dir docs/session-sets/048-lightweight-tier-parity --session-number 1 --engine claude-code --provider anthropic --model claude-opus-4-7 --effort max --total-sessions 1. State-file flipped from not-started (schemaVersion=3, sessions[]=empty) to in-progress with the v4-canonical writer per Set 047 S4 (schemaVersion=4, sessions[1]={number:1, title:'Session 1', status:in-progress, startedAt, orchestrator block populated}). Confirms Set 047 S4 writer-flip works against a v3 stub correctly.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/audit-proposal-pass-a-drafted",
+      "dateTime": "2026-05-26T16:55:00-04:00",
+      "description": "Authored docs/proposals/2026-05-26-set-048-lightweight-tier-parity/proposal.md (~414 lines, 29879 chars): §1 purpose, §2 carry-forward locked items (P1-P4 + D1-D5 from Set 047 + new L1-L4 from this stub), §3 code-state grounding (writer call sites post-Set-047, install footprint, current context-menu surface, spec.md schema today, review-criteria storage today=nowhere, Marketplace count=3), §4 Group A --no-router mode dispositions (A1 activation precedence CLI>env>spec>default, A2 lazy LLM-SDK imports, A3 verification short-circuit, A4 CLI back-compat), §5 Group B copyable-prompt dispositions (B1 path-reference format per L1, B2 dual-surface enablement rules, B3 clipboard mechanism), §6 Group C context-menu IA refresh (C1 cursor-anchor preservation with HTML submenu was drafter's preference, C2 close-on-blur + close-button belt-and-suspenders, C3 submenu item layout, C4 removed Open AI Assignment), §7 Group D doc-revision pass (D1-D4), §8 Group E open-question dispositions (E1-E10), §9 6-session arc proposed, §10 8 bias-cautions, §11 5 open questions, §12 13 memory-hook citations. Self-authored per feedback_ai_router_usage; cross-provider verification routed at audit's end-of-session boundary.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/cross-provider-consensus-pass-a",
+      "dateTime": "2026-05-26T17:00:00-04:00",
+      "description": "Ran Pass A of two-pass devil's-advocate consensus via docs/proposals/2026-05-26-set-048-lightweight-tier-parity/run_consensus.py. Primary read (route, gemini-2.5-pro tier 2): ENDORSE WITH REVISIONS. Group A (--no-router) sound; Group B (copyable prompts) UNSOUND — wants content-embed fallback (later flagged as L1 violation by verifier); Group C UNSOUND — wants showQuickPick over HTML submenu; Group D sound (warning-only); session breakdown sound (do not merge S3+S4, do not split publish); 'missing topics' surfaced as telemetry + prompt-template VS Code settings (verifier flagged speculative). Cross-provider verify (gpt-5-4-mini): ISSUES FOUND — (1) Critical: Pass A's content-embed fallback recommendation violates locked premise L1, (2) Major: missing-audit-topic completeness — should have surfaced agent-capability + submenu-accessibility + tri-state-generality as explicit findings, (3) Minor: telemetry/template-settings additions speculative. Pass A cost: $0.0506 ($0.0239 route + $0.0268 verify).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-2.5-pro",
+          "tier": 2,
+          "cost_usd": 0.02385125,
+          "tokens_in": 8857,
+          "tokens_out": 1278,
+          "phase": "pass-a-route"
+        },
+        {
+          "model": "gpt-5-4-mini",
+          "tier": "verifier",
+          "cost_usd": 0.02681325,
+          "tokens_in": 9309,
+          "tokens_out": 4407,
+          "phase": "pass-a-verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/cross-provider-consensus-pass-b",
+      "dateTime": "2026-05-26T17:05:00-04:00",
+      "description": "Ran Pass B (devil's-advocate framing) of consensus. Primary read (gemini-2.5-pro): ENDORSE WITH SPECIFIC BIAS FLIPS — FLIPPED Bias 2 partial (wanted content-embed fallback — later flagged as L1 violation by verifier; stand-by adopted), FLIPPED Bias 3 (HTML submenu → showQuickPick — accessibility + keyboard nav + theme respect + forward-compat all free; cursor-anchor regression acceptable), STAND BY Bias 4 (triple-redundancy reminders cost is low), FLIPPED Bias 5 (warning-only → soft gate with interactive [y/N] confirm), STAND BY Bias 6 (repo-level review criteria), FLIPPED Bias 7 (combine S3+S4 — separating creates throwaway work), FLIPPED Bias 8 (ship Set 047 publishes before Set 048 starts — cleaner engineering vs bundled release). Cross-provider verify (gpt-5-4-mini): ISSUES FOUND — Major: Bias 2 inversion recommends content-embed fallback that violates L1 lock. Verifier called out: 'Evaluate Specification (with content)' as a fourth submenu item directly conflicts with locked L1. Pass B cost: $0.0520 ($0.0309 route + $0.0211 verify).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-2.5-pro",
+          "tier": 2,
+          "cost_usd": 0.0309225,
+          "tokens_in": 8810,
+          "tokens_out": 1991,
+          "phase": "pass-b-route"
+        },
+        {
+          "model": "gpt-5-4-mini",
+          "tier": "verifier",
+          "cost_usd": 0.021117,
+          "tokens_in": 9940,
+          "tokens_out": 3036,
+          "phase": "pass-b-verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/synthesis-and-verdict-drafted",
+      "dateTime": "2026-05-26T17:15:00-04:00",
+      "description": "Synthesized 4 consensus reads into docs/proposals/2026-05-26-set-048-lightweight-tier-parity/verdict.md. Locked flips: Bias 3 (QuickPick wins; L4 becomes a free byproduct since QuickPick handles dismiss natively), Bias 5 PARTIAL (soft gate with interactive [y/N] in TTY mode + non-interactive bypass + --accept-suggestions CLI flag override). Locked stand-by: Bias 1 (three-knob activation), Bias 2 (path-reference ONLY — verifier ruled both Pass A and Pass B content-embed recommendations as L1 violations; resolved via UX docs not prompt-format compromise), Bias 4 (triple-redundancy), Bias 6 (repo-level criteria). Open-question resolutions: Q1 CLI>env>spec with log.info notification, Q2 free-form external-verification.md, Q3 tri-state both tiers, Q5 do not add Evaluate Implementation Plan menu item. Bias 7 and Bias 8 surfaced for operator decision (split votes between Pass A endorsing proposal and Pass B inverting). Cumulative S1 routed cost: $0.1027 of $10 NTE (1.0%).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/operator-dispositions-on-split-votes",
+      "dateTime": "2026-05-26T17:25:00-04:00",
+      "description": "Operator via AskUserQuestion: Bias 7 → COMBINE S3 (copyable-prompt commands) + S4 (context-menu IA refresh) into one session per Pass B's throwaway-work argument. Bias 8 → SHIP Set 047's HELD publishes NOW (separately, before Set 048 S2 starts) per Pass B's stable-baseline argument. Net effect on session arc: 5 sessions (down from proposed 6). Set 047 PyPI 0.9.0 + Marketplace 0.22.0 will publish before S2.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-001/operator-override-bias-4",
+      "dateTime": "2026-05-26T17:32:00-04:00",
+      "description": "Operator override on Bias 4 stand-by: triple-redundancy reminders (toast + activity-log + close-out) REPLACED by single upfront positive-confirmation prompt issued by the AI orchestrator at session start. When session has UX scope AND requiresUAT/E2E is 'suggested', AI orchestrator asks operator: 'E2E tests, UAT checklist, both, or neither?' Operator's choice recorded once in activity-log.json (kind: suggestion_disposition). No further nag during session. Close-out reads recorded disposition and gates accordingly (neither → proceed, E2E only → require E2E pass evidence, UAT only → require UAT checklist evidence, both → both Full-tier gates apply). Verdict.md updated to reflect override. Set 048 session 3 implementation will own the AI-orchestrator-question wiring; workflow doc Step 1 documents the branch.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-001/spec-rewrite-to-audit-locked",
+      "dateTime": "2026-05-26T17:40:00-04:00",
+      "description": "Rewrote docs/session-sets/048-lightweight-tier-parity/spec.md from STUB AUDIT-PENDING to AUDIT-LOCKED. Session Set Configuration: totalSessions=5, prerequisites=[047-state-file-schema-v4-audit], requiresUAT=true, requiresE2E=false, uatStyle=ad-hoc, effort=high, tier=full. §1 what this set ships, §2 operator-locked premises P1-P4 + decisions D1-D5 + new additions L1-L4, §3 scope-locked decisions (3.1 --no-router mode, 3.2 copyable-prompt commands with path-reference format and agent-capability documentation, 3.3 context-menu IA refresh on QuickPick with two-step submenu flow + Open AI Assignment removed + L4 free via QuickPick native dismiss, 3.4 tri-state UAT/E2E runtime with operator-override upfront positive-confirmation prompt replacing triple-redundancy, 3.5 external-verification.md soft gate with TTY/non-TTY branching + --accept-suggestions flag, 3.6 spec.md schema additions tier+tri-state, 3.7 per-consumer migrator CLI, 3.8 external-verification command, 3.9 review-criteria repo files), §4 5-session breakdown (S1 audit closed, S2 --no-router mode + tri-state schema/runtime + soft gate, S3 combined copyable-prompt + context-menu IA, S4 doc revision + migrator + bootstrap tier-branch, S5 UAT + change-log + version bumps + publish), §5 non-goals (v4 schema = 047, package split = 047 Bias 1 flip, auto-verification excluded by P3, orchestrator block simplification = 049, cursor-anchor preservation = 048 Bias 3 flip, triple-redundancy = operator override, content-embed fallback = L1 lock), §6 deferred follow-ups Q5 + telemetry, §7 cross-references.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}
