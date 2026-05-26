@@ -126,6 +126,100 @@
       "description": "Rewrote docs/session-sets/048-lightweight-tier-parity/spec.md from STUB AUDIT-PENDING to AUDIT-LOCKED. Session Set Configuration: totalSessions=5, prerequisites=[047-state-file-schema-v4-audit], requiresUAT=true, requiresE2E=false, uatStyle=ad-hoc, effort=high, tier=full. §1 what this set ships, §2 operator-locked premises P1-P4 + decisions D1-D5 + new additions L1-L4, §3 scope-locked decisions (3.1 --no-router mode, 3.2 copyable-prompt commands with path-reference format and agent-capability documentation, 3.3 context-menu IA refresh on QuickPick with two-step submenu flow + Open AI Assignment removed + L4 free via QuickPick native dismiss, 3.4 tri-state UAT/E2E runtime with operator-override upfront positive-confirmation prompt replacing triple-redundancy, 3.5 external-verification.md soft gate with TTY/non-TTY branching + --accept-suggestions flag, 3.6 spec.md schema additions tier+tri-state, 3.7 per-consumer migrator CLI, 3.8 external-verification command, 3.9 review-criteria repo files), §4 5-session breakdown (S1 audit closed, S2 --no-router mode + tri-state schema/runtime + soft gate, S3 combined copyable-prompt + context-menu IA, S4 doc revision + migrator + bootstrap tier-branch, S5 UAT + change-log + version bumps + publish), §5 non-goals (v4 schema = 047, package split = 047 Bias 1 flip, auto-verification excluded by P3, orchestrator block simplification = 049, cursor-anchor preservation = 048 Bias 3 flip, triple-redundancy = operator override, content-embed fallback = L1 lock), §6 deferred follow-ups Q5 + telemetry, §7 cross-references.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/operator-decision-start-s2-with-pending-marketplace",
+      "dateTime": "2026-05-26T17:45:00-04:00",
+      "description": "Operator requested S2 start despite Marketplace 0.22.0 publish still queued. Discussed strict Bias-8-ordering vs pragmatic-start with operator via AskUserQuestion. Operator chose Start now: PyPI 0.9.0 already live (the dependency S2 actually needs); Marketplace publish is for end-user delivery and not blocking S2 implementation. Marketplace publish background-polled (task bn2l9l1i4) until completion; failed 3m18s into the Publish-to-VS-Code-Marketplace step with /_apis/gallery timeouts (third Marketplace failure today; same as 3 prior local vsce attempts). Operator directive: 'We will have to publish the extension later.' Saved memory at project_marketplace_0_22_0_queued_unshipped.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/register-session-start",
+      "dateTime": "2026-05-26T17:45:00-04:00",
+      "description": "Invoked python -m ai_router.start_session --session-number 2 --engine claude-code --provider anthropic --model claude-opus-4-7 --effort max. Writer flipped sessions[2].status from not-started to in-progress; orchestrator block populated; cumulative routed S1 spend $0.1027 of $10 NTE (1.0%) carried forward per memory feedback_budget_question_scope (no re-ask at session start).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/code-surface-grounding-via-explore",
+      "dateTime": "2026-05-26T17:50:00-04:00",
+      "description": "Delegated to Explore subagent: (1) spec.md schema validator surfaces - TS-side at types.ts:47 (SessionSetConfig interface, today: requiresUAT/E2E as booleans, no tier) + fileSystem.ts:187 (parseSessionSetConfig). Python-side has NO existing tier/UAT/E2E parser. (2) LLM-SDK imports: NONE at module level - providers.py uses httpx directly. Lazy-import deliverable (A2) is a NO-OP for this codebase. (3) route() @ __init__.py:221, verify() @ :520 - both module-level functions. (4) mark_session_complete() @ session_state.py:1371 - does NOT call verification directly, calls run_gate_checks. (5) close_session: _build_parser @ :271, verification gate around :1398-1426. (6) CLI argparse: per-module, not shared. (7) Activity-log reader: _read_activity_log @ gate_checks.py:443. (8) spec.md reader: parseSessionSetConfig TS-side only.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/commit-A-spec-schema-additions",
+      "dateTime": "2026-05-26T18:05:00-04:00",
+      "description": "Commit A (44a1d45): spec.md schema additions per §3.6. TS: new TriStateFlag = boolean|'suggested' + SessionSetTier = 'full'|'lightweight' type aliases in types.ts. SessionSetConfig interface gains tier field; requiresUAT/E2E widen to TriStateFlag. parseSessionSetConfig in fileSystem.ts updated: defaults to tier='full', accepts 'suggested' (quoted/unquoted), tolerates inline YAML comments. 6 test-fixture files updated for the new required tier field (actionRegistry, flagDecisionForReview, forceClosedBadge, inProgressSetsService, prerequisites, sessionSetsProvider). Python: new ai_router/spec_config.py mirroring TS parser - SessionSetConfig frozen dataclass, parse_session_set_config(), Full-tier-conservative defaults. 16 new unit tests. 10 new TS tests for Set 048 schema additions. tsc --noEmit clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/commit-B-no-router-activation",
+      "dateTime": "2026-05-26T18:25:00-04:00",
+      "description": "Commit B (90b7c0c): --no-router activation infrastructure per §3.1 A1+A2. New ai_router/runtime_mode.py with three-knob precedence resolver (CLI flag > env var DABBLER_NO_ROUTER > spec.md tier field > default). resolve_no_router_mode(cli_flag, session_set_dir) caches via module-level _NO_ROUTER_MODE; is_no_router_mode() returns cached or lazy-resolves from env var. Override logging: log.info when CLI/env contradicts spec tier=full. CLI wiring: --no-router flag added to start_session and close_session argparse + main() resolves runtime_mode at entry-point start. --accept-suggestions added to close_session for non-interactive soft-gate bypass per §3.5. Lazy LLM-SDK imports per §3.1 A2: documented as NO-OP (providers.py already uses httpx). 29 new unit tests covering all precedence paths + override-logging assertions. 0 regressions.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/commit-C-verification-shortcircuit-and-soft-gate",
+      "dateTime": "2026-05-26T19:05:00-04:00",
+      "description": "Commit C (1eed29a): route()/verify() short-circuit + external-verification.md soft gate per §3.1 A3 + §3.5. ai_router/__init__.py: new _NO_ROUTER_MODEL constant and _build_no_router_route_stub() / _build_no_router_verification_stub() helpers. route() and verify() prologues short-circuit via runtime_mode.is_no_router_mode() and return zero-cost stubs WITHOUT calling _init() (no config load, no credentials needed). close_session.py three changes: (a) manual_attestation block under args.no_router auto-supplies stock attestation when no --reason-file; (b) method resolution gains args.no_router branch setting method='manual'; (c) NEW soft gate after gates pass + before state flip - fires only under --no-router, reads external-verification.md, branches on --accept-suggestions/TTY/non-TTY, aborts with result='aborted_at_soft_gate' + closeout_failed event on TTY non-affirmative answer. 5 route/verify short-circuit tests + 12 close_session integration tests. 947 Python pass + 0 regressions.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/commit-D-suggestion-disposition-helpers-plus-backcompat",
+      "dateTime": "2026-05-26T19:30:00-04:00",
+      "description": "Commit D (bd94205): suggestion_disposition helpers + CLI backcompat tests + deferral note. New ai_router/suggestion_disposition.py with record_suggestion_disposition(set_dir, session_number, choice, *, step_number=None) writer + read_suggestion_disposition_for_session(set_dir, session_number) reader. Entry shape: kind='suggestion_disposition' + choice in {e2e, uat, both, neither}. Writer auto-infers stepNumber, raises on unknown choice, raises on missing activity-log. Reader returns last matching choice for session_number, returns None on missing/malformed, never raises. 20 unit tests. 13 CLI backcompat regression tests verifying pre-Set-048 start_session + close_session invocations still parse and validate unchanged. DEFERRAL NOTE in module docstring + commit message: the close-out gate that USES these helpers is deferred to S3 because Full-tier close_session has NO existing UAT/E2E gate today; adding one would touch Full behavior outside the audit scope. S3 owns the AI-orchestrator-question wiring + workflow doc update + the gate that consumes the recorded disposition.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 8,
+      "stepKey": "session-002/cross-provider-verification-round-A",
+      "dateTime": "2026-05-26T19:50:00-04:00",
+      "description": "Ran docs/session-sets/048-lightweight-tier-parity/run_s2_verification.py. Route (sonnet, tier 2, $0.132) returned ISSUES_FOUND with 7 findings: Critical #1 (route/verify silent-swallow falls back to live LLM under exception); Major #2 (bare imports - false positive, this is the package convention via conftest); Major #3 (race condition on activity-log read-modify-write); Major #4 (resolve_no_router_mode re-entry silently overwrites cache); Important #5 (false-positive tier detection - parser falls back to full-file scan when no canonical block, free-form prose 'tier: lightweight' could silently activate Lightweight mode); Minor #6 (timestamp .astimezone() produces local time, inconsistent with UTC log entries); Suggestion #7 (lazy is_no_router_mode caching). Verify (gemini-pro, $0.015) returned VERIFIED for review quality - confirmed all 7 findings as valid with appropriate severity assessments. S2 verification cost: $0.147 of $10 NTE; cumulative Set 048 spend $0.250 (2.5%).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "sonnet",
+          "tier": 2,
+          "cost_usd": 0.13178,
+          "phase": "route"
+        },
+        {
+          "model": "gemini-pro",
+          "tier": "verifier",
+          "cost_usd": 0.01544,
+          "phase": "verify"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 9,
+      "stepKey": "session-002/round-A-fixes-in-flight",
+      "dateTime": "2026-05-26T20:00:00-04:00",
+      "description": "All 5 actionable Round-A findings addressed in-flight per memory feedback_dont_hide_behind_out_of_scope: (C1) route()/verify() prologues now fail-CLOSED - top-level import of runtime_mode + direct call; if is_no_router_mode raises, it propagates rather than silently promoting to a live LLM call; (M4) resolve_no_router_mode no-ops on re-entry, returns cached value with debug log; (M3) record_suggestion_disposition uses write-temp + atomic-rename pattern eliminating the read-modify-write race; (I5) parse_session_set_config reads tier ONLY from inside the canonical YAML block (no full-file fallback), preserves Set 015 plain-text fallback for requiresUAT/E2E/uatScope; (Minor 6) timestamp emits UTC directly via datetime.now(timezone.utc).isoformat(). M2 (bare imports) acknowledged as false-positive (matches existing package convention via conftest.py sys.path manipulation); S7 (lazy-cache consistency) deferred as low-priority documentation matter. 2 new regression tests for I5 fix (test_tier_from_free_form_prose_is_ignored + test_requiresUAT_in_plain_text_still_parses_set015_compat). 982 Python pass + 0 regressions after fixes.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

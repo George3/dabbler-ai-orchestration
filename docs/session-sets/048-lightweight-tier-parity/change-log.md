@@ -65,4 +65,68 @@ Marketplace `dabbler-ai-orchestration 0.22.0` publishes. Publish action
 is operator-initiated (requires Marketplace PAT + PyPI twine
 credentials).
 
-<!-- Sessions 2-5 to be appended on each session close-out -->
+## Session 2 — `--no-router` mode + tri-state schema/runtime + soft gate
+
+Closed 2026-05-26 with disposition `completed`.
+
+Four commits land the Lightweight-tier `--no-router` mode infrastructure
+per audit-locked spec §3.1, §3.4, §3.5, §3.6:
+
+- **A** ([`44a1d45`](../../../../commit/44a1d45)) — spec.md schema additions: `tier` field +
+  tri-state UAT/E2E. New `ai_router/spec_config.py` Python parser
+  mirroring the TS parser at
+  `tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`. 16 Python +
+  10 TS tests; 6 TS test fixtures updated for the new required field.
+- **B** ([`90b7c0c`](../../../../commit/90b7c0c)) — `--no-router` activation infrastructure.
+  New `ai_router/runtime_mode.py` with three-knob precedence
+  (CLI flag > env var `DABBLER_NO_ROUTER` > spec.md `tier` field >
+  default `full`). CLI flags `--no-router` (start_session + close_session)
+  and `--accept-suggestions` (close_session) added; `main()` resolves
+  runtime mode at entry-point startup. Override logging via `log.info`
+  names the source that won when CLI/env contradicts spec. Lazy
+  LLM-SDK imports per §3.1 A2 documented as no-op (providers.py uses
+  httpx directly). 29 new unit tests.
+- **C** ([`1eed29a`](../../../../commit/1eed29a)) — `route()` / `verify()` short-circuit +
+  `external-verification.md` soft gate. `route()` and `verify()`
+  prologues return zero-cost stubs without calling `_init()` when
+  `is_no_router_mode()` is True. `close_session.run()` integration:
+  manual-attestation block + method resolution + new soft gate after
+  gate_checks pass + before state flip. Soft gate branches on
+  `--accept-suggestions` / TTY / non-TTY; aborts with
+  `result="aborted_at_soft_gate"` + `closeout_failed` event on TTY
+  non-affirmative answer. 5 route/verify short-circuit + 12
+  close_session integration tests.
+- **D** ([`bd94205`](../../../../commit/bd94205)) — `suggestion_disposition` reader/writer
+  helpers (new `ai_router/suggestion_disposition.py`) + 13 CLI
+  backward-compat regression tests. **Deferral note**: the close-out
+  *gate* that USES these helpers ships in S3 because Full-tier
+  `close_session.py` has no existing UAT/E2E gate today — adding one
+  would touch Full behavior outside the audit scope. Documented in
+  module docstring + commit message + this change-log.
+
+### Cross-provider verification round
+
+Route (`sonnet`, $0.132) + verify (`gemini-pro`, $0.015) = **$0.147**
+routed for S2. Verifier confirmed `ISSUES_FOUND` with 7 findings:
+
+| # | Severity | Disposition |
+|---|---|---|
+| 1 | Critical — route/verify silent-swallow falls back to live LLM | **FIXED** in-flight (fail-CLOSED with top-level import) |
+| 2 | Major — bare imports | **FALSE POSITIVE** (matches existing package convention) |
+| 3 | Major — race condition on activity-log read-modify-write | **FIXED** in-flight (write-temp + atomic-rename) |
+| 4 | Major — `resolve_no_router_mode` re-entry overwrites cache | **FIXED** in-flight (no-op on re-entry) |
+| 5 | Important — false-positive tier detection from full-file fallback | **FIXED** in-flight (`tier:` read only from canonical YAML block; UAT/E2E retain Set 015 plain-text fallback) |
+| 6 | Minor — timestamp not UTC | **FIXED** in-flight |
+| 7 | Suggestion — lazy cache consistency | **DEFERRED** (production callers always resolve at entry-point startup) |
+
+2 new regression tests for I5 lock in the behavior:
+`test_tier_from_free_form_prose_is_ignored` and
+`test_requiresUAT_in_plain_text_still_parses_set015_compat`.
+
+### Test counts at close
+
+- **Python:** 982 passed + 1 skipped (98 new for S2). Cumulative
+  Set 048 routed spend $0.250 of $10 NTE (2.5%).
+- **TypeScript:** 633 passed + 2 pre-existing failures unrelated to S2.
+
+<!-- Sessions 3-5 to be appended on each session close-out -->
