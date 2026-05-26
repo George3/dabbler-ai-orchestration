@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 3,
+  "sessionSetName": "047-state-file-schema-v4-audit",
+  "currentSession": null,
+  "totalSessions": null,
+  "status": "not-started",
+  "lifecycleState": null,
+  "startedAt": null,
+  "completedAt": null,
+  "verificationVerdict": null,
+  "orchestrator": null,
+  "sessions": [],
+  "completedSessions": []
+}

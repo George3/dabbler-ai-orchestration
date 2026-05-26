@@ -1,345 +1,97 @@
 # Explorer Enrichment from Harvest Records
 
 > **Purpose:** leverage the canonical Harvest Record stream that Set 045
-> produces to surface richer per-row signals in the Session Set Explorer
-> — orchestrator badges, cost surfacing, conflict warnings, and other
-> derived views that the post-044 information surface makes possible.
-> **Created:** 2026-05-23 (stub — Set 044 / S6 close-out).
-> **Status:** STUB — AUDIT PENDING. The candidate leverage points
-> listed below are starter material captured at close-out; a fresh
-> cross-provider audit pass should run before the spec is detailed.
+> produces, plus the canonical `orchestrator` block that Set 033 produces,
+> to surface richer per-row signals in the Session Set Explorer —
+> orchestrator second-line badge, live cost surfacing, idle-time
+> annotation, a state-divergence pill, and an actionable
+> "(needs migration)" remediation path.
+> **Status:** AUDIT-LOCKED 2026-05-26 (Set 046 Session 1). Replaces the
+> 2026-05-23 stub. Audit artifacts at
+> [`docs/proposals/2026-05-26-explorer-enrichment-from-harvest-records/`](../../proposals/2026-05-26-explorer-enrichment-from-harvest-records/).
 > **Session Set:** `docs/session-sets/046-explorer-enrichment-from-harvest-records/`
-> **Prerequisites:**
-> - Set 045 (`045-log-harvest-implementation`) CLOSED. The canonical
->   Harvest Record schema, the joiner, and the wrapper + parsers must
->   exist and be production-grade before this set can derive views
->   from them.
-> - Set 036 (`036-chatsessionid-and-watcher-scope`) CLOSED. Writer-side
->   identity must be solid first.
-> **Workflow:** Orchestrator → AI Router → Cross-provider verification
-> **Relationship to other sets:**
-> - **Consumes** Set 045's Harvest Record stream. This set ships no
->   new producer channels; it ships new *consumer* views over the
->   information Set 045 makes available.
-> - **Replaces (for the upside use case)** the cancelled Sets 042-043
->   chat-interface roadmap. Those sets answered "do we need our own
->   chat surface?"; this set answers the more valuable downstream
->   question "what should the existing Explorer surface, now that
->   we have honest per-session visibility?"
-> - **Does not modify** the Set 045 architecture or its Harvest Record
->   schema. If a leverage point requires a schema change, that's a
->   Set 045 amendment, not an in-set 046 decision.
+> **Prerequisites (both CLOSED before this set runs):**
+> - Set 045 (`045-log-harvest-implementation`) — CLOSED 2026-05-26. The
+>   Harvest Record schema, joiner, wrapper, and parsers are production.
+> - Set 036 (`036-chatsessionid-and-watcher-scope-implementation`) —
+>   CLOSED 2026-05-24. Writer-side identity is solid.
+> **Workflow:** Orchestrator → AI Router → Cross-provider verification.
+> **Cumulative Set 046 NTE:** $5.
 
 ---
 
-## Why this is a STUB
+## 1. What this set ships
 
-This stub exists to park the idea while it's fresh. The candidate
-leverage points below are operator-sourced starting material, not
-audit-locked scope. Before this set begins:
+Seven sessions. The set is **discretionary enrichment** of the existing
+Session Set Explorer — no new UI surface, no new chat interface, no
+schema changes to Harvest Records or `session-state.json` (the v4
+schema audit is parked in Set 047).
 
-1. **Audit pass** — run the cross-provider consensus pattern from
-   `docs/ai-led-session-workflow.md` over the candidate list. Prune
-   low-value entries; surface any leverage points the operator
-   missed. The two-pass devil's-advocate variant should be default
-   given the discretionary nature of the work (per the
-   `feedback_devils_advocate_default_for_roadmap_decisions` memory).
-2. **Scope-lock** — the audit-endorsed subset becomes the actual
-   set scope. Estimated session count and effort are deferred to
-   that scope-lock pass; this stub does not pre-commit a session
-   breakdown.
-3. **Detail pass** — first session of the audited set authors the
-   per-session breakdown.
+| # | Title | Scope | Layer |
+|---|---|---|---|
+| **1** | **Audit pass + scope-lock** | *(this session)* — proposal, cross-provider verification, spec rewrite, open `047` stub. | docs |
+| **2** | **Writer-side `totalSessions: null` + Explorer pre-flight** | Change `start_session` to keep `totalSessions: null` unless `--total-sessions` is passed. Backfill tests. Verify deliverable (a) renders `0/?` end-to-end on a fresh stub. Forward-only — no retroactive migration of existing not-started sets. | router + ext |
+| **3** | **Second-line orchestrator badge (deliverable (b)) + state-divergence pill** | Insert `.row-second-line` between `.row-name` and `.harvest-badges` in [`media/session-sets-tree/client.js:271-273`](../../../tools/dabbler-ai-orchestration/media/session-sets-tree/client.js#L271-L273). Data source: canonical `orchestrator` block primary, most-recent harvest record fallback only when the orchestrator block is empty AND a single distinct triple exists across all records for the set_slug. Suppress silently otherwise. Long-name handling via `text-overflow: ellipsis` + `title` tooltip. **State-divergence pill** added in the same session: when `orchestrator.engine != most_recent_harvest_record.engine` for the set_slug, render a new conflict pill `state-divergence` alongside the existing `engine-mismatch` pill column. Layer-3 Playwright coverage of (b) + the new pill. | ext only |
+| **4** | **Live cost surfacing per row** | Render `$X.XX` in a new column on in-progress rows. **Cost source: router metric ledger primary, harvest-estimated secondary** (consistent with the canonical-vs-evidence framing in S3). Compact display: `$X.XX` shows router-ledger only when no harvest activity exists; `$X.XX + $Y.YY` shows router-ledger + harvest-estimated when both exist. Hover-tooltip explains the breakdown explicitly per `feedback_user_facing_cost_messaging`. Cumulative-on-bucket-header is a nice-to-have if S4 runs short; otherwise out of scope. | router + ext |
+| **5** | **Time-since-last-activity per row** | Third element on the second line: `active 2 min ago` / `idle 45 min` / `stale 4 h`. Data source: `orchestrator.lastActivityAt` (already populated by `start_session` — confirmed in this session's own state file), fallback to `max(ts)` over harvest records when the orchestrator block lacks `lastActivityAt`. Thresholds: live `< 5 min` (no color), idle `5–60 min` (default text color), stale `> 60 min` (muted/amber). Re-render piggybacks on the existing file-watcher; no new timer. Layer-3 coverage. | ext only |
+| **6** | **"(needs migration)" expansion: migrator + triage + click action** | (Split from S5 per audit Bias 4 flip — Python migrator and TS UI work are distinct code surfaces.) Extend `python -m ai_router.migrate_session_state` to recognize non-canonical-v3 shapes (the `sessionLog[]` shape seen on `great-psalms-scroll-font`, plus any other near-conformant shapes surfaced by the triage). Idempotent. **Triage:** a one-page catalog at `docs/lightweight-tier-emission-drift.md` listing which Lightweight-tier consumers emit which non-canonical shapes (sweep over `dabbler-homehealthcare-accessdb`, `great-psalms-scroll-font`, and any other known Lightweight repos). **Click action:** add a left-click handler on the "(needs migration)" indicator that routes to the v2→v3 migrator (existing) for schemaVersion-absent files, and to the new expanded migrator for schemaVersion-3 non-canonical files. Confirmation modal before any write. | router + ext |
+| **7** | **README screenshot (deliverable (c)) + cross-tier docs + cross-provider verification + close-out + dual release** | **README screenshot:** static PNG (per audit Q4) showing 1 in-progress half-completed row with the full enriched surface (second-line badge, idle-time annotation, cost figure, harvest-signal badge, conflict pill), 2 not-started rows (one stub `0/?`, one defined `0/5`), 2 completed rows (one collapsed bucket, one expanded). Mock-fixture lives at `tools/dabbler-ai-orchestration/test/fixtures/readme-screenshot/` so the screenshot can be regenerated. **Cross-tier consumer notice:** mirror the `docs/cross-repo-harvest-notice.md` pattern (per audit Q3); add a release-checklist line so the three consumer repos know to update their CLAUDE.md addenda. **Cross-provider verification** of the full set per the standard close-out flow (`feedback_split_large_verification_bundles` — slice to ≤500 LOC bundles). **Dual release:** `dabbler-ai-router 0.9.0` to PyPI + extension `0.22.0` to Marketplace. | docs + release |
 
----
+## 2. Operator-locked deliverables (audit-confirmed)
 
-## Candidate leverage points (audit-pending)
+The operator locked three deliverables at S1 start. The audit confirms they map cleanly onto the session plan above:
 
-Each entry below is a possible direction. None is committed. Listed
-roughly in operator-floated-first order, then by my-read-of-value
-order, but the audit should reorder.
+| # | Deliverable | Session(s) |
+|---|---|---|
+| (a) | "0/?" fraction icon for not-started session sets whose spec.md has no defined session breakdown | **S2** (writer-side change — Explorer's `fractionFor` already returns `N/?` when `totalSessions == null` per [`CustomSessionSetsView.ts:142-147`](../../../tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts#L142-L147); the fix is upstream) |
+| (b) | Second line under In Progress rows showing `engine • model • effort` of the checked-out orchestrator; suppress silently when no data | **S3** (canonical `orchestrator` block primary; harvested fallback only as documented above) |
+| (c) | Updated README.md with mocked screenshot of the Explorer (1 In Progress half-completed, 2 Not Started, 2 Completed) | **S7** |
 
-### 1. Second-line orchestrator badge on in-progress rows
+## 3. Already shipped in 0.21.0 — expansion deferred
 
-**What:** for each accordion row in the IN PROGRESS bucket, render a
-second line under the title showing `engine • model • effort` derived
-from the most recent `event_type=launch` record (or the latest turn's
-`engine` + `model` + `effort` if no launch record).
+The original spec stub listed two candidate leverage points (§3 / §4 — writer-bypass warning surface and multi-AI conflict warning) as net-new. The audit confirms both **shipped in 0.21.0** as part of Set 045's joiner work:
 
-**Why this is valuable:** today the operator sees "this set is in
-progress" but has to dig (or remember) to know what AI is driving
-it. With multiple checkout-capable orchestrators, single-glance
-identification matters.
+- Writer-bypass is visible as **harvested-signal badge B** + **coordination-conflict pill `writer-bypass`** ([CLAUDE.md](../../../CLAUDE.md) 0.21.0 section).
+- Multi-AI conflict is visible as **coordination-conflict pill `engine-mismatch`** (same section).
 
-**Data source:** Harvest Record fields `engine`, `model`, `effort`
-filtered to records where `set_slug` matches the row's set.
+The spec stub's refinement open-questions (sticky-vs-live, dismissal flow, window-tuning) are real but defer until usage data shows the existing signals are being missed. With Marketplace download count near zero (`project_marketplace_download_count`), the cost of deferring expansion is near zero.
 
-**Open questions for audit:**
-- Compact rendering when the model name is long (`claude-opus-4-7`
-  vs `gpt-5.4-turbo-preview-...`).
-- Behavior when records show effort drift mid-session (which
-  effort to display).
-- Behavior when no harvest records exist for the set (fallback to
-  the orchestrator block from `session-state.json`, which is the
-  Set 033 check-out source-of-truth).
+## 4. Deferred to follow-on sets
 
-### 2. Live cost surfacing per row
+- **Set 047 — `state-file-schema-v4-audit`** (audit-pending). Bundles the parked v4 schema migration AND the "blocked-on-prereqs" lifecycle-state question. Per `feedback_audit_then_spec_for_substantial_features`, this is the class of change that wants its own audit set followed by a separate implementation set. Stub opened at Session 1 close-out (mirroring how Set 046 itself was opened at Set 044/S6 close-out).
+- **Tool-touch histogram** (original spec §6) — deferred indefinitely. Privacy concern (file paths) + low marginal value vs. the operator's direct line-of-sight to tool calls.
+- **§3.3 / §3.4 expansion refinements** — deferred until observed pain (see §3 above).
 
-**What:** for each in-progress row, render a running cost estimate
-derived from `tokens_in` × in-rate + `tokens_out` × out-rate per
-provider, summed across all records for that set_slug. Optionally
-render cumulative cost across all sessions in the set on the bucket
-header.
+## 5. Data-source rules (for implementers)
 
-**Why this is valuable:** matches the operator's recurring budget-
-question pattern (per `feedback_budget_question_scope`). Today
-budget tracking is manual recall from session prompts; harvest
-records make it observable.
+These rules apply across S3, S4, S5 and capture the audit's resolved canonical-vs-evidence framing:
 
-**Data source:** `tokens_in`, `tokens_out`, `model`, `provider`
-fields across all Harvest Records for the set. Provider-rate
-lookup table (likely already in `ai_router/budget.yaml`).
+| Signal | Primary source | Fallback | Suppression |
+|---|---|---|---|
+| Second-line orchestrator badge (b) | `orchestrator` block from `session-state.json` | most-recent harvest record's `engine + model + effort` **only if** single distinct triple exists across all records for the set_slug | otherwise — render nothing |
+| State-divergence pill | n/a — purely derived | n/a | suppress when no orchestrator block OR no harvest records (need both to detect divergence) |
+| Live cost (S4) | router metric ledger (`ai_router/metrics/`) | harvest-estimated cost as additive secondary | suppress harvest-estimated `+ $0.00` clutter |
+| Idle time (S5) | `orchestrator.lastActivityAt` | `max(ts)` over harvest records | suppress when neither exists |
 
-**Open questions for audit:**
-- Authoritative cost source: the Harvest Record stream, or the
-  router's own metric ledger (which is already authoritative for
-  router-routed calls)? Reconciliation strategy if they diverge.
-- IDE-agent calls (Codex, Gemini Code Assist) bypass the router;
-  harvest-record-derived cost may be the only signal for those.
-- Honest-display posture per `feedback_user_facing_cost_messaging`:
-  cost messaging must be explicit about source, range, and limits.
+Rule of thumb: **canonical primary, harvested fallback, suppress silently otherwise** (per operator's "no error, no missing data, just suppress" directive). The state-divergence pill is the *visible* expression of the rare case where canonical and harvested disagree — that's the high-value signal worth its own pill column.
 
-### 3. Writer-bypass warning surface
+## 6. Non-goals
 
-**What:** if the Harvest Record stream shows event_type=`tool_call`
-records with B5 (Edit/Write on `session-state.json` or similar
-load-bearing state files) without an accompanying B4 (subprocess
-invocation of the writer CLI), surface a warning badge on the
-affected row. This is the post-Set-033 honesty guarantee made
-visible.
+- **A full Dabbler-owned chat replay UI.** Cancelled Sets 042-043 territory; this set should not drift there.
+- **Modifying the Harvest Record schema.** Belongs in a Set 045 amendment or new parser-side set.
+- **Modifying the `session-state.json` schema.** Belongs in Set 047.
+- **Cross-provider cost reconciliation.** S4 ships router-primary + harvest-secondary side-by-side; reconciliation logic is its own future problem.
+- **Retroactive `totalSessions: null` migration** (S2 forward-only per audit Q1).
 
-**Why this is valuable:** the Set 033 architecture is designed to
-prevent writer-bypass; the joiner from Set 045 will detect it; this
-set makes the detection operator-visible.
+## 7. Risk register
 
-**Data source:** B4 / B5 signals already specified in Set 044
-proposal §4.4. The joiner emits a conflict record; this set
-renders it.
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| S4 cost-source decision turns out to need reconciliation logic beyond side-by-side display | medium | Defer cumulative-on-bucket-header (already marked nice-to-have). Split into follow-on set if S4 runs long. |
+| S6 migrator triage reveals more than 2-3 non-canonical shapes across Lightweight tier | low-medium | Migrator's recognition rules are pattern-based; per-shape recognition is cheap to add. Worst case: defer some shapes to a follow-on set, document them in the triage catalog. |
+| S7 README screenshot mock-fixture work is larger than estimated (audit Bias 5 partial-flip) | medium | S7 is the close-out session and already has cross-provider verification + dual release packed in. If fixture work bloats, the cumulative-cost-on-bucket-header from S4 is the obvious deferral. |
+| Cross-provider verifier 429 cascade on S7 verification bundle | medium-high (per `feedback_session_verification_gpt54_429_pivot_to_gemini`) | Pre-split S7 verification into ≤500 LOC slices per `feedback_split_large_verification_bundles`. Fall back to gemini-pro-as-verifier if gpt-5-4 cascades. |
 
-**Open questions for audit:**
-- Persistence: is the warning live-only, or sticky across Explorer
-  refreshes / VS Code reloads? (Sticky implies a persistence layer
-  this set may or may not own.)
-- Operator dismissal flow.
+## 8. Cumulative spend tracking
 
-### 4. Multi-AI-on-same-set conflict warning
-
-**What:** if Harvest Records show more than one distinct
-`(engine, conv_id)` pair touching the same `set_slug` within a
-short time window AND `session-state.json`'s orchestrator block
-shows a single checkout, render a coordination-conflict warning
-on the row.
-
-**Why this is valuable:** the Set 033 check-out / check-in
-architecture's whole reason for existing was preventing exactly
-this; making it visible when it slips through is the natural
-endpoint.
-
-**Data source:** record grouping by `set_slug` + temporal window
-on `ts`, compared against `session-state.json` orchestrator block.
-Largely a joiner emission; this set renders it.
-
-**Open questions for audit:**
-- Window length and quiescence threshold for the "same-set" check.
-- Behavior when the second AI is operator-driven explicit reread
-  with `--force` (legitimate, not a conflict).
-
-### 5. Time-since-last-activity per row
-
-**What:** for in-progress rows, render "active 2 min ago" or "idle
-45 min" derived from the most recent Harvest Record's `ts` for that
-set. Distinguishes live checkouts from stranded ones at a glance.
-
-**Why this is valuable:** stranded check-outs are a Set 033
-operational pain point (per the `dabblerSessionSets.checkoutPollTimeoutMinutes`
-setting). Surfacing idleness visibly cues the operator to release
-or follow up.
-
-**Data source:** max(`ts`) across Harvest Records for set_slug.
-
-**Open questions for audit:**
-- Tick frequency vs. webview re-render cost.
-- Threshold-based color coding ("live" green / "idle" amber /
-  "stale" red) — what thresholds, and is amber/red ever wrong?
-
-### 6. Tool-touch histogram or scope-creep indicator per session
-
-**What:** for each in-progress row, derive a per-session breakdown
-of which file paths the AI has been touching (Edit / Write tool
-calls), and surface either a count badge ("28 file touches") or a
-scope indicator ("touching files outside `docs/session-sets/<slug>/`").
-
-**Why this is valuable:** scope creep / writer-bypass / accidental
-edits to load-bearing infrastructure are recurring concerns; tool-
-call records make this measurable.
-
-**Data source:** B1 records filtered by `event_type=tool_call` and
-`tool ∈ {Edit, Write, apply_patch}`, with `tool_args` path
-extraction.
-
-**Open questions for audit:**
-- Privacy: file paths are arguably sensitive in some workspaces.
-- Useful aggregation level: per-session, per-set, per-bucket.
-- Threshold for the "outside session-set scope" warning.
-
----
-
-## Candidate non-goals (audit-pending)
-
-- **A full Dabbler-owned chat replay UI.** The cancelled Sets 042-043
-  were the chat-interface direction. This set should NOT drift into
-  that territory; the goal is *enriching the existing Explorer*, not
-  building a new conversation surface.
-- **Modifying the Harvest Record schema.** If a leverage point
-  requires fields Set 045 doesn't already emit, the right path is a
-  Set 045 amendment (or a follow-on parser-side set), not in-set 046
-  schema changes.
-- **Cross-provider cost reconciliation.** If §2 (live cost
-  surfacing) is in-scope, the cost source decision is locked at
-  audit; reconciling routed vs harvested cost data is its own
-  problem and can be deferred unless audit endorses it.
-
----
-
-## Open architectural questions parked here
-
-This set is also the natural home for the "blocked-on-prereqs"
-lifecycle-state question that surfaced during Set 044 close-out
-(see Set 044's `change-log.md`). The question:
-
-> Should the canonical state-file `status` field gain a "deferred"
-> or "blocked" value distinct from "not-started" and "cancelled"
-> for sets whose prerequisites are unmet? Or is that better
-> modeled as a derived Explorer property over machine-readable
-> prerequisite declarations on existing "not-started" specs?
-
-Not committed to Set 046 — flagged here so the next audit pass can
-decide whether to absorb it, spin it into its own set, or defer
-indefinitely.
-
-### Schema v4 — derive top-level state from `sessions[]`
-
-Surfaced during Set 045 / S3 close-out (2026-05-24). The current
-v3 schema denormalizes a half-dozen fields that are derivable from
-the `sessions[]` array if per-session timestamps and orchestrator
-are promoted into it. Concretely:
-
-| Top-level field | Derivation |
-|---|---|
-| `totalSessions` | `len(sessions)` |
-| `completedSessions` | `[s.number for s in sessions if s.status == "complete"]` |
-| `currentSession` | the (singleton) session with `status == "in-progress"`, else `null` |
-| `status` | all complete → `complete`; all not-started → `not-started`; any in-progress → `in-progress`; explicit cancellation marker remains |
-| `lifecycleState` | drop entirely; sub-states (`closeout_pending`, `closeout_blocked`) move to the events ledger |
-| `startedAt` (set) | `min(session.startedAt for s in sessions if s.startedAt)` |
-| `completedAt` (set) | `null` unless `status == "complete"`, else `max(session.completedAt)` |
-| `orchestrator` (set) | the orchestrator of the in-progress session (per-session field) |
-| `verificationVerdict` (set) | composite over per-session verdicts (today the top-level field is overwritten each close, losing history) |
-
-The redundancy is mostly historical baggage from the v0→v3
-migration. Today it generates real bugs: Set 036 S7 had to add a
-`fractionFor() → N/?` fallback because the writer can leave
-`totalSessions` null. Set 045 S3's final VERIFIED clobbered S2's
-VERIFIED in the snapshot (events ledger has both; snapshot
-doesn't).
-
-**This is audit-then-spec material**, not in-flight work. The
-migration touches: ai_router writers (start/close/mark_session_
-complete/cancel_lifecycle/register_session_start), readers
-(gate_checks/reconciler/session_lifecycle/joiner.parsers),
-extension consumers (fileSystem.ts:readSessionSets, fractionFor,
-cancellation reader from Set 035), every test, and every
-Lightweight-tier consumer repo (which currently lacks a canonical
-emission pattern and so invents ad-hoc shapes — see triage
-candidate below).
-
-**Cross-provider audit topics:**
-- Is the "promote timestamps + orchestrator + verdict to per-session"
-  shape the right v4 shape, or is there a different normalization
-  worth considering?
-- Cancellation marker: explicit set-level `cancelled: true` flag,
-  or every-session-cancelled-or-not-started inference?
-- Migration sequencing: reader-first (accept both v3 and v4)
-  then writer-second (emit v4) — or atomic flip with a v3→v4
-  migrator?
-- One-shot migrator for non-canonical v3 files emitted by
-  Lightweight orchestrators (see triage below).
-
-### Triage: "(needs migration)" indicator firing on fresh Lightweight repos
-
-Surfaced 2026-05-24: the Session Set Explorer's "(needs migration)"
-indicator fired immediately on `great-psalms-scroll-font`, a freshly-
-started Lightweight-tier repo. Root cause analysis during the same
-session showed:
-
-- That repo's orchestrator emitted a non-canonical v3 file: a
-  `sessionLog[]` array carrying per-session
-  `{ session, title, startedAt, completedAt, output, notes }`
-  entries — but no canonical `sessions[]` and no
-  `completedSessions[]`.
-- The Explorer's `fractionFor(state)` reads
-  `state.completedSessions.length`, so it rendered `0/5` instead
-  of the operator-expected `2/5`.
-- The "(needs migration)" detector almost certainly fires on the
-  *absence* of canonical v3 fields when `schemaVersion: 3` is
-  present — i.e., it's correctly flagging schema drift, just not
-  in an actionable way.
-
-This is the *same problem* the v4 audit above is trying to solve:
-the Lightweight tier doesn't have a clear canonical emission
-contract, so individual orchestrators invent shapes. A natural-
-emission pattern (per-session timestamps + notes) is exactly what
-the v4 schema would canonicalize.
-
-**In-set 046 deliverables (when this set runs):**
-
-1. **One-shot migrator** that recognizes the legacy `sessionLog[]`
-   shape (and any other non-canonical-but-near-conformant shape)
-   and rewrites the file canonically. Idempotent. Should run
-   on-demand via the "(needs migration)" indicator's click action
-   AND as part of a `python -m ai_router.migrate_session_state`
-   sweep.
-
-2. **Triage of which Lightweight orchestrators emit which shapes.**
-   If multiple orchestrators emit `sessionLog[]`, that's signal
-   that the schema doc isn't reaching them — fix is doc + canonical
-   template at https://raw.githubusercontent.com/.../session-state-schema.md.
-
-3. **"(needs migration)" indicator click action** — today the
-   indicator surfaces the problem but offers no remediation. The
-   click should open the migrator OR open the schema doc OR (the
-   v4-aware version) just-fix-it inline.
-
-The immediate operator-side workaround applied 2026-05-24 (manual
-edit of `great-psalms-scroll-font/docs/session-sets/001-discovery/
-session-state.json` to add the canonical `sessions[]` +
-`completedSessions[]`) is documented at that repo's CLAUDE.md
-"Session-state file shape" section so the next session there
-emits canonically.
-
----
-
-## Note on this stub
-
-The candidate leverage points are operator + drafter starting
-material captured during Set 044 / S6 close-out while the
-information surface from Set 045 was fresh. The audit pass should
-treat the list as a prompt for thinking, not a checklist to
-implement. Some entries may merge; others may be cancelled; new
-ones may emerge.
-
-The session count, effort estimate, and exact scope are deliberately
-NOT specified here — those are audit deliverables. This stub locks
-only: (a) the set exists as a parking spot; (b) it consumes Set 045's
-output; (c) it ships UI changes to the existing Explorer, not a new
-UI surface.
+Set 045 closed at $0.39 of $5 NTE (~7.7%). Session 1 of Set 046 routed cost: **$0.183** of $5 NTE (~3.7%) — entirely on the audit cross-provider consensus. Each subsequent session's cross-provider verification is expected to cost $0.05–$0.30 per the empirical data in `project_verification_cost_empirical`. Projected total at S7 close-out: $0.5–$2 of $5 NTE (~10–40%).
