@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "047-state-file-schema-v4-audit",
-  "status": "in-progress",
+  "status": "complete",
   "sessions": [
     {
       "number": 1,
@@ -67,9 +67,9 @@
     {
       "number": 6,
       "title": "Schema-doc + authoring-guide revision + close-out + publish",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-05-26T15:02:59.903739-04:00",
-      "completedAt": null,
+      "completedAt": "2026-05-26T16:15:42.220040-04:00",
       "orchestrator": {
         "engine": "claude",
         "provider": "anthropic",
