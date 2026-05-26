@@ -67,10 +67,18 @@
     {
       "number": 6,
       "title": "Schema-doc + authoring-guide revision + close-out + publish",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-05-26T15:02:59.903739-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-26T15:02:59.903739-04:00",
+        "lastActivityAt": "2026-05-26T15:02:59.903739-04:00"
+      },
       "verificationVerdict": null
     }
   ]

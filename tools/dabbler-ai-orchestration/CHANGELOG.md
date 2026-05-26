@@ -5,6 +5,99 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-05-26 (Set 047 — state-file schema v4)
+
+Ships the v4 evolution of `session-state.json`. The v4 schema derives
+every legacy top-level lifecycle field (`currentSession`,
+`totalSessions`, `completedSessions`, `lifecycleState`, `startedAt`,
+`completedAt`, `orchestrator`, `verificationVerdict`) from a
+per-session `sessions[]` ledger where each entry carries its own
+startedAt / completedAt / orchestrator / verificationVerdict. Reader-
+first migration: every reader in both Python and TypeScript routes
+through a `normalizeToV4Shape(state, specMdPath)` shim that accepts
+v1/v2/v3/v4 input and returns a v4 read-view, so consumer repos on
+mixed schema versions read identically. Companion PyPI release:
+`dabbler-ai-router 0.9.0`.
+
+### Added
+
+- **`normalizeToV4Shape(state, specMdPath)`** shim
+  (`src/utils/progress.ts`) — accepts v1/v2/v3/v4 input, returns
+  a v4 read-view with both per-session metadata and derived legacy
+  top-level fields. TS mirror of the Python
+  `ai_router.progress.normalize_to_v4_shape`. Reader contract is
+  byte-equivalent across the two implementations (parity validated
+  in Set 047 S2 + S5).
+- **v4 writers** (`src/utils/sessionState.ts`,
+  `src/utils/cancelLifecycle.ts`) — `synthesizeNotStartedState` /
+  `ensureSessionStateFile` / `cancelSessionSet` / `restoreSessionSet`
+  now emit canonical v4 on-disk shape per the audit-locked spec.
+  Each session record carries `startedAt` / `completedAt` /
+  `orchestrator` / `verificationVerdict`; top-level keeps only
+  `schemaVersion` / `sessionSetName` / `status` / `sessions`. Helper
+  `toV4OnDiskShape` projects any v1/v2/v3/v4 input through the shim
+  and trims to the v4 contract. Plan-less carve-out
+  (`sessions[]`-absent, top-level `orchestrator` + `startedAt`
+  passthrough) preserved across all writers.
+- **v3 → v4 right-click migration**
+  (`src/commands/migrateSetV4.ts`,
+  `src/utils/migrateSessionStateV4.ts`,
+  `dabblerSessionSets.migrateToV4`) — single-set migrator with same
+  on-disk shape and same backup filename as the Python CLI
+  (`python -m ai_router.migrate_v3_to_v4`). `failed-backup`
+  notification branches on whether the `.bak` exists, surfacing the
+  rollback procedure only when needed. Idempotent: v4 files
+  short-circuit with `skipped-v4`.
+- **`needsMigration` detector expansion** (`src/utils/fileSystem.ts`)
+  — now flags canonical v3 files (target=4) AND v1/v2/broken-v3
+  files (target=3) via a new `migrationTargetSchemaVersion: 3 | 4 |
+  null` field on the `SessionSet` record. Detector hoisted above
+  the `normalizeToV4Shape` call so a normalize failure can't eat
+  the badge.
+- **`ActionRegistry` predicate split** — `needsMigrationToV3` (group
+  801) and `needsMigrationToV4` (group 802) are mutually exclusive
+  by construction; one row never surfaces both badges.
+- **`spec.md` `prerequisites:` field schema**
+  (`src/utils/fileSystem.ts:parsePrerequisites`) — declares cross-set
+  dependencies as `{slug, condition: "complete"}` entries. The
+  Explorer's `readSessionSets` / `readAllSessionSets` cross-references
+  each set's prereqs against target sets' `status` and surfaces a
+  `[BLOCKED BY PREREQS]` badge in the row description. Suppressed on
+  terminal-state rows (Complete / Cancelled). Unknown target slug
+  (typo / missing set) keeps the row blocked — typos do NOT silently
+  unblock. Lightweight regex parser (no YAML dep); tolerant of
+  inline YAML comments on scalar values.
+
+### Changed
+
+- **`readSessionSets` performance benchmark baseline established**
+  (`src/test/suite/readSessionSetsPerfBenchmark.test.ts`) — 47 sets
+  × 20 iters: mean=21.8ms p50=21.2ms p95=32.5ms max=32.5ms.
+  Regression guard: `p95 < 5000ms`.
+- **`readSessionSets`, `readCancellationState`, `fractionFor`,
+  gate-check predicates** all route through `normalizeToV4Shape` so
+  v3 and v4 files read identically.
+- **`cancelLifecycle.ts` writer parity** with `session_lifecycle.py`
+  re-validated on v4 emission (Set 035 byte-equivalence preserved).
+
+### Companion releases / cross-references
+
+- **`dabbler-ai-router 0.9.0`** ships the Python writer flip
+  (`session_state.py`, `session_lifecycle.py`), the
+  `normalize_to_v4_shape` shim (`progress.py`), and the
+  `python -m ai_router.migrate_v3_to_v4` CLI.
+- **`docs/session-state-schema.md`** rewritten as the canonical v4
+  reference.
+- **`docs/v3-to-v4-rollback-procedure.md`** documents the rollback
+  contract for the migrator.
+- **`docs/planning/session-set-authoring-guide.md`** gains the
+  `prerequisites:` field documentation.
+- **Set 048** (`048-lightweight-tier-parity`) — stubbed for the
+  carved-out Lightweight-parity work under its own audit-S1.
+- **Set 049** (`049-orchestrator-coordination-removal`) — stubbed for
+  the orchestrator-block simplification + check-out/check-in code
+  removal under audit-then-spec discipline.
+
 ## [0.21.0] — 2026-05-25 (Set 045 — log-harvest implementation)
 
 Ships the user-facing surface for the dual-primary log-harvest

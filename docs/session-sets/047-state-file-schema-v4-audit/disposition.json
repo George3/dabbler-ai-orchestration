@@ -1,35 +1,24 @@
 {
   "status": "completed",
-  "summary": "Set 047 Session 5 shipped the writer-flip phase part 2 of the v4 schema migration: all four TypeScript writer surfaces — synthesizeNotStartedState / notStartedPayload, ensureSessionStateFile / backfillPayload, cancelSessionSet, restoreSessionSet — now emit canonical v4 on-disk shape per spec section 3.1, mirroring the Python S4 flip byte-for-byte on the v4 contract. The new helper toV4OnDiskShape in cancelLifecycle.ts projects any v1/v2/v3/v4 input through the normalizeToV4Shape shim and trims to the v4 contract, preserving the plan-less carve-out (absent sessions[] + top-level orchestrator/startedAt passthrough) across cancel/restore — identical semantic to Python session_lifecycle._to_v4_on_disk_shape. notStartedPayload's readTotalSessionsFromSpec falls back on ### Session N headings when the config block lacks a numeric totalSessions (mirrors Python S4 verifier Critical 2). backfillPayload writes per-session startedAt onto sessions[0] for the activity-log branch and promotes all sessions to status: complete for the change-log branch, leaving per-session completedAt at null (the change-log mtime is a set-level heuristic, not a per-session boundary — matches Python parity). Explorer prerequisites surface (spec §3.3): new SessionSetPrerequisite type, SessionSet.prerequisites field parsed from spec.md, SessionSet.blockedByPrereqs derived via the new deriveBlockedByPrereqs helper (runs in readSessionSets per-root AND in readAllSessionSets against the merged map so cross-root prereq resolution works — S5 verifier Important-2 fix), parsePrerequisites lightweight regex parser tolerant of YAML inline comments and operator typos (S5 verifier Important-1 fix), blockedByPrereqsBadge predicate suppressed on terminal-state rows, contextValueFor gating blocked-by-prereqs on non-terminal state. Cross-provider verification ran one round against gpt-5-4 tier 3 ($0.4717) and returned ISSUES_FOUND with 0 Critical + 2 Important + 2 Nice-to-have items; all 4 items addressed in-flight per memory feedback_dont_hide_behind_out_of_scope: parsePrerequisites condition handling distinguishes 'absent → default complete' from 'present-but-bad → drop' with YAML inline-comment stripping, blockedByPrereqs cross-reference factored into deriveBlockedByPrereqs and re-invoked at the merged-list boundary, explicit sessions: [] preservation pinned by new regression test, terminal-row badge suppression added as Layer-3 scenario 3. 13 new TS tests in sessionStateV4Writers.test.ts + 12 new in prerequisites.test.ts + 4 Layer-3 Playwright scenarios in blocked-by-prereqs.spec.ts + 13-item UAT checklist. Final: 623 TS unit tests pass (vs 553 pre-S5 baseline) with 2 pre-existing baseline failures unchanged; 896 Python tests pass + 1 skipped + 0 failed. Cumulative S1+S2+S3+S4+S5 routed cost: $1.809 of $10 NTE (18.1%). 13 new TS tests in sessionStateV4Writers.test.ts.",
-  "verification_method": "manual",
+  "summary": "Set 047 Session 6 closes the v4 state-file schema migration session set with the documentation revision (canonical schema doc + authoring-guide update + set change-log), version bumps for the dual publish (PyPI dabbler-ai-router 0.8.0 → 0.9.0; Marketplace extension 0.21.0 → 0.22.0; ai_router/__init__.py __version__ string brought current from a stale 0.5.1), CLAUDE.md version-walk update + retargeted parking pointer (Set 048+ → Set 049 for the orchestrator-coordination-removal work), and a cross-provider verification round (gpt-5-4 tier 3, 873s, $0.505) that returned ISSUES_FOUND with 3 Critical + 4 Important + 2 Nice-to-have items — all 9 dispositioned in-flight per memory feedback_dont_hide_behind_out_of_scope. Pre-emptively caught Critical 1 (per-session orchestrator close-out documented backwards) before the verifier returned by re-reading the S4 close-reason; the verifier's subsequent flag confirmed the catch and the in-flight rewrite of the field-table entry, Check-out/check-in section, rule 8, Lightweight tier worked example, three worked examples, and Tier expectations all landed in the right shape. Reader contract split into Layer 1 (normalize shim returning normalized dict with derived top-level fields), Layer 2 (get_progress/ProgressView with progress-counting fields only), Layer 3 (readCancellationState carve-out reading raw state.status). Derived top-level field semantics corrected to match progress.py lines 470-572 (startedAt: in-progress else most-recently-completed reversed; completedAt: ONLY when set-status==complete; lifecycleState: synthesized for in-progress and complete but NOT cancelled). verificationVerdict field type widened from strict 2-token enum to string|null to match writer behavior + the bundled S4 ISSUES_FOUND_RESOLVED_IN_FLIGHT extension token. v3-shim support horizon reworded from 'permanent' to 'persists through the transition' per spec §3.4 future-removal schedule. lastActivityAt bump claim narrowed to register_session_start only (close_session does NOT bump). Status vocabulary alignment caveat added (top-level allows cancelled, per-session does not). Build artifacts: dabbler-ai-orchestration-0.22.0.vsix built locally (23 files, 852.81 KB); PyPI release build NOT executed. Dual publish held by operator at close-out — option preserved to bundle with Set 048 (Lightweight parity) or Set 049 (orchestrator-coordination removal). Cumulative routed cost S1-S6: $2.31427 of $10 NTE (23.1%); plenty of headroom remained at set close.",
+  "verification_method": "ai-router",
   "files_changed": [
-    "tools/dabbler-ai-orchestration/src/utils/sessionState.ts",
-    "tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts",
-    "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
-    "tools/dabbler-ai-orchestration/src/types.ts",
-    "tools/dabbler-ai-orchestration/src/providers/SessionSetsModel.ts",
-    "tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/sessionStateV4Writers.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/prerequisites.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/cancelLifecycle.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/fileSystem.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/actionRegistry.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/flagDecisionForReview.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/forceClosedBadge.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/inProgressSetsService.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/sessionSetsProvider.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/playwright/blocked-by-prereqs.spec.ts",
-    "docs/session-sets/047-state-file-schema-v4-audit/spec.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/activity-log.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/session-events.jsonl",
-    "docs/session-sets/047-state-file-schema-v4-audit/session-state.json",
+    "docs/session-state-schema.md",
+    "docs/planning/session-set-authoring-guide.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/change-log.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/s6-close-reason.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/s6-verification-prompt.md",
+    "docs/session-sets/047-state-file-schema-v4-audit/run_s6_verification.py",
+    "docs/session-sets/047-state-file-schema-v4-audit/s6-verification-result.json",
+    "docs/session-sets/047-state-file-schema-v4-audit/s6-verification-transcript.md",
     "docs/session-sets/047-state-file-schema-v4-audit/disposition.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/047-state-file-schema-v4-audit-uat-checklist.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/s5-close-reason.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-prompt.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-result.json",
-    "docs/session-sets/047-state-file-schema-v4-audit/s5-verification-transcript.md",
-    "docs/session-sets/047-state-file-schema-v4-audit/run_s5_verification.py"
+    "docs/session-sets/047-state-file-schema-v4-audit/session-state.json",
+    "docs/session-sets/047-state-file-schema-v4-audit/session-events.jsonl",
+    "ai_router/__init__.py",
+    "pyproject.toml",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "CLAUDE.md"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -38,8 +27,8 @@
     "model": "claude-opus-4-7",
     "effort": "high",
     "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "Set 047 Session 6 is the schema-doc + authoring-guide revision + close-out + publish session per the scope-locked spec.md section 4: rewrite docs/session-state-schema.md to canonical v4, update docs/planning/session-set-authoring-guide.md to document the prerequisites field, generate change-log.md for the set, run a final cross-provider verification of the bundled set, and dual-publish (dabbler-ai-router minor bump + extension Marketplace minor bump). docs/adoption-bootstrap.md revision is DEFERRED to Set 048 per spec section 4. Claude Opus 4.7 high-effort is the right pick — the same orchestrator that closed S1-S5 knows the v4 contract end-to-end, and S6 is a docs-and-release wrap-up where consistency of voice matters more than fresh perspective."
+      "code": "other",
+      "specifics": "Set 047 is now fully closed (all 6 sessions complete); next session lives in a different set entirely. The two queued follow-on sets are Set 048 (Lightweight tier parity — audit-pending under its own S1 per the audit-then-spec discipline) and Set 049 (orchestrator-coordination removal — also audit-pending). Operator chooses which to start next; the next-orchestrator block here is a placeholder for the close-out gate's schema requirement, not a directive to continue this set."
     }
   },
   "blockers": []

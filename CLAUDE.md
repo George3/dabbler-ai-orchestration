@@ -63,9 +63,11 @@ test runs):
 - The Set 033 / Set 036 refusal tests set this env var explicitly via
   `monkeypatch.setenv`, so their coverage is preserved.
 
-The longer-term decision (full rollback or formal re-design) is parked
-as Set 048+ behind the standard `feedback_audit_then_spec_for_substantial_features`
-discipline — do not touch the coordination layer outside an audit set.
+The longer-term decision (full rollback or formal re-design) is
+parked as Set 049 (`049-orchestrator-coordination-removal`) behind
+the standard `feedback_audit_then_spec_for_substantial_features`
+discipline — do not touch the coordination layer outside that
+audit set.
 
 ## License
 
@@ -75,33 +77,63 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.21.0** (Set 045 — log-harvest implementation;
-  dual-primary observability surface per Set 044's
-  consensus-locked proposal v1 shipped end-to-end across 6
-  sessions; Session Set Explorer rows gain
-  harvested-signal badges (W / N / M / B for wrapper-launched
-  / native-log / narration-marker / writer-bypass) plus
-  coordination-conflict pills (engine-mismatch / bare-touch /
-  stale-checkout-touch / writer-bypass) fed by an async
-  shell-out to the new `python -m ai_router.joiner` CLI in the
-  companion `dabbler-ai-router 0.8.0`; new `Dabbler:
-  Regenerate Narration Templates` Command Palette action
-  writes canonical CLAUDE.md / AGENTS.md files with the
-  Set-044-spec'd session-start attribution marker an operator
-  can drop into a free-running consumer workspace; one-time
-  setup warning toast with `Open settings` action when
-  `dabbler-ai-router` is not installed in the active venv
-  (otherwise the surface keeps rendering all rows but the
-  badge / pill columns stay empty); IBM colorblind-safe palette
-  for badge colors; CSS custom-property indent for the conflict-
-  pill column so it tracks the fraction column above through
-  font-size changes; new `CONTRIBUTING.md` at repo root with
-  per-test-layer scope guidance + the rebuild-trap note
-  (invoke through `npm run test:playwright` not bare
-  `npx playwright test`); new
-  `docs/cross-repo-harvest-notice.md` for cross-tier consumer-
-  repo paste-in). Companion PyPI release: `dabbler-ai-router`
-  0.8.0. The version walk:
+- Current: **v0.22.0** (Set 047 — state-file schema v4 audit;
+  v4 evolution of `session-state.json` shipped end-to-end across
+  6 sessions; derives every legacy top-level lifecycle field
+  (`currentSession` / `totalSessions` / `completedSessions` /
+  `lifecycleState` / `startedAt` / `completedAt` /
+  `orchestrator` / `verificationVerdict`) from a per-session
+  `sessions[]` ledger where each entry carries its own
+  startedAt / completedAt / orchestrator / verificationVerdict;
+  reader-first migration via `normalizeToV4Shape(state, specMdPath)`
+  shim (TS) + `normalize_to_v4_shape(state, spec_md_path)` shim
+  (Python) that accepts v1/v2/v3/v4 input transparently; new
+  `python -m ai_router.migrate_v3_to_v4` CLI + `Migrate to v4
+  schema` right-click action with `.bak` rollback contract and
+  documented rollback procedure at
+  `docs/v3-to-v4-rollback-procedure.md`; all writers
+  (`register_session_start` / `_flip_state_to_closed` /
+  `cancel_session_set` / `restore_session_set` / TS mirrors)
+  emit canonical v4 on-disk shape; new `spec.md`
+  `prerequisites:` field with `[BLOCKED BY PREREQS]` badge in
+  the Session Set Explorer description (suppressed on terminal-
+  state rows); `docs/session-state-schema.md` rewritten as
+  canonical v4 reference;
+  `docs/planning/session-set-authoring-guide.md` documents the
+  prerequisites field. Lightweight-tier parity carved out to
+  Set 048 under its own audit-S1. Orchestrator-block
+  simplification (omit-null engine/provider/model/effort only;
+  drop chatSessionId/checkedOutAt/lastActivityAt) and full
+  check-out/check-in code rip-out carved out to Set 049 under
+  audit-then-spec discipline. Companion PyPI release:
+  `dabbler-ai-router 0.9.0`. The version walk:
+  - **0.21.0** (Set 045) — log-harvest implementation;
+    dual-primary observability surface per Set 044's
+    consensus-locked proposal v1 shipped end-to-end across 6
+    sessions; Session Set Explorer rows gain
+    harvested-signal badges (W / N / M / B for wrapper-launched
+    / native-log / narration-marker / writer-bypass) plus
+    coordination-conflict pills (engine-mismatch / bare-touch /
+    stale-checkout-touch / writer-bypass) fed by an async
+    shell-out to the new `python -m ai_router.joiner` CLI in
+    the companion `dabbler-ai-router 0.8.0`; new `Dabbler:
+    Regenerate Narration Templates` Command Palette action
+    writes canonical CLAUDE.md / AGENTS.md files with the
+    Set-044-spec'd session-start attribution marker an operator
+    can drop into a free-running consumer workspace; one-time
+    setup warning toast with `Open settings` action when
+    `dabbler-ai-router` is not installed in the active venv
+    (otherwise the surface keeps rendering all rows but the
+    badge / pill columns stay empty); IBM colorblind-safe
+    palette for badge colors; CSS custom-property indent for
+    the conflict-pill column so it tracks the fraction column
+    above through font-size changes; new `CONTRIBUTING.md` at
+    repo root with per-test-layer scope guidance + the rebuild-
+    trap note (invoke through `npm run test:playwright` not
+    bare `npx playwright test`); new
+    `docs/cross-repo-harvest-notice.md` for cross-tier
+    consumer-repo paste-in. Companion PyPI release:
+    `dabbler-ai-router` 0.8.0.
   - **0.20.0** (Set 036) — chatSessionId identity refinement +
     MVVM watcher-scope discipline; H4 holder-identity composite
     refined from `engine + provider` to
@@ -132,10 +164,9 @@ is a required duplicate — `vsce package` expects the file alongside
     block) to the cancellation lifecycle. See below for the prior
     Set 035 description.
 
-- Previous: **v0.20.0** (Set 036 — chatSessionId identity refinement
-  + MVVM watcher-scope discipline. Companion PyPI release:
-  `dabbler-ai-router 0.7.0`). Full description preserved below
-  for posterity.
+- Previous: **v0.21.0** (Set 045 — log-harvest implementation.
+  Companion PyPI release: `dabbler-ai-router 0.8.0`). Full
+  description preserved in the version walk above.
 
 - Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
   cancellation/restoration; Marketplace publish gated on operator

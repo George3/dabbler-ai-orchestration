@@ -7,30 +7,42 @@ restore commands, and the cost dashboard all read it; on Full tier
 orchestrator) maintains it by hand.
 
 The schema is **strict where machines parse**: a fixed field set with
-canonical string values for `status` and `lifecycleState`. Field-name
-drift or status-value drift causes silent display bugs in the
-extension — the ctelr-spec 1/2 + 2/3 episode (2026-05-12) was a
-hand-written file with `status: "completed"` (past participle) instead
-of `"complete"`, which displayed as N−1/N until the count derivation
-was canonicalized in extension v0.13.10.
+canonical string values for `status`. Field-name drift or status-value
+drift causes silent display bugs in the extension — the ctelr-spec
+1/2 + 2/3 episode (2026-05-12) was a hand-written file with
+`status: "completed"` (past participle) instead of `"complete"`, which
+displayed as N−1/N until the count derivation was canonicalized in
+extension v0.13.10.
 
-## v3 is canonical; v2 read support is permanent
+## v4 is canonical; v1/v2/v3 read support persists through the transition
 
-Set 030 (proposal at
-`docs/proposals/2026-05-17-session-state-sessions-ledger-v3.md`)
-replaced the v2 progress triple (`currentSession` /
-`totalSessions` / `completedSessions`) with a single canonical
-`sessions[]` ledger. **New writes always use v3.** v2 files keep
-working: the read-time synthesizer at
-[`ai_router/progress.py`](../ai_router/progress.py) normalizes v2 to
-a v3 view on the fly, and tolerant v2 read support is permanent.
+Set 047 (proposal at
+`docs/proposals/2026-05-26-state-file-schema-v4-and-lightweight-parity/`)
+collapses the v3 top-level lifecycle fields (`currentSession`,
+`totalSessions`, `completedSessions`, `lifecycleState`, `startedAt`,
+`completedAt`, `orchestrator`, `verificationVerdict`) into per-session
+records inside `sessions[]`. **New writes always use v4.** v1/v2/v3
+files keep working: progress / state-normalization readers route
+through the `normalize_to_v4_shape(state, spec_md_path)` shim
+(Python) and its TS mirror, which accept any prior shape and return
+a v4 read-view with both per-session metadata and the historically-
+derived top-level fields. (See **Reader contract** below for the
+specific consumers that route through the shim vs. those — like
+`readCancellationState` — that read raw status directly.)
 
-Dual-write of legacy fields is the operational steady state through
-this set (per Set 030 D5): Full-tier writers emit BOTH `sessions[]`
-and the legacy triple, so consumer repos pinned to older versions of
-the extension or the router keep working through the migration. A
-future set may flip "stop writing legacy" once every consumer has
-confirmed v3-reader support.
+Migration to v4 is **operator-initiated**: run
+`python -m ai_router.migrate_v3_to_v4 --in-place` or right-click a
+set in the Session Sets view → **Migrate to v4 schema**. The migrator
+is idempotent and writes `session-state.v3.bak.json` alongside; see
+[`v3-to-v4-rollback-procedure.md`](v3-to-v4-rollback-procedure.md)
+for the rollback contract.
+
+The reader-shim is the operational steady state through the
+post-ship transition window so a mixed repo (some sets on v3, some
+on v4) reads identically from both. Per the audit-locked spec §3.4,
+the v3-shim is scheduled for removal in a future explicitly-scoped
+set after v4 has shipped on a release and every consumer repo has
+migrated; removal does NOT land in Set 047.
 
 ## When this applies
 
@@ -38,277 +50,347 @@ Every directory under `docs/session-sets/<slug>/` that contains a
 `spec.md`. The state file sits next to `spec.md`, `activity-log.json`,
 and `change-log.md`. A directory with a spec but no state file is
 lazy-synthesized on first read (`ensureSessionStateFile` in the
-extension; `ensure_state_file` in the router), which infers the
-initial status from current file presence and writes a v3 skeleton.
+extension; `ensure_session_state_file` in the router), which infers
+the initial status from current file presence and writes a v4
+skeleton.
 
 The schema applies to all four Dabbler consumer repos and to any new
 repo adopted through the bootstrap prompt.
 
 ---
 
-## Reader contract — every reader uses `get_progress()`
+## Reader contract — two layers, with one carve-out
 
-There is exactly one reader path:
+Progress and state-normalization consumers route through a two-step
+path; the cancellation reader is the documented carve-out.
 
-- **Python:** `from ai_router.progress import get_progress`
-  (or, when reading a v2 file: `synthesize_v3_from_v2(state, spec_md_path)`
-  first, then `get_progress(state)`).
-- **TypeScript (extension):** `import { getProgress } from "../utils/progress";`
-  (with `synthesizeV3FromV2(state, specMdPath)` for v2 inputs).
+### Layer 1 — the normalize shim
 
-The helper returns a `ProgressView` with every derived field already
-populated. Readers **MUST NOT** directly interpret `currentSession`,
-`totalSessions`, or `completedSessions` — those fields are legacy
-compatibility surface and the writer derives them from `sessions[]`.
-Direct reads risk re-introducing the off-by-one and drift bugs that
-motivated v3.
+The shim returns a **dict** with both per-session metadata and
+derived legacy top-level fields:
 
-Set 030 Session 3 ships a lint rule that fails CI on any direct
-legacy-field read inside application code (`ai_router/` and the
-extension's `src/`), with explicit carve-outs for `progress.py` /
-`progress.ts` themselves, the migrator, tests, and v2 compat code.
+- **Python:** `from ai_router.progress import normalize_to_v4_shape`
+  → call `normalize_to_v4_shape(state, spec_md_path)`.
+- **TypeScript (extension):**
+  `import { normalizeToV4Shape } from "../utils/progress";`
+  → call `normalizeToV4Shape(state, specMdPath)`.
+
+The shim:
+
+- Accepts v1, v2, v3, or v4 input.
+- Returns a NEW dict (does not mutate input).
+- Canonicalizes per-session `status` aliases (`"completed"` → `"complete"`).
+- For v1/v2/v3 input, **promotes** the top-level orchestrator /
+  startedAt / completedAt / verificationVerdict onto the appropriate
+  `sessions[]` entry (the in-progress session if any, else the
+  most-recently-completed session) so per-session metadata is
+  populated.
+- For all input, **derives** the legacy top-level fields
+  (`currentSession`, `totalSessions`, `completedSessions`,
+  `orchestrator`, `startedAt`, `completedAt`, `verificationVerdict`,
+  `lifecycleState`) — see the **Derived values** section below for
+  the exact derivation rules.
+
+### Layer 2 — the progress view
+
+`get_progress(normalizedState)` (Python) /
+`getProgress(normalizedState)` (TS) returns a `ProgressView` with
+**only the progress-counting fields**: `sessions`, `total_sessions`,
+`completed_sessions`, `current_session`, `next_session`,
+`is_between_sessions`. It does NOT carry `startedAt`, `completedAt`,
+`orchestrator`, or `verificationVerdict` — callers that want those
+read them off the normalized dict (Layer 1) directly.
+
+`get_progress()` validates the 8 v4 invariants and raises
+`SessionStateInvariantError` on violation. **It requires `sessions[]`
+to be present and non-empty** (rule 1), so plan-less carve-out
+inputs (no `sessions[]` key) are handled at the shim layer and not
+fed into `get_progress()`; callers consuming a plan-less state read
+the normalized dict's derived fields directly instead.
+
+The convenience wrapper `read_progress(state, spec_md_path)`
+(Python) / `readProgress(state, specMdPath)` (TS) chains the two
+layers for the common case.
+
+### Layer 3 — the cancellation reader (carve-out)
+
+[`readCancellationState(sessionSetDir)`](../tools/dabbler-ai-orchestration/src/utils/cancelLifecycle.ts)
+reads raw `state.status` directly (not through the shim) because the
+bucketing decision is a status-only signal and intentionally avoids
+the invariant validation that `get_progress()` performs. See
+[§ Cancel / restore](#cancel--restore) for the full contract.
+
+Readers **MUST NOT** read top-level `currentSession`, `totalSessions`,
+or `completedSessions` directly off a raw `state` dict — those fields
+exist for the shim to materialize, never as a source of truth on v4
+writes.
 
 ---
 
-## v3 schema shape
+## v4 schema shape
 
-A conforming v3 `session-state.json` is a JSON object with these
+A conforming v4 `session-state.json` is a JSON object with these
 fields:
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "<slug matching the directory name>",
   "status": "not-started" | "in-progress" | "complete" | "cancelled",
-  "lifecycleState": "work_in_progress" | "closed" | null,
-  "startedAt": "<ISO 8601 timestamp | null>",
-  "completedAt": "<ISO 8601 timestamp | null>",
-  "verificationVerdict": "VERIFIED" | null,
-  "orchestrator": {
-    "engine": "...",
-    "provider": "...",
-    "model": "...",
-    "effort": "...",
-    "chatSessionId": "<string | null>",
-    "checkedOutAt": "<ISO 8601 timestamp>",
-    "lastActivityAt": "<ISO 8601 timestamp>"
-  } | null,
   "sessions": [
-    { "number": 1, "title": "Schema doc + helper", "status": "complete" },
-    { "number": 2, "title": "Writers + scaffolding", "status": "in-progress" },
-    { "number": 3, "title": "Reader migration",     "status": "not-started" }
+    {
+      "number": 1,
+      "title": "Schema doc + helper",
+      "status": "complete",
+      "startedAt": "2026-05-26T09:12:00-04:00",
+      "completedAt": "2026-05-26T11:04:00-04:00",
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-26T09:12:00-04:00",
+        "lastActivityAt": "2026-05-26T11:04:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED"
+    },
+    {
+      "number": 2,
+      "title": "Writers + scaffolding",
+      "status": "in-progress",
+      "startedAt": "2026-05-26T11:30:00-04:00",
+      "completedAt": null,
+      "orchestrator": { "engine": "claude", "provider": "anthropic",
+                        "model": "claude-opus-4-7", "effort": "high",
+                        "chatSessionId": null,
+                        "checkedOutAt": "2026-05-26T11:30:00-04:00",
+                        "lastActivityAt": "2026-05-26T11:42:00-04:00" },
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Reader migration",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
   ]
 }
 ```
 
-### Field-by-field
+### Top-level fields
 
 | Field | Type | Purpose |
 |---|---|---|
-| `schemaVersion` | int (currently `3`) | Schema gate; bump when breaking. |
+| `schemaVersion` | int (currently `4`) | Schema gate; bump when breaking. |
 | `sessionSetName` | string | Must equal the parent directory's basename. |
 | `status` | enum (see below) | Canonical top-level lifecycle state. Drives Done/Active bucketing in the extension. |
-| `lifecycleState` | enum or null | Coarser-grained machine-readable lifecycle (close-out's view). |
-| `startedAt` | ISO 8601 or null | First session start time. |
-| `completedAt` | ISO 8601 or null | Final session completion time. |
-| `verificationVerdict` | `"VERIFIED"` or null | Set by `close_session` after all gates pass. |
-| `orchestrator` | object or null | Engine / provider / model / effort + chatSessionId + check-out timestamps for the holder. Null when `status != "in-progress"`. Null for hand-driven Lightweight runs that have not started a session. See **Check-out / check-in** below. |
-| `sessions` | array of objects | The canonical progress ledger. See below. |
+| `sessions` | array of objects | The canonical progress ledger AND the carrier for every per-session lifecycle field. See below. |
 
-### `sessions[]` — the canonical progress ledger
+**Top-level fields that v3 carried but v4 drops** (now derived from
+`sessions[]` via the reader shim):
 
-Each entry is an object with three required fields:
+- `currentSession`, `totalSessions`, `completedSessions` — derived
+  from per-session `status`.
+- `startedAt` — derived from the earliest non-null
+  `sessions[].startedAt`.
+- `completedAt` — derived from the latest non-null
+  `sessions[].completedAt`.
+- `orchestrator` — derived from the in-progress session's orchestrator
+  block (or, when between sessions, null).
+- `verificationVerdict` — derived from the most-recently-completed
+  session's verificationVerdict.
+- `lifecycleState` — derived from top-level `status` per the v3 rule
+  (`work_in_progress` while in-flight; `closed` when complete or
+  cancelled).
+
+A v4 reader that calls these fields off `state` directly will see
+`KeyError` / `undefined`. The shim's whole job is to derive them.
+
+### `sessions[]` — the canonical lifecycle ledger
+
+Each entry is an object with these fields:
 
 | Field | Type | Purpose |
 |---|---|---|
 | `number` | positive int | 1-indexed session number. Unique within the array, sorted ascending. |
 | `title` | string | Display title, copied from `spec.md`'s `### Session K of N: <title>` heading. Cosmetic — drift between `spec.md` and the state file is benign. |
 | `status` | enum (see below) | Per-session lifecycle state. |
+| `startedAt` | ISO 8601 or null | Set on `start_session`. Null until the session begins. |
+| `completedAt` | ISO 8601 or null | Set on `close_session`. Null until the session closes. |
+| `orchestrator` | object or null | Engine / provider / model / effort + chatSessionId + check-out timestamps for the holder of THIS session. Null when this session has not yet started; populated by `start_session`; **preserved across `close_session`** as historical attribution on closed sessions. See **Per-session orchestrator block** below. |
+| `verificationVerdict` | string \| null | Set by `close_session` after gate checks. The two canonical tokens are `"VERIFIED"` and `"ISSUES_FOUND"`; the writer does not enforce an enum and operators have shipped extension tokens like `"ISSUES_FOUND_RESOLVED_IN_FLIGHT"` to capture mid-session disposition (see e.g. this set's S4 record). Readers should treat the field as a string and match on prefix when bucketing into VERIFIED vs ISSUES-FOUND buckets. |
 
-`number` and `status` are authoritative for progress semantics; `title`
-exists so consumers don't have to re-parse `spec.md` for every UI
-refresh. A future repair command may refresh stale titles from
-`spec.md`; until then, title drift is cosmetic (per the Set 030
-Gemini-approved clarification).
+The migration from v3 reorganized the lifecycle so that **per-session
+attribution survives the set's full lifetime**: who ran each session
+(orchestrator block), when it started, when it ended, and the
+verification verdict are all preserved on the per-session record
+instead of being overwritten by the next session's start.
 
-### Check-out / check-in (Set 033)
+### Per-session orchestrator block — historical attribution
 
-The `orchestrator` block doubles as the authoritative **check-out
-record** for the session set. Set 033 anchored the framework's
-coordination model in this block (rather than the retired per-set
-`.dabbler/orchestrator.json` marker — H2 in the Set 032 audit
-verdicts). Two nested timestamp fields capture the lifecycle:
+A populated `sessions[N].orchestrator` block carries:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `engine` | string | Orchestrator engine name (`claude`, `gpt-5-4`, `gemini-pro`, `codex`, etc.). |
+| `provider` | string \| null | Provider keying the API or IDE surface (`anthropic`, `openai`, `google`). Optional but always present in writes from the v4 writer. |
+| `model` | string | Model id (`claude-opus-4-7`, `gpt-5.4`, etc.). |
+| `effort` | string | Effort level: `low` / `medium` / `high` / `fast` / `normal` / `unknown`. |
+| `chatSessionId` | string \| null | Per-chat identifier (Set 036 H4 holder-identity discriminator). See **Check-out / check-in** below. |
+| `checkedOutAt` | ISO 8601 | When this orchestrator first claimed the session. |
+| `lastActivityAt` | ISO 8601 | Bumped on every same-holder re-attach during the session. |
+
+**A note on the `checkedOutAt` / `lastActivityAt` / `chatSessionId`
+fields:** these three carry forward from v3's check-out / check-in
+coordination layer (Sets 033 / 036). Hard enforcement of cross-holder
+coordination is **off by default since mid-Set-046** (see CLAUDE.md);
+the fields continue to be written for audit-history purposes but no
+gate consults them in production. The longer-term cleanup is
+scheduled as Set 049 (orchestrator-coordination-removal), which will
+audit-then-spec dropping all three fields from new writes and reshape
+the block to omit-null `engine` / `provider` / `model` / `effort`
+only. Until then, v4 writers emit the full 7-field block and v4
+readers tolerate both the full and the to-be-simplified form.
+
+### Check-out / check-in (preserved from Set 033, enforcement disabled)
+
+Each session's orchestrator block doubles as a check-out record for
+the **lifetime of that session**. Two nested timestamp fields capture
+the lifecycle:
 
 | Field | Set on | Bumped on |
 |---|---|---|
-| `checkedOutAt` | Fresh check-out (`status` flips `null → in-progress` with a new holder) OR force-override handoff (`--force`). | Never bumped by a same-holder write — preserved across re-attach. |
-| `lastActivityAt` | Every write. Mirrors `checkedOutAt` on a fresh check-out. | Every same-holder re-attach or in-state holder update. |
+| `checkedOutAt` | `start_session` invocation (`sessions[N].orchestrator` flips `null → populated`). | Never bumped by a same-holder write — preserved across re-attach. |
+| `lastActivityAt` | `start_session` invocation. Mirrors `checkedOutAt` on a fresh check-out. | Every same-holder `start_session` re-attach. `close_session` does NOT bump this field — the writer's only emission site is the shared `register_session_start` helper. |
 
 **Holder identity (H4):** the equality predicate is the
-`engine + provider + chatSessionId` composite (Set 036 Q1
-refinement of the Set 033 `engine + provider` base composite). Two
+`engine + provider + chatSessionId` composite (Set 036). Two
 orchestrators with the same triple but different `model` (e.g.,
 `claude-opus-4-7` and `claude-sonnet-4-6` both running through the
 same Claude chat) are treated as the **same holder**; model and
-effort are mutable fields inside the block and update in place on
-a same-holder re-attach without resetting `checkedOutAt`. Two
-distinct chats (different `chatSessionId`) on the same
-`engine + provider` are treated as **different holders** even
-though the engine and provider match — the chatSessionId is the
-discriminator the takeover UX (see below) keys on.
+effort are mutable fields inside the block and update in place on a
+same-holder re-attach without resetting `checkedOutAt`.
 
 **`chatSessionId`** is a per-chat identifier sourced at write time
 in one of two ways:
 
 - **Claude Code chats** — the SessionStart hook invoker
-  (`scripts/claude-session-start-invoker.js`) extracts
-  `session_id` from the hook payload and forwards it as
-  `--chat-session-id` to `start_session` automatically.
+  (`scripts/claude-session-start-invoker.js`) extracts `session_id`
+  from the hook payload and forwards it as `--chat-session-id` to
+  `start_session` automatically.
 - **All other orchestrators** (Codex CLI, Gemini Code Assist,
   GitHub Copilot, manual Lightweight) — the operator runs
   `python -m ai_router.new_chat_id --export --shell <bash|powershell|fish>`
-  in their shell once per chat and `eval`/`Invoke-Expression`/`source`s
-  the output. The resulting `$CHAT_SESSION_ID` env var is the
-  default for `start_session --chat-session-id` (env-fallback
-  branch). The wizard's "Configure Orchestrator" toast for
-  Gemini / Copilot links to this workflow.
+  in their shell once per chat and sources the output.
 
-**Tolerant-on-read.** A prior `orchestrator` block missing the
-`chatSessionId` key entirely (pre-Set-036 writer) or with the key
-present and `null` (Set 036 writer that had no ID at the time of
-write — e.g., a Claude chat without a hook-payload `session_id`,
-or an operator who skipped the `new_chat_id` workflow) is treated
-as a match against any caller-supplied chatSessionId for
-`engine + provider` equality. The first new write **populates the
-field strictly** with whatever the caller supplied (or `null` if
-nothing was supplied) — every new write under the Set 036+ writer
-includes the key.
+**Tolerant-on-read.** A prior orchestrator block missing
+`chatSessionId` entirely or with the key present and `null` is
+treated as a match against any caller-supplied chatSessionId for
+`engine + provider` equality. The first new write populates the
+field strictly.
 
-**Hard coordination (H3):** `start_session` REFUSES to write when
-the existing `orchestrator` block names a different
-`engine + provider + chatSessionId` composite than the caller,
-unless `--force` is set. The refusal error names both (a) the
-current holder's full composite (including the chatSessionId or
-`<no chat session ID recorded>` for legacy state) and (b) the two
-release paths — `--force` and the "Release Check-Out" Command
-Palette action — so the operator can act on it without consulting
-external docs. When the only difference is the chatSessionId
-(same `engine + provider`, different chat) and the caller is
-running on an interactive TTY, `start_session` ALSO surfaces an
-inline three-option prompt to stderr (Take Over / Open in
-Read-Only Mode / Cancel) before falling through to the standard
-refusal text — the operator-facing CLI mirror of the extension's
-Q3-locked takeover modal.
+**Hard coordination (gated).** When
+`DABBLER_ENFORCE_CHECKOUT_COORDINATION=1` is set in the environment,
+`start_session` REFUSES to write when the existing orchestrator
+block on the target session names a different
+`engine + provider + chatSessionId` composite than the caller, unless
+`--force` is set. Without the env var (the production default since
+Set 046), the writer proceeds without coordination checks. See
+CLAUDE.md "Hard-coordination enforcement (Sets 033 / 036) is OFF by
+default" for the full context.
 
-**Force-override (`--force`)** is an authority handoff, not a
-state-machine transition. The writer appends a single line to
-`~/.dabbler/orchestrator-writer.log` (best-effort; failure to write
-the log does not block the override) and proceeds with the write;
-the line carries both holders' full composites including both
-chatSessionIds (or `<no chat session ID recorded>` for the legacy
-case) so a forensic walk can correlate the handoff to the chats.
-`checkedOutAt` is rewritten to now and `lastActivityAt` mirrors
-it. The lifecycle invariant — at most one `in-progress` session
-per set, top-level status agreement with `sessions[]` — is
-unchanged.
+**Block-preserved-on-close (v4 historical-attribution contract):**
+when `close_session` flips `sessions[N].status` from `"in-progress"`
+to `"complete"`, the v4 writer **preserves** `sessions[N].orchestrator`
+in place. Under v3 the top-level orchestrator block was cleared on
+every close because the block doubled as a single global holder
+lock; under v4 the per-session orchestrator on a closed session is a
+historical record (who ran this session), NOT a check-out lock. The
+operator-visible "released between sessions" semantic is preserved
+by the reader shim: the derived top-level `orchestrator` is computed
+ONLY from the in-progress session, so the Explorer and other
+top-level consumers still see `orchestrator: null` between sessions
+even while per-session blocks remain populated on closed entries.
+
+The writer reads prior `sessions[]` back, preserves all per-session
+metadata on prior-completed entries (including their orchestrator
+blocks), and only mutates the current session's record. A session
+record's orchestrator block is null only when (a) the session has
+not yet started, OR (b) the session was closed by a v3 writer and
+later migrated to v4 (the v3 close cleared the top-level block, so
+the shim's promotion has nothing to attribute).
 
 **Per-set lifecycle lock (Set 036 Q5).** Both `start_session` and
-`close_session` acquire `<session-set-dir>/.lifecycle.lock` for
-the duration of their read/check/write window so a hybrid
-migration — one orchestrator opening a new session while another
-is mid-close-out on the same set — never interleaves writes. The
-lock dual-acquires the canonical `.lifecycle.lock` and the legacy
-`.close_session.lock` filename atomically for one release window
-per the R1 alias-on-read contract; both files carry `pid`,
-`worker_id`, and `acquired_at`, and stale locks on either path
-are reaped automatically. `start_session` polls for up to 30s on
-contention before exiting `EXIT_LOCK_CONTENTION=5`;
+`close_session` acquire `<session-set-dir>/.lifecycle.lock` for the
+duration of their read/check/write window so a hybrid migration —
+one orchestrator opening a new session while another is mid-close-out
+on the same set — never interleaves writes. `start_session` polls
+for up to 30s on contention before exiting `EXIT_LOCK_CONTENTION=5`;
 `close_session` keeps its existing immediate-failure contract
 (exit 3) so a stuck close-out surfaces fast rather than blocking
-under the poll window. See
-[`ai_router/docs/close-out.md`](../ai_router/docs/close-out.md)
-Section 3 step 3 for the lock contract end-to-end.
+under the poll window.
 
-**Block-null invariant:** when top-level `status` is anything other
-than `"in-progress"` (`"not-started"`, `"complete"`, or
-`"cancelled"`), the `orchestrator` block is `null`. The block lives
-exactly as long as a check-out does — the session boundary IS the
-release point. Because the chatSessionId lives inside the block,
-it clears together with the rest of the holder identity on every
-successful close; the next holder's `start_session` populates the
-field fresh from their own chat-id source.
+**Stranded-checkout recovery.** A session whose holder disappeared
+(crashed orchestrator, abandoned workstation) before running
+`close_session` ends up with a `sessions[N].orchestrator` block that
+no live process is claiming. Recovery paths:
 
-The invariant is tier-symmetric:
+- `start_session --force` from the would-be next holder. Force-mode
+  is an authority handoff — appends a single line to
+  `~/.dabbler/orchestrator-writer.log` and proceeds with the write.
+  Only meaningful when enforcement is on; otherwise the next call
+  just succeeds.
+- Manual edit of `sessions[N].orchestrator` to `null` if the operator
+  is sure no live holder is present.
 
-- **Full tier (Set 033 Session 6):** `close_session` clears the
-  block on every successful close (mid-set and final alike). The
-  same `_flip_state_to_closed` write that flips `status` and
-  `lifecycleState` also sets `orchestrator: null` immediately before
-  the file write. **Idempotent** — a block that is already `null`
-  (the previous holder force-released, or the session was closed via
-  a path that already cleared it) lands the same write and the close
-  proceeds normally. Close-out success is intentionally **not**
-  coupled to the prior check-out state, so the check-in is safe to
-  retry.
-- **Lightweight tier:** the human writes `orchestrator: null` by
-  hand at the same boundary, alongside the manual
-  `completedSessions[]` update. The rule is identical; only the
-  actor differs.
+### Plan-less carve-out
 
-**Migration tolerance:** an in-flight set whose `orchestrator`
-block lacks `checkedOutAt` (e.g., a state file written by a pre-Set-033
-writer that is still in-progress when v0.18.x ships) is **tolerated
-on read**. The next `start_session` call by the same holder
-populates `checkedOutAt` with the current time, since the prior
-value is unknown — a one-time loss of fidelity in exchange for not
-forcing a synchronous migration of every in-flight set across
-consumer repos.
+A set whose plan has not yet been committed (`spec.md` lacks both a
+`totalSessions:` in the configuration block AND `### Session N`
+headings) writes a v4 file with **no `sessions[]` array** at all.
+This is the Set 046 deliverable (a): the Explorer's `fractionFor()`
+renders this as `0/?` and the row buckets as in-progress.
 
-**Documentation aliases (OQ2):** the events `work_started` and
-`closeout_succeeded` in `session-events.jsonl` are equivalent to
-**`work_checked_out`** and **`work_checked_in`** in operator-facing
-prose. The ledger event names are NOT renamed (no schema change);
-the aliases live in documentation only. Per the Set 032 audit
-verdict, this lets the check-out / check-in framing settle into the
-operator vocabulary without churning every reader of the events
-ledger or breaking the analytics surface that already keys on
-`work_started` / `closeout_succeeded`.
-
-**Stranded-checkout recovery.** A session set whose holder
-disappeared (crashed orchestrator, abandoned workstation) before
-running `close_session` ends up with an `orchestrator` block that
-no live process is claiming. Two recovery paths exist:
-
-- `start_session --force` from the would-be next holder. The
-  refusal-message body (S1) names this path explicitly.
-- "Release Check-Out" from the VS Code Command Palette. Wraps the
-  same `--force` invocation.
-
-Both paths log the authority handoff to
-`~/.dabbler/orchestrator-writer.log` for audit; neither alters the
-events ledger.
-
-### Dual-write legacy fields (Set 030 steady state)
-
-Through this set and indefinitely after, Full-tier writers also emit
-the legacy progress triple, derived from `sessions[]`:
+The plan-less carve-out keeps two top-level fields that the canonical
+known-plan shape drops:
 
 ```json
 {
-  ...,
-  "currentSession": 2,
-  "totalSessions": 3,
-  "completedSessions": [1]
+  "schemaVersion": 4,
+  "sessionSetName": "047-state-file-schema-v4-audit",
+  "status": "in-progress",
+  "startedAt": "2026-05-26T15:02:59-04:00",
+  "orchestrator": {
+    "engine": "claude", "provider": "anthropic",
+    "model": "claude-opus-4-7", "effort": "high",
+    "chatSessionId": null,
+    "checkedOutAt": "2026-05-26T15:02:59-04:00",
+    "lastActivityAt": "2026-05-26T15:02:59-04:00"
+  }
 }
 ```
 
-These three fields are **observability only** in v3 — they exist so
-older readers (consumer repos still on a pre-v3 extension, ad-hoc
-scripts, the cost dashboard's legacy paths) keep working. They are
-never the source of truth; if the dual-write parity test ever flags a
-disagreement between `sessions[]` and the legacy triple, the bug is
-on the writer side and the legacy values must be regenerated from
-`sessions[]`.
+The reader shim consults the top-level passthroughs when `sessions`
+is absent so the in-flight session is still attributable. Once a
+plan lands (`spec.md` configuration block populated, or
+`--total-sessions N` passed to `start_session`), the next register or
+close write emits the canonical v4 shape with `sessions[]` and the
+top-level passthroughs are no longer written.
+
+### Passthrough fields preserved across writes
+
+Two fields written by orthogonal subsystems are opaque to the v4
+schema but preserved by every v4 writer across rewrites:
+
+- `forceClosed: true` — set by `close_session --force`; consumed by
+  the extension's FORCED badge.
+- `preCancelStatus: <status>` — captured by `cancelSessionSet` /
+  `cancel_session_set` so a subsequent restore can recover the
+  pre-cancel status (see **Cancel / restore** below).
 
 ---
 
@@ -316,8 +398,10 @@ on the writer side and the legacy values must be regenerated from
 
 ### Top-level `status`
 
-Exactly one of four values; same vocabulary as the per-session
-ledger:
+Exactly one of four values. The vocabulary mostly aligns with the
+per-session ledger, EXCEPT set-level `"cancelled"` is not accepted
+as a per-session value in v4 (per-session cancellation is reserved
+for a future schema — see **Per-session `sessions[].status`** below):
 
 - `"not-started"` — no session has begun.
 - `"in-progress"` — at least one session has begun and not all are
@@ -327,23 +411,15 @@ ledger:
 - `"cancelled"` — set was cancelled mid-flight. `status: "cancelled"`
   in this file is the **canonical signal** (Set 035, extending the
   H2 single-source-of-truth verdict from Set 033 Session 2). The
-  ``CANCELLED.md`` marker continues to be written alongside as an
+  `CANCELLED.md` marker continues to be written alongside as an
   audit-history artifact, but the bucketing read consults `status`
   first. See [§ Cancel / restore](#cancel--restore) below.
 
 **Aliases tolerated on read, never written:** the canonicalizer in
-both helpers maps `"completed"` and `"done"` to `"complete"`. The
+the shim maps `"completed"` and `"done"` to `"complete"`. The
 canonicalization keeps legacy files functional but **all new writes
 must emit the canonical token**. Drift to `"completed"` or `"done"`
 is a bug in the writer, not a valid alternate spelling.
-
-> **Terminology note (Set 030):** the Session Set Explorer's display
-> label has been unified from "Done" to "Complete" everywhere it
-> appears (rendered tree labels, viewsWelcome text, README
-> screenshots). The JSON canonical token and the display label now
-> match: one word, one mental model. The legacy "Done" string only
-> survives as an internal bucketing type alias
-> (`SessionState = "done" | ...`) and the read-time alias map.
 
 ### Per-session `sessions[].status`
 
@@ -355,66 +431,108 @@ Three accepted values today:
 - `"complete"` — this session has closed successfully.
 
 **Not accepted:** `"cancelled"` at the session level is reserved
-for a future schema. Set 030 only exercises set-level cancellation
+for a future schema. v4 only exercises set-level cancellation
 (`CANCELLED.md` filename marker plus top-level
 `status: "cancelled"`). Validators raise
 `SessionStateInvariantError(rule=2)` if a session entry uses it.
 
-### `lifecycleState` — the coarse machine view
+### `lifecycleState` (derived, never written)
 
-Exactly one of:
+The v4 reader shim derives `lifecycleState` so v3-era consumers keep
+working:
 
-- `null` — set is `not-started`; nothing to track.
-- `"work_in_progress"` — at least one session has begun; the set is
-  still live for close-out and queue routing.
-- `"closed"` — final close-out has run. Pairs with
-  `status: "complete"` or `status: "cancelled"` only (invariant rule
-  8).
+- `null` — set is `"not-started"` OR `"cancelled"`. The cancellation
+  signal lives in top-level `status` (per Set 035); the shim
+  intentionally does NOT synthesize `"closed"` for cancelled v4
+  inputs, matching the v3 writer's pre-Set-035 behavior of leaving
+  `lifecycleState` on the on-disk file untouched at cancel time.
+  Cancellation readers consult `status` (or
+  `readCancellationState()`) and do not depend on lifecycleState.
+- `"work_in_progress"` — top-level `status` is `"in-progress"`.
+- `"closed"` — top-level `status` is `"complete"`.
+
+V4 writers never emit `lifecycleState`; the field exists only in the
+derived read-view.
 
 ---
 
-## Derived values — the `get_progress()` view
+## Derived values
 
-`get_progress(state)` returns:
+### From the normalize shim (Layer 1)
+
+`normalize_to_v4_shape(state, spec_md_path)` returns a dict carrying
+the derived top-level fields:
 
 ```text
-sessions            = state.sessions
-totalSessions       = sessions.length
-completedSessions   = [s.number for s in sessions if s.status == "complete"]
+sessions            = canonicalized per-session records (Layer-1 dict)
+status              = canonicalized top-level status
+schemaVersion       = 4
 currentSession      = the single session where s.status == "in-progress", else null
-nextSession         = first session where s.status == "not-started", else null
-isBetweenSessions   = currentSession is null
-                      AND completedSessions is non-empty
-                      AND nextSession is not null
+totalSessions       = sessions.length (or null for plan-less carve-out)
+completedSessions   = [s.number for s in sessions if s.status == "complete"]
+orchestrator        = in-progress session's orchestrator (or plan-less
+                      top-level passthrough); null between sessions
+                      and after final close
+startedAt           = in-progress session's startedAt, else the
+                      most-recently-completed session's startedAt
+                      (scanned in reverse); for plan-less in-progress
+                      sets, falls back to top-level passthrough
+completedAt         = most-recently-completed session's completedAt
+                      ONLY when set-level status == "complete";
+                      mid-set closes keep this null (preserves v3's
+                      "set-completion timestamp" semantic)
+verificationVerdict = most-recently-completed session's
+                      verificationVerdict
+lifecycleState      = "work_in_progress" when status == "in-progress";
+                      "closed" when status == "complete"; null
+                      otherwise (including for cancelled sets — the
+                      cancellation signal lives in top-level `status`
+                      and not in lifecycleState)
 ```
 
-The `isBetweenSessions` predicate is what the extension's tree view
-uses to distinguish a fresh-start row from a "set is live but no
-session is active right now" row, and to decide whether to render the
-"session N in flight" annotation.
+### From the progress view (Layer 2)
+
+`get_progress(normalizedState)` returns a `ProgressView` dataclass
+carrying ONLY:
+
+```text
+sessions            = tuple of canonicalized SessionRecord values
+total_sessions      = sessions.length
+completed_sessions  = tuple of session numbers with status == "complete"
+current_session     = the single in-progress session's number, else None
+next_session        = first not-started session's number, else None
+is_between_sessions = current_session is None
+                      AND completed_sessions is non-empty
+                      AND next_session is not None
+```
+
+The `is_between_sessions` predicate is what the extension's tree
+view uses to distinguish a fresh-start row from a "set is live but
+no session is active right now" row, and to decide whether to render
+the "session N in flight" annotation. Callers that want the
+historical attribution (`startedAt`, `completedAt`, `orchestrator`,
+`verificationVerdict`) read those off the normalized dict (Layer 1)
+or off individual `sessions[]` entries, not off `ProgressView`.
 
 ---
 
-## Invariants — the 8 v3 rules
+## Invariants — the 8 v4 rules
 
 Writers and readers enforce these rules; violations raise
-`SessionStateInvariantError` (Python) /
-`SessionStateInvariantError` (TypeScript) with the violated rule
-number and an actionable message. **Fail loud, never silently
-recover.** Recovery lives in explicit repair tooling
-(`close_session --repair`, future `migrate_session_state`); the
-normal writers and the read-side validator never paper over a
-violation.
+`SessionStateInvariantError` (Python) / `SessionStateInvariantError`
+(TypeScript) with the violated rule number and an actionable message.
+**Fail loud, never silently recover.** Recovery lives in explicit
+repair tooling (`close_session --repair`, the migrator's validation
+mode); the normal writers and the read-side validator never paper
+over a violation.
 
 1. **`sessions` is required and non-empty** for any set with a
-   known plan.
+   known plan. The plan-less carve-out (no `sessions[]` key)
+   is the only exception.
 2. **`sessions[].number` values are positive integers, unique, and
-   contiguous starting at 1** (per spec decision D12: skipped
-   sessions are not supported; the invariant is *strict sequential*,
-   so `[1, 3]` is rejected, not just `[2, 1]`). Each entry's
-   `status` must be one of `"not-started"`, `"in-progress"`, or
-   `"complete"` — **session-level `"cancelled"` is reserved for a
-   future schema** and rejected today.
+   contiguous starting at 1**. Each entry's `status` must be one of
+   `"not-started"`, `"in-progress"`, or `"complete"` — **session-level
+   `"cancelled"` is reserved for a future schema** and rejected today.
 3. **At most one session may have `status: "in-progress"`.**
 4. **No session may be `"complete"` if an earlier session is
    `"not-started"` or `"in-progress"`.** Complete sessions form a
@@ -425,15 +543,18 @@ violation.
    in-progress session OR a between-sessions state (≥1 complete, ≥1
    not-started, 0 in-progress).
 7. **Top-level `status: "complete"`** requires every session to be
-   `"complete"`. The synthesizer is intentionally non-papering: a
-   v2 file with `status: "complete"` but an incomplete
-   `completedSessions[]` ledger is surfaced as a rule-7 violation
-   rather than coerced into a "consistent" shape.
-8. **`lifecycleState: "closed"`** pairs with top-level
-   `status: "complete"` or `"cancelled"` only. This rule fires even
-   when top-level `status` is absent — a state with
-   `lifecycleState: "closed"` and missing `status` is internally
-   inconsistent regardless.
+   `"complete"`. The shim is intentionally non-papering: a file with
+   `status: "complete"` but an incomplete `sessions[]` ledger is
+   surfaced as a rule-7 violation rather than coerced into a
+   "consistent" shape.
+8. **`sessions[N].orchestrator` is non-null whenever
+   `sessions[N].status` is `"in-progress"`.** In-progress sessions
+   always carry an orchestrator block (writer-side enforced by
+   `start_session`'s `--engine` + `--model` requirement).
+   Completed sessions written by the v4 writer carry their
+   orchestrator block as historical attribution; completed
+   sessions written by an earlier v3 writer (then migrated to v4)
+   carry `null`. Not-started sessions always carry `null`.
 
 > **Shape-vs-invariant errors.** Unknown top-level `status` values
 > (typos, future tokens) raise `SessionStateInvariantError(rule=2)`
@@ -445,27 +566,28 @@ violation.
 
 ## Lightweight tier — one-field-flip worked example
 
-The Lightweight tier maintains `session-state.json` by hand. The v3
-shape is deliberately optimized so each session transition is a
-**single-field edit** to one `sessions[]` entry, plus an optional
+The Lightweight tier maintains `session-state.json` by hand. The v4
+shape preserves the v3 single-field-flip property by keeping the
+session transitions local to one `sessions[]` entry, plus an optional
 top-level `status` flip on the first/last transition.
 
 Starting state (fresh set, 3 sessions planned):
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "002-extraction-pipeline",
   "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null,
   "sessions": [
-    { "number": 1, "title": "Discover sources", "status": "not-started" },
-    { "number": 2, "title": "Extract + normalize", "status": "not-started" },
-    { "number": 3, "title": "Load + verify", "status": "not-started" }
+    { "number": 1, "title": "Discover sources",   "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null },
+    { "number": 2, "title": "Extract + normalize", "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null },
+    { "number": 3, "title": "Load + verify",       "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null }
   ]
 }
 ```
@@ -473,15 +595,21 @@ Starting state (fresh set, 3 sessions planned):
 ### Start session 1
 
 - Flip `sessions[0].status`: `"not-started"` → `"in-progress"`
+- Set `sessions[0].startedAt` to today's ISO timestamp
+- (Optional) populate `sessions[0].orchestrator` with the holder
+  composite
 - Flip top-level `status`: `"not-started"` → `"in-progress"`
-- Flip `lifecycleState`: `null` → `"work_in_progress"`
-- Set `startedAt` to today's ISO timestamp
 
-(The top-level flips happen only on the first session's start.)
+(The top-level flip happens only on the first session's start.)
 
 ### Close session 1
 
 - Flip `sessions[0].status`: `"in-progress"` → `"complete"`
+- Set `sessions[0].completedAt` to today's ISO timestamp
+- Leave `sessions[0].orchestrator` in place as historical
+  attribution (do NOT clear it — v4 preserves the block on close)
+- Set `sessions[0].verificationVerdict` to `"VERIFIED"` (or
+  `"ISSUES_FOUND"` if the verifier round flagged unresolved issues)
 
 That's it. No other edits required. The top-level `status` stays
 `"in-progress"` because session 2 has not started yet — this is the
@@ -490,49 +618,55 @@ canonical between-sessions state.
 ### Start session 2
 
 - Flip `sessions[1].status`: `"not-started"` → `"in-progress"`
-
-One edit.
+- Set `sessions[1].startedAt`
+- (Optional) populate `sessions[1].orchestrator`
 
 ### Close session 2
 
 - Flip `sessions[1].status`: `"in-progress"` → `"complete"`
-
-One edit.
+- Set `sessions[1].completedAt`
+- Leave `sessions[1].orchestrator` in place
+- Set `sessions[1].verificationVerdict`
 
 ### Start + close session 3 (final)
 
 - Start: flip `sessions[2].status`: `"not-started"` →
-  `"in-progress"`
-- Close: flip `sessions[2].status`: `"in-progress"` → `"complete"`
-- Final-close additional flips: top-level `status` →
-  `"complete"`, `lifecycleState` → `"closed"`, set `completedAt` to
-  today's ISO timestamp.
+  `"in-progress"`; set `startedAt`; populate `orchestrator`.
+- Close: flip `sessions[2].status`: `"in-progress"` → `"complete"`;
+  set `completedAt`; set `verificationVerdict`; leave
+  `orchestrator` in place.
+- Final-close additional flip: top-level `status` → `"complete"`.
 
-The Set 030 D10 ergonomic test (Session 4) replays this exact
-sequence against a real `dabbler-homehealthcare-accessdb` state file
-to confirm the one-field-flip property holds end-to-end before the GA
-release.
+Each transition is still local — usually 2 to 4 field edits on a
+single `sessions[]` entry. The set's overall lifecycle continues to
+be driven by per-session status, with top-level `status` flipping
+once at the start and once at the final close. The reader shim
+derives the operator-visible "released between sessions" semantic
+(top-level `orchestrator: null` between sessions) from per-session
+status alone, so leaving the per-session block in place does NOT
+make the Explorer think a closed session is still in flight.
 
 ---
 
-## Worked examples (v3)
+## Worked examples (v4)
 
 ### Not-started
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "022-next-up",
   "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null,
   "sessions": [
-    { "number": 1, "title": "Plan",   "status": "not-started" },
-    { "number": 2, "title": "Build",  "status": "not-started" },
-    { "number": 3, "title": "Verify", "status": "not-started" }
+    { "number": 1, "title": "Plan",   "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null },
+    { "number": 2, "title": "Build",  "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null },
+    { "number": 3, "title": "Verify", "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null }
   ]
 }
 ```
@@ -544,39 +678,52 @@ release.
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "021-developer-approachability",
   "status": "in-progress",
-  "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-11T14:30:00-04:00",
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude-code",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "normal",
-    "chatSessionId": "5d3e9c2b-1f47-4a8b-9c61-2e7d8f4a1b3c",
-    "checkedOutAt": "2026-05-11T14:30:00-04:00",
-    "lastActivityAt": "2026-05-11T16:42:18-04:00"
-  },
   "sessions": [
-    { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
-    { "number": 2, "title": "Wire the wizard into onboarding", "status": "in-progress" },
-    { "number": 3, "title": "Marketplace launch checklist",    "status": "not-started" },
-    { "number": 4, "title": "Final round of dogfood feedback", "status": "not-started" }
+    { "number": 1, "title": "Pull together quick-start",
+      "status": "complete",
+      "startedAt": "2026-05-11T14:30:00-04:00",
+      "completedAt": "2026-05-12T10:15:00-04:00",
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-11T14:30:00-04:00",
+        "lastActivityAt": "2026-05-12T10:15:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED" },
+    { "number": 2, "title": "Wire the wizard into onboarding",
+      "status": "in-progress",
+      "startedAt": "2026-05-12T11:00:00-04:00",
+      "completedAt": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": "5d3e9c2b-1f47-4a8b-9c61-2e7d8f4a1b3c",
+        "checkedOutAt": "2026-05-12T11:00:00-04:00",
+        "lastActivityAt": "2026-05-12T16:42:18-04:00"
+      },
+      "verificationVerdict": null },
+    { "number": 3, "title": "Marketplace launch checklist",
+      "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null }
   ]
 }
 ```
 
 `get_progress()` returns `currentSession=2`, `nextSession=3`,
 `completedSessions=[1]`, `isBetweenSessions=False`. The extension's
-tree view renders this as `1/4 · session 2 in flight`. `checkedOutAt`
-captures when this set was first checked out; `lastActivityAt`
-bumped on the most recent same-holder re-attach. `chatSessionId`
-is the per-chat identifier from Claude Code's SessionStart hook
-payload — the H4 discriminator that lets the writer distinguish
-two Claude chats sharing `claude-code + anthropic`.
+tree view renders this as `1/3 · session 2 in flight`. The shim's
+derived top-level `orchestrator` reflects session 2's holder (the
+in-progress session); session 1's per-session orchestrator stays in
+place as historical attribution.
 
 ### Between sessions
 
@@ -586,60 +733,94 @@ flight.
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "030-session-state-v3-sessions-ledger",
   "status": "in-progress",
-  "lifecycleState": "work_in_progress",
-  "startedAt": "2026-05-17T05:00:00-04:00",
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": {
-    "engine": "claude",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "effort": "high",
-    "checkedOutAt": "2026-05-17T05:00:00-04:00",
-    "lastActivityAt": "2026-05-17T05:00:00-04:00"
-  },
   "sessions": [
-    { "number": 1, "title": "Schema doc + get_progress() helper + v2-read synthesizer", "status": "complete" },
-    { "number": 2, "title": "Dual-write writers + scaffolding",                          "status": "not-started" },
-    { "number": 3, "title": "Reader migration + Explorer label",                         "status": "not-started" },
-    { "number": 4, "title": "Bulk migrator + in-repo migration + RC build",              "status": "not-started" },
-    { "number": 5, "title": "Migration UX + loading state + final release",              "status": "not-started" }
+    { "number": 1, "title": "Schema doc + get_progress() helper",
+      "status": "complete",
+      "startedAt": "2026-05-17T05:00:00-04:00",
+      "completedAt": "2026-05-17T10:30:00-04:00",
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-17T05:00:00-04:00",
+        "lastActivityAt": "2026-05-17T10:30:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED" },
+    { "number": 2, "title": "Dual-write writers + scaffolding",
+      "status": "not-started",
+      "startedAt": null, "completedAt": null,
+      "orchestrator": null, "verificationVerdict": null }
   ]
 }
 ```
 
 `get_progress()` returns `currentSession=None`, `nextSession=2`,
 `completedSessions=[1]`, `isBetweenSessions=True`. The extension's
-tree view renders this as `1/5` plain (no in-flight annotation).
+tree view renders this as `1/2` plain (no in-flight annotation).
+The shim's derived top-level `orchestrator` is `null` (no in-progress
+session); session 1's per-session block stays as historical
+attribution.
 
 ### Complete
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sessionSetName": "021-developer-approachability",
   "status": "complete",
-  "lifecycleState": "closed",
-  "startedAt": "2026-05-11T14:30:00-04:00",
-  "completedAt": "2026-05-13T18:45:00-04:00",
-  "verificationVerdict": "VERIFIED",
-  "orchestrator": null,
   "sessions": [
-    { "number": 1, "title": "Pull together quick-start",       "status": "complete" },
-    { "number": 2, "title": "Wire the wizard into onboarding", "status": "complete" },
-    { "number": 3, "title": "Marketplace launch checklist",    "status": "complete" },
-    { "number": 4, "title": "Final round of dogfood feedback", "status": "complete" }
+    { "number": 1, "title": "Pull together quick-start",
+      "status": "complete",
+      "startedAt": "2026-05-11T14:30:00-04:00",
+      "completedAt": "2026-05-12T10:15:00-04:00",
+      "orchestrator": {
+        "engine": "claude", "provider": "anthropic",
+        "model": "claude-opus-4-7", "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-11T14:30:00-04:00",
+        "lastActivityAt": "2026-05-12T10:15:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED" },
+    { "number": 2, "title": "Wire the wizard into onboarding",
+      "status": "complete",
+      "startedAt": "2026-05-12T11:00:00-04:00",
+      "completedAt": "2026-05-13T16:00:00-04:00",
+      "orchestrator": {
+        "engine": "claude", "provider": "anthropic",
+        "model": "claude-opus-4-7", "effort": "high",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-12T11:00:00-04:00",
+        "lastActivityAt": "2026-05-13T16:00:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED" },
+    { "number": 3, "title": "Marketplace launch checklist",
+      "status": "complete",
+      "startedAt": "2026-05-13T17:00:00-04:00",
+      "completedAt": "2026-05-13T18:45:00-04:00",
+      "orchestrator": {
+        "engine": "gpt-5-4", "provider": "openai",
+        "model": "gpt-5.4", "effort": "medium",
+        "chatSessionId": null,
+        "checkedOutAt": "2026-05-13T17:00:00-04:00",
+        "lastActivityAt": "2026-05-13T18:45:00-04:00"
+      },
+      "verificationVerdict": "VERIFIED" }
   ]
 }
 ```
 
-The `orchestrator` block is `null` on a closed set per the Set 033
-block-null invariant — the check-out cleared on close. Historical
-files in the wild may still carry a populated block on a closed
-set; that's tolerated on read but no new write produces it.
+Each session's orchestrator block is preserved as historical
+attribution — different sessions may have been run by different
+orchestrators (here, sessions 1-2 by Claude, session 3 by Codex).
+The shim's derived top-level `orchestrator` is `null` because no
+session is in-progress. Sets migrated from v3 carry `null`
+orchestrator on sessions that were closed by the v3 writer (whose
+on-close clear of the top-level block left nothing to attribute).
 
 ---
 
@@ -686,12 +867,15 @@ not the bucketing API. The wired-in call site is
 
 The two canonical writers — `cancelLifecycle.ts` (TypeScript) and
 `ai_router/session_lifecycle.py` (Python) — keep both signals in
-lockstep at every cancel/restore boundary:
+lockstep at every cancel/restore boundary. Both writers route v1/v2/v3/v4
+input through `normalizeToV4Shape` / `_to_v4_on_disk_shape` and emit
+canonical v4 output:
 
 - A successful `cancelSessionSet` / `cancel_session_set` writes the
   `CANCELLED.md` audit entry **and** sets `state.status =
   "cancelled"` with the prior status captured into
-  `preCancelStatus`.
+  `preCancelStatus` (an opaque passthrough field preserved across
+  rewrites).
 - A successful `restoreSessionSet` / `restore_session_set` renames
   `CANCELLED.md` to `RESTORED.md` (preserving history), prepends a
   new `Restored on <iso>` entry, **and** restores `state.status`
@@ -701,20 +885,13 @@ lockstep at every cancel/restore boundary:
   cancel-on-an-already-cancelled set prepends a new audit entry
   but does NOT overwrite `preCancelStatus` with `"cancelled"` —
   that would lose the original status across the next restore.
-  Both writers gate the `preCancelStatus` capture on
-  `state.status !== "cancelled"`, so a re-cancel is a no-op for
-  the captured prior status.
 
 Set 035 Session 2's writer-parity check confirmed the two writers
 produce byte-equivalent on-disk output (LF newlines, UTF-8 no BOM,
 local-time ISO-8601 with second precision and `±HH:MM` offset).
+Set 047 Session 5 re-validated the parity on v4 emission.
 A set cancelled on one platform reads identically when the same
-repo is opened on another. Because the writers are symmetric,
-the only way for the state file's `status` and the markdown
-marker's presence to disagree is (a) a legacy state file written
-before Set 035, or (b) a manual edit to one signal without the
-other. Both branches resolve through the legacy-fallback path
-below, never by silently overriding the state file.
+repo is opened on another.
 
 ### Legacy-fallback path
 
@@ -724,10 +901,10 @@ v1 snapshot, hand-edited shape, brand-new folder), and a
 `CANCELLED.md` is present on disk, the set still buckets as
 Cancelled. The fallback emits a `console.warn` so a diagnostic
 trail exists if a state-file write bug ever masks a real
-cancellation behind an inconsistent status. Modern v3 writes from
-either writer always populate `status` correctly, so the fallback
-branch is exercised only for legacy state and manually edited
-files.
+cancellation behind an inconsistent status. Modern v3 and v4 writes
+from either writer always populate `status` correctly, so the
+fallback branch is exercised only for legacy state and manually
+edited files.
 
 The state-file-first contract intentionally does NOT consult
 `CANCELLED.md` presence when the state file declares a
@@ -736,8 +913,8 @@ non-cancelled `status`. A stray `CANCELLED.md` paired with
 inconsistency (likely a manual edit), not a signal to silently
 override the state file.
 
-Per-session cancellation is reserved for a future schema. v3
-readers tolerate `"cancelled"` in `sessions[]` but no v3 writer
+Per-session cancellation is reserved for a future schema. v4
+readers tolerate `"cancelled"` in `sessions[]` but no v4 writer
 emits it.
 
 ### Layer-3 coverage
@@ -745,12 +922,72 @@ emits it.
 The state-file-first contract is pinned by a Layer-3 Playwright
 smoke at
 [`tools/dabbler-ai-orchestration/src/test/playwright/cancellation-state-file.spec.ts`](../tools/dabbler-ai-orchestration/src/test/playwright/cancellation-state-file.spec.ts).
-Two scenarios cover the two paths: (1) `status: "cancelled"` with
+Three scenarios cover both paths: (1) `status: "cancelled"` with
 no `CANCELLED.md` on disk → Cancelled bucket (the new contract);
 (2) no usable state file + `CANCELLED.md` present → Cancelled
-bucket (the legacy fallback). A third scenario covers the
-write-side asymmetry — `status: "complete"` with a stray
-`CANCELLED.md` is NOT bucketed as Cancelled (the state file wins).
+bucket (the legacy fallback); (3) `status: "complete"` with a
+stray `CANCELLED.md` is NOT bucketed as Cancelled (the state file
+wins).
+
+---
+
+## Prerequisites — cross-set blocking
+
+Set 047 ships a `prerequisites:` field on `spec.md`'s Session Set
+Configuration block that declares which other sets must complete
+before this one is workable. The Explorer cross-references each
+set's prereqs against the target set's `status` and adds a
+`blockedByPrereqs: boolean` derived property to the in-memory
+`SessionSet` record. Blocked rows render a `[BLOCKED BY PREREQS]`
+badge in the Explorer description.
+
+### Spec-side declaration
+
+```yaml
+## Session Set Configuration
+
+totalSessions: 4
+requiresUAT: false
+requiresE2E: false
+prerequisites:
+  - slug: 047-state-file-schema-v4-audit
+    condition: complete
+  - slug: 045-log-harvest
+    condition: complete
+```
+
+The enum for `condition` is `"complete"` only today. The field is
+typed as a string so a future spec can extend the enum.
+
+### Parser semantics
+
+`parsePrerequisites(specPath)` (TS) is a lightweight regex parser —
+no YAML lib dependency — that:
+
+- Strips trailing YAML `# comment` from scalar values before
+  matching.
+- Distinguishes "no `condition:` key present" (defaults to
+  `"complete"`) from "key present but invalid" (drops the entry).
+- Drops entries missing `slug`.
+- Returns `null` when the field is absent entirely, `[]` when
+  explicitly empty.
+
+### Cross-reference semantics
+
+`deriveBlockedByPrereqs(sets)` runs after `readSessionSets()` /
+`readAllSessionSets()` builds the merged set list, so cross-root
+prereq resolution works (a set in one workspace root can depend on
+a set in another). The derivation rules:
+
+- ANY unsatisfied prereq blocks the row.
+- An unknown target slug (typo / missing set) keeps the row
+  blocked — typos do NOT silently unblock.
+- The `[BLOCKED BY PREREQS]` badge is suppressed on terminal-state
+  rows (`complete` / `cancelled`) because once a set has closed,
+  its dependency status is no longer actionable.
+
+The `blockedByPrereqs` property is a derived in-memory boolean;
+it is never persisted to the state file.
 
 ---
 
@@ -760,15 +997,17 @@ A folder with `spec.md` but no `session-state.json` triggers
 `ensureSessionStateFile` (extension) / `ensure_state_file` (router),
 which infers a starting shape from current file presence:
 
-| Files present | Inferred `status` | Inferred `lifecycleState` |
+| Files present | Inferred `status` | `sessions[]` shape |
 |---|---|---|
-| `change-log.md` | `"complete"` | `"closed"` |
-| `activity-log.json` (no change-log) | `"in-progress"` | `"work_in_progress"` |
-| Neither | `"not-started"` | `null` |
+| `change-log.md` | `"complete"` | every session promoted to `"complete"`; per-session `completedAt` left `null` (the change-log mtime is a set-level heuristic, not a per-session boundary) |
+| `activity-log.json` (no change-log) | `"in-progress"` | session 1 promoted to `"in-progress"`; `sessions[0].startedAt` set from the earliest activity-log timestamp |
+| Neither | `"not-started"` | every session `"not-started"` |
 
 Both writers also seed `sessions[]` by parsing `spec.md` headings
-(`### Session K of N: <title>`); when the spec has no headings, they
-fall back to generic `"Session N"` titles up to the planned count.
+(`### Session K of N: <title>`) or its Session Set Configuration
+block's `totalSessions:` value; when the spec has neither, they
+write the plan-less carve-out shape (no `sessions[]` key, top-level
+`status: "in-progress"` + `startedAt` + `orchestrator` passthroughs).
 
 ---
 
@@ -778,49 +1017,61 @@ fall back to generic `"Session N"` titles up to the planned count.
   writes the state file on every session boundary.
   - `start_session`: validates no other session is in-progress
     (invariant rule 3), flips `sessions[N-1].status` to
-    `"in-progress"`, sets top-level `status` and `lifecycleState`
-    accordingly, sets `startedAt` if previously null. Always backfills
-    `sessions[]` from `spec.md` if absent.
+    `"in-progress"`, populates `sessions[N-1].startedAt` and
+    `sessions[N-1].orchestrator`, sets top-level `status` accordingly.
+    Always backfills `sessions[]` from `spec.md` if absent unless the
+    plan-less carve-out fires.
   - `close_session`: validates `sessions[N-1].status` is
     `"in-progress"` (or already `"complete"` under idempotent
-    retry), flips it to `"complete"`, then re-derives top-level
-    status (rule 6/7) and lifecycleState (rule 8). Final close also
-    sets `completedAt` and `verificationVerdict`.
+    retry), flips it to `"complete"`, sets `sessions[N-1].completedAt`,
+    **leaves `sessions[N-1].orchestrator` in place** as historical
+    attribution, sets `sessions[N-1].verificationVerdict`, then
+    re-derives top-level status (rule 6/7).
 - **Lightweight tier** (`Workflow: Lightweight`): no router writes.
   The human or AI orchestrator maintains the file by hand on each
   session boundary using the one-field-flip recipe above. **Always
-  include and maintain `sessions[]`** — it is the only authoritative
-  progress signal under hand-maintenance.
+  include and maintain `sessions[]`** — it is the canonical
+  authoritative ledger under hand-maintenance. (The longer-term
+  Lightweight parity work — `--no-router` mode, copyable review
+  prompts, suggested-not-required UAT/E2E — is Set 048's scope.)
 
 ---
 
-## Reading a v2 file (compat path)
+## Reading a v3 file (compat path)
 
-Before v3 reaches every consumer repo, readers will still encounter
-v2 files in the wild. The compat path is:
+Before v4 reaches every consumer repo, readers will still encounter
+v3 files in the wild. The compat path is automatic: the reader shim
+accepts any `schemaVersion` from 1 through 4 and returns a v4
+read-view. Callers do not branch on schema version.
 
-1. Read the file as JSON. Check `schemaVersion`.
-2. If `schemaVersion == 3`: pass directly to `get_progress(state)`.
-3. If `schemaVersion == 2` (or missing): call
-   `synthesize_v3_from_v2(state, spec_md_path)` first. The
-   synthesizer returns a NEW dict (does not mutate the input) with
-   `sessions[]` derived from `completedSessions[]`, `currentSession`,
-   and `spec.md` titles. Pass the result to `get_progress()`.
-4. The Session 5 bulk migrator (`python -m
-   ai_router.migrate_session_state`) is the eventual one-shot path
-   for converting v2 files in place. Until then, the read-side
-   synthesizer is the daily-driver path.
+The shim's v3 → v4 promotion rules:
 
-### v2 → v3 default-to-not-started rule
+- Top-level `orchestrator` block (if present) is promoted to the
+  in-progress session's `sessions[N].orchestrator` (or, when between
+  sessions, to the most-recently-completed session).
+- Top-level `startedAt` is promoted to the earliest in-progress or
+  completed session's `sessions[N].startedAt`.
+- Top-level `completedAt` is promoted to the most-recently-completed
+  session's `sessions[N].completedAt`.
+- Top-level `verificationVerdict` is promoted to the
+  most-recently-completed session's `sessions[N].verificationVerdict`.
 
-The synthesizer follows the project's
+The promoted view is read-only — the shim does not mutate the
+on-disk file. To convert a v3 file to v4 on disk, use the migrator
+(see next section).
+
+### v2 → v3 → v4 default-to-not-started rule
+
+When the shim sees a v2 (or v1) input, it routes through
+`synthesize_v3_from_v2(state, spec_md_path)` first to produce a
+v3-shaped intermediate, then proceeds with the v3 → v4 promotion.
+The v2 synthesizer follows the project's
 `feedback_default_not_started_evidence_to_escalate` rule: every
 session defaults to `"not-started"` and is only escalated when
 concrete evidence is present:
 
 - A session escalates to `"complete"` **only** if its number is
-  present in v2's `completedSessions[]` as a strict positive integer
-  (not `true`, not `1.0`).
+  present in v2's `completedSessions[]` as a strict positive integer.
 - A session escalates to `"in-progress"` **only** if it equals v2's
   `currentSession` AND the top-level status is `"in-progress"` AND
   the session is not already complete.
@@ -831,50 +1082,64 @@ fields reads as less progressed than it might be, which the operator
 can fix by hand, rather than reading as more progressed and silently
 producing wrong "X/N" counts.
 
-**The synthesizer does not "fix" contradictions.** A v2 file with
-top-level `status: "complete"` but an incomplete
-`completedSessions[]` is reported faithfully: the named-complete
-sessions are `"complete"`, the rest are `"not-started"`, and the
-contradiction surfaces as a rule-7 violation on the next
-`get_progress()` call. Per the "fail loud, never silently recover"
-rule, the operator (or a repair tool) is responsible for resolving
-the inconsistency before the file becomes readable. Earlier drafts
-of the synthesizer force-promoted every session to complete in this
-case; that papered over real human errors and was removed.
+**The shim does not "fix" contradictions.** A v2 file with top-level
+`status: "complete"` but an incomplete `completedSessions[]` is
+reported faithfully: the named-complete sessions are `"complete"`,
+the rest are `"not-started"`, and the contradiction surfaces as a
+rule-7 violation on the next `get_progress()` call. Per the "fail
+loud, never silently recover" rule, the operator (or a repair tool)
+is responsible for resolving the inconsistency.
 
 ---
 
-## Migration recipe (one-time, for legacy v1/v2 files)
+## v3 → v4 migration
 
-The bulk migrator in Set 030 Session 4 will run this recipe
-automatically on every state file under `docs/session-sets/`. For
-ad-hoc hand-migration of a single file:
+The migrator (Set 047 Session 3) converts v3 files on disk to
+canonical v4 in place. Two surfaces invoke it:
 
-1. Run `synthesize_v3_from_v2()` on the existing state with the set's
-   `spec.md` path. The returned dict is the v3 shape.
-2. Inspect the synthesized `sessions[]` titles. Edit any that the
-   regex got wrong (titles drift on hand-rewritten specs).
-3. Bump `schemaVersion` to `3`.
-4. Remove the legacy progress triple — or leave them in place if the
-   file will be read by an old reader; the dual-write contract treats
-   the triple as compat surface and ignores it on the source-of-truth
-   path.
-5. Write the file back. The next `start_session` /
-   `close_session` invocation will rewrite the dual-write shape and
-   normalize anything that drifted further.
+### CLI
 
-Lifecycle-state and status-token migration recipes are unchanged from
-v2:
+```bash
+# Dry run (default) — shows what would change without writing.
+python -m ai_router.migrate_v3_to_v4
 
-- Rewrite `status: "completed"` → `"complete"` and
-  `status: "done"` → `"complete"`.
-- Rewrite `lifecycleState: "done"` / `"active"` / `"finished"` to
-  the canonical `"closed"` (terminal) or `"work_in_progress"`
-  (live).
+# Apply mode — writes v4 in place; writes session-state.v3.bak.json
+# alongside as the rollback artifact.
+python -m ai_router.migrate_v3_to_v4 --in-place
+
+# Single set:
+python -m ai_router.migrate_v3_to_v4 --in-place --only <slug>
+```
+
+Properties:
+
+- **Idempotent** — re-running on a v4 file is a no-op (the migrator
+  detects `schemaVersion >= 4` and skips).
+- **Validates before writing** — the resulting v4 state is checked
+  against the 8 invariant rules; a `WOULD-VIOLATE` disposition
+  refuses to write rather than producing a malformed file.
+- **Writes the `.bak` before the new file** — so a partial write is
+  always recoverable.
+- **Per-set independence** — one set's failure does not block
+  another set's migration. The CLI exits non-zero iff any set
+  reported a hard error.
+
+### VS Code right-click action
+
+The Session Sets view's right-click menu offers **Migrate to v4
+schema** on any v3 row. The action wraps the same migrator in
+single-set mode and shows the result (and any rollback path) in a
+VS Code notification.
+
+### Rollback
+
+See [`v3-to-v4-rollback-procedure.md`](v3-to-v4-rollback-procedure.md)
+for the full trigger conditions, single-set / batch restore steps,
+and post-rollback validation.
 
 ---
 
-## Bucketing in the Session Sets Explorer (v3)
+## Bucketing in the Session Sets Explorer (v4)
 
 The extension's tree view buckets each row from `get_progress()` plus
 filename signals:
@@ -891,18 +1156,23 @@ filename signals:
 
 The "not mid-set" guard (`isMidSetComplete` in
 `tools/dabbler-ai-orchestration/src/utils/fileSystem.ts`) consults
-the same `sessions[]` ledger as `get_progress()`; v3 makes the guard
+the same `sessions[]` ledger as `get_progress()`; v4 makes the guard
 trivial since "every session complete" is directly readable. The
 legacy `completedSessions[]` + events-ledger fallback paths described
 in earlier versions of this doc are still tolerated for reading old
-files but are not exercised by v3 writers.
+files but are not exercised by v4 writers.
+
+A row whose set declares `prerequisites:` and has at least one
+unsatisfied prereq target ALSO renders the `[BLOCKED BY PREREQS]`
+badge in its description — the badge is suppressed on terminal-state
+rows (Complete / Cancelled).
 
 ---
 
 ## Drift check
 
-The v3 example file at `docs/session-state-schema-example.json` is
-the canonical reference. A future drift check (Session 4 of Set 030
-or later) will regenerate it from the live schema constants and
-fail-loud when the documented example and the live writer
-disagree. Until then, keep them in sync by hand when either changes.
+The v4 example file at `docs/session-state-schema-example.json` is
+the canonical reference. A future drift check will regenerate it
+from the live schema constants and fail-loud when the documented
+example and the live writer disagree. Until then, keep them in sync
+by hand when either changes.

@@ -87,6 +87,8 @@ Provisional: 4-6 sessions (audit S1 + 3-5 implementation sessions). The audit wi
 - **v4 schema design** — Set 047's territory; Set 048 builds against canonical v4.
 - **PyPI package split** — rejected in Set 047 Bias 1 flip.
 - **Auto-verification for Lightweight** — explicitly excluded by premise P3.
+- **Orchestrator-block simplification + check-out/check-in code rip-out + Session Set Explorer orchestrator-rendering removal** — Set 049's territory (stub at [`docs/session-sets/049-orchestrator-coordination-removal/`](../049-orchestrator-coordination-removal/), operator-locked 2026-05-26). Set 048's writers emit the v4 orchestrator block as-shipped from Set 047. Set 049 will reshape the orchestrator block to four fields (engine/provider/model/effort) with an omit-null writer pattern *after* Set 048 lands.
+- **Orchestrator-identity introspection design** — operator decision 2026-05-26: P1.(a) "model and effort identification" resolves via simple operator-prompt at session start. No introspection branch (Copilot Chat model is hallucination-prone; effort is universally not introspectable across engines). See `feedback_orchestrator_block_omit_null_no_explorer.md` in memory.
 
 ---
 

@@ -142,6 +142,9 @@ requiresUAT: false       # human UAT review required before set closes
 requiresE2E: false       # E2E test coverage required before notifying
 uatStyle: ad-hoc         # dsl | ad-hoc (only meaningful when requiresUAT: true; default ad-hoc)
 uatScope: per-session    # per-session | per-set | none (only meaningful when requiresUAT: true)
+prerequisites:           # optional; sets that must complete before this one is workable
+  - slug: 047-state-file-schema-v4-audit
+    condition: complete
 ```
 
 ### Field semantics
@@ -194,6 +197,27 @@ uatScope: per-session    # per-session | per-set | none (only meaningful when re
   - `per-set` — a single checklist authored at the end of the set,
     covering the whole effort.
   - `none` — invalid here (use `requiresUAT: false` instead).
+
+- **`prerequisites`** — optional list of other session sets that must
+  reach a particular state before this set is considered workable.
+  Each entry has two fields:
+  - **`slug`** — the directory name (under `docs/session-sets/`) of
+    the prerequisite set.
+  - **`condition`** — the required state on the prerequisite. The
+    enum is `"complete"` only today; a future spec may extend it.
+    Omitting `condition:` defaults to `"complete"`.
+
+  Cross-references run after the Session Sets view builds its merged
+  set list, so a prereq can target a set in a different workspace
+  root. An unknown target slug (typo / missing set) keeps the
+  dependent row blocked — typos do NOT silently unblock. The
+  Explorer renders blocked rows with a `[BLOCKED BY PREREQS]` badge
+  in the row description; the badge is suppressed on terminal-state
+  rows (Complete / Cancelled) because once a set has closed, its
+  dependency status is no longer actionable. Field added in Set 047
+  Session 5; see [`docs/session-state-schema.md`](../session-state-schema.md)
+  § Prerequisites for parser semantics and the cross-reference
+  derivation rules.
 
 ### Defaults
 
@@ -395,6 +419,9 @@ placeholders.
 requiresUAT: false
 requiresE2E: false
 uatScope: none
+# prerequisites:                # uncomment if this set depends on another
+#   - slug: <prerequisite-slug>
+#     condition: complete
 ```
 
 > Rationale: <one or two sentences on why these flags are set this way.
@@ -442,15 +469,24 @@ uatScope: none
 ## Cross-set dependencies
 
 When a set depends on another set's deliverables, declare the
-prerequisite in the preamble (the `**Prerequisite:**` line). The
-orchestrator and the Session Set Explorer use this to show the
-dependency DAG and to prevent starting a dependent set before its
-prerequisite is complete.
+prerequisite in **two places**:
+
+1. **Prose** — the `**Prerequisite:**` line in the preamble at the
+   top of `spec.md`. Human-readable; no machine semantics.
+2. **Machine-readable** — the `prerequisites:` field in the Session
+   Set Configuration block (see field semantics above). The
+   Session Sets view's `[BLOCKED BY PREREQS]` badge is driven from
+   this field; the prose preamble is not parsed.
+
+The two should agree. The structured `prerequisites:` field is what
+gates the Explorer's visible blocking signal — a prereq omitted
+there is invisible to the tool even if the preamble names it.
 
 For a set that consolidates outputs from multiple prior sets (a
-**synthesis** set), declare every prerequisite. The synthesis set's
-last session typically produces a `change-log.md` that summarizes the
-combined effect across all prerequisites.
+**synthesis** set), declare every prerequisite in both surfaces.
+The synthesis set's last session typically produces a
+`change-log.md` that summarizes the combined effect across all
+prerequisites.
 
 ---
 
