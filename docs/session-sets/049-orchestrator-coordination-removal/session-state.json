@@ -6,9 +6,9 @@
     {
       "number": 1,
       "title": "Audit pass + scope-lock",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-05-27T15:36:47.468976-04:00",
-      "completedAt": null,
+      "completedAt": "2026-05-27T15:41:55.738646-04:00",
       "orchestrator": {
         "engine": "codex",
         "provider": "openai",
