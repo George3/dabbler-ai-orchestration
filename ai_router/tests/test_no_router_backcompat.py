@@ -49,16 +49,21 @@ def test_start_session_pre_set_048_invocation_still_works():
     assert args.no_router is False  # new flag defaults to False
 
 
-def test_start_session_with_force_still_works():
-    """The --force flag (Set 033) still parses without --no-router."""
+def test_start_session_chat_session_id_still_parses():
+    """--chat-session-id (Set 036) still parses post-Set-049.
+
+    The flag is accepted by argparse and ignored by the writer per T2
+    accept-with-warning, so consumer-repo invokers that still pass it
+    don't error.
+    """
     parser = start_session._build_arg_parser()
     args = parser.parse_args([
         "--session-set-dir", "x",
         "--engine", "claude",
         "--model", "claude-opus-4-7",
-        "--force",
+        "--chat-session-id", "fake-uuid",
     ])
-    assert args.force is True
+    assert args.chat_session_id == "fake-uuid"
     assert args.no_router is False
 
 
@@ -72,21 +77,20 @@ def test_start_session_no_router_flag_independently_settable():
         "--no-router",
     ])
     assert args.no_router is True
-    assert args.force is False
 
 
-def test_start_session_no_router_with_force_both_set():
-    """--no-router and --force are orthogonal; both can be set."""
+def test_start_session_no_router_with_chat_session_id_both_set():
+    """--no-router and --chat-session-id are orthogonal; both can be set."""
     parser = start_session._build_arg_parser()
     args = parser.parse_args([
         "--session-set-dir", "x",
         "--engine", "claude",
         "--model", "claude-opus-4-7",
         "--no-router",
-        "--force",
+        "--chat-session-id", "fake-uuid",
     ])
     assert args.no_router is True
-    assert args.force is True
+    assert args.chat_session_id == "fake-uuid"
 
 
 # ---------- close_session: pre-Set-048 invocations work unchanged ----------

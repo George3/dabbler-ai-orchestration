@@ -135,7 +135,6 @@ class TestRegisterSessionStartV4Shape:
             orchestrator_provider="anthropic",
             orchestrator_model="claude-opus-4-7",
             orchestrator_effort="high",
-            orchestrator_chat_session_id="chat-id-123",
         )
         raw = _read_raw(session_set_dir)
         session1 = raw["sessions"][0]
@@ -144,14 +143,33 @@ class TestRegisterSessionStartV4Shape:
         assert session1["completedAt"] is None
         assert session1["verificationVerdict"] is None
         orch = session1["orchestrator"]
+        # Set 049: orchestrator block is a 4-field omit-null dict; the
+        # coordination-era fields (chatSessionId / checkedOutAt /
+        # lastActivityAt) are dropped from both the writer parameter
+        # surface and the on-disk shape.
         assert isinstance(orch, dict)
-        assert orch["engine"] == "claude"
-        assert orch["provider"] == "anthropic"
-        assert orch["model"] == "claude-opus-4-7"
-        assert orch["effort"] == "high"
-        assert orch["chatSessionId"] == "chat-id-123"
-        assert isinstance(orch["checkedOutAt"], str)
-        assert orch["lastActivityAt"] == orch["checkedOutAt"]
+        assert orch == {
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
+            "effort": "high",
+        }
+
+    def test_orchestrator_block_applies_omit_null(
+        self, session_set_dir, spec_md,
+    ):
+        """Set 049: missing model/effort/provider are omitted from the
+        on-disk block (no null values, no "unknown" placeholders)."""
+        register_session_start(
+            session_set=session_set_dir,
+            session_number=1,
+            total_sessions=3,
+            orchestrator_engine="claude",
+            # provider / model / effort intentionally omitted
+        )
+        raw = _read_raw(session_set_dir)
+        orch = raw["sessions"][0]["orchestrator"]
+        assert orch == {"engine": "claude"}
 
     def test_not_started_sessions_have_null_metadata(self, session_set_dir, spec_md):
         register_session_start(

@@ -1,44 +1,51 @@
-"""Conflict detection for ai_router.joiner.
+"""Writer-discipline conflict detection for ai_router.joiner.
 
-Implements the three conflict modes specified in joiner-spec.md §3:
+Set 049 retired the Set 033 / Set 036 coordination-conflict detectors
+(engine-mismatch, bare-touch, stale-checkout-touch) along with the
+rest of the H3 + H4 coordination layer (D1 + D2 in the audit). Each
+of those detectors depended on the orchestrator block's
+``lastActivityAt`` / ``checkedOutAt`` timestamps or the implicit
+"engine claims the workspace" semantic, neither of which survives
+the rip-out.
 
-- Mode A: engine-mismatch (high severity)
-- Mode B: bare-touch / stale-checkout-touch (medium severity)
-- Mode C: writer-bypass session-state write (high severity)
+What remains is the writer-bypass detector (D3 in the audit verdict),
+decoupled from the coordination framing: ``session-state.json``'s
+mtime should be bracketed by a ``session-events.jsonl`` entry within
+the standard tolerance, regardless of which orchestrator wrote the
+file. A miss surfaces an out-of-band write that the canonical writers
+did not perform — a discipline check that is engine-independent and
+useful even when there is no coordination model in play.
 
-The detector reads session-state.json + native logs + (eventually)
-the events-ledger; it does NOT write. Per Set 033 H1/H2, the joiner
-is observation-only.
+The detector reads ``session-state.json`` + the sibling
+``session-events.jsonl``; it does NOT write. Per Set 033 H1/H2 the
+joiner remains observation-only.
 """
 from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Literal, Optional
+from typing import Literal, Optional
 
 from ai_router.joiner import parsers
 from ai_router.joiner.parsers import (
-    NativeSession,
     SessionStateView,
-    scan_native_sessions,
     scan_session_states,
 )
-from ai_router.joiner.schema import normalize_engine, parse_iso
+from ai_router.joiner.schema import parse_iso
 
-ConflictKind = Literal[
-    "engine-mismatch",
-    "bare-touch",
-    "stale-checkout-touch",
-    "writer-bypass",
-]
+# Set 049: ConflictKind narrowed to just ``writer-bypass``. The three
+# retired coordination kinds (engine-mismatch / bare-touch /
+# stale-checkout-touch) are no longer emitted by the joiner; downstream
+# consumers (HarvestService.parseConflicts in the extension) drop
+# unknown kinds silently so historical journal entries keep round-
+# tripping cleanly.
+ConflictKind = Literal["writer-bypass"]
 
 Severity = Literal["high", "medium", "low"]
 
 
-DEFAULT_ENGINE_MISMATCH_WINDOW = timedelta(minutes=5)
-DEFAULT_STALENESS_THRESHOLD = timedelta(hours=2)
 DEFAULT_WRITER_BYPASS_EVENT_TOLERANCE_NS = 2_000_000_000  # ±2 seconds
 
 
@@ -61,162 +68,7 @@ class ConflictReport:
 
 
 # ---------------------------------------------------------------------------
-# Mode A — engine-mismatch.
-# ---------------------------------------------------------------------------
-
-
-def detect_engine_mismatch(
-    state: SessionStateView,
-    native_sessions: Iterable[NativeSession],
-    *,
-    window: timedelta = DEFAULT_ENGINE_MISMATCH_WINDOW,
-    detected_at: Optional[datetime] = None,
-) -> list[ConflictReport]:
-    """Surface engine-mismatch reports for one state-file view."""
-    if state.orchestrator_engine is None or state.last_activity is None:
-        return []
-    state_engine_norm = normalize_engine(state.orchestrator_engine)
-    state_cwd_canon = parsers.canonicalize_cwd(str(state.workspace_root))
-    when = detected_at or datetime.now(timezone.utc)
-    reports: list[ConflictReport] = []
-    for ns in native_sessions:
-        if ns.cwd_canonical != state_cwd_canon:
-            continue
-        delta = abs(ns.first_event_ts - state.last_activity)
-        if delta > window:
-            continue
-        if normalize_engine(ns.engine) == state_engine_norm:
-            continue
-        reports.append(
-            ConflictReport(
-                kind="engine-mismatch",
-                severity="high",
-                detected_at=when,
-                set_slug=state.set_slug,
-                state_file=str(state.state_file),
-                workspace_cwd_canonical=state_cwd_canon,
-                evidence={
-                    "state_engine": state.orchestrator_engine,
-                    "native_engine": ns.engine,
-                    "native_conv_id": ns.conv_id,
-                    "delta_seconds": round(delta.total_seconds(), 1),
-                },
-                raw_refs=[
-                    {"file": str(state.state_file), "field": "orchestrator.engine"},
-                    {"file": ns.source_file, "field": "first-event"},
-                ],
-                note=(
-                    f"state-file claims {state.orchestrator_engine} but "
-                    f"{ns.engine} session {ns.conv_id} is active in the "
-                    f"same workspace within {delta.total_seconds():.0f}s"
-                ),
-            )
-        )
-    return reports
-
-
-# ---------------------------------------------------------------------------
-# Mode B — bare-touch / stale-checkout-touch.
-# ---------------------------------------------------------------------------
-
-
-def detect_bare_or_stale_touch(
-    state: SessionStateView,
-    native_sessions: Iterable[NativeSession],
-    *,
-    staleness_threshold: timedelta = DEFAULT_STALENESS_THRESHOLD,
-    detected_at: Optional[datetime] = None,
-) -> list[ConflictReport]:
-    """Surface bare-touch or stale-checkout-touch reports for one state.
-
-    Mode B fires when an AI is active in the workspace housing this
-    session set but no fresh checkout claim is in place.
-    """
-    when = detected_at or datetime.now(timezone.utc)
-    state_cwd_canon = parsers.canonicalize_cwd(str(state.workspace_root))
-    reports: list[ConflictReport] = []
-
-    if state.orchestrator_engine is None:
-        # Bare-touch — no checkout block at all.
-        for ns in native_sessions:
-            # Touch must be strictly inside the workspace boundary.
-            if not _touches_workspace(ns.cwd_canonical, state_cwd_canon):
-                continue
-            reports.append(
-                ConflictReport(
-                    kind="bare-touch",
-                    severity="medium",
-                    detected_at=when,
-                    set_slug=state.set_slug,
-                    state_file=str(state.state_file),
-                    workspace_cwd_canonical=state_cwd_canon,
-                    evidence={
-                        "native_engine": ns.engine,
-                        "native_conv_id": ns.conv_id,
-                        "checkout_age_seconds": None,
-                        "first_event_ts": ns.first_event_ts.isoformat(),
-                    },
-                    raw_refs=[
-                        {"file": str(state.state_file), "field": "orchestrator"},
-                        {"file": ns.source_file, "field": "first-event"},
-                    ],
-                    note=(
-                        f"no checkout but {ns.engine} session {ns.conv_id} "
-                        f"active in workspace housing set {state.set_slug}"
-                    ),
-                )
-            )
-        return reports
-
-    # Stale-checkout-touch — checkout exists but is ancient.
-    if state.last_activity is None:
-        return reports
-    age = when - state.last_activity
-    if age <= staleness_threshold:
-        return reports
-    for ns in native_sessions:
-        if not _touches_workspace(ns.cwd_canonical, state_cwd_canon):
-            continue
-        if ns.first_event_ts <= state.last_activity + staleness_threshold:
-            continue
-        reports.append(
-            ConflictReport(
-                kind="stale-checkout-touch",
-                severity="medium",
-                detected_at=when,
-                set_slug=state.set_slug,
-                state_file=str(state.state_file),
-                workspace_cwd_canonical=state_cwd_canon,
-                evidence={
-                    "native_engine": ns.engine,
-                    "native_conv_id": ns.conv_id,
-                    "checkout_age_seconds": round(age.total_seconds(), 1),
-                    "first_event_ts": ns.first_event_ts.isoformat(),
-                },
-                raw_refs=[
-                    {"file": str(state.state_file), "field": "orchestrator.lastActivityAt"},
-                    {"file": ns.source_file, "field": "first-event"},
-                ],
-                note=(
-                    f"checkout {age.total_seconds() / 3600:.1f}h stale; "
-                    f"{ns.engine} session {ns.conv_id} touching workspace anyway"
-                ),
-            )
-        )
-    return reports
-
-
-def _touches_workspace(native_cwd_canon: str, workspace_canon: str) -> bool:
-    """Return True if the native session's cwd is inside the workspace."""
-    if not native_cwd_canon or not workspace_canon:
-        return False
-    if native_cwd_canon == workspace_canon:
-        return True
-    return native_cwd_canon.startswith(workspace_canon + "/")
-
-
-# ---------------------------------------------------------------------------
-# Mode C — writer-bypass.
+# Writer-bypass — out-of-band writes the canonical writers did not perform.
 # ---------------------------------------------------------------------------
 
 
@@ -230,8 +82,17 @@ def detect_writer_bypass(
 
     A bypass is suspected when ``session-state.json``'s mtime is not
     bracketed by a corresponding ``session-events.jsonl`` entry
-    within ``event_tolerance_ns``. The canonical writers append an
-    event in the same transaction as the state-file write.
+    within ``event_tolerance_ns``. The canonical writers
+    (``register_session_start`` / ``_flip_state_to_closed`` and their
+    TS mirrors) append an event in the same transaction as the
+    state-file write; a divergence indicates the snapshot was touched
+    out-of-band.
+
+    Set 049: this is the only conflict mode the joiner still emits.
+    The framing was decoupled from the coordination layer it was
+    originally spec'd alongside — the predicate is purely a writer-
+    discipline check (state-file mtime vs. events ledger entries),
+    engine-independent, and useful even with no holder model.
     """
     when = detected_at or datetime.now(timezone.utc)
     try:
@@ -310,47 +171,29 @@ def scan_conflicts(
     set_slug: Optional[str] = None,
     *,
     workspace_root: Optional[Path] = None,
-    claude_root: Optional[Path] = None,
-    copilot_root: Optional[Path] = None,
     detected_at: Optional[datetime] = None,
-    engine_mismatch_window: timedelta = DEFAULT_ENGINE_MISMATCH_WINDOW,
-    staleness_threshold: timedelta = DEFAULT_STALENESS_THRESHOLD,
 ) -> list[ConflictReport]:
-    """Scan all known state files and emit conflict reports.
+    """Scan all known state files and emit writer-bypass conflict reports.
 
     Args:
         set_slug: optionally restrict to one session set.
         workspace_root: defaults to ``Path.cwd()``; the joiner walks
             ``<root>/docs/session-sets/*/session-state.json`` from
             there.
-        claude_root / copilot_root: override default operator-home
-            scanner roots (used in tests + when scanning a remote
-            machine's logs).
         detected_at: pin the joiner-run timestamp (for deterministic
             tests).
+
+    Set 049: the ``claude_root`` / ``copilot_root`` / ``engine_mismatch_window``
+    / ``staleness_threshold`` parameters are gone with the retired
+    engine-mismatch + stale-checkout-touch detectors. Callers that
+    passed those kwargs need to update to the writer-bypass-only
+    signature.
     """
     root = workspace_root or Path.cwd()
-    natives = list(scan_native_sessions(claude_root=claude_root, copilot_root=copilot_root))
     reports: list[ConflictReport] = []
     for state in scan_session_states(root):
         if set_slug and state.set_slug != set_slug:
             continue
-        reports.extend(
-            detect_engine_mismatch(
-                state,
-                natives,
-                window=engine_mismatch_window,
-                detected_at=detected_at,
-            )
-        )
-        reports.extend(
-            detect_bare_or_stale_touch(
-                state,
-                natives,
-                staleness_threshold=staleness_threshold,
-                detected_at=detected_at,
-            )
-        )
         reports.extend(
             detect_writer_bypass(state, detected_at=detected_at)
         )

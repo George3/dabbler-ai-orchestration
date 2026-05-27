@@ -528,19 +528,22 @@ def register_session_start(
     session_number: int,
     total_sessions: Optional[int],
     orchestrator_engine: str,
-    orchestrator_model: str,
-    orchestrator_effort: str = "unknown",
+    orchestrator_model: Optional[str] = None,
+    orchestrator_effort: Optional[str] = None,
     orchestrator_provider: Optional[str] = None,
-    orchestrator_chat_session_id: Optional[str] = None,
 ) -> str:
     """Write ``session-state.json`` marking *session_number* as in-progress.
 
     Called at the start of every session. Overwrites any prior state file.
     Returns the absolute path to the written file.
 
-    ``orchestrator_effort`` accepts ``"low"``, ``"medium"``, ``"high"``,
-    ``"fast"``, ``"normal"``, or ``"unknown"`` — orchestrators that cannot
-    introspect their own effort level pass ``"unknown"`` rather than guess.
+    Set 049: the orchestrator block is a 4-field omit-null dict
+    (``engine``, ``provider``, ``model``, ``effort``). Any of
+    ``provider`` / ``model`` / ``effort`` left as None is omitted from
+    the on-disk block per the operator-locked omit-null contract (P2).
+    Callers that cannot authoritatively declare a field pass None and
+    let omit-null drop the key, rather than guessing or emitting
+    ``"unknown"``.
 
     Events emission
     ---------------
@@ -760,132 +763,37 @@ def register_session_start(
     # Set 047 Session 4: writer-flip phase. The orchestrator block
     # lives on the in-progress session's per-session record under v4
     # (not at the top level — top-level orchestrator was the v3 model
-    # cleared on every close). Same-holder re-attach reads the prior
-    # orchestrator from the in-progress session's record in the
-    # normalized v4 view so v3 input files (top-level orchestrator
-    # promoted onto the in-progress session by the shim) and v4 input
-    # files (per-session orchestrator authoritative) both flow through
-    # the same code path. Per-session metadata for prior-completed
+    # cleared on every close). Per-session metadata for prior-completed
     # sessions is preserved across the rewrite so close-out timestamps
     # / verdicts / orchestrators that closed those sessions survive.
     now = _now_iso()
     prior_v4_metadata = _read_prior_v4_metadata(existing, session_set)
 
-    # Set 033 Session 1 (H3 + H4 + OQ1) + Set 036 Session 1 (Q5):
-    # compute checkedOutAt and lastActivityAt from the existing
-    # orchestrator block. The H4 identity predicate is the
-    # ``engine + provider + chatSessionId`` composite (Set 036
-    # refinement); on a same-holder re-attach, ``checkedOutAt`` is
-    # preserved across the rewrite so the operator-visible "checked
-    # out at HH:MM" reflects when this holder first claimed the set,
-    # not the last resume.
+    # Set 049: orchestrator block reshaped to a 4-field omit-null dict
+    # (engine / provider / model / effort). The coordination layer
+    # shipped in Set 033 + refined in Set 036 (chatSessionId composite
+    # identity + checkedOutAt + lastActivityAt timestamps + same-holder
+    # re-attach logic) is retired here; the writer no longer treats
+    # the prior block as a check-out record. Operator-locked premises
+    # P1-P3 from the Set 049 audit spec drive the shape:
     #
-    # Tolerance: a prior orchestrator block missing ``chatSessionId``
-    # (pre-Set-036 writer) or with ``chatSessionId: null`` (Set 036
-    # writer that had no ID to record at write time) treats the
-    # caller's chatSessionId as a match for engine + provider equality
-    # — the writer cannot recover the historical chat identity, so we
-    # accept the new one and populate the field on the next write.
+    #   P1: orchestrator block fields = engine, provider, model, effort
+    #   P2: omit-null — missing keys allowed; no null values, no
+    #       "unknown" placeholders
+    #   P3: chatSessionId, checkedOutAt, lastActivityAt all dropped
+    #       from the on-disk shape and the writer code paths
     #
-    # On a fresh check-out (no prior block, or prior block null) and
-    # on a force-override handoff (different ``engine + provider`` or
-    # different ``chatSessionId``, which the CLI's H3 refusal logic
-    # only lets through on ``--force``), ``checkedOutAt`` is set to
-    # now. ``lastActivityAt`` bumps on every write.
-    #
-    # Set 047 Session 4: the prior orchestrator is sourced from the
-    # session_number we are about to start — but only if the prior
-    # file had that session in-progress (re-attach). Falling back to
-    # the top-level orchestrator on a between-sessions / closed prior
-    # file is intentionally NOT done: under v4 the per-session
-    # orchestrator on closed sessions is preserved as a historical
-    # record, and treating it as "still checked out" would defeat the
-    # check-in semantic. A fresh check-out of a new session number is
-    # always a different holder by construction.
-    # Set 047 Session 4: same-holder re-attach detection looks at
-    # the prior in-progress session's orchestrator. Under v3 input
-    # that's the top-level ``orchestrator`` field paired with a
-    # matching top-level ``currentSession``; under v4 input it's the
-    # per-session record for ``session_number`` when its status is
-    # ``in-progress``. Either way, the question is the same: "did
-    # the prior file have THIS session number checked out?" If yes,
-    # that orchestrator block is the candidate; if no, fresh
-    # check-out (different holder by construction).
-    prior_orch_for_holder_check = None
-    if isinstance(existing, dict):
-        # v3 path: top-level currentSession + orchestrator pair.
-        prior_current = existing.get("currentSession")
-        if (
-            isinstance(prior_current, int)
-            and not isinstance(prior_current, bool)
-            and prior_current == session_number
-        ):
-            candidate = existing.get("orchestrator")
-            if isinstance(candidate, dict):
-                prior_orch_for_holder_check = candidate
-        # v4 path: per-session record with status=in-progress.
-        if prior_orch_for_holder_check is None:
-            for entry in existing.get("sessions") or []:
-                if (
-                    isinstance(entry, dict)
-                    and entry.get("number") == session_number
-                    and entry.get("status") == SESSION_STATUS_IN_PROGRESS
-                ):
-                    candidate = entry.get("orchestrator")
-                    if isinstance(candidate, dict):
-                        prior_orch_for_holder_check = candidate
-                    break
-
-    prior_orch = prior_orch_for_holder_check
-    if isinstance(prior_orch, dict):
-        prior_chat_session_id = prior_orch.get("chatSessionId")
-        prior_has_chat_session_field = "chatSessionId" in prior_orch
-        chat_session_id_matches = (
-            not prior_has_chat_session_field
-            or prior_chat_session_id is None
-            or prior_chat_session_id == orchestrator_chat_session_id
-        )
-        same_holder = (
-            prior_orch.get("engine") == orchestrator_engine
-            and prior_orch.get("provider") == orchestrator_provider
-            and chat_session_id_matches
-        )
-    else:
-        same_holder = False
-    if same_holder:
-        prior_checked_out = prior_orch.get("checkedOutAt") if prior_orch else None
-        # Migration tolerance: an in-flight set whose prior writer
-        # didn't emit ``checkedOutAt`` (pre-Set-033 writers) lands
-        # here on the first same-holder re-attach. Populate the field
-        # with ``now`` rather than leaving it None; the one-time loss
-        # of fidelity is documented in docs/session-state-schema.md.
-        checked_out_at = (
-            prior_checked_out
-            if isinstance(prior_checked_out, str) and prior_checked_out
-            else now
-        )
-    else:
-        checked_out_at = now
-
-    # Set 036 Session 1 (Q5 strict-on-write): the orchestrator block
-    # always carries a ``chatSessionId`` field on a new write. The
-    # value is either the caller-supplied UUID (from the
-    # ``--chat-session-id`` arg or the ``$CHAT_SESSION_ID`` env that
-    # the CLI resolves into it) or ``None`` when neither is provided.
-    # Storing ``None`` explicitly (rather than omitting the key) is
-    # the contract that lets downstream readers tell "this writer
-    # was Set 036+ aware but had no chatSessionId to record" apart
-    # from "this writer pre-dated Set 036" (the latter omits the key
-    # entirely).
-    orchestrator_block = {
-        "engine": orchestrator_engine,
-        "provider": orchestrator_provider,
-        "model": orchestrator_model,
-        "effort": orchestrator_effort,
-        "chatSessionId": orchestrator_chat_session_id,
-        "checkedOutAt": checked_out_at,
-        "lastActivityAt": now,
-    }
+    # The hook / CLI caller decides which of provider / model / effort
+    # it can authoritatively declare and omits the rest (T3 in the
+    # spec); the writer trusts the caller and emits the omit-null block
+    # without "unknown" fallbacks.
+    orchestrator_block: dict = {"engine": orchestrator_engine}
+    if orchestrator_provider is not None:
+        orchestrator_block["provider"] = orchestrator_provider
+    if orchestrator_model is not None:
+        orchestrator_block["model"] = orchestrator_model
+    if orchestrator_effort is not None:
+        orchestrator_block["effort"] = orchestrator_effort
 
     if sessions is None:
         # Set 046 Session 2 plan-less write carve-out, Set 047 Session

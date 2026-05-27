@@ -107,23 +107,24 @@ def build_example_state() -> dict:
     refactor surfaces here on the next ``--check`` rather than going
     silent.
     """
+    # Set 049: the orchestrator block is a 4-field omit-null dict
+    # (engine / provider / model / effort). The Set 033 / Set 036
+    # coordination fields (chatSessionId, checkedOutAt, lastActivityAt)
+    # are dropped per audit premise P3. The example shows the canonical
+    # post-rip shape every fresh writer emits — callers that cannot
+    # authoritatively declare provider / model / effort simply omit
+    # the key rather than emitting null or "unknown" placeholders.
     s1_orch = {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
         "effort": "high",
-        "chatSessionId": None,
-        "checkedOutAt": "2026-04-30T13:00:00-04:00",
-        "lastActivityAt": "2026-04-30T13:50:00-04:00",
     }
     s2_orch = {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
         "effort": "high",
-        "chatSessionId": None,
-        "checkedOutAt": "2026-04-30T14:00:00-04:00",
-        "lastActivityAt": "2026-04-30T14:30:00-04:00",
     }
     return {
         "schemaVersion": SCHEMA_VERSION,
