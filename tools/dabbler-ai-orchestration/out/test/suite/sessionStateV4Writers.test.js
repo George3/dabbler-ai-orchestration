@@ -1,0 +1,457 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const assert = __importStar(require("assert"));
+const fs = __importStar(require("fs"));
+const os = __importStar(require("os"));
+const path = __importStar(require("path"));
+const cancelLifecycle_1 = require("../../utils/cancelLifecycle");
+const sessionState_1 = require("../../utils/sessionState");
+// Set 047 Session 5 — TS writer-flip phase part 2.
+//
+// The four writer surfaces flipped this session
+// (synthesizeNotStartedState, ensureSessionStateFile,
+// cancelSessionSet, restoreSessionSet) must emit canonical v4 on-disk
+// shape per spec §3.1: schemaVersion=4, sessions[] carries per-session
+// metadata, derived top-level keys are dropped. The plan-less
+// carve-out (no spec totalSessions, no headings) preserves
+// absent-sessions[] across cancel/restore. This file pins those
+// invariants shut and mirrors test_session_state_v4_writers.py.
+const V4_TOP_LEVEL_DROPPED_KEYS = [
+    "lifecycleState",
+    "currentSession",
+    "totalSessions",
+    "completedSessions",
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+];
+function makeTmpDir() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-ssv4-test-"));
+}
+function writeSpec(dir, body) {
+    fs.writeFileSync(path.join(dir, "spec.md"), body, "utf8");
+}
+function specWithTotal(total, name = "Test Set") {
+    return [
+        `# ${name}`,
+        "",
+        "## Session Set Configuration",
+        "",
+        "```yaml",
+        `totalSessions: ${total}`,
+        "requiresUAT: false",
+        "requiresE2E: false",
+        "```",
+        "",
+    ].join("\n");
+}
+function readState(dir) {
+    return JSON.parse(fs.readFileSync(path.join(dir, "session-state.json"), "utf8"));
+}
+function writeRawState(dir, state) {
+    fs.writeFileSync(path.join(dir, "session-state.json"), JSON.stringify(state, null, 2) + "\n", "utf8");
+}
+suite("Set 047 / S5 — synthesizeNotStartedState emits v4", () => {
+    test("schemaVersion=4 and dropped top-level keys absent", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(3));
+            (0, sessionState_1.synthesizeNotStartedState)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "not-started");
+            for (const key of V4_TOP_LEVEL_DROPPED_KEYS) {
+                assert.ok(!(key in state), `top-level key "${key}" should be dropped under v4`);
+            }
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("sessions[] carries per-session metadata defaulted to null", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(2));
+            (0, sessionState_1.synthesizeNotStartedState)(dir);
+            const state = readState(dir);
+            const sessions = state.sessions;
+            assert.strictEqual(sessions.length, 2);
+            for (const entry of sessions) {
+                assert.strictEqual(entry.status, "not-started");
+                assert.strictEqual(entry.startedAt, null);
+                assert.strictEqual(entry.completedAt, null);
+                assert.strictEqual(entry.orchestrator, null);
+                assert.strictEqual(entry.verificationVerdict, null);
+            }
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("plan-less spec produces no sessions[] (preserved across v4)", () => {
+        const dir = makeTmpDir();
+        try {
+            // Spec without Session Set Configuration block and without any
+            // ### Session N headings.
+            writeSpec(dir, "# Stub spec\n\nTo be authored.\n");
+            (0, sessionState_1.synthesizeNotStartedState)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.ok(!("sessions" in state));
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("idempotent — does not rewrite an existing state file", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(1));
+            // Plant an existing v3 file; the synth should not touch it.
+            writeRawState(dir, {
+                schemaVersion: 3,
+                sessionSetName: "preserved",
+                status: "in-progress",
+                sessions: [{ number: 1, title: "S1", status: "in-progress" }],
+            });
+            (0, sessionState_1.synthesizeNotStartedState)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 3, "existing file untouched");
+            assert.strictEqual(state.sessionSetName, "preserved");
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("headings fallback materializes sessions[] without Session Set Configuration", () => {
+        // Mirrors the S4 verifier Critical-2 fix on the Python side: a
+        // spec with ### Session N headings but no totalSessions field is
+        // still a known plan; the writer must materialize sessions[] from
+        // the heading count.
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, [
+                "# Set with headings only",
+                "",
+                "### Session 1: First",
+                "Body...",
+                "",
+                "### Session 2: Second",
+                "Body...",
+                "",
+            ].join("\n"));
+            (0, sessionState_1.synthesizeNotStartedState)(dir);
+            const state = readState(dir);
+            const sessions = state.sessions;
+            assert.ok(Array.isArray(sessions));
+            assert.strictEqual(sessions.length, 2);
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+});
+suite("Set 047 / S5 — ensureSessionStateFile emits v4", () => {
+    test("change-log branch → status=complete with all sessions complete", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(2));
+            fs.writeFileSync(path.join(dir, "change-log.md"), "# Set close-out\n");
+            (0, sessionState_1.ensureSessionStateFile)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "complete");
+            const sessions = state.sessions;
+            assert.strictEqual(sessions.length, 2);
+            for (const entry of sessions) {
+                assert.strictEqual(entry.status, "complete");
+                // Per-session completedAt left null per Python parity — the
+                // change-log mtime is a set-level heuristic, not a per-session
+                // boundary.
+                assert.strictEqual(entry.completedAt, null);
+            }
+            for (const key of V4_TOP_LEVEL_DROPPED_KEYS) {
+                assert.ok(!(key in state), `dropped key ${key} must be absent`);
+            }
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("activity-log branch → status=in-progress with per-session startedAt promoted to session 1", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(3));
+            const iso = "2026-05-26T08:00:00-04:00";
+            fs.writeFileSync(path.join(dir, "activity-log.json"), JSON.stringify({
+                sessionSetName: "x",
+                createdDate: "2026-05-26",
+                totalSessions: 3,
+                entries: [
+                    { sessionNumber: 1, dateTime: iso, description: "started", status: "complete" },
+                ],
+            }, null, 2), "utf8");
+            (0, sessionState_1.ensureSessionStateFile)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "in-progress");
+            const sessions = state.sessions;
+            assert.strictEqual(sessions[0].status, "in-progress");
+            assert.strictEqual(sessions[0].startedAt, iso);
+            assert.strictEqual(sessions[1].status, "not-started");
+            assert.strictEqual(sessions[1].startedAt, null);
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("change-log without spec plan → falls back to not-started shape", () => {
+        // Rule-1 guard: cannot emit a reader-valid `complete` snapshot
+        // without sessions[]; preserves operator intent via file presence
+        // and waits for the next boundary write with a plan to promote.
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, "# Stub\n\nTo be authored.\n");
+            fs.writeFileSync(path.join(dir, "change-log.md"), "# Set close-out\n");
+            (0, sessionState_1.ensureSessionStateFile)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.status, "not-started");
+            assert.ok(!("sessions" in state));
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("no markdown markers → not-started shape", () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(1));
+            (0, sessionState_1.ensureSessionStateFile)(dir);
+            const state = readState(dir);
+            assert.strictEqual(state.status, "not-started");
+            const sessions = state.sessions;
+            assert.strictEqual(sessions.length, 1);
+            assert.strictEqual(sessions[0].status, "not-started");
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+});
+suite("Set 047 / S5 — cancelSessionSet emits v4", () => {
+    test("v3 input → v4 output with status=cancelled and preCancelStatus preserved", async () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(2));
+            writeRawState(dir, {
+                schemaVersion: 3,
+                sessionSetName: "047-fixture",
+                status: "in-progress",
+                lifecycleState: "work_in_progress",
+                currentSession: 1,
+                totalSessions: 2,
+                completedSessions: [],
+                startedAt: "2026-05-26T08:00:00-04:00",
+                completedAt: null,
+                verificationVerdict: null,
+                orchestrator: { engine: "claude", provider: "anthropic", model: "claude-opus-4-7", effort: "high" },
+                sessions: [
+                    { number: 1, title: "S1", status: "in-progress" },
+                    { number: 2, title: "S2", status: "not-started" },
+                ],
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "rolled into another set");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "cancelled");
+            assert.strictEqual(state.preCancelStatus, "in-progress");
+            for (const key of V4_TOP_LEVEL_DROPPED_KEYS) {
+                assert.ok(!(key in state), `dropped key ${key} must be absent`);
+            }
+            // Per-session orchestrator is preserved as historical record
+            // (the shim promotes top-level orchestrator onto the
+            // in-progress session before the trim).
+            const sessions = state.sessions;
+            assert.strictEqual(sessions[0].orchestrator.engine, "claude");
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("v4 input → v4 output with sessions[] preserved", async () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(1));
+            writeRawState(dir, {
+                schemaVersion: 4,
+                sessionSetName: "047-fixture",
+                status: "in-progress",
+                sessions: [
+                    {
+                        number: 1,
+                        title: "S1",
+                        status: "in-progress",
+                        startedAt: "2026-05-26T08:00:00-04:00",
+                        completedAt: null,
+                        orchestrator: { engine: "codex", provider: "openai", model: "gpt-5.4", effort: "medium" },
+                        verificationVerdict: null,
+                    },
+                ],
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "cancelled");
+            assert.strictEqual(state.preCancelStatus, "in-progress");
+            const sessions = state.sessions;
+            assert.strictEqual(sessions[0].startedAt, "2026-05-26T08:00:00-04:00");
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("explicit empty sessions[] is preserved on cancel (NOT the plan-less carve-out)", async () => {
+        // S5 verifier Nice-to-have-1: ``sessions: []`` (zero-session,
+        // explicit) is structurally different from absent ``sessions``
+        // (plan-less). The carve-out applies ONLY to the absent case;
+        // an explicit empty array must round-trip unchanged.
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(0));
+            writeRawState(dir, {
+                schemaVersion: 4,
+                sessionSetName: "explicit-empty",
+                status: "in-progress",
+                sessions: [],
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "cancelled");
+            assert.ok(Array.isArray(state.sessions), "explicit sessions:[] must survive cancel (NOT carved out to absent)");
+            assert.strictEqual(state.sessions.length, 0);
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("plan-less carve-out: cancel preserves absent sessions[] + top-level orchestrator/startedAt", async () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, "# Stub\n");
+            writeRawState(dir, {
+                schemaVersion: 3,
+                sessionSetName: "plan-less",
+                status: "in-progress",
+                startedAt: "2026-05-26T07:00:00-04:00",
+                orchestrator: { engine: "claude", provider: "anthropic", model: "claude-opus-4-7", effort: "high" },
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "cancelled");
+            // Carve-out preserved
+            assert.ok(!("sessions" in state), "plan-less carve-out preserves absent sessions[]");
+            assert.strictEqual(state.startedAt, "2026-05-26T07:00:00-04:00");
+            assert.deepStrictEqual(state.orchestrator, {
+                engine: "claude",
+                provider: "anthropic",
+                model: "claude-opus-4-7",
+                effort: "high",
+            });
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+});
+suite("Set 047 / S5 — restoreSessionSet emits v4", () => {
+    test("v3 input → v4 output with status restored from preCancelStatus", async () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, specWithTotal(2));
+            writeRawState(dir, {
+                schemaVersion: 3,
+                sessionSetName: "x",
+                status: "in-progress",
+                sessions: [
+                    { number: 1, title: "S1", status: "in-progress" },
+                    { number: 2, title: "S2", status: "not-started" },
+                ],
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "");
+            await (0, cancelLifecycle_1.restoreSessionSet)(dir, "");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            assert.strictEqual(state.status, "in-progress");
+            assert.ok(!("preCancelStatus" in state), "preCancelStatus cleared on restore");
+            for (const key of V4_TOP_LEVEL_DROPPED_KEYS) {
+                assert.ok(!(key in state), `dropped key ${key} must be absent`);
+            }
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+    test("plan-less carve-out: restore preserves absent sessions[]", async () => {
+        const dir = makeTmpDir();
+        try {
+            writeSpec(dir, "# Stub\n");
+            writeRawState(dir, {
+                schemaVersion: 3,
+                sessionSetName: "plan-less",
+                status: "in-progress",
+                startedAt: "2026-05-26T07:00:00-04:00",
+                orchestrator: { engine: "claude", provider: "anthropic", model: "claude-opus-4-7", effort: "high" },
+            });
+            await (0, cancelLifecycle_1.cancelSessionSet)(dir, "");
+            await (0, cancelLifecycle_1.restoreSessionSet)(dir, "");
+            const state = readState(dir);
+            assert.strictEqual(state.schemaVersion, 4);
+            // Restore reads preCancelStatus first (set during the cancel
+            // step above to "in-progress") and uses it as the post-restore
+            // status. inferStatusFromFiles is only the fallback when
+            // preCancelStatus is missing — not exercised here.
+            assert.strictEqual(state.status, "in-progress");
+            assert.ok(!("sessions" in state), "plan-less carve-out preserved across restore");
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true });
+        }
+    });
+});
+//# sourceMappingURL=sessionStateV4Writers.test.js.map

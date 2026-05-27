@@ -49,15 +49,29 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SessionStateInvariantError = exports.LIFECYCLE_STATE_CLOSED = exports.LIFECYCLE_STATE_WORK_IN_PROGRESS = exports.TOP_LEVEL_STATUSES = exports.SESSION_STATUSES = exports.SESSION_STATUS_CANCELLED = exports.SESSION_STATUS_COMPLETE = exports.SESSION_STATUS_IN_PROGRESS = exports.SESSION_STATUS_NOT_STARTED = exports.SCHEMA_VERSION_V3 = void 0;
+exports.SessionStateInvariantError = exports.LIFECYCLE_STATE_CLOSED = exports.LIFECYCLE_STATE_WORK_IN_PROGRESS = exports.TOP_LEVEL_STATUSES = exports.SESSION_STATUSES = exports.SESSION_STATUS_CANCELLED = exports.SESSION_STATUS_COMPLETE = exports.SESSION_STATUS_IN_PROGRESS = exports.SESSION_STATUS_NOT_STARTED = exports.SCHEMA_VERSION_V4 = exports.SCHEMA_VERSION_V3 = void 0;
 exports.canonicalizeStatus = canonicalizeStatus;
 exports.extractSessionTitlesFromSpec = extractSessionTitlesFromSpec;
 exports.synthesizeV3FromV2 = synthesizeV3FromV2;
+exports.normalizeToV4Shape = normalizeToV4Shape;
 exports.readProgress = readProgress;
 exports.getProgress = getProgress;
 exports.validateInvariants = validateInvariants;
 const fs = __importStar(require("fs"));
 exports.SCHEMA_VERSION_V3 = 3;
+// Set 047 Session 2: v4 schema constant. v4 derives top-level state
+// (currentSession, totalSessions, completedSessions, orchestrator,
+// startedAt, completedAt, verificationVerdict, lifecycleState) from a
+// per-session sessions[] ledger where each entry gains its own
+// startedAt / completedAt / orchestrator / verificationVerdict fields.
+// The Session-2 reader-first shim (`normalizeToV4Shape`) accepts
+// v1/v2/v3/v4 input and returns a normalized v4 read-view object with
+// BOTH per-session metadata AND derived top-level fields so existing
+// readers (which still consume top-level fields like `sd.orchestrator`,
+// `sd.startedAt`, `sd.completedAt`, `sd.verificationVerdict`) work
+// transparently against v4 writes from Sessions 4-5. Mirrors the
+// Python constant in `ai_router/progress.py`.
+exports.SCHEMA_VERSION_V4 = 4;
 exports.SESSION_STATUS_NOT_STARTED = "not-started";
 exports.SESSION_STATUS_IN_PROGRESS = "in-progress";
 exports.SESSION_STATUS_COMPLETE = "complete";
@@ -175,6 +189,14 @@ function synthesizeV3FromV2(state, specMdPath) {
         titlesByNumber.set(t.number, t.title);
     }
     // Figure out total: prefer explicit, else largest known number, else 0.
+    //
+    // Set 046 Session 2: ``legacyCurrent`` is intentionally excluded
+    // from the candidate set. Including it inflated the synthesized
+    // total to 1 for the plan-less in-progress shape the Set 046 writer
+    // produces (``totalSessions: null``, ``currentSession: 1``,
+    // ``completedSessions: []``, no ``sessions[]``) — which made the
+    // Explorer render ``0/1`` instead of the intended ``0/?``. Mirrors
+    // the same change in ai_router/progress.py.
     let total = legacyTotal;
     for (const n of titlesByNumber.keys()) {
         if (n > total)
@@ -183,9 +205,6 @@ function synthesizeV3FromV2(state, specMdPath) {
     for (const n of legacyCompleted) {
         if (n > total)
             total = n;
-    }
-    if (legacyCurrent !== null && legacyCurrent > total) {
-        total = legacyCurrent;
     }
     const completedSet = new Set(legacyCompleted);
     const sessions = [];
@@ -220,6 +239,212 @@ function synthesizeV3FromV2(state, specMdPath) {
     return out;
 }
 // ---------------------------------------------------------------------------
+// v3/v4 -> v4 read-time normalization (Set 047 Session 2)
+// ---------------------------------------------------------------------------
+// v4 per-session metadata keys promoted/derived by the normalize shim.
+// Centralized so the Python and TypeScript implementations stay in
+// lockstep on which fields move from top-level to per-session in v4.
+const V4_PER_SESSION_KEYS = [
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+];
+// Return `state` in canonical v4 read-view shape.
+//
+// Accepts v1/v2/v3/v4 input. Returns a NEW object; does NOT mutate the
+// input. The returned object carries:
+//
+// - `schemaVersion: 4`
+// - `sessionSetName` (preserved)
+// - `sessions[]` with v4 per-session metadata (each entry gains
+//   `startedAt` / `completedAt` / `orchestrator` /
+//   `verificationVerdict` defaulted to `null` when absent)
+// - `status` (canonicalized)
+// - Derived legacy top-level fields (`currentSession`,
+//   `totalSessions`, `completedSessions`, `orchestrator`,
+//   `startedAt`, `completedAt`, `verificationVerdict`,
+//   `lifecycleState`) so existing readers that still consume the
+//   top-level fields (most notably the Explorer's `readSessionSets`)
+//   work transparently against v4 writes.
+//
+// The TWO directions of derivation mirror the Python helper in
+// `ai_router/progress.py`:
+//
+// - v3 input → v4: top-level `orchestrator` / `startedAt` /
+//   `completedAt` / `verificationVerdict` are promoted to the
+//   in-progress session (or, if none, the most-recently-completed
+//   session) so per-session metadata is populated. The top-level
+//   fields are then re-derived from the per-session ones (no-op on
+//   pure v3 input).
+// - v4 input → v4: per-session metadata is preserved; top-level
+//   fields are derived FROM the per-session metadata. This is what
+//   lets a v3-era reader consume a v4 file unchanged.
+//
+// Per the Session-1 audit verdict (Group A1): the shim is the
+// reader-first phase; the migrator (Session 3) and the writer flip
+// (Sessions 4-5) both depend on this contract.
+function normalizeToV4Shape(state, specMdPath) {
+    if (state === null || state === undefined) {
+        throw new TypeError("normalizeToV4Shape: state is null");
+    }
+    // Step 1: ensure sessions[] is present (synthesize from v2 if missing).
+    let v3State;
+    if (state.sessions === undefined || state.sessions === null) {
+        v3State = synthesizeV3FromV2(state, specMdPath);
+    }
+    else {
+        v3State = { ...state };
+    }
+    const rawSessions = v3State.sessions ?? [];
+    if (!Array.isArray(rawSessions)) {
+        throw new SessionStateInvariantError(1, `sessions[] must be an array, got ${typeof rawSessions}`);
+    }
+    // Step 2: build v4 per-session records. Each entry gets the v4
+    // metadata fields defaulted to null when absent so downstream code
+    // can rely on key presence. We copy each entry rather than
+    // mutating in place.
+    const sessionsV4 = [];
+    for (const entry of rawSessions) {
+        if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+            // Defer to validator; this branch shouldn't normally fire
+            // because getProgress would have rejected earlier. Be permissive
+            // here so callers can validate at their own layer.
+            sessionsV4.push({ number: null, title: null, status: null });
+            continue;
+        }
+        const sv4 = { ...entry };
+        // Canonicalize per-session status BEFORE downstream derivation
+        // reads it. Aliased values (`"completed"` / `"done"`) must
+        // collapse to `"complete"` here so the promotion and the
+        // legacy-top-level derivation below match those entries against
+        // SESSION_STATUS_COMPLETE. Without this, a v3/v4 file authored
+        // with the alias form would bypass the derivation entirely (a
+        // hand-edited "completed" session would not appear in derived
+        // `completedSessions[]`).
+        sv4.status = canonicalizeStatus(sv4.status);
+        for (const k of V4_PER_SESSION_KEYS) {
+            if (sv4[k] === undefined)
+                sv4[k] = null;
+        }
+        sessionsV4.push(sv4);
+    }
+    const schemaVersionIn = state.schemaVersion;
+    const isV4Input = typeof schemaVersionIn === "number" && schemaVersionIn >= exports.SCHEMA_VERSION_V4;
+    // Step 3: on non-v4 input, promote top-level fields to per-session
+    // records that don't already carry the metadata. v4 inputs skip
+    // promotion because their per-session fields are authoritative.
+    if (!isV4Input) {
+        const topOrchestrator = state.orchestrator ?? null;
+        const topStarted = state.startedAt ?? null;
+        const topCompleted = state.completedAt ?? null;
+        const topVerdict = state.verificationVerdict ?? null;
+        const inProgress = sessionsV4.filter((s) => s.status === exports.SESSION_STATUS_IN_PROGRESS);
+        const completed = sessionsV4.filter((s) => s.status === exports.SESSION_STATUS_COMPLETE);
+        if (inProgress.length > 0) {
+            const tgt = inProgress[0];
+            if (tgt.orchestrator === null && topOrchestrator !== null) {
+                tgt.orchestrator = topOrchestrator;
+            }
+            if (tgt.startedAt === null && topStarted !== null) {
+                tgt.startedAt = topStarted;
+            }
+        }
+        if (completed.length > 0) {
+            const lastCompleted = completed[completed.length - 1];
+            if (lastCompleted.completedAt === null && topCompleted !== null) {
+                lastCompleted.completedAt = topCompleted;
+            }
+            if (lastCompleted.verificationVerdict === null && topVerdict !== null) {
+                lastCompleted.verificationVerdict = topVerdict;
+            }
+            // When no in-progress session, the orchestrator block on a v3
+            // close-out snapshot belongs with the most recent completed
+            // session (the orchestrator that closed it). Same goes for
+            // `startedAt` — without this branch, a between-sessions or
+            // all-complete snapshot would lose the top-level `startedAt`
+            // entirely (no in-progress session to receive it, and the v4
+            // derivation step has nowhere to re-discover it).
+            if (inProgress.length === 0) {
+                if (lastCompleted.orchestrator === null && topOrchestrator !== null) {
+                    lastCompleted.orchestrator = topOrchestrator;
+                }
+                if (lastCompleted.startedAt === null && topStarted !== null) {
+                    lastCompleted.startedAt = topStarted;
+                }
+            }
+        }
+    }
+    // Step 4: derive legacy top-level fields from the per-session
+    // ledger. This is the v4 reader contract — top-level fields are
+    // DERIVED, never independently maintained.
+    const completedNumbers = sessionsV4
+        .filter((s) => s.status === exports.SESSION_STATUS_COMPLETE && Number.isInteger(s.number))
+        .map((s) => s.number);
+    const inProgressList = sessionsV4.filter((s) => s.status === exports.SESSION_STATUS_IN_PROGRESS);
+    const currentSession = inProgressList.length > 0 && Number.isInteger(inProgressList[0].number)
+        ? inProgressList[0].number
+        : null;
+    let derivedOrchestrator = null;
+    let derivedStarted = null;
+    let derivedCompleted = null;
+    let derivedVerdict = null;
+    if (inProgressList.length > 0) {
+        derivedOrchestrator = inProgressList[0].orchestrator ?? null;
+        derivedStarted = inProgressList[0].startedAt ?? null;
+    }
+    const completedV4 = sessionsV4.filter((s) => s.status === exports.SESSION_STATUS_COMPLETE);
+    if (completedV4.length > 0) {
+        const lastCompleted = completedV4[completedV4.length - 1];
+        derivedCompleted = lastCompleted.completedAt ?? null;
+        derivedVerdict = lastCompleted.verificationVerdict ?? null;
+        if (derivedOrchestrator === null) {
+            derivedOrchestrator = lastCompleted.orchestrator ?? null;
+        }
+        if (derivedStarted === null) {
+            // Prefer the most-recently-completed session's startedAt over
+            // the earliest session's. Earlier draft scanned `sessionsV4`
+            // from the start, which on a v4 between-sessions snapshot
+            // would return session 1's startedAt (typically the set's
+            // open time, not the active session boundary). Scanning
+            // completed sessions in reverse gives the most current
+            // boundary timestamp.
+            for (let i = completedV4.length - 1; i >= 0; i--) {
+                const s = completedV4[i];
+                if (s.startedAt) {
+                    derivedStarted = s.startedAt;
+                    break;
+                }
+            }
+        }
+    }
+    const canonicalTopStatus = canonicalizeStatus(state.status ?? null);
+    const out = {
+        schemaVersion: exports.SCHEMA_VERSION_V4,
+        sessionSetName: state.sessionSetName ?? null,
+        sessions: sessionsV4,
+        status: canonicalTopStatus,
+        currentSession,
+        totalSessions: sessionsV4.length,
+        completedSessions: completedNumbers,
+        orchestrator: derivedOrchestrator,
+        startedAt: derivedStarted,
+        completedAt: derivedCompleted,
+        verificationVerdict: derivedVerdict,
+        lifecycleState: state.lifecycleState ?? null,
+    };
+    // Preserve passthrough fields that callers (cancellation reader,
+    // forceClosed display, Set 035 preCancelStatus) still consume from
+    // the top level. These are NOT derived from sessions[]; they ride
+    // along as opaque values until a future schema folds them in too.
+    for (const passthroughKey of ["preCancelStatus", "forceClosed"]) {
+        if (passthroughKey in state) {
+            out[passthroughKey] = state[passthroughKey];
+        }
+    }
+    return out;
+}
+// ---------------------------------------------------------------------------
 // getProgress: the one reader path
 // ---------------------------------------------------------------------------
 // Single reader entry point for any session-state.json shape.
@@ -239,14 +464,19 @@ function synthesizeV3FromV2(state, specMdPath) {
 // Raises `SessionStateInvariantError` on invariant violation.
 // Application readers that want defensive fallback (e.g. degrade to
 // in-progress rather than throw) should wrap the call in try/catch.
+//
+// Set 047 Session 2: routed through `normalizeToV4Shape` so a
+// v4-shaped file (sessions[] entries carrying per-session startedAt /
+// completedAt / orchestrator / verificationVerdict) reads identically
+// to a v3 file. The normalize shim is invoked even for v3 inputs so
+// the v4 per-session enrichment is available to any consumer that
+// fetches the normalized object directly.
 function readProgress(state, specMdPath) {
     if (state === null || state === undefined) {
         throw new TypeError("readProgress: state is null");
     }
-    if (state.sessions !== undefined && state.sessions !== null) {
-        return getProgress(state);
-    }
-    return getProgress(synthesizeV3FromV2(state, specMdPath));
+    const normalized = normalizeToV4Shape(state, specMdPath);
+    return getProgress(normalized);
 }
 function getProgress(state) {
     if (state === null || state === undefined) {

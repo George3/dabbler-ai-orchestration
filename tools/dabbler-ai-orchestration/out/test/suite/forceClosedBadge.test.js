@@ -73,10 +73,14 @@ function fakeSet(liveSession) {
             requiresUAT: false,
             requiresE2E: false,
             uatScope: "none",
+            tier: "full",
         },
         uatSummary: null,
         root: "/x",
         needsMigration: false,
+        migrationTargetSchemaVersion: null,
+        prerequisites: null,
+        blockedByPrereqs: false,
     };
 }
 suite("SessionSetsProvider — forceClosedBadge", () => {

@@ -38,6 +38,7 @@ exports.discoverRoots = discoverRoots;
 exports.isMidSetComplete = isMidSetComplete;
 exports.countDistinctCloseoutSessions = countDistinctCloseoutSessions;
 exports.parseSessionSetConfig = parseSessionSetConfig;
+exports.parsePrerequisites = parsePrerequisites;
 exports.parseUatChecklist = parseUatChecklist;
 exports.readSessionSets = readSessionSets;
 exports.readAllSessionSets = readAllSessionSets;
@@ -94,6 +95,11 @@ function discoverRoots() {
 // `completedSessions[]` synthesizes to a sessions[] that fails rule 7,
 // flagging the same drift cases (count mismatch, final-session signal
 // gap) without the explicit predicate ladder.
+//
+// Set 047 Session 2: `readProgress` itself runs through
+// `normalizeToV4Shape` now, so this probe is robust to both v3 and v4
+// state-file shapes. The v2-compat ledger-merge below stays unchanged
+// — it operates on the raw parsed dict before any normalization.
 //
 // V2-compat: pre-Set-022 snapshots without `completedSessions[]` get
 // their array pre-populated from the events ledger before synthesis,
@@ -211,10 +217,15 @@ function countDistinctCloseoutSessions(eventsPath) {
     return seen.size;
 }
 function parseSessionSetConfig(specPath) {
+    // Set 048 Session 2: defaults are full-tier-conservative — `tier: "full"`,
+    // `requiresUAT: false`, `requiresE2E: false`. Pre-Set-048 specs without
+    // explicit `tier:` resolve to `"full"` so existing 47 sets continue to
+    // run under canonical Full-tier discipline.
     const config = {
         requiresUAT: false,
         requiresE2E: false,
         uatScope: "none",
+        tier: "full",
     };
     if (!fs.existsSync(specPath))
         return config;
@@ -227,18 +238,163 @@ function parseSessionSetConfig(specPath) {
     }
     const headingMatch = text.match(/##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i);
     const block = headingMatch ? headingMatch[1] : text;
-    const flagRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(true|false)\\s*$`, "im");
-    const stringRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*([\\w-]+)\\s*$`, "im");
-    const uat = block.match(flagRe("requiresUAT"));
-    if (uat)
-        config.requiresUAT = uat[1].toLowerCase() === "true";
-    const e2e = block.match(flagRe("requiresE2E"));
-    if (e2e)
-        config.requiresE2E = e2e[1].toLowerCase() === "true";
+    // Set 048 Session 2: triStateRe accepts `true | false | suggested` (with
+    // optional surrounding quotes on `suggested` since YAML allows either).
+    const triStateRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(?:"(suggested)"|(true|false|suggested))\\s*(?:#.*)?$`, "im");
+    const stringRe = (key) => new RegExp(`^\\s*${key}\\s*:\\s*([\\w-]+)\\s*(?:#.*)?$`, "im");
+    const parseTriState = (m) => {
+        if (!m)
+            return null;
+        const raw = (m[1] ?? m[2] ?? "").toLowerCase();
+        if (raw === "true")
+            return true;
+        if (raw === "false")
+            return false;
+        if (raw === "suggested")
+            return "suggested";
+        return null;
+    };
+    const uat = parseTriState(block.match(triStateRe("requiresUAT")));
+    if (uat !== null)
+        config.requiresUAT = uat;
+    const e2e = parseTriState(block.match(triStateRe("requiresE2E")));
+    if (e2e !== null)
+        config.requiresE2E = e2e;
     const scope = block.match(stringRe("uatScope"));
     if (scope)
         config.uatScope = scope[1];
+    const tier = block.match(stringRe("tier"));
+    if (tier) {
+        const v = tier[1].toLowerCase();
+        if (v === "full" || v === "lightweight")
+            config.tier = v;
+        // Unknown tier values silently fall back to "full" — schema validator
+        // (separate from this parser) is responsible for surfacing the typo.
+    }
     return config;
+}
+/**
+ * Set 047 Session 5: parse the optional ``prerequisites:`` field from
+ * the spec's ``Session Set Configuration`` YAML block.
+ *
+ * Expected shape (per spec §3.3):
+ *
+ * ```yaml
+ * prerequisites:
+ *   - slug: 046-some-other-set
+ *     condition: complete
+ *   - slug: 044-another-set
+ *     condition: complete
+ * ```
+ *
+ * Returns ``null`` when the field is absent (no dependency declared).
+ * Returns ``[]`` when ``prerequisites: []`` is written explicitly.
+ * Returns the parsed list otherwise. Tolerant of operator typos:
+ * entries missing ``slug`` are dropped; unrecognized ``condition``
+ * values are dropped (only ``"complete"`` is in the enum today, per
+ * spec §3.3).
+ *
+ * The parser is intentionally lightweight (regex, not a YAML parser)
+ * so this module stays dependency-free and so a stray indentation
+ * issue in the spec doesn't fail-closed across the entire Explorer.
+ * A full YAML round-trip lives in the config-editor module; readers
+ * here only need to recognize the array form.
+ */
+function parsePrerequisites(specPath) {
+    if (!fs.existsSync(specPath))
+        return null;
+    let text;
+    try {
+        text = fs.readFileSync(specPath, "utf8");
+    }
+    catch {
+        return null;
+    }
+    const headingMatch = text.match(/##\s*Session Set Configuration[\s\S]*?```ya?ml\s*([\s\S]*?)```/i);
+    const block = headingMatch ? headingMatch[1] : text;
+    // Detect the key first — distinguishes "field absent" from
+    // "field present with empty list".
+    const keyRe = /^\s*prerequisites\s*:(.*)$/im;
+    const keyMatch = block.match(keyRe);
+    if (!keyMatch)
+        return null;
+    const inlineRest = keyMatch[1].trim();
+    // Inline empty: ``prerequisites: []`` — distinct from absent.
+    if (inlineRest === "[]")
+        return [];
+    // Locate the list body following the key. Each entry begins with
+    // ``- slug: ...`` followed (in any order) by ``condition: ...``.
+    const keyIndex = block.search(keyRe);
+    if (keyIndex < 0)
+        return null;
+    const after = block.slice(keyIndex + keyMatch[0].length);
+    // Stop at the next top-level (or shallower) key. We allow nested
+    // (indented) lines until we hit a non-indented non-empty line.
+    const lines = after.split(/\r?\n/);
+    const bodyLines = [];
+    for (const line of lines) {
+        if (line.trim() === "") {
+            bodyLines.push(line);
+            continue;
+        }
+        if (!/^\s/.test(line))
+            break; // next top-level key
+        bodyLines.push(line);
+    }
+    const body = bodyLines.join("\n");
+    // Split the body on the YAML list-item marker (``\n  - ``) so each
+    // chunk holds one entry's key/value pairs. Splitting (rather than
+    // matching with a lookahead) avoids a subtle regex-end-of-line bug
+    // where `(?=...\\s*$)` truncated multi-line entries at the first
+    // whitespace-only EOL inside the entry.
+    const chunks = body.split(/\r?\n[ \t]*-[ \t]+/);
+    // chunks[0] is the pre-list text (typically blank/whitespace);
+    // each subsequent chunk is one entry's body.
+    const out = [];
+    // Strip a YAML inline comment from a scalar value
+    // (``slug: 046-foo # comment`` → ``046-foo``). Comments are stripped
+    // before matching so an operator-friendly annotation does not drop
+    // the entry. Per the YAML spec a ``#`` mid-value requires a
+    // preceding whitespace to start a comment; we honor that to avoid
+    // mangling values like ``slug: foo#bar`` (unusual, but valid).
+    const stripComment = (s) => s.replace(/\s+#.*$/, "").trim();
+    // S5 verifier-fix Important-1: distinguish "no condition key
+    // present → default to complete" from "condition key present but
+    // invalid → drop the entry". The earlier all-in-one ``\S+`` capture
+    // collapsed the two cases by treating an unparseable condition
+    // (e.g., with an inline comment that broke the ``\S+`` capture) as
+    // if it were absent.
+    for (const chunk of chunks.slice(1)) {
+        // Match the slug line; tolerate a trailing YAML comment on the
+        // value via stripComment(). Slug is mandatory.
+        const slugLineMatch = chunk.match(/^\s*slug\s*:\s*(.+)$/im);
+        if (!slugLineMatch)
+            continue;
+        const slug = stripComment(slugLineMatch[1]);
+        if (!slug)
+            continue;
+        // Detect presence of the ``condition`` key first; parse its
+        // value (with comment-strip) afterwards. Presence-with-bad-value
+        // is the drop case; absence is the default-to-"complete" case.
+        const condLineMatch = chunk.match(/^\s*condition\s*:\s*(.*)$/im);
+        let condition;
+        if (condLineMatch) {
+            const raw = stripComment(condLineMatch[1]);
+            if (raw === "complete") {
+                condition = "complete";
+            }
+            else {
+                // Present but not in the enum → drop per spec §3.3.
+                continue;
+            }
+        }
+        else {
+            // Absent → default to "complete".
+            condition = "complete";
+        }
+        out.push({ slug, condition });
+    }
+    return out;
 }
 function parseUatChecklist(checklistPath) {
     if (!fs.existsSync(checklistPath))
@@ -356,7 +512,15 @@ function readSessionSets(root) {
         // sessions[] is missing (a broken v3 shape that the bulk migrator
         // refuses to rewrite — see migrate_session_state.py's
         // ACTION_SKIPPED_MALFORMED case for the same heuristic).
+        //
+        // Set 047 Session 3: expanded so canonical v3 files (schemaVersion=3
+        // with sessions[]) also flag — the migration target in that case
+        // is v4, and the ActionRegistry surfaces "Migrate to v4 schema"
+        // instead of "Migrate to v3 schema". `migrationTargetSchemaVersion`
+        // carries the target so the ActionRegistry can pick the right
+        // command without re-reading the file.
         let needsMigration = false;
+        let migrationTargetSchemaVersion = null;
         const eventsPath = path.join(dir, "session-events.jsonl");
         // Activity log is a step log, not a count source. The activity-log
         // read is retained for two non-count signals: `totalSessions` (which
@@ -379,58 +543,109 @@ function readSessionSets(root) {
         }
         if (fs.existsSync(statePath)) {
             try {
-                const sd = JSON.parse(fs.readFileSync(statePath, "utf8"));
-                // Set 030 Session 5: v2 detection. The criteria match the
-                // bulk migrator's "would migrate" rule so the badge and the
-                // CLI agree set-for-set:
-                //   - schemaVersion absent or not the literal 3: legacy v2.
-                //   - schemaVersion === 3 but sessions[] missing or not an
-                //     array: broken-v3 shape the migrator refuses to rewrite
-                //     (operator must hand-repair) — still a needs-attention
-                //     signal in the tree.
-                // Files with schemaVersion > 3 are future-schema and treated
-                // as already-current (the migrator refuses to downgrade them
-                // for the same reason).
-                if (sd && typeof sd === "object" && !Array.isArray(sd)) {
-                    const sv = sd.schemaVersion;
-                    if (sv === 3) {
-                        if (!Array.isArray(sd.sessions)) {
+                // Set 047 Session 2 (reader-first phase): pipe the raw parsed
+                // state through `normalizeToV4Shape` so a v4-shaped file (whose
+                // writers — Sessions 4-5 — drop `orchestrator`, `startedAt`,
+                // `completedAt`, `verificationVerdict` from the top level in
+                // favor of per-session metadata) reads identically to a v3 file.
+                // The shim re-derives the top-level fields from `sessions[]` on
+                // v4 inputs and is a no-op on pure v3 inputs that already carry
+                // them. `needsMigration` detection below reads the RAW parsed
+                // object (`rawSd`) because the v3/v4 distinction is precisely
+                // the signal we're checking for there.
+                const rawSd = JSON.parse(fs.readFileSync(statePath, "utf8"));
+                // Set 030 Session 5 + Set 047 Session 3: needs-migration detection.
+                // Computed FIRST — before normalize/progress reads — so the
+                // badge surfaces even when the downstream shim/reader rejects
+                // the file (e.g., an invariant violation in `normalizeToV4Shape`
+                // would otherwise jump straight to the outer catch and lose
+                // the migration affordance entirely, leaving the operator
+                // unable to either fix or migrate the row). The S3 verifier
+                // flagged the prior ordering as a coupling bug; this block
+                // depends only on the parsed `rawSd`, not on any derived
+                // value, so it's safe to run first.
+                //
+                // The criteria match the bulk migrators' "would migrate" rule
+                // so the badge and the CLIs agree set-for-set:
+                //   - schemaVersion === 4 (or higher): already current, no
+                //     migration needed.
+                //   - canonical v3 (schemaVersion === 3 with sessions[]): the
+                //     `migrate_v3_to_v4` migrator's target — flag with
+                //     target=4 so the ActionRegistry surfaces "Migrate to v4
+                //     schema".
+                //   - schemaVersion === 3 but sessions[] missing: broken-v3
+                //     shape neither migrator will rewrite. Operator must
+                //     hand-repair to canonical v3 (then re-run the v4
+                //     migrator). Flag with target=3 so the menu offers
+                //     "Migrate to v3 schema" — the v2→v3 migrator's
+                //     same-shaped branch will also skip, which is the right
+                //     "hand-repair, then come back" UX.
+                //   - schemaVersion absent or < 3: legacy v1/v2; the v2→v3
+                //     migrator's target. Flag with target=3.
+                if (rawSd && typeof rawSd === "object" && !Array.isArray(rawSd)) {
+                    const sv = rawSd.schemaVersion;
+                    if (typeof sv === "number" && sv >= 4) {
+                        needsMigration = false;
+                        migrationTargetSchemaVersion = null;
+                    }
+                    else if (sv === 3) {
+                        if (Array.isArray(rawSd.sessions)) {
                             needsMigration = true;
+                            migrationTargetSchemaVersion = 4;
+                        }
+                        else {
+                            needsMigration = true;
+                            migrationTargetSchemaVersion = 3;
                         }
                     }
                     else if (typeof sv !== "number" || sv < 3) {
                         needsMigration = true;
+                        migrationTargetSchemaVersion = 3;
                     }
                 }
-                // Set 030 Session 3: route progress reads through the v3
-                // helper. `readProgress` branches v2/v3 internally; on a v3
-                // file it reads sessions[] directly, and on a v2 file it
-                // synthesizes from the legacy triple first. We trap invariant
-                // violations and fall through to the v2-compat events-ledger
-                // fallback below so a pre-Set-022 snapshot lacking
-                // completedSessions[] still derives a sensible count.
-                //
-                // V2-compat pre-processing: if the snapshot is v2 (no sessions[])
-                // and lacks a non-empty completedSessions[], pre-populate it
-                // from the events ledger BEFORE synthesizing. This keeps the
-                // ledger as a count signal for pre-Set-022 sets that have not
-                // yet been healed by the next boundary write. Pure-v3 snapshots
-                // skip this entirely — sessions[] is authoritative.
-                let progressTotal = null;
-                let progressCompleted = null;
-                let progressCurrent = null;
-                let stateForProgress = sd;
-                if (sd.sessions === undefined &&
-                    (!Array.isArray(sd.completedSessions) || // noqa: D13 - v2-compat ledger-merge for synthesizer input
-                        (sd.completedSessions?.length ?? 0) === 0) // noqa: D13 - v2-compat ledger-merge for synthesizer input
+                // Set 030 Session 3 v2-compat pre-processing: if the snapshot
+                // is v2-shape (no sessions[]) and lacks a non-empty
+                // completedSessions[], pre-populate it from the events ledger
+                // BEFORE handing the dict to the normalize shim. This keeps
+                // the ledger as a count signal for pre-Set-022 snapshots that
+                // haven't been healed by their next boundary write yet.
+                // Pure-v3 / v4 snapshots skip this entirely — sessions[] is
+                // authoritative for them. Set 047 Session 2 moved this branch
+                // ahead of the normalize call because normalize guarantees
+                // sessions[] on the output, which would mask the v2-compat
+                // signal if checked post-normalize.
+                let preNormalizeSd = rawSd;
+                if (rawSd &&
+                    typeof rawSd === "object" &&
+                    !Array.isArray(rawSd) &&
+                    rawSd.sessions === undefined &&
+                    (!Array.isArray(rawSd.completedSessions) || // noqa: D13 - v2-compat ledger-merge for synthesizer input
+                        rawSd.completedSessions.length === 0) // noqa: D13 - v2-compat ledger-merge for synthesizer input
                 ) {
                     const ledgerSessions = readClosedSessionsFromLedger(eventsPath);
                     if (ledgerSessions.length > 0) {
-                        stateForProgress = { ...sd, completedSessions: ledgerSessions };
+                        preNormalizeSd = { ...rawSd, completedSessions: ledgerSessions };
                     }
                 }
+                const sd = (0, progress_1.normalizeToV4Shape)(preNormalizeSd, specPath);
+                // Set 030 Session 3: route progress reads through the v3/v4
+                // helper. `readProgress` itself runs through `normalizeToV4Shape`
+                // so a v4 file (per-session metadata) and a v3 file (top-level
+                // metadata) both produce the same `ProgressView`. We trap
+                // invariant violations and fall through to the v2-compat
+                // events-ledger fallback below so a pre-Set-022 snapshot
+                // lacking completedSessions[] still derives a sensible count.
+                //
+                // Set 047 Session 2: the v2-compat ledger-merge pre-step that
+                // used to sit here is hoisted above the normalize call (see
+                // `preNormalizeSd` above) — `sd` is already normalized to v4
+                // with sessions[] guaranteed, so the historical ledger-merge
+                // check (`sd.sessions === undefined`) would no longer fire.
+                let progressTotal = null;
+                let progressCompleted = null;
+                let progressCurrent = null;
                 try {
-                    const view = (0, progress_1.readProgress)(stateForProgress, specPath);
+                    const view = (0, progress_1.readProgress)(sd, specPath);
                     progressTotal = view.totalSessions;
                     progressCompleted = [...view.completedSessions];
                     progressCurrent = view.currentSession;
@@ -502,6 +717,7 @@ function readSessionSets(root) {
         }
         const config = parseSessionSetConfig(specPath);
         const uatSummary = config.requiresUAT ? parseUatChecklist(uatChecklistPath) : null;
+        const prerequisites = parsePrerequisites(specPath);
         sets.push({
             name: entry.name,
             dir,
@@ -520,8 +736,22 @@ function readSessionSets(root) {
             uatSummary,
             root,
             needsMigration,
+            migrationTargetSchemaVersion,
+            prerequisites,
+            // Default false; the cross-reference pass below overwrites this
+            // once every set's `state` is known so each prereq can resolve
+            // against an up-to-date snapshot. Sets without declared
+            // prerequisites stay at false in both passes.
+            blockedByPrereqs: false,
         });
     }
+    // Set 047 Session 5 (spec §3.3): per-root cross-reference for the
+    // single-root caller. `readAllSessionSets()` recomputes against the
+    // merged map below so prereqs that resolve to a set discovered in a
+    // different worktree / root still find their target. Single-root
+    // callers (tests, isolated workspace scans) get the right answer
+    // here without needing the merge step.
+    deriveBlockedByPrereqs(sets);
     // Diagnostic: one-line summary in the dev console showing how the
     // extension bucketed each root. Useful for spotting UI/cache bugs vs.
     // state-derivation bugs without needing a breakpoint.
@@ -538,6 +768,45 @@ function readSessionSets(root) {
             `cancelled=${counts.cancelled ?? 0}`);
     }
     return sets;
+}
+/**
+ * Set 047 Session 5 (spec §3.3): mutate each set in *sets* to set
+ * ``blockedByPrereqs`` against the in-memory map of the same list.
+ *
+ * Cross-references each set's ``prerequisites`` (the parsed
+ * spec.md field) against the target set's bucketed ``state`` and
+ * sets the boolean accordingly. ANY unsatisfied prereq blocks the
+ * row; an unknown prereq slug also blocks (typo / missing set must
+ * surface, not silently unblock).
+ *
+ * Idempotent: callable on a `sets` array that has been merged
+ * across roots in `readAllSessionSets`, so cross-root prerequisites
+ * resolve against the merged view rather than the per-root scan
+ * (S5 verifier Important-2 fix).
+ */
+function deriveBlockedByPrereqs(sets) {
+    const setsByName = new Map();
+    for (const s of sets)
+        setsByName.set(s.name, s);
+    for (const s of sets) {
+        if (!s.prerequisites || s.prerequisites.length === 0) {
+            s.blockedByPrereqs = false;
+            continue;
+        }
+        let blocked = false;
+        for (const prereq of s.prerequisites) {
+            const target = setsByName.get(prereq.slug);
+            if (!target) {
+                blocked = true;
+                break;
+            }
+            if (prereq.condition === "complete" && target.state !== "complete") {
+                blocked = true;
+                break;
+            }
+        }
+        s.blockedByPrereqs = blocked;
+    }
 }
 function readAllSessionSets() {
     const merged = new Map();
@@ -559,6 +828,12 @@ function readAllSessionSets() {
             }
         }
     }
-    return Array.from(merged.values());
+    const mergedList = Array.from(merged.values());
+    // S5 verifier Important-2 fix: re-derive blockedByPrereqs against
+    // the merged map so a prereq target discovered in a different root
+    // / worktree still resolves. The per-root pass inside
+    // readSessionSets() handles the single-root case.
+    deriveBlockedByPrereqs(mergedList);
+    return mergedList;
 }
 //# sourceMappingURL=fileSystem.js.map

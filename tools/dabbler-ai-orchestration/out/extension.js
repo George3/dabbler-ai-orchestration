@@ -41,9 +41,11 @@ const path = __importStar(require("path"));
 const CustomSessionSetsView_1 = require("./providers/CustomSessionSetsView");
 const scanState_1 = require("./providers/scanState");
 const migrateSet_1 = require("./commands/migrateSet");
+const migrateSetV4_1 = require("./commands/migrateSetV4");
 const fileSystem_1 = require("./utils/fileSystem");
 const openFile_1 = require("./commands/openFile");
 const copyCommand_1 = require("./commands/copyCommand");
+const copyPromptCommands_1 = require("./commands/copyPromptCommands");
 const gitScaffold_1 = require("./commands/gitScaffold");
 const copyAdoptionBootstrapPrompt_1 = require("./commands/copyAdoptionBootstrapPrompt");
 const troubleshoot_1 = require("./commands/troubleshoot");
@@ -55,14 +57,9 @@ const ConfigEditorPanel_1 = require("./configEditor/ConfigEditorPanel");
 const flagDecisionForReview_1 = require("./commands/flagDecisionForReview");
 const scanAnnotationsForActiveSet_1 = require("./commands/scanAnnotationsForActiveSet");
 const installOrchestratorHookClaudeCode_1 = require("./commands/installOrchestratorHookClaudeCode");
-const installOrchestratorHookGemini_1 = require("./commands/installOrchestratorHookGemini");
-const installOrchestratorHookCopilot_1 = require("./commands/installOrchestratorHookCopilot");
-const checkOutOrchestrator_1 = require("./commands/checkOutOrchestrator");
-const releaseCheckOut_1 = require("./commands/releaseCheckOut");
 const openOrchestratorWriterLog_1 = require("./commands/openOrchestratorWriterLog");
 const regenerateNarrationTemplates_1 = require("./commands/regenerateNarrationTemplates");
-const CheckoutPollService_1 = require("./providers/CheckoutPollService");
-const ReadOnlyIntentService_1 = require("./providers/ReadOnlyIntentService");
+const externalVerification_1 = require("./commands/externalVerification");
 const SESSION_SETS_REL = path.join("docs", "session-sets");
 function evaluateSupportContextKeys(allSets) {
     const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
@@ -209,6 +206,7 @@ function activate(context) {
     };
     safeRegister("registerOpenFileCommands", () => (0, openFile_1.registerOpenFileCommands)(context));
     safeRegister("registerCopyCommands", () => (0, copyCommand_1.registerCopyCommands)(context));
+    safeRegister("registerCopyPromptCommands", () => (0, copyPromptCommands_1.registerCopyPromptCommands)(context));
     safeRegister("registerGitScaffoldCommand", () => (0, gitScaffold_1.registerGitScaffoldCommand)(context));
     safeRegister("registerCopyAdoptionBootstrapPromptCommand", () => (0, copyAdoptionBootstrapPrompt_1.registerCopyAdoptionBootstrapPromptCommand)(context));
     safeRegister("registerTroubleshootCommand", () => (0, troubleshoot_1.registerTroubleshootCommand)(context));
@@ -220,74 +218,23 @@ function activate(context) {
     safeRegister("registerFlagDecisionForReview", () => (0, flagDecisionForReview_1.registerFlagDecisionForReview)(context));
     safeRegister("registerScanAnnotationsForActiveSet", () => (0, scanAnnotationsForActiveSet_1.registerScanAnnotationsForActiveSet)(context));
     safeRegister("registerMigrateSetCommand", () => (0, migrateSet_1.registerMigrateSetCommand)(context, { refreshView: refreshAll }));
-    // Set 029 Session 4: the dedicated dabblerOrchestratorIndicator view
-    // is retired in v0.16.0. Set 034 then retired the per-row gauges in
-    // CustomSessionSetsView; Set 036 Session 6 deleted the source.
-    // Hook installer + manual-override stub + writer-log opener remain
-    // as standalone Command Palette / right-click context-menu actions.
-    //
-    // Set 029 Session 5: full multi-provider surface — Gemini + Copilot
-    // manual-only shim commands that delegate to the universal
-    // manual-override quickpick. Manual stub from S2 is retired in favor
-    // of the real implementation.
-    //
-    // Set 036 Session 3 (D1 watcher-scope discipline): the Codex
-    // config.toml auto-detect watcher is retired. Codex joins Gemini
-    // and Copilot as a manual-only orchestrator; operators claim a
-    // Codex check-out via "Check Out As…" (the canonical writer path)
-    // instead of via filesystem inference.
+    safeRegister("registerMigrateSetV4Command", () => (0, migrateSetV4_1.registerMigrateSetV4Command)(context, { refreshView: refreshAll }));
+    // Set 049 S4 (rip-out): the orchestrator check-out / check-in
+    // coordination layer is removed. Claude Code remains the sole
+    // engine with an auto-attribution path via the SessionStart hook
+    // installed below; other engines write `engine + provider [+ model
+    // + effort]` into `session-state.json`'s orchestrator block by
+    // invoking `python -m ai_router.start_session` directly. The
+    // standalone Gemini / Copilot / manual-override / release-check-out
+    // commands and their backing CheckoutPollService + chatSessionId
+    // takeover modal + ReadOnlyIntentService were retired alongside.
+    // The writer-log opener stays as a Command-Palette / right-click
+    // diagnostic surface; the writer log itself is preserved
+    // provisionally per Set 049 T5.
     safeRegister("registerInstallOrchestratorHookClaudeCode", () => (0, installOrchestratorHookClaudeCode_1.registerInstallOrchestratorHookClaudeCodeCommand)(context));
-    safeRegister("registerInstallOrchestratorHookGemini", () => (0, installOrchestratorHookGemini_1.registerInstallOrchestratorHookGeminiCommand)(context));
-    safeRegister("registerInstallOrchestratorHookCopilot", () => (0, installOrchestratorHookCopilot_1.registerInstallOrchestratorHookCopilotCommand)(context));
-    safeRegister("registerCheckOutOrchestrator", () => (0, checkOutOrchestrator_1.registerCheckOutOrchestrator)(context));
-    safeRegister("registerReleaseCheckOut", () => (0, releaseCheckOut_1.registerReleaseCheckOut)(context));
     safeRegister("registerOpenOrchestratorWriterLog", () => (0, openOrchestratorWriterLog_1.registerOpenOrchestratorWriterLog)(context));
     safeRegister("registerRegenerateNarrationTemplates", () => (0, regenerateNarrationTemplates_1.registerRegenerateNarrationTemplatesCommand)(context));
-    // Set 036 Session 4: ReadOnlyIntentService is the in-memory map of
-    // session sets the operator picked "Open in Read-Only Mode" on via
-    // the chatSessionMismatchModal. checkOutOrchestrator reads it to
-    // prompt-before-write; lifetime ends when the extension host
-    // deactivates.
-    context.subscriptions.push({ dispose: () => (0, ReadOnlyIntentService_1.getReadOnlyIntentService)().dispose() });
-    // Set 033 Session 5: CheckoutPollService watches
-    // ~/.dabbler/checkout-conflicts/ for structured conflict records
-    // emitted by the Claude SessionStart invoker on
-    // EXIT_CHECKOUT_CONFLICT (H3 refusal). For each record, it surfaces
-    // a poll/force/dismiss prompt; "poll" watches the held set's
-    // session-state.json (5s debounce) and auto-retries start_session
-    // when the slot becomes free (H4 identity gate). The pythonPath
-    // resolver mirrors the one in checkOutOrchestrator.ts so both paths
-    // share the operator's dabblerSessionSets.pythonPath setting.
-    safeRegister("CheckoutPollService", () => {
-        const pollService = new CheckoutPollService_1.CheckoutPollService({
-            pythonPathResolver: (cwd) => {
-                const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
-                const inspected = cfg.inspect("pythonPath");
-                const explicit = inspected?.workspaceFolderValue ??
-                    inspected?.workspaceValue ??
-                    inspected?.globalValue;
-                const raw = (explicit ?? "python").trim();
-                if (!raw)
-                    return "python";
-                if (path.isAbsolute(raw))
-                    return raw;
-                if (raw.includes(path.sep) || raw.includes("/")) {
-                    return path.resolve(cwd, raw);
-                }
-                return raw;
-            },
-            timeoutMinutesResolver: () => {
-                const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
-                const value = cfg.get("checkoutPollTimeoutMinutes", CheckoutPollService_1.DEFAULT_TIMEOUT_MINUTES);
-                if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
-                    return CheckoutPollService_1.DEFAULT_TIMEOUT_MINUTES;
-                }
-                return Math.min(value, 1440);
-            },
-        });
-        pollService.start();
-        context.subscriptions.push(pollService);
-    });
+    safeRegister("registerExternalVerificationCommand", () => (0, externalVerification_1.registerExternalVerificationCommand)(context));
     // Set 030 Session 5: flip scanState to "ready" once activation
     // finishes. `setImmediate` yields the event loop one tick so the
     // synchronous body of activate() returns first (VS Code measures

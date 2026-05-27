@@ -58,7 +58,7 @@ function ids(set: SessionSet, supports: ActionSupports): string[] {
 }
 
 suite("ActionRegistry", () => {
-  test("ROW_ACTIONS exposes the 14 menu-surface actions (Set 048 S3 reshape + Set 049 S1 hygiene)", () => {
+  test("ROW_ACTIONS exposes the 14 menu-surface actions (Set 048 S3 reshape + Set 049 S1 hygiene + Set 049 S4 rip-out)", () => {
     // Set 048 S3 reshape:
     //   - L3 removed `dabblerSessionSets.openAiAssignment`.
     //   - L2 narrowed the Open File submenu to exactly 4 entries
@@ -78,9 +78,11 @@ suite("ActionRegistry", () => {
     // Set 049 S1 hygiene addition:
     //   - dabbler.copyStartNextParallelSessionPrompt — the parallel-
     //     session variant surfaces in the submenu under the same
-    //     non-terminal gating as "Start Next Session". Pre-049 the
-    //     copyStartCommand.parallel command existed in copyCommand.ts
-    //     but had no menu entry.
+    //     non-terminal gating as "Start Next Session".
+    // Set 049 S4 rip-out:
+    //   - `dabbler.checkOutOrchestrator` ("Set Orchestrator…") retired
+    //     alongside the check-out / check-in coordination layer. The
+    //     writer-log opener stays.
     const expected = new Set([
       "dabblerSessionSets.openSpec",
       "dabblerSessionSets.openActivityLog",
@@ -91,7 +93,6 @@ suite("ActionRegistry", () => {
       "dabbler.copySetAccomplishmentsPrompt",
       "dabbler.copyStartNextSessionPrompt",
       "dabbler.copyStartNextParallelSessionPrompt",
-      "dabbler.checkOutOrchestrator",
       "dabbler.openOrchestratorWriterLog",
       "dabblerSessionSets.migrate",
       "dabblerSessionSets.migrateToV4",
@@ -100,7 +101,7 @@ suite("ActionRegistry", () => {
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 15);
+    assert.strictEqual(ROW_ACTIONS.length, 14);
   });
 
   test("openAiAssignment fully removed (L3)", () => {
@@ -219,15 +220,24 @@ suite("ActionRegistry", () => {
     }
   });
 
-  test("Set Orchestrator… is gated to in-progress rows only", () => {
-    assert.ok(
-      ids(fakeSet("in-progress"), ALL_SUPPORTED).includes("dabbler.checkOutOrchestrator"),
-      "checkOutOrchestrator should surface on in-progress rows",
-    );
-    for (const st of ["not-started", "complete", "cancelled"] as SessionState[]) {
+  test("checkOutOrchestrator fully retired (Set 049 S4 rip-out)", () => {
+    for (const st of ["in-progress", "not-started", "complete", "cancelled"] as SessionState[]) {
       assert.ok(
         !ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.checkOutOrchestrator"),
-        `checkOutOrchestrator leaked onto state=${st}`,
+        `checkOutOrchestrator must not appear in any state (retired Set 049 S4); leaked onto state=${st}`,
+      );
+    }
+    for (const a of ROW_ACTIONS) {
+      assert.notStrictEqual(a.id, "dabbler.checkOutOrchestrator",
+        "dabbler.checkOutOrchestrator must not appear in ROW_ACTIONS — Set 049 S4 rip-out");
+    }
+  });
+
+  test("openOrchestratorWriterLog stays for all states (writer log preserved per Set 049 T5)", () => {
+    for (const st of ["in-progress", "not-started", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.openOrchestratorWriterLog"),
+        `openOrchestratorWriterLog missing for state=${st}`,
       );
     }
   });

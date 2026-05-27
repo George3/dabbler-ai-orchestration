@@ -56,10 +56,13 @@ function ssStub(over = {}) {
         sessionsCompleted: 0,
         lastTouched: "2026-05-16T00:00:00Z",
         liveSession: null,
-        config: { requiresUAT: false, requiresE2E: false, uatScope: "none" },
+        config: { requiresUAT: false, requiresE2E: false, uatScope: "none", tier: "full" },
         uatSummary: null,
         root: "/tmp",
         needsMigration: false,
+        migrationTargetSchemaVersion: null,
+        prerequisites: null,
+        blockedByPrereqs: false,
         ...over,
     };
 }

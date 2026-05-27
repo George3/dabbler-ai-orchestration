@@ -40,6 +40,7 @@ exports.cancelSessionSet = cancelSessionSet;
 exports.restoreSessionSet = restoreSessionSet;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const progress_1 = require("./progress");
 // Filenames for the cancel/restore audit-trail markdown files. Pre-
 // Set-035 the filename signalled the *current* lifecycle state and
 // drove the Explorer's bucketing read; post-Set-035 the canonical
@@ -51,6 +52,19 @@ const path = __importStar(require("path"));
 const CANCELLED_FILENAME = "CANCELLED.md";
 const RESTORED_FILENAME = "RESTORED.md";
 const SESSION_STATE_FILENAME = "session-state.json";
+// Set 047 Session 5 (mirrors Python session_lifecycle._V4_TOP_LEVEL_DROPPED_KEYS):
+// top-level keys dropped from the v4 on-disk shape. The shim
+// re-derives them at read time from the per-session ledger.
+const V4_TOP_LEVEL_DROPPED_KEYS = [
+    "lifecycleState",
+    "currentSession",
+    "totalSessions",
+    "completedSessions",
+    "startedAt",
+    "completedAt",
+    "orchestrator",
+    "verificationVerdict",
+];
 const HISTORY_HEADER = "# Cancellation history";
 // Canonical text written by both this writer and the Python mirror in
 // ai_router/session_lifecycle.py. The two writers must agree
@@ -278,6 +292,96 @@ function writeSessionState(sessionSetDir, state) {
     atomicWriteFile(statePath, JSON.stringify(state, null, 2) + "\n");
 }
 /**
+ * Project *state* to the canonical v4 on-disk shape.
+ *
+ * Set 047 Session 5 (mirrors Python session_lifecycle._to_v4_on_disk_shape):
+ * cancel / restore re-emit the state file in v4 shape so the writer
+ * surface is uniform across register / close / cancel / restore. The
+ * shim normalizes any v1/v2/v3/v4 input to a v4 read-view
+ * (``sessions[]`` with per-session metadata + derived top-level
+ * fields); this helper drops the derived top-level fields so the
+ * on-disk file matches the v4 contract per spec §3.1.
+ *
+ * Plan-less carve-out (mirrors Python S4 verifier Critical 3): when
+ * the input had no ``sessions[]`` at all (plan-less in-progress
+ * write), preserve that absence on output — writing ``sessions: []``
+ * would convert a "plan unknown" file into a "zero-session" file.
+ * Top-level ``orchestrator`` / ``startedAt`` ride through
+ * cancel/restore so the restored set lands on the same plan-less
+ * shape it started from.
+ *
+ * Falls back to the input dict unchanged if the shim raises on
+ * malformed input — the cancel/restore lifecycle is best-effort and
+ * should not block on schema-validation failures.
+ */
+function toV4OnDiskShape(state, sessionSetDir) {
+    const specMdPath = path.join(sessionSetDir, "spec.md");
+    let normalized;
+    try {
+        normalized = (0, progress_1.normalizeToV4Shape)(state, specMdPath);
+    }
+    catch (exc) {
+        if (exc instanceof progress_1.SessionStateInvariantError ||
+            exc instanceof TypeError ||
+            exc instanceof RangeError) {
+            return state;
+        }
+        throw exc;
+    }
+    const out = {
+        schemaVersion: progress_1.SCHEMA_VERSION_V4,
+        sessionSetName: normalized.sessionSetName ??
+            state.sessionSetName ??
+            path.basename(sessionSetDir.replace(/[\\/]+$/, "")),
+        status: normalized.status ?? state.status,
+    };
+    // Plan-less carve-out detection: the input file omitted sessions[]
+    // entirely AND the synthesizer couldn't produce one. Preserve the
+    // absent-key form on output and carry top-level orchestrator /
+    // startedAt through as the documented plan-less passthrough.
+    const inputHasSessions = Array.isArray(state.sessions);
+    const normalizedSessions = normalized.sessions;
+    const isPlanless = !inputHasSessions &&
+        (!Array.isArray(normalizedSessions) || normalizedSessions.length === 0);
+    if (isPlanless) {
+        for (const carveoutKey of ["orchestrator", "startedAt"]) {
+            const value = state[carveoutKey];
+            if ((carveoutKey === "orchestrator" &&
+                value !== null &&
+                typeof value === "object") ||
+                (carveoutKey === "startedAt" && typeof value === "string")) {
+                out[carveoutKey] = value;
+            }
+        }
+    }
+    else if (Array.isArray(normalizedSessions)) {
+        out.sessions = normalizedSessions;
+    }
+    // Cancellation lifecycle passthroughs that the shim already carries
+    // through the normalized read-view. Persist them at the top level
+    // so the cancellation reader (Set 035) sees the same shape it has
+    // always seen.
+    for (const passthroughKey of ["preCancelStatus", "forceClosed"]) {
+        if (passthroughKey in normalized) {
+            out[passthroughKey] = normalized[passthroughKey];
+        }
+        else if (passthroughKey in state) {
+            out[passthroughKey] = state[passthroughKey];
+        }
+    }
+    // Defensively strip any derived top-level keys the shim added to
+    // its read-view but the on-disk shape drops. Plan-less carve-out
+    // keys (orchestrator, startedAt) are RE-ADDED above only when the
+    // input was plan-less, so the strip below skips them in that branch.
+    for (const key of V4_TOP_LEVEL_DROPPED_KEYS) {
+        if (isPlanless && (key === "orchestrator" || key === "startedAt")) {
+            continue;
+        }
+        delete out[key];
+    }
+    return out;
+}
+/**
  * Return the inferred status from current file presence — same rules as
  * the Set 7 backfill payload. Used as the restore fallback when
  * ``preCancelStatus`` is missing (e.g., a manually edited state file).
@@ -337,7 +441,15 @@ async function cancelSessionSet(sessionSetDir, reason = "") {
             state.preCancelStatus = state.status ?? null;
         }
         state.status = "cancelled";
-        writeSessionState(sessionSetDir, state);
+        // Set 047 Session 5: emit canonical v4 on-disk shape so a cancel
+        // rewrite of a legacy v3 file lands on v4 just like register /
+        // close (the Python mirror at session_lifecycle.cancel_session_set
+        // does the same). The shim's normalize promotes the legacy
+        // top-level orchestrator / startedAt onto the in-progress /
+        // most-recently-completed session before the write trims the
+        // derived top-level keys.
+        const v4State = toV4OnDiskShape(state, sessionSetDir);
+        writeSessionState(sessionSetDir, v4State);
     }
 }
 /**
@@ -388,7 +500,11 @@ async function restoreSessionSet(sessionSetDir, reason = "") {
         }
         state.status = restored;
         delete state.preCancelStatus;
-        writeSessionState(sessionSetDir, state);
+        // Set 047 Session 5: emit canonical v4 on-disk shape so a
+        // restore rewrite of a legacy v3 file lands on v4 just like the
+        // cancel write above.
+        const v4State = toV4OnDiskShape(state, sessionSetDir);
+        writeSessionState(sessionSetDir, v4State);
     }
     try {
         fs.unlinkSync(cancelledPath);

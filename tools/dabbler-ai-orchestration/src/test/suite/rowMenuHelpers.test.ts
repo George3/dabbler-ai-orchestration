@@ -59,17 +59,17 @@ suite("rowMenuHelpers — buildTopLevelItems", () => {
         openFile: [action({ id: "a", category: "openFile" })],
         copyEval: [action({ id: "b", category: "copyEval" })],
         flat: [
-          action({ id: "dabbler.checkOutOrchestrator", label: "Set Orchestrator…", category: "flat" }),
+          action({ id: "dabbler.openOrchestratorWriterLog", label: "Open Orchestrator Writer Log", category: "flat" }),
           action({ id: "dabblerSessionSets.cancel", label: "Cancel Session Set", category: "flat" }),
         ],
       }),
     );
     assert.deepStrictEqual(
       items.map((i) => i.label),
-      ["Open File ▸", "Copy Prompt ▸", "Set Orchestrator…", "Cancel Session Set"],
+      ["Open File ▸", "Copy Prompt ▸", "Open Orchestrator Writer Log", "Cancel Session Set"],
     );
     assert.strictEqual(items[2].dabblerKind, "action");
-    assert.strictEqual(items[2].action?.id, "dabbler.checkOutOrchestrator");
+    assert.strictEqual(items[2].action?.id, "dabbler.openOrchestratorWriterLog");
   });
 
   test("submenu chips come BEFORE flat actions regardless of category order", () => {

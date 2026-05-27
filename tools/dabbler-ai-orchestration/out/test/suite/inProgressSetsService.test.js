@@ -142,10 +142,13 @@ function fakeSet(name, state, startedAt) {
             forceClosed: null,
             completedSessions: [],
         },
-        config: { requiresUAT: false, requiresE2E: false, uatScope: "none" },
+        config: { requiresUAT: false, requiresE2E: false, uatScope: "none", tier: "full" },
         uatSummary: null,
         root: "/tmp",
         needsMigration: false,
+        migrationTargetSchemaVersion: null,
+        prerequisites: null,
+        blockedByPrereqs: false,
     };
 }
 suite("listInProgressSets", () => {

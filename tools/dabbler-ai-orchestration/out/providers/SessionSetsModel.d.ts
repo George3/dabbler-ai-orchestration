@@ -8,6 +8,7 @@ export declare function progressText(set: SessionSet): string;
 export declare function touchedDate(set: SessionSet): string;
 export declare function uatBadge(set: SessionSet): string;
 export declare function forceClosedBadge(set: SessionSet): string;
+export declare function blockedByPrereqsBadge(set: SessionSet): string;
 export declare function modeBadge(_set: SessionSet): string;
 export interface BucketedSets {
     inProgress: SessionSet[];

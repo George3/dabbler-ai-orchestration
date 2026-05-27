@@ -23,44 +23,14 @@ export type ScanState = "loading" | "ready";
 // runs the model functions once per snapshot and ships only the
 // strings + flags the webview needs.
 //
-// Set 033 Session 2: `isResolvedSet` retired — multi-in-progress is
-// the supported case and every in-progress row gets its own
-// accordion. `accordionUpdatedAt` carries the orchestrator block's
-// `lastActivityAt` (or `checkedOutAt` fallback) and serves as the
-// suppression key per row (replaces the marker file's `updatedAt`).
-// Set 045 / Session 5 — harvested-signal badges + conflict pills on
-// each row. The host queries `python -m ai_router.joiner --coverage`
-// and `--conflicts` via HarvestService and attaches the per-set
-// results to the row payload. The webview client.js renders four
-// badge slots (wrapper / native / narration / bypass) and one
-// conflict pill per detected conflict (severity-colored).
-//
-// When harvest data is unavailable (cold cache, Python missing,
-// joiner CLI failed), `harvestSignals` is null and `conflicts` is
-// empty — the row renders with name + fraction + description only,
-// matching the pre-S5 surface exactly.
-export type ConflictKind =
-  | "engine-mismatch"
-  | "bare-touch"
-  | "stale-checkout-touch"
-  | "writer-bypass";
-
-export type ConflictSeverity = "high" | "medium" | "low";
-
-export interface HarvestSignalsPayload {
-  wrapperLaunched: boolean;
-  narrationPresent: boolean;
-  nativeLogBound: boolean;
-  bypassInferred: boolean;
-  lastSignalTs: string | null;
-}
-
-export interface ConflictPayload {
-  kind: ConflictKind;
-  severity: ConflictSeverity;
-  note: string;
-}
-
+// Set 049 S4 (rip-out): Set 045's `harvestSignals` + `conflicts`
+// fields are retired. The orchestrator-rendering surface in the
+// Session Set Explorer reverts to its pre-Set-045 shape — no
+// harvest-record badges (W / N / M / B), no coordination-conflict
+// pills. Per Non-goal 2, the Python-side log-harvest infrastructure
+// (joiner CLI + parsers) and the writer-bypass detector (D3) survive
+// independently; only the Explorer rendering of those signals is
+// removed here.
 export interface RowPayload {
   slug: string;
   name: string;
@@ -80,11 +50,6 @@ export interface RowPayload {
   // the webview never renders an accordion body.
   accordionHtml: string | null;
   accordionUpdatedAt: string | null;
-  // Set 045 / S5 — harvested signals + conflict warnings. null /
-  // empty when HarvestService has no data yet (cold cache or fetch
-  // failed).
-  harvestSignals: HarvestSignalsPayload | null;
-  conflicts: ConflictPayload[];
 }
 
 export interface BucketPayload {

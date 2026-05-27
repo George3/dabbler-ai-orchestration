@@ -1,18 +1,4 @@
 export type ScanState = "loading" | "ready";
-export type ConflictKind = "engine-mismatch" | "bare-touch" | "stale-checkout-touch" | "writer-bypass";
-export type ConflictSeverity = "high" | "medium" | "low";
-export interface HarvestSignalsPayload {
-    wrapperLaunched: boolean;
-    narrationPresent: boolean;
-    nativeLogBound: boolean;
-    bypassInferred: boolean;
-    lastSignalTs: string | null;
-}
-export interface ConflictPayload {
-    kind: ConflictKind;
-    severity: ConflictSeverity;
-    note: string;
-}
 export interface RowPayload {
     slug: string;
     name: string;
@@ -24,8 +10,6 @@ export interface RowPayload {
     needsMigration: boolean;
     accordionHtml: string | null;
     accordionUpdatedAt: string | null;
-    harvestSignals: HarvestSignalsPayload | null;
-    conflicts: ConflictPayload[];
 }
 export interface BucketPayload {
     key: "in-progress" | "not-started" | "complete" | "cancelled";
@@ -54,16 +38,7 @@ export interface SuppressionEchoMsg {
     version: number;
     suppressed: Record<string, string>;
 }
-export interface ContextMenuItem {
-    label: string;
-    commandId: string;
-}
-export interface RenderContextMenuMsg {
-    type: "renderContextMenu";
-    slug: string;
-    items: ContextMenuItem[];
-}
-export type HostToWebview = RowsSnapshotMsg | ScanStateChangedMsg | SuppressionEchoMsg | RenderContextMenuMsg;
+export type HostToWebview = RowsSnapshotMsg | ScanStateChangedMsg | SuppressionEchoMsg;
 export interface ExecuteCommandMsg {
     type: "executeCommand";
     commandId: string;
@@ -86,9 +61,4 @@ export interface ActivateRowMsg {
 export interface ReadyMsg {
     type: "ready";
 }
-export interface ExecuteRowCommandMsg {
-    type: "executeRowCommand";
-    slug: string;
-    commandId: string;
-}
-export type WebviewToHost = ExecuteCommandMsg | ExecuteRowCommandMsg | ShowRowContextMenuMsg | ToggleRowMsg | ActivateRowMsg | ReadyMsg;
+export type WebviewToHost = ExecuteCommandMsg | ShowRowContextMenuMsg | ToggleRowMsg | ActivateRowMsg | ReadyMsg;

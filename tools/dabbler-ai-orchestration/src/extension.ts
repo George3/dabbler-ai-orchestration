@@ -20,18 +20,9 @@ import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
 import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
 import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
-import { registerInstallOrchestratorHookGeminiCommand } from "./commands/installOrchestratorHookGemini";
-import { registerInstallOrchestratorHookCopilotCommand } from "./commands/installOrchestratorHookCopilot";
-import { registerCheckOutOrchestrator } from "./commands/checkOutOrchestrator";
-import { registerReleaseCheckOut } from "./commands/releaseCheckOut";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { registerRegenerateNarrationTemplatesCommand } from "./commands/regenerateNarrationTemplates";
 import { registerExternalVerificationCommand } from "./commands/externalVerification";
-import {
-  CheckoutPollService,
-  DEFAULT_TIMEOUT_MINUTES,
-} from "./providers/CheckoutPollService";
-import { getReadOnlyIntentService } from "./providers/ReadOnlyIntentService";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -243,36 +234,20 @@ export function activate(context: vscode.ExtensionContext): void {
     registerMigrateSetV4Command(context, { refreshView: refreshAll }),
   );
 
-  // Set 029 Session 4: the dedicated dabblerOrchestratorIndicator view
-  // is retired in v0.16.0. Set 034 then retired the per-row gauges in
-  // CustomSessionSetsView; Set 036 Session 6 deleted the source.
-  // Hook installer + manual-override stub + writer-log opener remain
-  // as standalone Command Palette / right-click context-menu actions.
-  //
-  // Set 029 Session 5: full multi-provider surface — Gemini + Copilot
-  // manual-only shim commands that delegate to the universal
-  // manual-override quickpick. Manual stub from S2 is retired in favor
-  // of the real implementation.
-  //
-  // Set 036 Session 3 (D1 watcher-scope discipline): the Codex
-  // config.toml auto-detect watcher is retired. Codex joins Gemini
-  // and Copilot as a manual-only orchestrator; operators claim a
-  // Codex check-out via "Check Out As…" (the canonical writer path)
-  // instead of via filesystem inference.
+  // Set 049 S4 (rip-out): the orchestrator check-out / check-in
+  // coordination layer is removed. Claude Code remains the sole
+  // engine with an auto-attribution path via the SessionStart hook
+  // installed below; other engines write `engine + provider [+ model
+  // + effort]` into `session-state.json`'s orchestrator block by
+  // invoking `python -m ai_router.start_session` directly. The
+  // standalone Gemini / Copilot / manual-override / release-check-out
+  // commands and their backing CheckoutPollService + chatSessionId
+  // takeover modal + ReadOnlyIntentService were retired alongside.
+  // The writer-log opener stays as a Command-Palette / right-click
+  // diagnostic surface; the writer log itself is preserved
+  // provisionally per Set 049 T5.
   safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
     registerInstallOrchestratorHookClaudeCodeCommand(context),
-  );
-  safeRegister("registerInstallOrchestratorHookGemini", () =>
-    registerInstallOrchestratorHookGeminiCommand(context),
-  );
-  safeRegister("registerInstallOrchestratorHookCopilot", () =>
-    registerInstallOrchestratorHookCopilotCommand(context),
-  );
-  safeRegister("registerCheckOutOrchestrator", () =>
-    registerCheckOutOrchestrator(context),
-  );
-  safeRegister("registerReleaseCheckOut", () =>
-    registerReleaseCheckOut(context),
   );
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),
@@ -283,52 +258,6 @@ export function activate(context: vscode.ExtensionContext): void {
   safeRegister("registerExternalVerificationCommand", () =>
     registerExternalVerificationCommand(context),
   );
-
-  // Set 036 Session 4: ReadOnlyIntentService is the in-memory map of
-  // session sets the operator picked "Open in Read-Only Mode" on via
-  // the chatSessionMismatchModal. checkOutOrchestrator reads it to
-  // prompt-before-write; lifetime ends when the extension host
-  // deactivates.
-  context.subscriptions.push({ dispose: () => getReadOnlyIntentService().dispose() });
-
-  // Set 033 Session 5: CheckoutPollService watches
-  // ~/.dabbler/checkout-conflicts/ for structured conflict records
-  // emitted by the Claude SessionStart invoker on
-  // EXIT_CHECKOUT_CONFLICT (H3 refusal). For each record, it surfaces
-  // a poll/force/dismiss prompt; "poll" watches the held set's
-  // session-state.json (5s debounce) and auto-retries start_session
-  // when the slot becomes free (H4 identity gate). The pythonPath
-  // resolver mirrors the one in checkOutOrchestrator.ts so both paths
-  // share the operator's dabblerSessionSets.pythonPath setting.
-  safeRegister("CheckoutPollService", () => {
-    const pollService = new CheckoutPollService({
-      pythonPathResolver: (cwd: string): string => {
-        const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
-        const inspected = cfg.inspect<string>("pythonPath");
-        const explicit =
-          inspected?.workspaceFolderValue ??
-          inspected?.workspaceValue ??
-          inspected?.globalValue;
-        const raw = (explicit ?? "python").trim();
-        if (!raw) return "python";
-        if (path.isAbsolute(raw)) return raw;
-        if (raw.includes(path.sep) || raw.includes("/")) {
-          return path.resolve(cwd, raw);
-        }
-        return raw;
-      },
-      timeoutMinutesResolver: (): number => {
-        const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
-        const value = cfg.get<number>("checkoutPollTimeoutMinutes", DEFAULT_TIMEOUT_MINUTES);
-        if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
-          return DEFAULT_TIMEOUT_MINUTES;
-        }
-        return Math.min(value, 1440);
-      },
-    });
-    pollService.start();
-    context.subscriptions.push(pollService);
-  });
 
   // Set 030 Session 5: flip scanState to "ready" once activation
   // finishes. `setImmediate` yields the event loop one tick so the

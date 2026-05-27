@@ -235,8 +235,8 @@ function renderTemplate(
 }
 
 function resolvePythonPath(workspaceRoot: string): string {
-  // Mirrors the pythonPath resolver used by installAiRouterCommands +
-  // checkOutOrchestrator (same per-workspace setting, same fallback).
+  // Mirrors the pythonPath resolver used by installAiRouterCommands
+  // (same per-workspace setting, same fallback).
   const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
   const inspected = cfg.inspect<string>("pythonPath");
   const explicit =

@@ -10,14 +10,17 @@ export declare class CustomSessionSetsView implements vscode.WebviewViewProvider
     private renderTimer;
     private cache;
     private welcomeHtml;
-    private readonly harvest;
     constructor(context: vscode.ExtensionContext, scanState: ScanState);
     dispose(): void;
     refresh(): void;
     resolveWebviewView(webviewView: vscode.WebviewView, _context: vscode.WebviewViewResolveContext, _token: vscode.CancellationToken): void;
     private onMessage;
+    private handleActivateRow;
     private dispatchCommand;
     private showContextMenu;
+    private pickTopLevel;
+    private pickSubmenu;
+    private executeRowAction;
     private readSupports;
     private findSetBySlug;
     private getSuppression;

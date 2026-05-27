@@ -71,39 +71,27 @@ Object.defineProperty(exports, "isCurrentSessionInFlight", { enumerable: true, g
 // in-progress ordering helper survives in inProgressSetsService.
 const inProgressSetsService_1 = require("./inProgressSetsService");
 const ActionRegistry_1 = require("./ActionRegistry");
+const rowMenuHelpers_1 = require("./rowMenuHelpers");
 const suppressionState_1 = require("./suppressionState");
-const HarvestService_1 = require("./HarvestService");
 const SUPPRESSION_KEY = "dabbler.sessionSets.suppressedExpand";
 const RENDER_DEBOUNCE_MS = 50;
-// Allowlist for executeCommand dispatch from the webview. Defense-
-// in-depth: even if a malicious string slipped through the protocol
-// type check, only these commands fire. Holds the 14 row-context
-// actions; the orchestrator-control buttons that used to live in the
-// per-row accordion body were retired in Set 034 and no longer
-// dispatch from this surface (they remain accessible via the Command
-// Palette and the right-click menu).
+// Allowlist for executeCommand dispatch ORIGINATING IN THE WEBVIEW
+// (i.e., messages the webview posts and the host then forwards to
+// `vscode.commands.executeCommand`). Defense-in-depth: even if a
+// malicious string slipped through the typed protocol, only these
+// commands fire.
+//
+// Set 048 S3 (spec §3.3 + L3) rebuilt the right-click menu on
+// `vscode.window.showQuickPick`. QuickPick selections execute via
+// `executeRowAction` → `vscode.commands.executeCommand` directly,
+// which does NOT pass through this allowlist (the host-side picker
+// is fully trusted). So the allowlist now governs ONLY the L5
+// left-click `activateRow` path. Any new webview→host dispatch
+// channel introduced later MUST add its allowed command ids here
+// explicitly — adding a code path that bypasses this set undoes the
+// defense-in-depth guarantee.
 const COMMAND_ALLOWLIST = new Set([
-    // 14 row-context actions
     "dabblerSessionSets.openSpec",
-    "dabblerSessionSets.openActivityLog",
-    "dabblerSessionSets.openChangeLog",
-    "dabblerSessionSets.openAiAssignment",
-    "dabblerSessionSets.openUatChecklist",
-    "dabblerSessionSets.revealPlaywrightTests",
-    "dabblerSessionSets.openSessionState",
-    "dabblerSessionSets.openFolder",
-    "dabblerSessionSets.copyStartCommand.default",
-    "dabblerSessionSets.copyStartCommand.parallel",
-    "dabblerSessionSets.copySlug",
-    "dabblerSessionSets.migrate",
-    "dabblerSessionSets.cancel",
-    "dabblerSessionSets.restore",
-    // Set 034: the orchestrator-control commands (checkOutOrchestrator /
-    // releaseCheckOut / openOrchestratorWriterLog / installOrchestratorHook.*)
-    // are no longer dispatched from the webview — they're removed from
-    // both ActionRegistry (right-click menu) and the empty-state CTA
-    // (which itself is gone). The commands remain registered in
-    // extension.ts and are still accessible via the Command Palette.
 ]);
 function contextValueFor(set) {
     const parts = [`sessionSet:${set.state}`];
@@ -113,6 +101,9 @@ function contextValueFor(set) {
         parts.push("e2e");
     if (set.needsMigration)
         parts.push("needs-migration");
+    if (set.blockedByPrereqs && set.state !== "complete" && set.state !== "cancelled") {
+        parts.push("blocked-by-prereqs");
+    }
     return parts.join(":");
 }
 // Set 034: row description drops the fraction prefix (which now lives
@@ -131,6 +122,7 @@ function descriptionFor(set) {
         (0, SessionSetsModel_1.uatBadge)(set),
         (0, SessionSetsModel_1.forceClosedBadge)(set),
         (0, SessionSetsModel_1.needsMigrationBadge)(set),
+        (0, SessionSetsModel_1.blockedByPrereqsBadge)(set),
     ].filter(Boolean);
     bits.push(...extras);
     return bits.join("  ·  ");
@@ -159,7 +151,6 @@ class CustomSessionSetsView {
         this.version = 0;
         this.cache = null;
         this.welcomeHtml = this.loadWelcomeHtmlFromPackageJson();
-        this.harvest = new HarvestService_1.HarvestService(() => this.scheduleRender(), this.context.extensionUri);
         this.context.subscriptions.push(this.scanState.onDidChange(() => this.postScanState()));
     }
     dispose() {
@@ -167,11 +158,9 @@ class CustomSessionSetsView {
             clearTimeout(this.renderTimer);
             this.renderTimer = undefined;
         }
-        this.harvest.dispose();
     }
     refresh() {
         this.cache = null;
-        this.harvest.invalidate();
         this.scheduleRender();
     }
     resolveWebviewView(webviewView, _context, _token) {
@@ -202,15 +191,6 @@ class CustomSessionSetsView {
             case "executeCommand":
                 this.dispatchCommand(msg.commandId, msg.args);
                 return;
-            case "executeRowCommand": {
-                // Set 034: cursor-anchored context-menu item selection. Look
-                // up the set by slug and dispatch the command with [{ set }].
-                const set = this.findSetBySlug(msg.slug);
-                if (!set)
-                    return;
-                this.dispatchCommand(msg.commandId, [{ set }]);
-                return;
-            }
             case "showRowContextMenu":
                 void this.showContextMenu(msg.slug);
                 return;
@@ -218,9 +198,31 @@ class CustomSessionSetsView {
                 this.handleToggle(msg.slug, msg.expanded, msg.accordionUpdatedAt);
                 return;
             case "activateRow":
-                // Default activation: openSpec (per S4 step 3 / GPT M3).
-                this.dispatchCommand("dabblerSessionSets.openSpec", [{ set: this.findSetBySlug(msg.slug) }]);
+                // Set 048 S3 (spec §3.3, L5): left-click ALWAYS opens spec.md
+                // (preserved S4 default). On non-terminal rows the activation
+                // ALSO writes "Start the next session of `<slug>`." to the
+                // clipboard and shows a one-line info toast, so the high-
+                // frequency starting-shortcut surfaces without a separate
+                // affordance. Terminal-state rows (complete/cancelled) skip
+                // the clipboard write and toast — spec.md opens only.
+                void this.handleActivateRow(msg.slug);
                 return;
+        }
+    }
+    async handleActivateRow(slug) {
+        const set = this.findSetBySlug(slug);
+        if (!set)
+            return;
+        const plan = (0, rowMenuHelpers_1.planLeftClickActivation)(set.name, set.state);
+        this.dispatchCommand(plan.openCommand.commandId, [{ set }]);
+        if (!plan.clipboardWrite)
+            return;
+        try {
+            await vscode.env.clipboard.writeText(plan.clipboardWrite.text);
+            vscode.window.showInformationMessage(plan.clipboardWrite.toast);
+        }
+        catch (err) {
+            console.warn(`[CustomSessionSetsView] left-click clipboard write failed for "${slug}"`, err);
         }
     }
     dispatchCommand(commandId, args) {
@@ -230,27 +232,66 @@ class CustomSessionSetsView {
         }
         void vscode.commands.executeCommand(commandId, ...(args ?? []));
     }
-    // Set 034: replaced the v0.18.1 showQuickPick-at-top-of-window flow
-    // with a cursor-anchored popup rendered by the webview. The host
-    // computes applicable actions and posts them back as a flat
-    // `renderContextMenu` message; the webview paints the popup at the
-    // cursor position it captured on the contextmenu event.
-    async showContextMenu(slug) {
-        if (!this.view)
-            return;
+    // Set 048 S3 (spec §3.3, audit Bias 3 flip): the Set 034 cursor-
+    // anchored HTML popup is retired. The right-click menu is rebuilt
+    // on `vscode.window.showQuickPick` as a two-step flow:
+    //
+    //   Level 1 → top-level items:
+    //     - "Open File ▸"   (if any openFile entries are applicable)
+    //     - "Copy Prompt ▸" (if any copyEval entries are applicable; was
+    //       "Copy Eval ▸" through Set 048; relabeled Set 049 S1)
+    //     - each flat action as its own item
+    //
+    //   Level 2 → submenu items for the chosen "▸" branch. Escape /
+    //   dismiss cancels the second-level pick and is treated as "no
+    //   selection" (the operator returns to whatever they were doing).
+    //
+    // Native QuickPick handles click-outside, Escape, and focus-loss
+    // (L4 close-on-blur is a free byproduct) and respects theme +
+    // accessibility settings.
+    async showContextMenu(slug, opts) {
         const set = this.findSetBySlug(slug);
         if (!set)
             return;
         const supports = await this.readSupports();
-        const actions = (0, ActionRegistry_1.applicableActions)(set, supports);
-        if (actions.length === 0)
+        const categorized = (0, ActionRegistry_1.categorizedActions)(set, supports);
+        const totalActions = categorized.openFile.length + categorized.copyEval.length + categorized.flat.length;
+        if (totalActions === 0)
             return;
-        const msg = {
-            type: "renderContextMenu",
-            slug,
-            items: actions.map((a) => ({ label: a.label, commandId: a.id })),
-        };
-        this.view.webview.postMessage(msg);
+        const showQuickPick = opts?.showQuickPick ?? vscode.window.showQuickPick;
+        const topLevelChoice = await this.pickTopLevel(categorized, set.name, showQuickPick);
+        if (!topLevelChoice)
+            return;
+        if (topLevelChoice.kind === "action") {
+            this.executeRowAction(topLevelChoice.action, set);
+            return;
+        }
+        const submenu = topLevelChoice.kind === "openFile" ? categorized.openFile : categorized.copyEval;
+        const placeHolder = topLevelChoice.kind === "openFile"
+            ? `Open File — ${set.name}`
+            : `Copy Prompt — ${set.name}`;
+        const submenuChoice = await this.pickSubmenu(submenu, placeHolder, showQuickPick);
+        if (!submenuChoice)
+            return;
+        this.executeRowAction(submenuChoice, set);
+    }
+    async pickTopLevel(categorized, slug, showQuickPick) {
+        const items = (0, rowMenuHelpers_1.buildTopLevelItems)(categorized);
+        const picked = await showQuickPick(items, { placeHolder: slug, matchOnDescription: false });
+        if (!picked)
+            return undefined;
+        if (picked.dabblerKind === "action" && picked.action) {
+            return { kind: "action", action: picked.action };
+        }
+        return { kind: picked.dabblerKind === "openFile" ? "openFile" : "copyEval" };
+    }
+    async pickSubmenu(submenu, placeHolder, showQuickPick) {
+        const items = (0, rowMenuHelpers_1.buildSubmenuItems)(submenu);
+        const picked = await showQuickPick(items, { placeHolder });
+        return picked?.action;
+    }
+    executeRowAction(action, set) {
+        void vscode.commands.executeCommand(action.id, { set });
     }
     async readSupports() {
         // Context keys live in vscode's contextKeyService which is not
@@ -383,13 +424,6 @@ class CustomSessionSetsView {
         return { key, label, count: subset.length, rows };
     }
     buildRow(set) {
-        // Set 045 / S5 — attach harvested signals + conflicts when the
-        // service's cache has data for this slug. Cold cache (first paint
-        // or post-invalidate) returns null/empty here; the service then
-        // schedules a re-render via onUpdate once the joiner CLI returns.
-        const snapshot = this.harvest.getSnapshot();
-        const harvestSignals = snapshot?.signalsBySlug.get(set.name) ?? null;
-        const conflicts = snapshot?.conflictsBySlug.get(set.name) ?? [];
         // Set 034: the per-row accordion is GONE. Operator feedback
         // 2026-05-21 (mid-Set-034 Session 1) — the gauges and the
         // orchestrator-info text below them read as more authoritative
@@ -421,20 +455,6 @@ class CustomSessionSetsView {
             needsMigration: set.needsMigration,
             accordionHtml: null,
             accordionUpdatedAt: null,
-            harvestSignals: harvestSignals
-                ? {
-                    wrapperLaunched: harvestSignals.wrapperLaunched,
-                    narrationPresent: harvestSignals.narrationPresent,
-                    nativeLogBound: harvestSignals.nativeLogBound,
-                    bypassInferred: harvestSignals.bypassInferred,
-                    lastSignalTs: harvestSignals.lastSignalTs,
-                }
-                : null,
-            conflicts: conflicts.map((c) => ({
-                kind: c.kind,
-                severity: c.severity,
-                note: c.note,
-            })),
         };
     }
     // ----- Welcome HTML extraction -----

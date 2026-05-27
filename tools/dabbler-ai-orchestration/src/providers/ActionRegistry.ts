@@ -104,8 +104,11 @@ export const ROW_ACTIONS: RowAction[] = [
   // spec §3.3 table lists v4 only because v4 is the canonical target;
   // the v3 entry is kept here for legacy v1/v2 sets (mutually exclusive
   // with v4 — at most one of the two ever appears per row).
-  { id: "dabbler.checkOutOrchestrator",         label: "Set Orchestrator…",            group: 501, category: "flat",
-    when: (s) => s.state === "in-progress" },
+  //
+  // Set 049 S4 (rip-out): `dabbler.checkOutOrchestrator` ("Set
+  // Orchestrator…") retired alongside the check-out / check-in
+  // coordination layer. The writer-log opener stays as a diagnostic
+  // surface (the log itself is preserved provisionally per T5).
   { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log", group: 502, category: "flat", when: () => true },
   { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",         group: 801, category: "flat", when: needsMigrationToV3 },
   { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",         group: 802, category: "flat", when: needsMigrationToV4 },

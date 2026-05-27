@@ -98,7 +98,12 @@ function findPlaywrightTests(set) {
     return Array.from(candidates).sort();
 }
 function registerOpenFileCommands(context) {
-    context.subscriptions.push(vscode.commands.registerCommand("dabblerSessionSets.openSpec", (item) => openIfExists(item?.set?.specPath, "Spec")), vscode.commands.registerCommand("dabblerSessionSets.openActivityLog", (item) => openIfExists(item?.set?.activityPath, "Activity log")), vscode.commands.registerCommand("dabblerSessionSets.openChangeLog", (item) => openIfExists(item?.set?.changeLogPath, "Change log")), vscode.commands.registerCommand("dabblerSessionSets.openAiAssignment", (item) => openIfExists(item?.set?.aiAssignmentPath, "AI assignment")), vscode.commands.registerCommand("dabblerSessionSets.openUatChecklist", (item) => openIfExists(item?.set?.uatChecklistPath, "UAT checklist")), vscode.commands.registerCommand("dabblerSessionSets.openSessionState", (item) => openIfExists(item?.set?.statePath, "Session state")), vscode.commands.registerCommand("dabblerSessionSets.openFolder", (item) => {
+    context.subscriptions.push(vscode.commands.registerCommand("dabblerSessionSets.openSpec", (item) => openIfExists(item?.set?.specPath, "Spec")), vscode.commands.registerCommand("dabblerSessionSets.openActivityLog", (item) => openIfExists(item?.set?.activityPath, "Activity log")), vscode.commands.registerCommand("dabblerSessionSets.openChangeLog", (item) => openIfExists(item?.set?.changeLogPath, "Change log")), 
+    // Set 048 S3 (operator-locked L3): `Open AI Assignment` is fully
+    // removed. The `ai-assignment.md` file on disk continues to exist
+    // for any consumer that reads it directly; the menu / palette
+    // entry to open it does not.
+    vscode.commands.registerCommand("dabblerSessionSets.openUatChecklist", (item) => openIfExists(item?.set?.uatChecklistPath, "UAT checklist")), vscode.commands.registerCommand("dabblerSessionSets.openSessionState", (item) => openIfExists(item?.set?.statePath, "Session state")), vscode.commands.registerCommand("dabblerSessionSets.openFolder", (item) => {
         if (!item?.set)
             return;
         vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(item.set.dir));

@@ -24,10 +24,17 @@ export interface SessionStateV3 {
     orchestrator: OrchestratorInfo | null;
     sessions: SessionRecord[];
 }
+export type TriStateFlag = boolean | "suggested";
+export type SessionSetTier = "full" | "lightweight";
 export interface SessionSetConfig {
-    requiresUAT: boolean;
-    requiresE2E: boolean;
+    requiresUAT: TriStateFlag;
+    requiresE2E: TriStateFlag;
     uatScope: string;
+    tier: SessionSetTier;
+}
+export interface SessionSetPrerequisite {
+    slug: string;
+    condition: "complete";
 }
 export interface UatSummary {
     totalItems: number;
@@ -70,6 +77,9 @@ export interface SessionSet {
     uatSummary: UatSummary | null;
     root: string;
     needsMigration: boolean;
+    migrationTargetSchemaVersion: 3 | 4 | null;
+    prerequisites: SessionSetPrerequisite[] | null;
+    blockedByPrereqs: boolean;
 }
 export interface MetricsEntry {
     session_set: string;

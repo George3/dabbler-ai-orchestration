@@ -95,6 +95,89 @@ suite("fileSystem — parseSessionSetConfig", () => {
         assert.strictEqual(cfg.requiresE2E, false);
         fs.rmSync(dir, { recursive: true });
     });
+    // Set 048 Session 2: tier field + tri-state requiresUAT/E2E. Defaults
+    // are full-tier-conservative for backwards compatibility with the 47
+    // pre-Set-048 specs that have no `tier:` field.
+    test("Set 048: defaults tier to 'full' when field absent (pre-Set-048 specs)", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\nrequiresUAT: true\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "full");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: parses tier=lightweight", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\ntier: lightweight\nrequiresUAT: false\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "lightweight");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: parses tier=full explicitly", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\ntier: full\nrequiresUAT: false\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "full");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: unknown tier value falls back to 'full' (validator surfaces typos, not parser)", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\ntier: kitchen-sink\nrequiresUAT: false\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "full");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: tri-state requiresUAT='suggested' (unquoted)", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\nrequiresUAT: suggested\nrequiresE2E: false\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.requiresUAT, "suggested");
+        assert.strictEqual(cfg.requiresE2E, false);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: tri-state requiresUAT='suggested' (quoted)", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\nrequiresUAT: \"suggested\"\nrequiresE2E: false\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.requiresUAT, "suggested");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: tri-state requiresE2E='suggested'", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\nrequiresUAT: false\nrequiresE2E: suggested\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.requiresE2E, "suggested");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: inline YAML comments tolerated", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\ntier: lightweight  # operator-locked\nrequiresUAT: \"suggested\"  # Set 048 D4\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "lightweight");
+        assert.strictEqual(cfg.requiresUAT, "suggested");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: mixed tri-state + lightweight tier", () => {
+        const dir = makeTmpDir();
+        const specPath = path.join(dir, "spec.md");
+        fs.writeFileSync(specPath, "## Session Set Configuration\n```yaml\ntier: lightweight\nrequiresUAT: true\nrequiresE2E: suggested\n```");
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)(specPath);
+        assert.strictEqual(cfg.tier, "lightweight");
+        assert.strictEqual(cfg.requiresUAT, true);
+        assert.strictEqual(cfg.requiresE2E, "suggested");
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("Set 048: missing spec returns tier='full' default", () => {
+        const cfg = (0, fileSystem_1.parseSessionSetConfig)("/nonexistent/spec.md");
+        assert.strictEqual(cfg.tier, "full");
+    });
 });
 suite("fileSystem — parseUatChecklist", () => {
     test("returns null when file is missing", () => {
@@ -398,10 +481,10 @@ suite("fileSystem — readSessionSets", () => {
     // not-started). readStatus now routes the file-absent path through
     // ensureSessionStateFile, mirroring the Python helper.
     test("lazy-synth infers 'complete' from legacy change-log.md presence (with spec totalSessions)", () => {
-        // Set 030 Session 3: lazy-synth now writes v3 sessions[] when
-        // the spec declares totalSessions. Without totalSessions, the
-        // synthesized snapshot would lack per-session evidence and the
-        // v3 invariants would downgrade it to in-progress.
+        // Set 030 Session 3: lazy-synth writes sessions[] when the spec
+        // declares totalSessions. Set 047 Session 5 flipped the writer
+        // to v4 emission: top-level lifecycleState is dropped (the shim
+        // re-derives it on read from status); schemaVersion is 4.
         const dir = makeTmpDir();
         const setDir = path.join(dir, "docs", "session-sets", "legacy-done");
         fs.mkdirSync(setDir, { recursive: true });
@@ -413,20 +496,20 @@ suite("fileSystem — readSessionSets", () => {
         // Side effect: a state file was written with the inferred shape.
         const written = JSON.parse(fs.readFileSync(path.join(setDir, "session-state.json"), "utf8"));
         assert.strictEqual(written.status, "complete");
-        assert.strictEqual(written.lifecycleState, "closed");
-        assert.strictEqual(written.schemaVersion, 3);
+        assert.strictEqual(written.schemaVersion, 4);
+        assert.ok(!("lifecycleState" in written), "v4 drops top-level lifecycleState");
         assert.ok(Array.isArray(written.sessions));
         assert.strictEqual(written.sessions.length, 2);
+        for (const entry of written.sessions) {
+            assert.strictEqual(entry.status, "complete");
+        }
         fs.rmSync(dir, { recursive: true });
     });
     test("lazy-synth with change-log.md but NO spec totalSessions stays not-started (Round A fix)", () => {
-        // Round-A regression (Set 030 Session 3 verifier): when spec.md
-        // has no Session Set Configuration totalSessions, buildSessions
-        // returns undefined and the writer cannot emit a reader-valid
-        // status=complete snapshot. The backfill must fall through to
-        // not-started rather than write {status: "complete"} with no
-        // sessions[] / completedSessions[] (which would fail rule 1 +
-        // rule 7 on the next readProgress call).
+        // Round-A regression (Set 030 Session 3 verifier): without a
+        // known plan, the writer cannot emit a reader-valid complete
+        // snapshot. The backfill falls through to not-started. Set 047
+        // Session 5: shape is v4 (no top-level lifecycleState).
         const dir = makeTmpDir();
         const setDir = path.join(dir, "docs", "session-sets", "plan-less");
         fs.mkdirSync(setDir, { recursive: true });
@@ -438,7 +521,8 @@ suite("fileSystem — readSessionSets", () => {
         assert.strictEqual(sets[0].state, "not-started");
         const written = JSON.parse(fs.readFileSync(path.join(setDir, "session-state.json"), "utf8"));
         assert.strictEqual(written.status, "not-started");
-        assert.strictEqual(written.lifecycleState, null);
+        assert.strictEqual(written.schemaVersion, 4);
+        assert.ok(!("lifecycleState" in written));
         assert.strictEqual(written.sessions, undefined);
         fs.rmSync(dir, { recursive: true });
     });
@@ -454,10 +538,13 @@ suite("fileSystem — readSessionSets", () => {
         assert.strictEqual(sets[0].state, "in-progress");
         const written = JSON.parse(fs.readFileSync(path.join(setDir, "session-state.json"), "utf8"));
         assert.strictEqual(written.status, "in-progress");
-        assert.strictEqual(written.startedAt, "2026-01-01T00:00:00-04:00");
-        assert.strictEqual(written.schemaVersion, 3);
+        // Set 047 S5: top-level startedAt dropped; per-session startedAt
+        // carries the earliest activity-log timestamp.
+        assert.ok(!("startedAt" in written), "v4 drops top-level startedAt");
+        assert.strictEqual(written.schemaVersion, 4);
         assert.ok(Array.isArray(written.sessions));
         assert.strictEqual(written.sessions[0].status, "in-progress");
+        assert.strictEqual(written.sessions[0].startedAt, "2026-01-01T00:00:00-04:00");
         fs.rmSync(dir, { recursive: true });
     });
     test("skips directories starting with underscore", () => {
@@ -814,6 +901,125 @@ suite("fileSystem — countDistinctCloseoutSessions", () => {
         ].join("\n") + "\n";
         fs.writeFileSync(eventsPath, lines);
         assert.strictEqual((0, fileSystem_1.countDistinctCloseoutSessions)(eventsPath), 2);
+        fs.rmSync(dir, { recursive: true });
+    });
+});
+// Set 047 Session 3: extend the needsMigration detector so canonical
+// v3 files flag for the new v3 → v4 migrator. The earlier detector
+// only flagged v1/v2 (or broken v3); the new behavior surfaces a
+// migration affordance on every canonical v3 file so the (needs
+// migration) badge stays accurate after the migrator ships.
+suite("fileSystem — readSessionSets needsMigration + migrationTargetSchemaVersion", () => {
+    test("canonical v3 with sessions[] flags needsMigration target=4", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "canonical-v3");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# canonical-v3\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 3,
+            sessionSetName: "canonical-v3",
+            status: "in-progress",
+            sessions: [
+                { number: 1, title: "t1", status: "in-progress" },
+                { number: 2, title: "t2", status: "not-started" },
+            ],
+            currentSession: 1,
+            totalSessions: 2,
+            completedSessions: [],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, true);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, 4);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("v4 file does NOT flag (already current)", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "already-v4");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# already-v4\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 4,
+            sessionSetName: "already-v4",
+            status: "in-progress",
+            sessions: [
+                {
+                    number: 1,
+                    title: "t1",
+                    status: "in-progress",
+                    startedAt: null,
+                    completedAt: null,
+                    orchestrator: null,
+                    verificationVerdict: null,
+                },
+            ],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, false);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, null);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("v2 file flags needsMigration target=3", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "v2-set");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# v2-set\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 2,
+            sessionSetName: "v2-set",
+            status: "in-progress",
+            currentSession: 1,
+            totalSessions: 2,
+            completedSessions: [],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, true);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("broken v3 (schemaVersion=3, no sessions[]) flags needsMigration target=3", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "broken-v3");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# broken-v3\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 3,
+            sessionSetName: "broken-v3",
+            status: "in-progress",
+            // sessions[] intentionally missing
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, true);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("schemaVersion missing flags needsMigration target=3", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "no-schema");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# no-schema\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            sessionSetName: "no-schema",
+            status: "not-started",
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, true);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, 3);
+        fs.rmSync(dir, { recursive: true });
+    });
+    test("future schema (> 4) does NOT flag — refuses to downgrade", () => {
+        const dir = makeTmpDir();
+        const setDir = path.join(dir, "docs", "session-sets", "future");
+        fs.mkdirSync(setDir, { recursive: true });
+        fs.writeFileSync(path.join(setDir, "spec.md"), "# future\n");
+        fs.writeFileSync(path.join(setDir, "session-state.json"), JSON.stringify({
+            schemaVersion: 99,
+            sessionSetName: "future",
+            status: "in-progress",
+            sessions: [{ number: 1, title: "t1", status: "in-progress" }],
+        }));
+        const sets = (0, fileSystem_1.readSessionSets)(dir);
+        assert.strictEqual(sets[0].needsMigration, false);
+        assert.strictEqual(sets[0].migrationTargetSchemaVersion, null);
         fs.rmSync(dir, { recursive: true });
     });
 });

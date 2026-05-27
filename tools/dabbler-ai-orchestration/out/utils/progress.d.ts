@@ -1,5 +1,6 @@
 import { ProgressView, SessionRecord, SessionStatus } from "../types";
 export declare const SCHEMA_VERSION_V3: 3;
+export declare const SCHEMA_VERSION_V4: 4;
 export declare const SESSION_STATUS_NOT_STARTED: SessionStatus;
 export declare const SESSION_STATUS_IN_PROGRESS: SessionStatus;
 export declare const SESSION_STATUS_COMPLETE: SessionStatus;
@@ -18,6 +19,7 @@ export declare function extractSessionTitlesFromSpec(specMdPath: string): Array<
     title: string;
 }>;
 export declare function synthesizeV3FromV2(state: any, specMdPath: string): any;
+export declare function normalizeToV4Shape(state: any, specMdPath: string): any;
 export declare function readProgress(state: any, specMdPath: string): ProgressView;
 export declare function getProgress(state: any): ProgressView;
 export declare function validateInvariants(sessions: SessionRecord[], topStatus: string | null, lifecycleState: string | null): void;

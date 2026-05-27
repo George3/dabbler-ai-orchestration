@@ -249,26 +249,6 @@
         "category": "Dabbler"
       },
       {
-        "command": "dabbler.installOrchestratorHook.gemini",
-        "title": "Install Orchestrator Hook (Gemini Code Assist)",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabbler.installOrchestratorHook.copilot",
-        "title": "Install Orchestrator Hook (GitHub Copilot)",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabbler.checkOutOrchestrator",
-        "title": "Check Out As…",
-        "category": "Dabbler"
-      },
-      {
-        "command": "dabbler.releaseCheckOut",
-        "title": "Release Check-Out",
-        "category": "Dabbler"
-      },
-      {
         "command": "dabbler.openOrchestratorWriterLog",
         "title": "Open Orchestrator Writer Log",
         "category": "Dabbler"
@@ -346,13 +326,6 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Git repo URL the `Dabbler: Install ai-router` command's GitHub-fallback path clones from. Leave blank to use the upstream Dabbler repository. Override to point at a fork — handy for fork-trackers who want the GitHub fallback to pull *their* tags / branches rather than upstream's."
-        },
-        "dabblerSessionSets.checkoutPollTimeoutMinutes": {
-          "type": "number",
-          "default": 30,
-          "minimum": 1,
-          "maximum": 1440,
-          "markdownDescription": "How long (in minutes) the in-extension `CheckoutPollService` waits for a held orchestrator check-out to release before aborting the poll. When a Claude `SessionStart` hook or Codex config-toml watcher invocation hits a different-holder refusal (Set 033 H3), the service offers a non-blocking `Poll for release` / `Force override` / `Dismiss` prompt; choosing `Poll for release` starts a 5-second-debounced watcher on the held set's `session-state.json` and auto-retries `start_session` for the would-be holder when the slot becomes free. On timeout, the service surfaces a one-time toast pointing at the `Dabbler: Release Check-Out` Command Palette action. Range: 1–1440 minutes (1 day cap)."
         }
       }
     }
