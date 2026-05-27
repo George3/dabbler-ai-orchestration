@@ -314,7 +314,14 @@ def route(
     # mode under exception was a safety bug): the runtime-mode lookup
     # is now fail-CLOSED. If the check itself raises, we re-raise rather
     # than silently issue a live LLM call.
-    from runtime_mode import is_no_router_mode
+    #
+    # Set 048 S5 UAT-discovered Critical: the original `from runtime_mode
+    # import …` bare form only worked under the test conftest's sys.path
+    # shim. pip-installed consumers (the Lightweight target audience) had
+    # no such shim, so the import raised ModuleNotFoundError on every
+    # route() call under --no-router. Use a relative import so the
+    # package resolves the module within its own namespace.
+    from .runtime_mode import is_no_router_mode
 
     if is_no_router_mode():
         return _build_no_router_route_stub()
@@ -614,7 +621,8 @@ def verify(
     # contract as route() above. Round-A verifier-flagged Critical #1
     # made this fail-CLOSED — runtime-mode lookup failures re-raise
     # rather than silently promote to a live LLM verification call.
-    from runtime_mode import is_no_router_mode
+    # S5 UAT fix: relative import resolves correctly under pip-install.
+    from .runtime_mode import is_no_router_mode
 
     if is_no_router_mode():
         return _build_no_router_verification_stub(

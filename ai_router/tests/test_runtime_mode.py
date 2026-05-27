@@ -148,14 +148,14 @@ def test_is_no_router_mode_lazy_default_false() -> None:
 
 def test_cli_overrides_spec_full_logs_info(caplog, tmp_path: Path) -> None:
     """CLI --no-router on tier: full spec should log the override."""
-    caplog.set_level(logging.INFO, logger="runtime_mode")
+    caplog.set_level(logging.INFO, logger="ai_router.runtime_mode")
     spec_dir = _write_spec(tmp_path, "full")
     resolve_no_router_mode(cli_flag=True, session_set_dir=spec_dir)
     assert any("overrides spec tier" in r.message for r in caplog.records)
 
 
 def test_env_overrides_spec_full_logs_info(monkeypatch, caplog, tmp_path: Path) -> None:
-    caplog.set_level(logging.INFO, logger="runtime_mode")
+    caplog.set_level(logging.INFO, logger="ai_router.runtime_mode")
     monkeypatch.setenv(ENV_VAR_NAME, "1")
     spec_dir = _write_spec(tmp_path, "full")
     resolve_no_router_mode(cli_flag=False, session_set_dir=spec_dir)
@@ -164,7 +164,7 @@ def test_env_overrides_spec_full_logs_info(monkeypatch, caplog, tmp_path: Path) 
 
 def test_spec_lightweight_alone_logs_info(caplog, tmp_path: Path) -> None:
     """Just spec tier: lightweight (no CLI/env) logs the enabling source."""
-    caplog.set_level(logging.INFO, logger="runtime_mode")
+    caplog.set_level(logging.INFO, logger="ai_router.runtime_mode")
     spec_dir = _write_spec(tmp_path, "lightweight")
     resolve_no_router_mode(cli_flag=False, session_set_dir=spec_dir)
     assert any("spec tier=lightweight" in r.message for r in caplog.records)
@@ -172,6 +172,6 @@ def test_spec_lightweight_alone_logs_info(caplog, tmp_path: Path) -> None:
 
 def test_default_full_does_not_log(caplog) -> None:
     """Default-mode resolution should not log (nothing happened)."""
-    caplog.set_level(logging.INFO, logger="runtime_mode")
+    caplog.set_level(logging.INFO, logger="ai_router.runtime_mode")
     resolve_no_router_mode(cli_flag=False, session_set_dir=None)
     assert not [r for r in caplog.records if r.levelno >= logging.INFO]

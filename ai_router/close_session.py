@@ -1640,8 +1640,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Set 048 Session 2: resolve --no-router mode at entry-point start
     # so verification short-circuit + soft-gate logic downstream can
     # read the cached resolution. Side-effect: emits a log.info line.
+    #
+    # Set 048 S5 UAT fix: relative import resolves under pip-install
+    # mode. The original bare `from runtime_mode import …` worked under
+    # the test sys.path shim but silently no-op'd in production via the
+    # try/except below — and the soft-gate + verification short-circuit
+    # both depend on this resolution running.
     try:
-        from runtime_mode import resolve_no_router_mode
+        from .runtime_mode import resolve_no_router_mode
 
         ssd = getattr(args, "session_set_dir", None)
         resolve_no_router_mode(

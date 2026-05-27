@@ -72,7 +72,10 @@ def _spec_tier(session_set_dir: Optional[Path]) -> Optional[str]:
     try:
         # Lazy-import the parser so this module stays cheap to import
         # even from test contexts that mock out spec.md.
-        from spec_config import parse_session_set_config
+        # S5 UAT fix: relative import resolves under pip-install mode
+        # (bare `from spec_config` only worked via the test conftest's
+        # sys.path shim, silently broken in production package consumers).
+        from .spec_config import parse_session_set_config
 
         cfg = parse_session_set_config(spec)
         return cfg.tier

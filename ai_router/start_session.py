@@ -839,8 +839,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     # so downstream code (verification calls in close_session, lazy
     # imports in route/verify) can read the cached resolution. Side-
     # effect: emits a log.info line noting the source that won.
+    #
+    # Set 048 S5 UAT fix: relative import resolves under pip-install
+    # mode. The original bare `from runtime_mode import …` worked under
+    # the test sys.path shim but silently no-op'd in production because
+    # the try/except swallowed the ModuleNotFoundError — `--no-router`
+    # was a no-op for every Lightweight consumer.
     try:
-        from runtime_mode import resolve_no_router_mode
+        from .runtime_mode import resolve_no_router_mode
 
         resolve_no_router_mode(
             cli_flag=bool(getattr(args, "no_router", False)),
