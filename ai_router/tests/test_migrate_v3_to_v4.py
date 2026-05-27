@@ -60,9 +60,11 @@ from migrate_v3_to_v4 import (
     ACTION_SKIPPED_NO_STATE,
     ACTION_SKIPPED_NOT_V3,
     ACTION_SKIPPED_V4,
+    ACTION_SWEPT_ORCHESTRATOR,
     ACTION_WOULD_VIOLATE,
     BACKUP_FILENAME,
     SESSION_STATE_FILENAME,
+    SWEEP_BACKUP_FILENAME,
     MigrationResult,
     build_v4_on_disk_shape,
     discover_session_sets,
@@ -70,6 +72,7 @@ from migrate_v3_to_v4 import (
     migrate_all,
     migrate_one_set,
 )
+from migrate_v3_to_v4 import _strip_retired_orchestrator_keys, _sweep_orchestrator_blocks
 
 
 # ---------------------------------------------------------------------------
@@ -672,3 +675,305 @@ class TestCLI:
         assert _read_state(tmp_path / "set-a")["schemaVersion"] == 4
         # set-b untouched.
         assert _read_state(tmp_path / "set-b")["schemaVersion"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Set 049 T4: orchestrator-block sweep+normalize
+# ---------------------------------------------------------------------------
+
+
+def _v4_state_with_stale_orchestrator_keys() -> dict:
+    """Build a v4 state whose orchestrator blocks carry the 3 Set-049-retired keys."""
+    return {
+        "schemaVersion": 4,
+        "sessionSetName": "swept-fixture",
+        "status": "in-progress",
+        "sessions": [
+            {
+                "number": 1,
+                "title": "title-1",
+                "status": "complete",
+                "startedAt": "2026-05-26T09:00:00-04:00",
+                "completedAt": "2026-05-26T10:00:00-04:00",
+                "orchestrator": {
+                    "engine": "claude",
+                    "provider": "anthropic",
+                    "model": "claude-opus-4-7",
+                    "effort": "high",
+                    "chatSessionId": "sess-abc",
+                    "checkedOutAt": "2026-05-26T09:00:00-04:00",
+                    "lastActivityAt": "2026-05-26T10:00:00-04:00",
+                },
+                "verificationVerdict": None,
+            },
+            {
+                "number": 2,
+                "title": "title-2",
+                "status": "in-progress",
+                "startedAt": "2026-05-26T10:30:00-04:00",
+                "completedAt": None,
+                "orchestrator": {
+                    "engine": "codex",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "effort": "medium",
+                    "chatSessionId": None,
+                    "checkedOutAt": "2026-05-26T10:30:00-04:00",
+                    "lastActivityAt": "2026-05-26T10:30:00-04:00",
+                },
+                "verificationVerdict": None,
+            },
+        ],
+    }
+
+
+class TestStripRetiredOrchestratorKeys:
+    def test_returns_unchanged_on_clean_block(self):
+        block = {
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
+            "effort": "high",
+        }
+        new_block, changed = _strip_retired_orchestrator_keys(block)
+        assert changed is False
+        assert new_block == block
+
+    def test_strips_all_three_retired_keys(self):
+        block = {
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
+            "effort": "high",
+            "chatSessionId": "sess-abc",
+            "checkedOutAt": "2026-05-26T09:00:00-04:00",
+            "lastActivityAt": "2026-05-26T10:00:00-04:00",
+        }
+        new_block, changed = _strip_retired_orchestrator_keys(block)
+        assert changed is True
+        assert new_block == {
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
+            "effort": "high",
+        }
+
+    def test_strips_when_retired_keys_are_null(self):
+        # The retired keys are stripped regardless of value — including None.
+        # On-disk omit-null contract: missing key, not key with null value.
+        block = {
+            "engine": "claude",
+            "provider": "anthropic",
+            "chatSessionId": None,
+            "checkedOutAt": None,
+            "lastActivityAt": None,
+        }
+        new_block, changed = _strip_retired_orchestrator_keys(block)
+        assert changed is True
+        assert new_block == {"engine": "claude", "provider": "anthropic"}
+
+    def test_preserves_unknown_keys(self):
+        # Forward-compat: unknown keys are preserved (they may be added by a
+        # later schema without the migrator's awareness).
+        block = {"engine": "claude", "chatSessionId": "x", "futureField": "v"}
+        new_block, changed = _strip_retired_orchestrator_keys(block)
+        assert changed is True
+        assert new_block == {"engine": "claude", "futureField": "v"}
+
+    def test_non_dict_input_roundtrips(self):
+        for value in (None, [], "string", 42):
+            new_value, changed = _strip_retired_orchestrator_keys(value)
+            assert changed is False
+            assert new_value is value
+
+
+class TestSweepOrchestratorBlocks:
+    def test_sweeps_top_level_legacy_orchestrator(self):
+        state = {
+            "schemaVersion": 3,
+            "orchestrator": {
+                "engine": "claude",
+                "chatSessionId": "sess-abc",
+                "checkedOutAt": "ts",
+                "lastActivityAt": "ts",
+            },
+        }
+        new_state, changed = _sweep_orchestrator_blocks(state)
+        assert changed is True
+        assert new_state["orchestrator"] == {"engine": "claude"}
+        # Input was not mutated.
+        assert "chatSessionId" in state["orchestrator"]
+
+    def test_sweeps_per_session_orchestrator_blocks(self):
+        state = _v4_state_with_stale_orchestrator_keys()
+        new_state, changed = _sweep_orchestrator_blocks(state)
+        assert changed is True
+        for entry in new_state["sessions"]:
+            for retired in ("chatSessionId", "checkedOutAt", "lastActivityAt"):
+                assert retired not in entry["orchestrator"]
+        # Input was not mutated.
+        assert "chatSessionId" in state["sessions"][0]["orchestrator"]
+
+    def test_clean_state_returns_unchanged(self):
+        state = {
+            "schemaVersion": 4,
+            "sessions": [
+                {
+                    "number": 1,
+                    "orchestrator": {"engine": "claude", "provider": "anthropic"},
+                }
+            ],
+        }
+        new_state, changed = _sweep_orchestrator_blocks(state)
+        assert changed is False
+        assert new_state is state
+
+    def test_no_orchestrator_blocks_returns_unchanged(self):
+        state = {
+            "schemaVersion": 4,
+            "sessions": [
+                {"number": 1, "orchestrator": None},
+                {"number": 2},
+            ],
+        }
+        new_state, changed = _sweep_orchestrator_blocks(state)
+        assert changed is False
+        assert new_state is state
+
+    def test_idempotent_across_calls(self):
+        state = _v4_state_with_stale_orchestrator_keys()
+        once, changed_1 = _sweep_orchestrator_blocks(state)
+        twice, changed_2 = _sweep_orchestrator_blocks(once)
+        assert changed_1 is True
+        assert changed_2 is False
+        assert twice is once
+
+
+class TestMigrateOneSetSweep:
+    def test_v4_with_stale_keys_returns_swept_dry_run(self, tmp_path):
+        set_dir = tmp_path / "stale-v4"
+        set_dir.mkdir()
+        state = _v4_state_with_stale_orchestrator_keys()
+        (set_dir / SESSION_STATE_FILENAME).write_text(
+            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+        )
+        (set_dir / "spec.md").write_text(_spec(2), encoding="utf-8")
+        r = migrate_one_set(str(set_dir), dry_run=True)
+        assert r.action == ACTION_SWEPT_ORCHESTRATOR
+        assert r.backup_path is None
+        # The dry-run after view has the keys stripped...
+        for entry in r.after["sessions"]:
+            for retired in ("chatSessionId", "checkedOutAt", "lastActivityAt"):
+                assert retired not in entry["orchestrator"]
+        # ...but the on-disk file is untouched.
+        on_disk = json.loads((set_dir / SESSION_STATE_FILENAME).read_text(encoding="utf-8"))
+        assert "chatSessionId" in on_disk["sessions"][0]["orchestrator"]
+        # And no sweep backup file was created.
+        assert not (set_dir / SWEEP_BACKUP_FILENAME).exists()
+
+    def test_v4_with_stale_keys_applies_sweep_with_backup(self, tmp_path):
+        set_dir = tmp_path / "stale-v4"
+        set_dir.mkdir()
+        state = _v4_state_with_stale_orchestrator_keys()
+        (set_dir / SESSION_STATE_FILENAME).write_text(
+            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+        )
+        (set_dir / "spec.md").write_text(_spec(2), encoding="utf-8")
+        r = migrate_one_set(str(set_dir), dry_run=False)
+        assert r.action == ACTION_SWEPT_ORCHESTRATOR
+        assert r.backup_path == str(set_dir / SWEEP_BACKUP_FILENAME)
+        # State file: keys stripped.
+        on_disk = json.loads((set_dir / SESSION_STATE_FILENAME).read_text(encoding="utf-8"))
+        for entry in on_disk["sessions"]:
+            for retired in ("chatSessionId", "checkedOutAt", "lastActivityAt"):
+                assert retired not in entry["orchestrator"]
+        # Backup file: pre-sweep state (still carries the retired keys).
+        bak = json.loads(
+            (set_dir / SWEEP_BACKUP_FILENAME).read_text(encoding="utf-8")
+        )
+        assert "chatSessionId" in bak["sessions"][0]["orchestrator"]
+        # No v3-style .bak file was created (we're sweeping a v4 file).
+        assert not (set_dir / BACKUP_FILENAME).exists()
+
+    def test_v4_clean_returns_skipped_v4(self, tmp_path):
+        set_dir = tmp_path / "clean-v4"
+        set_dir.mkdir()
+        state = {
+            "schemaVersion": 4,
+            "sessionSetName": "clean",
+            "status": "in-progress",
+            "sessions": [
+                {
+                    "number": 1,
+                    "title": "title-1",
+                    "status": "in-progress",
+                    "startedAt": "2026-05-26T09:00:00-04:00",
+                    "completedAt": None,
+                    "orchestrator": {
+                        "engine": "claude",
+                        "provider": "anthropic",
+                        "model": "claude-opus-4-7",
+                        "effort": "high",
+                    },
+                    "verificationVerdict": None,
+                },
+            ],
+        }
+        (set_dir / SESSION_STATE_FILENAME).write_text(
+            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+        )
+        (set_dir / "spec.md").write_text(_spec(1), encoding="utf-8")
+        r = migrate_one_set(str(set_dir), dry_run=False)
+        assert r.action == ACTION_SKIPPED_V4
+        # No sweep backup written.
+        assert not (set_dir / SWEEP_BACKUP_FILENAME).exists()
+
+    def test_apply_then_rerun_is_idempotent(self, tmp_path):
+        set_dir = tmp_path / "stale-v4"
+        set_dir.mkdir()
+        state = _v4_state_with_stale_orchestrator_keys()
+        (set_dir / SESSION_STATE_FILENAME).write_text(
+            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+        )
+        (set_dir / "spec.md").write_text(_spec(2), encoding="utf-8")
+        # First apply: sweep + backup.
+        r1 = migrate_one_set(str(set_dir), dry_run=False)
+        assert r1.action == ACTION_SWEPT_ORCHESTRATOR
+        # Second apply: clean v4, no-op.
+        r2 = migrate_one_set(str(set_dir), dry_run=False)
+        assert r2.action == ACTION_SKIPPED_V4
+
+    def test_v3_with_stale_top_level_orchestrator_strips_on_migrate(self, tmp_path):
+        # A v3 file whose top-level orchestrator carries the retired keys.
+        # After v3→v4 promotion + sweep, the resulting per-session
+        # orchestrator block should NOT carry them.
+        set_dir = tmp_path / "stale-v3"
+        orchestrator_with_stale = {
+            "engine": "claude",
+            "provider": "anthropic",
+            "model": "claude-opus-4-7",
+            "effort": "high",
+            "chatSessionId": "sess-old",
+            "checkedOutAt": "2026-05-20T09:00:00-04:00",
+            "lastActivityAt": "2026-05-20T10:00:00-04:00",
+        }
+        _write_state(
+            set_dir,
+            _v3_state(
+                name="stale-v3",
+                total=2,
+                completed=0,
+                in_progress=1,
+                orchestrator=orchestrator_with_stale,
+                started="2026-05-20T09:00:00-04:00",
+            ),
+            spec_n=2,
+        )
+        r = migrate_one_set(str(set_dir), dry_run=True)
+        assert r.action == ACTION_MIGRATED
+        # The in-progress session received the promoted orchestrator,
+        # but the retired keys must not have ridden along.
+        s1 = r.after["sessions"][0]
+        assert s1["orchestrator"]["engine"] == "claude"
+        for retired in ("chatSessionId", "checkedOutAt", "lastActivityAt"):
+            assert retired not in s1["orchestrator"]

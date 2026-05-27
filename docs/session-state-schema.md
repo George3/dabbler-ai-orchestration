@@ -148,10 +148,7 @@ fields:
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
-        "effort": "high",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-26T09:12:00-04:00",
-        "lastActivityAt": "2026-05-26T11:04:00-04:00"
+        "effort": "high"
       },
       "verificationVerdict": "VERIFIED"
     },
@@ -162,10 +159,7 @@ fields:
       "startedAt": "2026-05-26T11:30:00-04:00",
       "completedAt": null,
       "orchestrator": { "engine": "claude", "provider": "anthropic",
-                        "model": "claude-opus-4-7", "effort": "high",
-                        "chatSessionId": null,
-                        "checkedOutAt": "2026-05-26T11:30:00-04:00",
-                        "lastActivityAt": "2026-05-26T11:42:00-04:00" },
+                        "model": "claude-opus-4-7", "effort": "high" },
       "verificationVerdict": null
     },
     {
@@ -221,7 +215,7 @@ Each entry is an object with these fields:
 | `status` | enum (see below) | Per-session lifecycle state. |
 | `startedAt` | ISO 8601 or null | Set on `start_session`. Null until the session begins. |
 | `completedAt` | ISO 8601 or null | Set on `close_session`. Null until the session closes. |
-| `orchestrator` | object or null | Engine / provider / model / effort + chatSessionId + check-out timestamps for the holder of THIS session. Null when this session has not yet started; populated by `start_session`; **preserved across `close_session`** as historical attribution on closed sessions. See **Per-session orchestrator block** below. |
+| `orchestrator` | object or null | Engine / provider / model / effort for the holder of THIS session, omit-null on disk. Null when this session has not yet started; populated by `start_session`; **preserved across `close_session`** as historical attribution on closed sessions. See **Per-session orchestrator block** below. |
 | `verificationVerdict` | string \| null | Set by `close_session` after gate checks. The two canonical tokens are `"VERIFIED"` and `"ISSUES_FOUND"`; the writer does not enforce an enum and operators have shipped extension tokens like `"ISSUES_FOUND_RESOLVED_IN_FLIGHT"` to capture mid-session disposition (see e.g. this set's S4 record). Readers should treat the field as a string and match on prefix when bucketing into VERIFIED vs ISSUES-FOUND buckets. |
 
 The migration from v3 reorganized the lifecycle so that **per-session
@@ -232,120 +226,90 @@ instead of being overwritten by the next session's start.
 
 ### Per-session orchestrator block — historical attribution
 
-A populated `sessions[N].orchestrator` block carries:
+A populated `sessions[N].orchestrator` block carries up to 4 fields:
 
 | Field | Type | Purpose |
 |---|---|---|
 | `engine` | string | Orchestrator engine name (`claude`, `gpt-5-4`, `gemini-pro`, `codex`, etc.). |
-| `provider` | string \| null | Provider keying the API or IDE surface (`anthropic`, `openai`, `google`). Optional but always present in writes from the v4 writer. |
+| `provider` | string | Provider keying the API or IDE surface (`anthropic`, `openai`, `google`). |
 | `model` | string | Model id (`claude-opus-4-7`, `gpt-5.4`, etc.). |
-| `effort` | string | Effort level: `low` / `medium` / `high` / `fast` / `normal` / `unknown`. |
-| `chatSessionId` | string \| null | Per-chat identifier (Set 036 H4 holder-identity discriminator). See **Check-out / check-in** below. |
-| `checkedOutAt` | ISO 8601 | When this orchestrator first claimed the session. |
-| `lastActivityAt` | ISO 8601 | Bumped on every same-holder re-attach during the session. |
+| `effort` | string | Effort level: `low` / `medium` / `high` / `fast` / `normal`. |
 
-**A note on the `checkedOutAt` / `lastActivityAt` / `chatSessionId`
-fields:** these three carry forward from v3's check-out / check-in
-coordination layer (Sets 033 / 036). Hard enforcement of cross-holder
-coordination is **off by default since mid-Set-046** (see CLAUDE.md);
-the fields continue to be written for audit-history purposes but no
-gate consults them in production. The longer-term cleanup is
-scheduled as Set 049 (orchestrator-coordination-removal), which will
-audit-then-spec dropping all three fields from new writes and reshape
-the block to omit-null `engine` / `provider` / `model` / `effort`
-only. Until then, v4 writers emit the full 7-field block and v4
-readers tolerate both the full and the to-be-simplified form.
+**Omit-null on disk (Set 049 T3).** Writers MUST omit any field they
+cannot declare authoritatively rather than writing `null` or a
+placeholder string like `"unknown"`. Missing keys are valid; null
+values and placeholder strings are not. Readers that need a value
+for a missing key simply observe its absence.
 
-### Check-out / check-in (preserved from Set 033, enforcement disabled)
+**Historical: `chatSessionId` / `checkedOutAt` / `lastActivityAt`.**
+Sets 033 / 036 added three additional fields to support a check-out
+/ check-in coordination layer (cross-holder refusal on
+`engine + provider + chatSessionId` mismatch). Hard enforcement was
+disabled mid-Set-046; the full coordination layer was ripped out in
+Set 049. The fields are no longer written, and the
+`migrate_v3_to_v4` sweep strips them from existing files on the next
+migrator run (apply mode writes `session-state.pre-049-sweep.bak.json`
+as the rollback affordance). A v4 reader tolerates their presence on
+un-swept files but does not consult them.
 
-Each session's orchestrator block doubles as a check-out record for
-the **lifetime of that session**. Two nested timestamp fields capture
-the lifecycle:
+### Writer Contract (Set 049 T3)
 
-| Field | Set on | Bumped on |
-|---|---|---|
-| `checkedOutAt` | `start_session` invocation (`sessions[N].orchestrator` flips `null → populated`). | Never bumped by a same-holder write — preserved across re-attach. |
-| `lastActivityAt` | `start_session` invocation. Mirrors `checkedOutAt` on a fresh check-out. | Every same-holder `start_session` re-attach. `close_session` does NOT bump this field — the writer's only emission site is the shared `register_session_start` helper. |
+`start_session` builds the `sessions[N].orchestrator` block from the
+caller's CLI arguments, applying omit-null:
 
-**Holder identity (H4):** the equality predicate is the
-`engine + provider + chatSessionId` composite (Set 036). Two
-orchestrators with the same triple but different `model` (e.g.,
-`claude-opus-4-7` and `claude-sonnet-4-6` both running through the
-same Claude chat) are treated as the **same holder**; model and
-effort are mutable fields inside the block and update in place on a
-same-holder re-attach without resetting `checkedOutAt`.
+- The caller passes the fields it can declare authoritatively
+  (`--engine claude --provider anthropic --model claude-opus-4-7
+  --effort high` for a full Claude attribution, or just
+  `--engine claude --provider anthropic` for a session-start hook
+  that has no model/effort signal).
+- The writer emits exactly the fields the caller declared. No
+  `"unknown"` fallback; no `null` placeholder. Missing keys are
+  encoded as missing keys on disk.
+- The Claude `SessionStart` hook
+  (`tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js`)
+  recovers `model` / `effort` from the prior orchestrator block on
+  the same set when the prior holder was already `claude + anthropic`;
+  otherwise the hook omits both fields and the writer attributes the
+  set with engine + provider only.
+- Same-holder re-attach (subsequent `start_session` calls on the
+  same in-progress session) replaces the block atomically with the
+  new write. There is no per-field merge; the caller is the source
+  of truth for whatever it declares.
 
-**`chatSessionId`** is a per-chat identifier sourced at write time
-in one of two ways:
+**Legacy CLI flag.** `start_session --chat-session-id <id>` is
+accepted by `argparse` and ignored by the writer logic (with one
+`stderr` line per invocation) so older consumer-repo invokers that
+still pass the flag don't break. The flag's value is never written.
 
-- **Claude Code chats** — the SessionStart hook invoker
-  (`scripts/claude-session-start-invoker.js`) extracts `session_id`
-  from the hook payload and forwards it as `--chat-session-id` to
-  `start_session` automatically.
-- **All other orchestrators** (Codex CLI, Gemini Code Assist,
-  GitHub Copilot, manual Lightweight) — the operator runs
-  `python -m ai_router.new_chat_id --export --shell <bash|powershell|fish>`
-  in their shell once per chat and sources the output.
+### Block-preserved-on-close
 
-**Tolerant-on-read.** A prior orchestrator block missing
-`chatSessionId` entirely or with the key present and `null` is
-treated as a match against any caller-supplied chatSessionId for
-`engine + provider` equality. The first new write populates the
-field strictly.
-
-**Hard coordination (gated).** When
-`DABBLER_ENFORCE_CHECKOUT_COORDINATION=1` is set in the environment,
-`start_session` REFUSES to write when the existing orchestrator
-block on the target session names a different
-`engine + provider + chatSessionId` composite than the caller, unless
-`--force` is set. Without the env var (the production default since
-Set 046), the writer proceeds without coordination checks. See
-CLAUDE.md "Hard-coordination enforcement (Sets 033 / 036) is OFF by
-default" for the full context.
-
-**Block-preserved-on-close (v4 historical-attribution contract):**
-when `close_session` flips `sessions[N].status` from `"in-progress"`
+When `close_session` flips `sessions[N].status` from `"in-progress"`
 to `"complete"`, the v4 writer **preserves** `sessions[N].orchestrator`
-in place. Under v3 the top-level orchestrator block was cleared on
-every close because the block doubled as a single global holder
-lock; under v4 the per-session orchestrator on a closed session is a
-historical record (who ran this session), NOT a check-out lock. The
-operator-visible "released between sessions" semantic is preserved
-by the reader shim: the derived top-level `orchestrator` is computed
-ONLY from the in-progress session, so the Explorer and other
-top-level consumers still see `orchestrator: null` between sessions
-even while per-session blocks remain populated on closed entries.
+in place. The per-session orchestrator on a closed session is a
+historical record (who ran this session), NOT a coordination lock.
+The operator-visible "released between sessions" semantic is
+preserved by the reader shim: the derived top-level `orchestrator`
+is computed ONLY from the in-progress session, so the Explorer and
+other top-level consumers still see `orchestrator: null` between
+sessions even while per-session blocks remain populated on closed
+entries.
 
 The writer reads prior `sessions[]` back, preserves all per-session
 metadata on prior-completed entries (including their orchestrator
 blocks), and only mutates the current session's record. A session
-record's orchestrator block is null only when (a) the session has
-not yet started, OR (b) the session was closed by a v3 writer and
-later migrated to v4 (the v3 close cleared the top-level block, so
-the shim's promotion has nothing to attribute).
+record's orchestrator block is missing only when (a) the session
+has not yet started, OR (b) the session was closed by a v3 writer
+and later migrated to v4 (the v3 close cleared the top-level block,
+so the shim's promotion has nothing to attribute).
 
-**Per-set lifecycle lock (Set 036 Q5).** Both `start_session` and
-`close_session` acquire `<session-set-dir>/.lifecycle.lock` for the
-duration of their read/check/write window so a hybrid migration —
-one orchestrator opening a new session while another is mid-close-out
-on the same set — never interleaves writes. `start_session` polls
-for up to 30s on contention before exiting `EXIT_LOCK_CONTENTION=5`;
-`close_session` keeps its existing immediate-failure contract
-(exit 3) so a stuck close-out surfaces fast rather than blocking
-under the poll window.
+### `~/.dabbler/orchestrator-writer.log`
 
-**Stranded-checkout recovery.** A session whose holder disappeared
-(crashed orchestrator, abandoned workstation) before running
-`close_session` ends up with a `sessions[N].orchestrator` block that
-no live process is claiming. Recovery paths:
-
-- `start_session --force` from the would-be next holder. Force-mode
-  is an authority handoff — appends a single line to
-  `~/.dabbler/orchestrator-writer.log` and proceeds with the write.
-  Only meaningful when enforcement is on; otherwise the next call
-  just succeeds.
-- Manual edit of `sessions[N].orchestrator` to `null` if the operator
-  is sure no live holder is present.
+`start_session` appends a single line to this file on every invocation
+as a post-rip diagnosis surface. Pre-Set-049 it carried holder-change
+semantics; today it's a generic "start_session ran" record. The log
+is the cheap audit trail for "which orchestrator wrote the state file
+when" without consulting the state file's own contents. Revisit in a
+future stability set if it proves dead.
 
 ### Plan-less carve-out
 
@@ -366,10 +330,7 @@ known-plan shape drops:
   "startedAt": "2026-05-26T15:02:59-04:00",
   "orchestrator": {
     "engine": "claude", "provider": "anthropic",
-    "model": "claude-opus-4-7", "effort": "high",
-    "chatSessionId": null,
-    "checkedOutAt": "2026-05-26T15:02:59-04:00",
-    "lastActivityAt": "2026-05-26T15:02:59-04:00"
+    "model": "claude-opus-4-7", "effort": "high"
   }
 }
 ```
@@ -690,10 +651,7 @@ make the Explorer think a closed session is still in flight.
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
-        "effort": "high",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-11T14:30:00-04:00",
-        "lastActivityAt": "2026-05-12T10:15:00-04:00"
+        "effort": "high"
       },
       "verificationVerdict": "VERIFIED" },
     { "number": 2, "title": "Wire the wizard into onboarding",
@@ -704,10 +662,7 @@ make the Explorer think a closed session is still in flight.
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
-        "effort": "high",
-        "chatSessionId": "5d3e9c2b-1f47-4a8b-9c61-2e7d8f4a1b3c",
-        "checkedOutAt": "2026-05-12T11:00:00-04:00",
-        "lastActivityAt": "2026-05-12T16:42:18-04:00"
+        "effort": "high"
       },
       "verificationVerdict": null },
     { "number": 3, "title": "Marketplace launch checklist",
@@ -745,10 +700,7 @@ flight.
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-7",
-        "effort": "high",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-17T05:00:00-04:00",
-        "lastActivityAt": "2026-05-17T10:30:00-04:00"
+        "effort": "high"
       },
       "verificationVerdict": "VERIFIED" },
     { "number": 2, "title": "Dual-write writers + scaffolding",
@@ -780,10 +732,7 @@ attribution.
       "completedAt": "2026-05-12T10:15:00-04:00",
       "orchestrator": {
         "engine": "claude", "provider": "anthropic",
-        "model": "claude-opus-4-7", "effort": "high",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-11T14:30:00-04:00",
-        "lastActivityAt": "2026-05-12T10:15:00-04:00"
+        "model": "claude-opus-4-7", "effort": "high"
       },
       "verificationVerdict": "VERIFIED" },
     { "number": 2, "title": "Wire the wizard into onboarding",
@@ -792,10 +741,7 @@ attribution.
       "completedAt": "2026-05-13T16:00:00-04:00",
       "orchestrator": {
         "engine": "claude", "provider": "anthropic",
-        "model": "claude-opus-4-7", "effort": "high",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-12T11:00:00-04:00",
-        "lastActivityAt": "2026-05-13T16:00:00-04:00"
+        "model": "claude-opus-4-7", "effort": "high"
       },
       "verificationVerdict": "VERIFIED" },
     { "number": 3, "title": "Marketplace launch checklist",
@@ -804,10 +750,7 @@ attribution.
       "completedAt": "2026-05-13T18:45:00-04:00",
       "orchestrator": {
         "engine": "gpt-5-4", "provider": "openai",
-        "model": "gpt-5.4", "effort": "medium",
-        "chatSessionId": null,
-        "checkedOutAt": "2026-05-13T17:00:00-04:00",
-        "lastActivityAt": "2026-05-13T18:45:00-04:00"
+        "model": "gpt-5.4", "effort": "medium"
       },
       "verificationVerdict": "VERIFIED" }
   ]

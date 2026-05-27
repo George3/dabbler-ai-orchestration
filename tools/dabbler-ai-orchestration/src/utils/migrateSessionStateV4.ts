@@ -47,9 +47,11 @@ import {
 
 export const SESSION_STATE_FILENAME = "session-state.json";
 export const BACKUP_FILENAME = "session-state.v3.bak.json";
+export const SWEEP_BACKUP_FILENAME = "session-state.pre-049-sweep.bak.json";
 
 export type MigrationActionV4 =
   | "migrated"
+  | "swept-orchestrator"
   | "skipped-v4"
   | "skipped-not-v3"
   | "skipped-no-state"
@@ -57,6 +59,18 @@ export type MigrationActionV4 =
   | "skipped-future-schema"
   | "would-violate"
   | "failed-backup";
+
+// Set 049 T4: orchestrator-block keys retired by the coordination-layer
+// rip. The sweep+normalize pass strips these from every orchestrator
+// block on disk — both the legacy top-level `orchestrator` field
+// (pre-v4 files migrated forward) and the per-session ledger blocks
+// (v4 shape). Mirrors `_RETIRED_ORCHESTRATOR_KEYS` in the Python
+// migrator.
+const RETIRED_ORCHESTRATOR_KEYS = [
+  "chatSessionId",
+  "checkedOutAt",
+  "lastActivityAt",
+] as const;
 
 export interface MigrationResultV4 {
   setDir: string;
@@ -103,6 +117,92 @@ const V4_TOP_LEVEL_PASSTHROUGH_KEYS = [
   "preCancelStatus",
   "forceClosed",
 ] as const;
+
+/**
+ * Strip Set-049-retired keys from a single orchestrator block.
+ * Mirrors `_strip_retired_orchestrator_keys` in the Python migrator.
+ *
+ * Returns `[newBlock, changed]`. Non-object input round-trips unchanged
+ * with `changed=false`. A retired key is "present" if it appears in
+ * the object regardless of value (including `null`) because the
+ * on-disk shape must omit these keys entirely under the omit-null
+ * contract.
+ */
+export function stripRetiredOrchestratorKeys(
+  block: unknown,
+): [unknown, boolean] {
+  if (block === null || typeof block !== "object" || Array.isArray(block)) {
+    return [block, false];
+  }
+  const obj = block as Record<string, unknown>;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if ((RETIRED_ORCHESTRATOR_KEYS as readonly string[]).includes(key)) {
+      changed = true;
+      continue;
+    }
+    out[key] = value;
+  }
+  return [out, changed];
+}
+
+/**
+ * Sweep retired orchestrator-block keys throughout a state file.
+ * Mirrors `_sweep_orchestrator_blocks` in the Python migrator.
+ *
+ * Sweeps both the top-level legacy `orchestrator` field (pre-v4
+ * files) AND every per-session ledger entry's `orchestrator` block
+ * (v4 shape). Returns `[newState, changed]`. Idempotent: re-running
+ * on already-clean state returns the input reference unchanged.
+ */
+export function sweepOrchestratorBlocks(
+  state: Record<string, unknown>,
+): [Record<string, unknown>, boolean] {
+  let changed = false;
+  let newState: Record<string, unknown> = state;
+
+  const topOrch = state.orchestrator;
+  if (topOrch !== null && typeof topOrch === "object" && !Array.isArray(topOrch)) {
+    const [swept, topChanged] = stripRetiredOrchestratorKeys(topOrch);
+    if (topChanged) {
+      newState = { ...state };
+      newState.orchestrator = swept;
+      changed = true;
+    }
+  }
+
+  const sessions = state.sessions;
+  if (Array.isArray(sessions)) {
+    const newSessions: unknown[] = [];
+    let sessionsChanged = false;
+    for (const entry of sessions) {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+        newSessions.push(entry);
+        continue;
+      }
+      const entryObj = entry as Record<string, unknown>;
+      const [swept, entryChanged] = stripRetiredOrchestratorKeys(
+        entryObj.orchestrator,
+      );
+      if (entryChanged) {
+        newSessions.push({ ...entryObj, orchestrator: swept });
+        sessionsChanged = true;
+      } else {
+        newSessions.push(entry);
+      }
+    }
+    if (sessionsChanged) {
+      if (newState === state) {
+        newState = { ...state };
+      }
+      newState.sessions = newSessions;
+      changed = true;
+    }
+  }
+
+  return [newState, changed];
+}
 
 /**
  * Build the on-disk v4 dict given a normalized read-view + the
@@ -264,13 +364,81 @@ export function migrateOneSetV4(
     };
   }
 
+  // Already-v4 branch. Set 049 T4 added an orchestrator-block sweep
+  // pass that strips three retired keys (chatSessionId / checkedOutAt
+  // / lastActivityAt) from any orchestrator block on disk. Mirrors
+  // the Python migrator. Pre-Set-049 v4 files written by Set 047
+  // carry those keys; the sweep catches them on the next migrator
+  // run. On already-clean v4 files the sweep is a no-op and we keep
+  // the existing skip semantics.
   if (typeof schemaVersion === "number" && schemaVersion >= SCHEMA_VERSION_V4) {
+    const [sweptState, swept] = sweepOrchestratorBlocks(stateObj);
+    if (!swept) {
+      return {
+        setDir,
+        action: "skipped-v4",
+        reason: `already v4 (schemaVersion=${schemaVersion})`,
+        before: state,
+        after: state,
+      };
+    }
+
+    if (dryRun) {
+      return {
+        setDir,
+        action: "swept-orchestrator",
+        reason:
+          "v4 → v4 (orchestrator-block sweep: stripping " +
+          `${RETIRED_ORCHESTRATOR_KEYS.join(", ")}; ` +
+          "dry-run, no write performed)",
+        before: state,
+        after: sweptState,
+      };
+    }
+
+    // Apply mode: use the Set-049-specific backup filename so the
+    // rollback affordance distinguishes a v3→v4 .bak (existing) from
+    // a v4-sweep .bak (new).
+    const sweepBackupPath = path.join(setDir, SWEEP_BACKUP_FILENAME);
+    try {
+      atomicCopyJson(statePath, sweepBackupPath);
+    } catch (exc) {
+      const msg = exc instanceof Error ? exc.message : String(exc);
+      return {
+        setDir,
+        action: "failed-backup",
+        reason: `could not write backup at ${sweepBackupPath}: ${msg}`,
+        error: msg,
+        before: state,
+      };
+    }
+
+    try {
+      atomicWriteJson(statePath, sweptState);
+    } catch (exc) {
+      const msg = exc instanceof Error ? exc.message : String(exc);
+      return {
+        setDir,
+        action: "failed-backup",
+        reason:
+          `backup written at ${sweepBackupPath} but state-file write ` +
+          `failed: ${msg}. Restore the backup via the rollback procedure ` +
+          "at docs/v3-to-v4-rollback-procedure.md.",
+        error: msg,
+        before: state,
+        backupPath: sweepBackupPath,
+      };
+    }
+
     return {
       setDir,
-      action: "skipped-v4",
-      reason: `already v4 (schemaVersion=${schemaVersion})`,
+      action: "swept-orchestrator",
+      reason:
+        "v4 → v4 (orchestrator-block sweep: stripped " +
+        `${RETIRED_ORCHESTRATOR_KEYS.join(", ")})`,
       before: state,
-      after: state,
+      after: sweptState,
+      backupPath: sweepBackupPath,
     };
   }
 
@@ -348,7 +516,15 @@ export function migrateOneSetV4(
     throw exc;
   }
 
-  const newState = buildV4OnDiskShape(normalized, stateObj);
+  let newState = buildV4OnDiskShape(normalized, stateObj);
+  // Set 049 T4: strip retired orchestrator-block keys from the v4
+  // output. The v3 input may have carried them on the top-level
+  // legacy `orchestrator` field (which the shim promotes into
+  // per-session entries), so the sweep applies after the v4 shape is
+  // assembled. Idempotent for v3 files without the retired keys.
+  // Mirrors the Python migrator.
+  const [sweptNewState] = sweepOrchestratorBlocks(newState);
+  newState = sweptNewState;
 
   if (dryRun) {
     return {

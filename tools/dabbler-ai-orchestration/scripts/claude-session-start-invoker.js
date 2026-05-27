@@ -1,65 +1,54 @@
 #!/usr/bin/env node
 // claude-session-start-invoker.js
 //
-// Set 033 Session 3 (H1: hooks become invokers, not writers).
+// Set 033 S3 (H1: hooks become invokers, not writers) +
+// Set 049 S3 (post-rip-out simplification).
 //
-// Successor to the retired `write-orchestrator-marker.js` script for the
-// Claude Code SessionStart hook path. The previous script wrote the
-// per-session-set `.dabbler/orchestrator.json` marker directly; per the
-// audit-locked H1 verdict (proposal-addendum §9), hooks must NOT write
-// the orchestrator block — they invoke the canonical writer
-// (`python -m ai_router.start_session`) which writes
-// `session-state.json` under the H3 hard-coordination rules.
+// Successor to the retired `write-orchestrator-marker.js` script for
+// the Claude Code SessionStart hook path. Per the Set 033 H1 verdict,
+// hooks must NOT write the orchestrator block directly — they invoke
+// the canonical writer (`python -m ai_router.start_session`) which
+// writes `session-state.json`.
 //
-// Behavior:
-//   1. Read Claude Code's SessionStart hook payload from stdin (JSON).
-//      The payload supplies `cwd` (the workspace path Claude is running
-//      in) and `session_id` (the per-chat identifier the writer pins
-//      to the H4 composite identity as of Set 036). Other fields are
-//      ignored. The `session_id` is best-effort: if the field is
-//      missing the invoker omits `--chat-session-id` and start_session
-//      falls through to its tolerant-on-read branch (Set 036 S1).
+// Behavior (Set 049):
+//   1. Read Claude Code's SessionStart hook payload from stdin (JSON)
+//      for the `cwd` field. Other payload fields are ignored.
 //   2. Walk up from `cwd` to locate `docs/session-sets/`. Find the
 //      single `status: "in-progress"` subdirectory.
 //   3. If zero or multiple in-progress sets: silent no-op, exit 0.
-//      (Same fail-closed posture as the retired writer.)
-//   4. Read the in-progress set's existing `orchestrator` block. When
-//      the existing holder is already `claude + anthropic` (per H4
-//      identity), preserve its `model` + `effort` so the
-//      same-holder re-attach (S1 writer behavior) bumps only
-//      `lastActivityAt` without degrading the model/effort fields.
-//   5. Spawn `python -m ai_router.start_session` with the resolved
-//      args. The writer enforces H3 hard coordination: if a different
-//      engine+provider holds the check-out, it exits 4 (conflict);
-//      the shim writes a short note to stderr (visible in Claude Code's
-//      hook log) and exits 0 so the hook chain isn't broken.
+//   4. Read the in-progress set's existing orchestrator block. When
+//      the prior block is already `engine: "claude", provider:
+//      "anthropic"`, recover its `model` / `effort` for forwarding.
+//      Per the T3 omit-null contract, fields the hook cannot declare
+//      authoritatively are simply omitted from the CLI call — no
+//      `"unknown"` fallback.
+//   5. Spawn `python -m ai_router.start_session` with
+//      `--engine claude --provider anthropic` plus `--model` /
+//      `--effort` only when a value was recovered.
+//   6. On non-zero exit or spawn failure, log stderr; always exit 0
+//      so the hook chain isn't broken.
 //
-// Exit code is always 0 unless an unrecoverable internal error occurs
-// (e.g., spawn fails entirely). This matches the retired writer's
-// "best-effort, never block the hook chain" contract.
-//
-// Set 033 Session 5: when start_session exits with EXIT_CHECKOUT_CONFLICT
-// (4 — H3 refusal because a different engine+provider holds the slot),
-// the invoker writes a structured conflict record to
-// `~/.dabbler/checkout-conflicts/<timestamp>-claude-<slug>.json`. The
-// in-extension CheckoutPollService watches that directory and surfaces
-// a non-blocking poll/force-override/dismiss prompt. The stderr log
-// (existing behavior) remains for hook-log debuggability.
+// Set 049 removed:
+//   - `--chat-session-id` forwarding (the H4 composite identity is
+//     gone; start_session no longer consumes the flag for coordination,
+//     and the writer's accept-with-warning path swallows any legacy
+//     consumer-repo invokers that still send it).
+//   - `EXIT_CHECKOUT_CONFLICT` handling (H3 hard-coordination retired).
+//   - `emitConflictRecord` + `~/.dabbler/checkout-conflicts/` directory
+//     writes (CheckoutPollService has no records to consume post-rip).
+//   - `DABBLER_ENFORCE_CHECKOUT_COORDINATION` env-var gating (the
+//     enforcement layer no longer exists, so the gate has nothing to
+//     branch on).
 //
 // No CLI arguments. The mode is implicit (this script is only attached
-// to SessionStart). Future hook variants (e.g., UserPromptSubmit) can
-// either ship their own thin shim or pass a `--mode` flag — the
-// previous combined-helper pattern was retired with H1.
+// to SessionStart).
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const cp = require("child_process");
 
 const CLAUDE_ENGINE = "claude";
 const CLAUDE_PROVIDER = "anthropic";
-const EXIT_CHECKOUT_CONFLICT = 4;
-const CONFLICT_DIR = path.join(os.homedir(), ".dabbler", "checkout-conflicts");
 
 function readStdinSync() {
   try {
@@ -80,8 +69,9 @@ function parsePayload(raw) {
 
 // Walk up from `startCwd` looking for `docs/session-sets/`. Return the
 // resolved in-progress set as { workspaceRoot, slug, setDir }, or
-// { reason } on failure. Matches the resolver semantic that the
-// retired marker writer used (single in-progress required; fail-closed).
+// { reason } on failure. Single in-progress required; fail-closed on
+// zero or multiple matches (mirrors the retired marker writer's
+// resolver semantics).
 function walkUpResolveSet(startCwd) {
   let current = path.resolve(startCwd);
   while (true) {
@@ -130,80 +120,63 @@ function walkUpResolveSet(startCwd) {
   }
 }
 
-// Set 036 Session 2 (Round B Medium fix): the H4 composite identity
-// now includes chatSessionId, so "same holder" preservation must
-// gate on the full triple, not just engine + provider. A new Claude
-// chat (different chatSessionId) is no longer the same holder as a
-// previously-recorded Claude chat — preserving its model/effort
-// would surface a stale-attribution gauge in the explorer.
+// Read the existing orchestrator block off the in-progress state.
+// When the prior block is already claude+anthropic, recover model +
+// effort for forwarding to start_session. Per Set 049 T3 (omit-null
+// writer contract), the recovered values are returned as undefined
+// when the prior block omitted them — the caller then omits the
+// corresponding CLI flag rather than substituting "unknown".
 //
-// Tolerant branches (mirroring start_session.py's H3 predicate):
-//   - prior state's chatSessionId key absent (pre-Set-036 writer) or
-//     value null (Set 036+ writer with no ID at write time) →
-//     treated as a match for any caller-supplied chatSessionId,
-//     since the writer's first new write will populate the field
-//     strictly.
-//   - prior state's chatSessionId present and string-equal to the
-//     caller's chatSessionId → match.
-//   - prior state's chatSessionId present and not equal → mismatch;
-//     return null and let start_session record fresh model/effort.
-function preserveExistingClaude(state, callerChatSessionId) {
-  const o = state && state.orchestrator;
-  if (!o) return null;
-  if (o.engine !== CLAUDE_ENGINE) return null;
-  if (o.provider !== CLAUDE_PROVIDER) return null;
-  const priorHasKey = Object.prototype.hasOwnProperty.call(o, "chatSessionId");
-  const priorChatSessionId = priorHasKey ? o.chatSessionId : null;
-  const chatSessionIdMatches =
-    !priorHasKey
-    || priorChatSessionId === null
-    || priorChatSessionId === callerChatSessionId;
-  if (!chatSessionIdMatches) return null;
-  return {
-    model: typeof o.model === "string" && o.model.length > 0 ? o.model : "unknown",
-    effort: typeof o.effort === "string" && o.effort.length > 0 ? o.effort : "unknown",
-  };
+// Set 049 simplification: holder identity is engine + provider only
+// (chatSessionId composite retired). Two distinct Claude chats writing
+// to the same session set are no longer distinguished as different
+// holders.
+function recoverPriorClaudeModelEffort(state) {
+  // The orchestrator block has moved location across schema versions.
+  // In v4 it lives on the active `sessions[]` entry; pre-v4 it was a
+  // top-level field. Read whichever is available — the writer accepts
+  // either input and emits canonical v4 on the next write.
+  let block = null;
+  if (state && Array.isArray(state.sessions)) {
+    const active = state.sessions.find((s) => s && s.status === "in-progress");
+    if (active && active.orchestrator) {
+      block = active.orchestrator;
+    } else {
+      // Fall back to the most-recently-completed entry's orchestrator
+      // — common shape just after `close_session` flips status. Best-
+      // effort; a fresh start with no prior holder simply yields null.
+      for (let i = state.sessions.length - 1; i >= 0; i -= 1) {
+        const s = state.sessions[i];
+        if (s && s.orchestrator) {
+          block = s.orchestrator;
+          break;
+        }
+      }
+    }
+  }
+  if (!block && state && state.orchestrator) {
+    block = state.orchestrator;
+  }
+  if (!block) return { model: undefined, effort: undefined };
+  if (block.engine !== CLAUDE_ENGINE) return { model: undefined, effort: undefined };
+  if (block.provider !== CLAUDE_PROVIDER) return { model: undefined, effort: undefined };
+  const model = typeof block.model === "string" && block.model.length > 0 ? block.model : undefined;
+  const effort = typeof block.effort === "string" && block.effort.length > 0 ? block.effort : undefined;
+  return { model, effort };
 }
 
-// Set 036 Session 2: pull the per-chat session_id off the SessionStart
-// payload and validate it before forwarding. Claude Code's hook payload
-// schema names the field `session_id`; the audit (proposal-addendum §Q1)
-// confirmed it as the per-chat identity source. The validation is
-// deliberately narrow — non-string / empty / whitespace-only values are
-// silently dropped and start_session falls through to its tolerant-on-
-// read branch rather than the field being written as garbage. A schema
-// drift in Claude Code's payload (R2 in the spec) shows up here as a
-// missing field and degrades gracefully.
-function extractSessionId(payload) {
-  if (!payload || typeof payload !== "object") return null;
-  const raw = payload.session_id;
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-  return trimmed;
-}
-
-function spawnStartSession(setDir, model, effort, chatSessionId) {
-  // No `--force`: the SessionStart hook never overrides an existing
-  // different-holder check-out (that's the operator's explicit decision
-  // via "Release Check-Out" or `start_session --force` on the CLI).
-  // If a conflict arises, start_session exits 4; we surface the stderr
-  // to Claude Code's hook log and continue.
+function spawnStartSession(setDir, model, effort) {
   const args = [
     "-m", "ai_router.start_session",
     "--session-set-dir", setDir,
     "--engine", CLAUDE_ENGINE,
     "--provider", CLAUDE_PROVIDER,
-    "--model", model,
-    "--effort", effort,
   ];
-  // Set 036 Session 2: forward the per-chat identifier when the
-  // SessionStart payload supplied one. Omitted entirely when null —
-  // start_session's `_resolve_chat_session_id` then falls back to the
-  // CHAT_SESSION_ID env var or None, matching the manual / fallback
-  // flow for non-Claude orchestrators.
-  if (typeof chatSessionId === "string" && chatSessionId.length > 0) {
-    args.push("--chat-session-id", chatSessionId);
+  if (typeof model === "string" && model.length > 0) {
+    args.push("--model", model);
+  }
+  if (typeof effort === "string" && effort.length > 0) {
+    args.push("--effort", effort);
   }
   // Inherit env (PATH must reach a python interpreter with
   // dabbler-ai-router importable). No working-directory override:
@@ -212,54 +185,6 @@ function spawnStartSession(setDir, model, effort, chatSessionId) {
     stdio: ["ignore", "pipe", "pipe"],
     encoding: "utf8",
   });
-}
-
-// Emit a structured conflict record so the in-extension
-// CheckoutPollService can surface a poll/force-override/dismiss prompt.
-// Best-effort: any failure here is swallowed (the stderr log path still
-// fires below, so the operator retains the existing visibility).
-function emitConflictRecord(resolution, model, effort, chatSessionId) {
-  try {
-    fs.mkdirSync(CONFLICT_DIR, { recursive: true });
-    const state = resolution.state || {};
-    const existing = state.orchestrator || {};
-    const record = {
-      schemaVersion: 1,
-      detectedAt: new Date().toISOString(),
-      source: "claude-invoker",
-      sessionSetPath: resolution.setDir,
-      sessionSetSlug: resolution.slug,
-      sessionNumber: typeof state.currentSession === "number"
-        ? state.currentSession
-        : null,
-      heldByEngine: typeof existing.engine === "string" ? existing.engine : "",
-      heldByProvider: typeof existing.provider === "string" ? existing.provider : "",
-      heldByModel: typeof existing.model === "string" ? existing.model : null,
-      heldByChatSessionId: typeof existing.chatSessionId === "string"
-        ? existing.chatSessionId
-        : null,
-      checkedOutAt: typeof existing.checkedOutAt === "string"
-        ? existing.checkedOutAt
-        : null,
-      wouldBeHolderEngine: CLAUDE_ENGINE,
-      wouldBeHolderProvider: CLAUDE_PROVIDER,
-      wouldBeHolderModel: typeof model === "string" ? model : null,
-      wouldBeHolderEffort: typeof effort === "string" ? effort : null,
-      wouldBeHolderChatSessionId: typeof chatSessionId === "string" && chatSessionId.length > 0
-        ? chatSessionId
-        : null,
-    };
-    // Filename: timestamp + source + slug so concurrent writers
-    // (multiple Claude windows or one Claude + one Codex) don't
-    // collide. ISO timestamp is filesystem-safe after replacing ':'.
-    const stamp = record.detectedAt.replace(/:/g, "-");
-    const filename = `${stamp}-claude-${resolution.slug}.json`;
-    const filePath = path.join(CONFLICT_DIR, filename);
-    fs.writeFileSync(filePath, JSON.stringify(record) + "\n", "utf8");
-  } catch {
-    // Sentinel emission is best-effort; the stderr log carries the
-    // same information for the hook-log debugger.
-  }
 }
 
 function main() {
@@ -276,46 +201,11 @@ function main() {
     process.exit(0);
   }
 
-  // Set 036 Session 2: extract the per-chat session_id off the
-  // SessionStart payload. Best-effort — a missing or malformed value
-  // becomes null and start_session falls through to its tolerant
-  // legacy branch. The extraction runs BEFORE preserveExistingClaude
-  // so the latter can fold chatSessionId into the H4 identity check
-  // (Round B Medium fix: model/effort preservation must gate on the
-  // full triple, not just engine + provider).
-  const chatSessionId = extractSessionId(payload);
+  const { model, effort } = recoverPriorClaudeModelEffort(resolution.state);
 
-  // Round B Low fix: surface a stderr signal on payload-schema drift
-  // (R2 in the spec). The fallback path still works, but the hook log
-  // gets a clear one-line indicator that the per-chat ID was absent
-  // so an operator triaging "why is takeover detection imprecise"
-  // can correlate against payload changes in Claude Code releases.
-  if (chatSessionId === null) {
-    process.stderr.write(
-      "claude-session-start-invoker: no usable session_id in "
-      + "SessionStart payload; falling back to env/None\n",
-    );
-  }
-
-  const preserved = preserveExistingClaude(resolution.state, chatSessionId);
-  // SessionStart has no model signal in its payload; default to the
-  // last-recorded model when claude already holds the slot AND the
-  // chatSessionId composite matches (preserveExistingClaude enforces
-  // the full H4 triple as of Round B), else "unknown" (S1 writer
-  // accepts it; H4 identity is what matters).
-  const model = preserved ? preserved.model : "unknown";
-  const effort = preserved ? preserved.effort : "unknown";
-
-  const result = spawnStartSession(
-    resolution.setDir,
-    model,
-    effort,
-    chatSessionId,
-  );
+  const result = spawnStartSession(resolution.setDir, model, effort);
 
   if (result.error) {
-    // spawnSync failure (python not on PATH, etc.). Surface to stderr
-    // for the hook log, exit 0 so we don't break Claude's hook chain.
     process.stderr.write(
       `claude-session-start-invoker: spawn failed: ${result.error.message}\n`,
     );
@@ -323,26 +213,6 @@ function main() {
   }
 
   if (result.status !== 0) {
-    // EXIT_CHECKOUT_CONFLICT (4) is the H3 refusal — write the
-    // structured conflict record (S5) AND log to stderr for the
-    // hook-log debugger. Any other non-zero (boundary violations,
-    // usage errors) only surfaces to stderr; the writer is the
-    // source of truth for state, the hook is best-effort notification.
-    //
-    // Set 046 mid-Session-2 hotfix: with hard-coordination
-    // enforcement opt-in (default off), start_session almost never
-    // returns EXIT_CHECKOUT_CONFLICT in practice. Belt-and-suspenders
-    // we still only emit a conflict record when enforcement is on,
-    // so a future code path that incidentally routes through exit-4
-    // doesn't resurrect the operator-blocking toast.
-    const enforcementOn = (() => {
-      const v = process.env.DABBLER_ENFORCE_CHECKOUT_COORDINATION;
-      if (typeof v !== "string") return false;
-      return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
-    })();
-    if (result.status === EXIT_CHECKOUT_CONFLICT && enforcementOn) {
-      emitConflictRecord(resolution, model, effort, chatSessionId);
-    }
     if (result.stderr) {
       process.stderr.write(
         `claude-session-start-invoker: start_session exit ${result.status}:\n${result.stderr}`,
@@ -358,14 +228,12 @@ function main() {
   process.exit(0);
 }
 
-// Module exports for Layer-2 unit tests. When the file is invoked as
-// a script (the SessionStart hook path), `require.main === module` is
-// true and main() runs. When the file is `require()`-ed from a test,
-// only the helpers are exposed and the main() flow is skipped so the
-// test can drive `extractSessionId` against fixture payloads without
-// firing the hook side effects.
+// Module exports for unit tests. When the file is invoked as a script
+// (the SessionStart hook path), `require.main === module` is true and
+// main() runs. When the file is require()-ed from a test, only the
+// helpers are exposed and main()'s side effects are skipped.
 if (require.main === module) {
   main();
 } else {
-  module.exports = { extractSessionId, parsePayload, preserveExistingClaude };
+  module.exports = { parsePayload, recoverPriorClaudeModelEffort };
 }

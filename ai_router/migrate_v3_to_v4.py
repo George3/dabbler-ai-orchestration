@@ -98,8 +98,10 @@ except ImportError:
 
 SESSION_STATE_FILENAME = "session-state.json"
 BACKUP_FILENAME = "session-state.v3.bak.json"
+SWEEP_BACKUP_FILENAME = "session-state.pre-049-sweep.bak.json"
 
 ACTION_MIGRATED = "migrated"
+ACTION_SWEPT_ORCHESTRATOR = "swept-orchestrator"
 ACTION_SKIPPED_V4 = "skipped-v4"
 ACTION_SKIPPED_NOT_V3 = "skipped-not-v3"
 ACTION_SKIPPED_NO_STATE = "skipped-no-state"
@@ -107,6 +109,18 @@ ACTION_SKIPPED_MALFORMED = "skipped-malformed"
 ACTION_SKIPPED_FUTURE_SCHEMA = "skipped-future-schema"
 ACTION_WOULD_VIOLATE = "would-violate"
 ACTION_FAILED_BACKUP = "failed-backup"
+
+# Orchestrator-block keys retired by Set 049 (chatSessionId composite
+# identity + coordination-layer rip). The sweep+normalize pass strips
+# these from every orchestrator block on disk — both the legacy
+# top-level `orchestrator` field (pre-v4 files migrated forward) and
+# the per-session ledger blocks (v4 shape). On already-clean v4 files
+# the sweep is a no-op (idempotent).
+_RETIRED_ORCHESTRATOR_KEYS = (
+    "chatSessionId",
+    "checkedOutAt",
+    "lastActivityAt",
+)
 
 # Fields the on-disk v4 shape drops from the top level. The normalize
 # shim re-derives these at read time from the per-session ledger, so a
@@ -166,6 +180,79 @@ class MigrationResult:
             "error": self.error,
             "backup_path": self.backup_path,
         }
+
+
+def _strip_retired_orchestrator_keys(block: object) -> tuple:
+    """Strip Set-049-retired keys from a single orchestrator block.
+
+    Returns ``(new_block, changed)``. *block* may be any value (``None``,
+    a dict, or something malformed); only dicts are processed, all
+    other inputs round-trip unchanged with ``changed=False``.
+
+    A retired key is "present" if it appears in the dict regardless of
+    value (including ``None``), because the on-disk shape must omit
+    these keys entirely under the Set 049 omit-null contract.
+    """
+    if not isinstance(block, dict):
+        return block, False
+    changed = False
+    new_block = {}
+    for key, value in block.items():
+        if key in _RETIRED_ORCHESTRATOR_KEYS:
+            changed = True
+            continue
+        new_block[key] = value
+    return new_block, changed
+
+
+def _sweep_orchestrator_blocks(state: dict) -> tuple:
+    """Strip retired orchestrator-block keys throughout a state file.
+
+    Sweeps the top-level legacy ``orchestrator`` field (where it
+    survives in pre-Set-047 files migrated forward) AND every
+    per-session ledger entry's ``orchestrator`` block (the v4 shape).
+    Returns ``(new_state, changed)``; ``new_state`` is a shallow copy
+    when ``changed=True`` and the original reference otherwise.
+
+    Idempotent: re-running on already-clean state returns the input
+    unchanged with ``changed=False``.
+    """
+    changed = False
+    new_state = state
+
+    # Sweep top-level legacy orchestrator (pre-v4 shape).
+    if isinstance(state.get("orchestrator"), dict):
+        swept, top_changed = _strip_retired_orchestrator_keys(state["orchestrator"])
+        if top_changed:
+            new_state = dict(state)
+            new_state["orchestrator"] = swept
+            changed = True
+
+    # Sweep per-session ledger orchestrator blocks (v4 shape).
+    sessions = state.get("sessions")
+    if isinstance(sessions, list):
+        new_sessions = []
+        sessions_changed = False
+        for entry in sessions:
+            if not isinstance(entry, dict):
+                new_sessions.append(entry)
+                continue
+            orch = entry.get("orchestrator")
+            swept, entry_changed = _strip_retired_orchestrator_keys(orch)
+            if entry_changed:
+                new_entry = dict(entry)
+                new_entry["orchestrator"] = swept
+                new_sessions.append(new_entry)
+                sessions_changed = True
+            else:
+                new_sessions.append(entry)
+        if sessions_changed:
+            if new_state is state:
+                new_state = dict(state)
+            new_state["sessions"] = new_sessions
+            changed = True
+
+    return new_state, changed
 
 
 def build_v4_on_disk_shape(normalized: dict, original: dict) -> dict:
@@ -267,16 +354,79 @@ def migrate_one_set(
             before=state,
         )
 
-    # Already-v4 idempotent skip. The shim treats anything >= 4 as v4
-    # input; mirror that here so a future v5 file that happens to keep
-    # `schemaVersion: 4` for some reason still skips cleanly.
+    # Already-v4 branch. Set 049 added an orchestrator-block sweep pass
+    # that strips three retired keys (``chatSessionId`` / ``checkedOutAt``
+    # / ``lastActivityAt``) from any orchestrator block on disk.
+    # Pre-Set-049 v4 files migrated to v4 by Set 047 still carry those
+    # keys on their per-session orchestrator blocks; the sweep catches
+    # them on the next migrator run. On already-clean v4 files the
+    # sweep is a no-op and we keep the existing skip semantics.
     if isinstance(schema_version, int) and schema_version >= SCHEMA_VERSION_V4:
+        swept_state, swept = _sweep_orchestrator_blocks(state)
+        if not swept:
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_SKIPPED_V4,
+                reason=f"already v4 (schemaVersion={schema_version})",
+                before=state,
+                after=state,
+            )
+
+        if dry_run:
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_SWEPT_ORCHESTRATOR,
+                reason=(
+                    "v4 → v4 (orchestrator-block sweep: stripping "
+                    f"{', '.join(_RETIRED_ORCHESTRATOR_KEYS)}; dry-run, "
+                    "no write performed)"
+                ),
+                before=state,
+                after=swept_state,
+                backup_path=None,
+            )
+
+        # Apply mode: use the Set-049-specific backup filename so the
+        # rollback affordance distinguishes a v3→v4 .bak (existing) from
+        # a v4-sweep .bak (new).
+        sweep_backup_path = os.path.join(set_dir, SWEEP_BACKUP_FILENAME)
+        try:
+            _atomic_copy_json(state_path, sweep_backup_path)
+        except OSError as exc:
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_FAILED_BACKUP,
+                reason=f"could not write backup at {sweep_backup_path}: {exc}",
+                before=state,
+                error=str(exc),
+            )
+
+        try:
+            _atomic_write_json(state_path, swept_state)
+        except OSError as exc:
+            return MigrationResult(
+                set_dir=set_dir,
+                action=ACTION_FAILED_BACKUP,
+                reason=(
+                    f"backup written at {sweep_backup_path} but state-file write "
+                    f"failed: {exc}. Restore the backup via the rollback "
+                    f"procedure at docs/v3-to-v4-rollback-procedure.md."
+                ),
+                before=state,
+                error=str(exc),
+                backup_path=sweep_backup_path,
+            )
+
         return MigrationResult(
             set_dir=set_dir,
-            action=ACTION_SKIPPED_V4,
-            reason=f"already v4 (schemaVersion={schema_version})",
+            action=ACTION_SWEPT_ORCHESTRATOR,
+            reason=(
+                "v4 → v4 (orchestrator-block sweep: stripped "
+                f"{', '.join(_RETIRED_ORCHESTRATOR_KEYS)})"
+            ),
             before=state,
-            after=state,
+            after=swept_state,
+            backup_path=sweep_backup_path,
         )
 
     # Pre-v3 guard: refuse to operate on v1/v2 files. The shim CAN
@@ -353,6 +503,12 @@ def migrate_one_set(
         )
 
     new_state = build_v4_on_disk_shape(normalized, state)
+    # Set 049 T4: strip retired orchestrator-block keys from the v4
+    # output. The v3 input may have carried them on the top-level
+    # legacy ``orchestrator`` field (which the shim promotes into
+    # per-session entries), so the sweep applies after the v4 shape is
+    # assembled. Idempotent for v3 files without the retired keys.
+    new_state, _ = _sweep_orchestrator_blocks(new_state)
 
     if dry_run:
         return MigrationResult(
@@ -521,6 +677,8 @@ def _print_result_line(r: MigrationResult, *, verbose: bool) -> None:
             sessions = r.after["sessions"]
             sessions_summary = f"  ({len(sessions)} session(s))"
         print(f"  [migrated]    {name}{sessions_summary}")
+    elif r.action == ACTION_SWEPT_ORCHESTRATOR:
+        print(f"  [swept]       {name}  ({r.reason})")
     elif r.action == ACTION_SKIPPED_V4:
         print(f"  [skip:v4]     {name}  (already v4)")
     elif r.action == ACTION_SKIPPED_NOT_V3:
@@ -550,11 +708,13 @@ def _print_result_line(r: MigrationResult, *, verbose: bool) -> None:
     else:
         print(f"  [unknown:{r.action}] {name}  ({r.reason})")
 
-    if verbose and r.action == ACTION_MIGRATED:
-        print("    --- before (v3):")
+    if verbose and r.action in (ACTION_MIGRATED, ACTION_SWEPT_ORCHESTRATOR):
+        label_before = "before (v3)" if r.action == ACTION_MIGRATED else "before (v4)"
+        label_after = "after (v4)"
+        print(f"    --- {label_before}:")
         for line in json.dumps(r.before, indent=2).splitlines():
             print(f"    {line}")
-        print("    --- after (v4):")
+        print(f"    --- {label_after}:")
         for line in json.dumps(r.after, indent=2).splitlines():
             print(f"    {line}")
 
@@ -634,6 +794,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     counts = {
         "migrated": sum(1 for r in results if r.action == ACTION_MIGRATED),
+        "swept_orchestrator": sum(
+            1 for r in results if r.action == ACTION_SWEPT_ORCHESTRATOR
+        ),
         "skipped_v4": sum(1 for r in results if r.action == ACTION_SKIPPED_V4),
         "skipped_not_v3": sum(1 for r in results if r.action == ACTION_SKIPPED_NOT_V3),
         "skipped_no_state": sum(1 for r in results if r.action == ACTION_SKIPPED_NO_STATE),
@@ -662,19 +825,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         print()
         print(
             f"  Summary: {counts['migrated']} migrated, "
-            f"{counts['skipped_v4']} already v4, "
+            f"{counts['swept_orchestrator']} swept (v4→v4 orchestrator strip), "
+            f"{counts['skipped_v4']} already v4 (clean), "
             f"{counts['skipped_not_v3']} not yet v3 (run v2→v3 first), "
             f"{counts['skipped_no_state']} no state file, "
             f"{counts['skipped_malformed']} malformed, "
             f"{counts['would_violate']} would-violate, "
             f"{counts['failed_backup']} backup-failed."
         )
-        if dry_run and counts["migrated"]:
+        if dry_run and (counts["migrated"] or counts["swept_orchestrator"]):
             print("  (dry run; rerun with --in-place to write changes)")
         if not dry_run and counts["migrated"]:
             print(
                 "  (rollback: see docs/v3-to-v4-rollback-procedure.md — "
                 "rename session-state.v3.bak.json back to session-state.json)"
+            )
+        if not dry_run and counts["swept_orchestrator"]:
+            print(
+                "  (sweep rollback: rename session-state.pre-049-sweep.bak.json "
+                "back to session-state.json)"
             )
 
     # Exit 1 if any set would violate invariants OR a backup failed;
@@ -690,7 +859,9 @@ if __name__ == "__main__":  # pragma: no cover
 __all__ = [
     "SESSION_STATE_FILENAME",
     "BACKUP_FILENAME",
+    "SWEEP_BACKUP_FILENAME",
     "ACTION_MIGRATED",
+    "ACTION_SWEPT_ORCHESTRATOR",
     "ACTION_SKIPPED_V4",
     "ACTION_SKIPPED_NOT_V3",
     "ACTION_SKIPPED_NO_STATE",

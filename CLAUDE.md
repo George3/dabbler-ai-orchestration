@@ -410,21 +410,27 @@ Lightweight tiers. Any AI orchestrator that touches a state file without
 having read it has a high chance of producing the N−1/N display drift
 the Session Set Explorer is known to surface.
 
-The non-negotiable rules:
+The non-negotiable rules (v4 shape; Set 047):
 
-- `completedSessions: [<int>, ...]` is the canonical "X done out of N"
-  ledger. Append `currentSession` to it (sorted, unique) on every
-  successful close.
+- `sessions: [{ number, title, status, startedAt, completedAt, ... }, ...]`
+  is the canonical per-session ledger. Legacy top-level fields
+  (`currentSession`, `totalSessions`, `completedSessions`,
+  `lifecycleState`, `startedAt`, `completedAt`) are NOT written to
+  disk in v4 — readers derive them at read time from `sessions[]`
+  via the `normalize_to_v4_shape` shim.
 - **Lightweight tier** — the orchestrator (or human) maintains
-  `completedSessions[]` **by hand** on every close. There is no router
-  writer and no events-ledger fallback; this array is the only
-  authoritative count signal.
-- **Full tier** — `close_session` writes `completedSessions[]`
-  automatically. The orchestrator never edits it directly.
-- Canonical `status` values are `"not-started"`, `"in-progress"`,
-  `"complete"`, `"cancelled"`. Never `"completed"` or `"done"` on a
-  new write (the read boundary tolerates them; the writer must emit
-  the canonical token).
+  `sessions[i]` **by hand** on every close: set the matching entry's
+  `status` to `"complete"` and populate its `completedAt`. There is
+  no router writer; this per-session ledger is the only authoritative
+  completion signal.
+- **Full tier** — `close_session` writes the per-session entry
+  automatically. The orchestrator never edits `sessions[]` directly.
+- Canonical per-session `status` values are `"not-started"`,
+  `"in-progress"`, `"complete"`, `"cancelled"`. Never `"completed"`
+  or `"done"` on a new write (the read boundary tolerates them; the
+  writer must emit the canonical token).
+- The set's top-level `status` flips to `"complete"` on the final
+  close (Full: `close_session`; Lightweight: the orchestrator).
 - The state invariant for "in flight" vs. "between sessions" vs. "done"
   is at the top of the schema doc — consult it before hand-editing any
   state.
