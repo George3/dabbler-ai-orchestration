@@ -5,6 +5,132 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-05-27 (Set 048 — Lightweight-tier parity)
+
+Ships end-to-end parity between the Full and Lightweight tiers per the
+audit-locked spec at
+[`docs/session-sets/048-lightweight-tier-parity/spec.md`](../../docs/session-sets/048-lightweight-tier-parity/spec.md).
+The Lightweight tier becomes a first-class peer: same writers, same
+Explorer UX, same `session-state.json` lifecycle. Differences from Full
+are limited to (a) no AI router runtime calls, (b) no auto-verification,
+(c) copyable review prompts in lieu of routed verification, (d)
+suggested-not-required UAT/E2E. Companion PyPI release:
+`dabbler-ai-router 0.10.0`.
+
+### Added
+
+- **Four copyable-review-prompt commands** under
+  `src/commands/copyPromptCommands.ts`:
+  `dabbler.copySpecReviewPrompt` (always enabled),
+  `dabbler.copySessionAccomplishmentsPrompt` (≥1 completed session),
+  `dabbler.copySetAccomplishmentsPrompt` (`state === "complete"`),
+  `dabbler.copyStartNextSessionPrompt` (non-terminal rows only).
+  Path-reference format per operator-locked L1: prompts list relative
+  paths (forward-slash normalized) and NEVER embed session-set
+  artifacts. Visible from both Command Palette and the right-click
+  context menu's `Copy Eval ▸` submenu. The `sanitizeSlugForPrompt`
+  helper guards slug-with-backtick edge cases.
+- **`dabbler.openExternalVerificationDoc`** Command Palette action
+  (`src/commands/externalVerification.ts`) — opens or creates
+  `<set>/external-verification.md` in an editor tab. Free-form text.
+  Single-set workspaces skip the picker; multi-set workspaces show a
+  QuickPick with `set.name + set.state` columns.
+- **Get Started wizard tier-branch** (`webview/wizard.html`) — new
+  `Choose adoption tier` radio group above `Prerequisites` with
+  `applyTierVisibility(tier)` toggling `.hidden` on `[data-tier]`
+  elements on radio change. Lightweight surfaces a new path-aware-
+  agent prerequisite + no-API-spend callout; Full preserves the
+  existing cost-reality callout. `Configure AI Router` and `Show Cost
+  Dashboard` buttons hide under Lightweight; `Troubleshoot` stays.
+- **Review-criteria template files** at `docs/review-criteria/{spec,
+  session,set}.md` — operator-editable meta-instructions picked up
+  automatically by `copyPromptCommands`. Comment-headers explain edit
+  and delete-to-default semantics.
+- **Cross-repo Lightweight notice** at
+  `docs/cross-repo-lightweight-notice.md` — one-time consumer-repo
+  paste-in following the `cross-repo-checkout-notice.md` /
+  `cross-repo-harvest-notice.md` pattern. Covers activation, copy-
+  prompt + paste-back flow, agent-capability requirement, review-
+  criteria files, migrator recipe, and the tier-branch wizard.
+- **Workflow doc Step 6 Lightweight subsection** at
+  `docs/ai-led-session-workflow.md` — 5-step copy / paste / paste-back
+  / soft-gate flow with the path-aware-agent requirement.
+
+### Changed
+
+- **Context-menu IA refresh** — right-click context menu rebuilt on
+  `vscode.window.showQuickPick` (Bias 3 flip per audit verdict). The
+  cursor-anchored HTML popup introduced in Set 034 is fully retired
+  including the `.context-menu*` CSS in `media/session-sets-tree/
+  tree.css` and ~100 lines of cursor-anchored popup state +
+  click/keydown/resize/scroll handlers in
+  `media/session-sets-tree/client.js`. Native QuickPick handles
+  click-outside, Escape, and focus-loss dismissal (operator-locked
+  L4 satisfied as a free byproduct). Two-step submenu pattern: top-
+  level shows `Open File ▸` + `Copy Eval ▸` chips when their
+  categories are non-empty plus flat actions inline; submenu
+  selection opens a second-level QuickPick. `RenderContextMenuMsg` /
+  `ContextMenuItem` / `ExecuteRowCommandMsg` removed from
+  `src/types/sessionSetsWebviewProtocol.ts`. `COMMAND_ALLOWLIST`
+  collapsed from 14 entries to 1 (`dabblerSessionSets.openSpec`) —
+  QuickPick selections dispatch from the host directly.
+- **Left-click row activation (L5 dual-action)** — clicking a row
+  ALWAYS opens `spec.md` in an editor tab. On non-terminal rows
+  (`status === "in-progress" | "not-started"`), the click ALSO writes
+  `Start the next session of \`<slug>\`.` to the clipboard via
+  `vscode.env.clipboard.writeText()` and shows a one-line information
+  toast (`Copied: Start the next session of <slug>`). Terminal-state
+  rows skip the clipboard write and toast (spec.md opens only).
+  Unknown future state values FAIL CLOSED via a positive
+  `in-progress | not-started` check so schema drift cannot
+  accidentally trigger the clipboard payload. The same start-next-
+  session action is also exposed in the right-click `Copy Eval ▸`
+  submenu as `Start Next Session`.
+- **ActionRegistry reshape** (`src/providers/ActionRegistry.ts`) —
+  new `ActionCategory` discriminator (`"openFile" | "copyEval" |
+  "flat"`); `categorizedActions(set, supports)` partitions the
+  applicable subset by category for the two-step QuickPick. Final
+  entry count: 14 (was 15). Operator-locked L2 narrows `Open File ▸`
+  to exactly 4 entries: Spec / Activity Log / Change Log / Session
+  State.
+- **TypeScript schema** (`src/types.ts` + `src/utils/fileSystem.ts`)
+  — `TriStateFlag = boolean | "suggested"` + `SessionSetTier = "full"
+  | "lightweight"` aliases; `SessionSetConfig` gains `tier` (defaults
+  to `"full"`); `requiresUAT` / `requiresE2E` widen to `TriStateFlag`.
+  `parseSessionSetConfig` reads `tier:` only from the canonical YAML
+  block to prevent free-form prose from silently activating
+  Lightweight mode.
+
+### Removed
+
+- **`dabblerSessionSets.openAiAssignment`** command per operator-
+  locked L3. Fully deleted from `package.json` `contributes.commands`,
+  `src/providers/ActionRegistry.ts` `ROW_ACTIONS`, the
+  `COMMAND_ALLOWLIST`, and `src/commands/openFile.ts` registration.
+  Any future surface that needs to read `ai-assignment.md` should use
+  the `aiAssignmentPath` field on `SessionSet`, not this menu entry.
+
+### Fixed
+
+- **S5 UAT-discovered Critical bare-import bug** —
+  `ai_router/__init__.py` (`route()` and `verify()`),
+  `start_session.py` (`main()`), `close_session.py` (`run()`), and
+  `runtime_mode.py` (`_spec_tier()`) used bare imports of the new
+  Set 048 modules (e.g., `from runtime_mode import …`). Those bare
+  forms only resolved under the test sys.path shim in
+  `ai_router/tests/conftest.py`; pip-installed package consumers —
+  the entire Lightweight target audience — hit `ModuleNotFoundError`
+  on every call site. `route()` and `verify()` exploded outright;
+  `start_session.main()` and `close_session.run()` silently swallowed
+  the error in their `try/except`, so `--no-router` was a no-op for
+  every CLI consumer. Now uses relative imports. New
+  `test_no_bare_imports_of_set048_modules_in_production_code`
+  static-analysis test (`ai_router/tests/test_production_imports.py`)
+  locks the invariant out at code-review time. `conftest.py` aliases
+  the bare names to the package-qualified modules so the existing
+  test convention (`import runtime_mode`) still resolves to the same
+  module object as production's `from .runtime_mode import …`.
+
 ## [0.22.0] — 2026-05-26 (Set 047 — state-file schema v4)
 
 Ships the v4 evolution of `session-state.json`. The v4 schema derives

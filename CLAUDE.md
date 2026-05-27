@@ -77,36 +77,93 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.22.0** (Set 047 — state-file schema v4 audit;
-  v4 evolution of `session-state.json` shipped end-to-end across
-  6 sessions; derives every legacy top-level lifecycle field
-  (`currentSession` / `totalSessions` / `completedSessions` /
-  `lifecycleState` / `startedAt` / `completedAt` /
-  `orchestrator` / `verificationVerdict`) from a per-session
-  `sessions[]` ledger where each entry carries its own
-  startedAt / completedAt / orchestrator / verificationVerdict;
-  reader-first migration via `normalizeToV4Shape(state, specMdPath)`
-  shim (TS) + `normalize_to_v4_shape(state, spec_md_path)` shim
-  (Python) that accepts v1/v2/v3/v4 input transparently; new
-  `python -m ai_router.migrate_v3_to_v4` CLI + `Migrate to v4
-  schema` right-click action with `.bak` rollback contract and
-  documented rollback procedure at
-  `docs/v3-to-v4-rollback-procedure.md`; all writers
-  (`register_session_start` / `_flip_state_to_closed` /
-  `cancel_session_set` / `restore_session_set` / TS mirrors)
-  emit canonical v4 on-disk shape; new `spec.md`
-  `prerequisites:` field with `[BLOCKED BY PREREQS]` badge in
-  the Session Set Explorer description (suppressed on terminal-
-  state rows); `docs/session-state-schema.md` rewritten as
-  canonical v4 reference;
-  `docs/planning/session-set-authoring-guide.md` documents the
-  prerequisites field. Lightweight-tier parity carved out to
-  Set 048 under its own audit-S1. Orchestrator-block
-  simplification (omit-null engine/provider/model/effort only;
-  drop chatSessionId/checkedOutAt/lastActivityAt) and full
-  check-out/check-in code rip-out carved out to Set 049 under
-  audit-then-spec discipline. Companion PyPI release:
-  `dabbler-ai-router 0.9.0`. The version walk:
+- Current: **v0.23.0** (Set 048 — Lightweight-tier parity;
+  end-to-end Lightweight parity with Full shipped across 5
+  sessions; `--no-router` mode with three-knob precedence
+  (CLI flag > env var `DABBLER_NO_ROUTER` > `spec.md` `tier:
+  lightweight` > default Full); route() / verify() prologues
+  short-circuit to zero-cost stubs without `_init()` (no
+  config load, no credentials needed); `close_session`
+  manual-attestation block + soft gate for
+  `external-verification.md` with TTY/non-TTY branching and
+  `--accept-suggestions` non-interactive flag; tri-state
+  `requiresUAT` / `requiresE2E` schema (`true | false |
+  "suggested"`) on both Full and Lightweight; AI orchestrator
+  asks operator at session start when scope has UX and value
+  is `"suggested"` ("E2E tests, UAT checklist, both, or
+  neither?") and records the choice as a
+  `suggestion_disposition` activity-log entry that the
+  close-out gate consumes; spec.md `tier: full | lightweight`
+  field with backwards-compat default to `full`; four
+  copyable-review-prompt commands (`dabbler.copy{Spec
+  Review,SessionAccomplishments,SetAccomplishments,
+  StartNextSession}Prompt`) using path-reference format per
+  operator-locked L1 (no content-embed) and visible from both
+  Command Palette and the right-click context menu's `Copy
+  Eval ▸` submenu; per-row left-click is a dual action — ALWAYS
+  opens `spec.md` and ALSO copies `Start the next session of
+  \`<slug>\`.` plus a one-line toast on non-terminal rows
+  (terminal rows skip the clipboard write); per-row right-click
+  rebuilt on `vscode.window.showQuickPick` with two-step
+  submenus (`Open File ▸` / `Copy Eval ▸` / flat actions) —
+  the cursor-anchored HTML popup from Set 034 is fully retired
+  including its `.context-menu*` CSS and ~100 lines of webview
+  client.js; `dabblerSessionSets.openAiAssignment` deleted per
+  operator-locked L3; `dabbler.openExternalVerificationDoc`
+  Command Palette action; `python -m ai_router.migrate_
+  lightweight_to_canonical_v4` CLI handles three Lightweight
+  non-canonical shapes (`sessionLog[]` → `sessions[]`,
+  `done`/`completed` status aliases, missing schemaVersion)
+  via a `_normalize_to_v3_intermediate` -> `normalize_to_v4_
+  shape` pipeline with `.lwbak.json` backup; `docs/review-
+  criteria/{spec,session,set}.md` template bootstrap kit;
+  Get Started wizard gains a `Choose adoption tier` radio
+  group above `Prerequisites` with `applyTierVisibility(tier)`
+  hiding the API-spend cost-reality callout / `Configure AI
+  Router` / `Show Cost Dashboard` under Lightweight while
+  preserving `Troubleshoot`; new `docs/cross-repo-lightweight-
+  notice.md` for consumer paste-in; `docs/session-state-
+  schema.md § Tier Expectations` rewritten;
+  `docs/ai-led-session-workflow.md Step 6` gains a Lightweight
+  subsection documenting the 5-step copy / paste / paste-back
+  / soft-gate flow + path-aware-agent requirement;
+  `docs/planning/session-set-authoring-guide.md` documents
+  the `tier:` field and tri-state UAT/E2E with the upfront-
+  positive-confirmation prompt (replacing the audit's
+  originally-proposed triple-redundancy reminders per
+  operator override). S5 UAT discovered + fixed a Critical
+  bare-import bug: production-code bare imports of
+  `runtime_mode` / `spec_config` (left over from S2's
+  test-conftest convention) raised `ModuleNotFoundError`
+  under pip-install consumers, silently no-op'ing
+  `--no-router` across the entire CLI surface; now use
+  relative imports and the bug is locked out by a new
+  static-analysis test. Companion PyPI release:
+  `dabbler-ai-router 0.10.0`. The version walk:
+  - **0.22.0** (Set 047) — state-file schema v4 audit;
+    v4 evolution of `session-state.json` shipped end-to-end
+    across 6 sessions; derives every legacy top-level lifecycle
+    field (`currentSession` / `totalSessions` /
+    `completedSessions` / `lifecycleState` / `startedAt` /
+    `completedAt` / `orchestrator` / `verificationVerdict`)
+    from a per-session `sessions[]` ledger where each entry
+    carries its own startedAt / completedAt / orchestrator /
+    verificationVerdict; reader-first migration via
+    `normalizeToV4Shape(state, specMdPath)` shim (TS) +
+    `normalize_to_v4_shape(state, spec_md_path)` shim (Python)
+    that accepts v1/v2/v3/v4 input transparently; new
+    `python -m ai_router.migrate_v3_to_v4` CLI + `Migrate to v4
+    schema` right-click action with `.bak` rollback contract
+    and documented rollback procedure at
+    `docs/v3-to-v4-rollback-procedure.md`; all writers
+    (`register_session_start` / `_flip_state_to_closed` /
+    `cancel_session_set` / `restore_session_set` + TS mirrors)
+    emit canonical v4 on-disk shape; new `spec.md`
+    `prerequisites:` field with `[BLOCKED BY PREREQS]` badge in
+    the Session Set Explorer description (suppressed on
+    terminal-state rows); `docs/session-state-schema.md`
+    rewritten as canonical v4 reference. Companion PyPI
+    release: `dabbler-ai-router 0.9.0`.
   - **0.21.0** (Set 045) — log-harvest implementation;
     dual-primary observability surface per Set 044's
     consensus-locked proposal v1 shipped end-to-end across 6
@@ -164,11 +221,15 @@ is a required duplicate — `vsce package` expects the file alongside
     block) to the cancellation lifecycle. See below for the prior
     Set 035 description.
 
-- Previous: **v0.21.0** (Set 045 — log-harvest implementation.
+- Previous: **v0.22.0** (Set 047 — state-file schema v4 audit.
+  Companion PyPI release: `dabbler-ai-router 0.9.0`). Full
+  description preserved in the version walk above.
+
+- Pre-Previous: **v0.21.0** (Set 045 — log-harvest implementation.
   Companion PyPI release: `dabbler-ai-router 0.8.0`). Full
   description preserved in the version walk above.
 
-- Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
+- Pre-Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
   cancellation/restoration; Marketplace publish gated on operator
   confirmation). No companion PyPI release this set
   (`ai_router/session_lifecycle.py` verified byte-equivalent with the
