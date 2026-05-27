@@ -1,3 +1,72 @@
+# Set 048 Session 4 cross-provider verification request
+
+## Context
+
+Set 048 Session 4 ships the four "closing" deliverables of the
+Lightweight-tier parity arc: per-consumer migrator CLI, the
+external-verification command, three review-criteria template
+files, the Get Started wizard tier-branch, and the four doc
+revisions plus the cross-repo notice. The audit-locked spec is
+at `docs/session-sets/048-lightweight-tier-parity/spec.md`
+§3.7 (migrator), §3.8 (external-verification command), §3.9
+(review-criteria storage), and §4 row for Session 4 (doc
+revisions + wizard tier-branch).
+
+Operator-locked premises in scope:
+- **P1.** Lightweight orchestrators MUST follow the SAME process
+  as Full for model/effort/session-set/session identification
+  and state-file updates.
+- **P3.** Lightweight differs from Full ONLY in: no router
+  runtime calls; no auto-verification; copyable review prompts;
+  suggested-not-required UAT/E2E.
+- **P4.** Lightweight users must not be required to hand-edit
+  state files (migrator addresses this).
+- **L1.** Copyable prompts MUST reference file paths, NOT embed
+  contents. The §3.9 review-criteria carve-out is the documented
+  exception (operator-authored meta-instructions).
+
+## What I'm asking you to verify
+
+1. **Correctness** — Does the migrator's `_normalize_to_v3_intermediate`
+   handle the four documented divergences (sessionLog[] alias, missing
+   schemaVersion, top-level status alias, per-session status alias)
+   in the right order, without mutating the input dict?
+2. **Refusal correctness** — Does the migrator correctly refuse
+   pre-v3 and future-schema inputs, and gracefully handle missing /
+   malformed state files without raising?
+3. **Backup atomicity** — `.lwbak.json` is written BEFORE the
+   new state file (mirroring `.v3.bak.json` in `migrate_v3_to_v4`).
+   On state-file-write failure with backup landed, the result
+   includes `backup_path` so the operator knows where to recover.
+4. **External-verification UX** — When the file is missing, the
+   command creates an empty file (no templated header per §3.8)
+   and opens it. EEXIST races fall through gracefully.
+5. **Review-criteria templates** — Each file's comment header
+   tells the operator how to edit and what happens if they
+   delete the file. Sample bullets are repo-relevant.
+6. **Wizard tier-branch** — The radio-group + data-tier toggle
+   logic correctly hides full-only content under Lightweight and
+   vice versa. Default is Full to preserve existing behavior.
+7. **Doc consistency** — The five doc revisions and the new
+   cross-repo notice describe the SAME mental model (P1 + P3
+   + L1 + tri-state + migrator + agent-capability requirement)
+   without contradicting each other. Pay particular attention
+   to whether the workflow doc Step 6 Lightweight subsection
+   and the schema doc Tier-expectations bullet agree on the
+   `--no-router` short-circuit semantics.
+8. **Spec compliance** — Are the four §3.x specs (§3.7 migrator,
+   §3.8 external-verification command, §3.9 review-criteria,
+   §4 wizard) implemented as specified? Flag any silent gaps
+   or scope drift.
+
+Please return findings as a JSON object matching
+`ai_router/prompt-templates/verification.md` schema.
+
+---
+
+## File: ai_router/migrate_lightweight_to_canonical_v4.py
+
+```python
 """Lightweight-tier migrator: rewrite non-canonical ``session-state.json``
 files into canonical v4 shape.
 
@@ -397,14 +466,8 @@ def migrate_one_set(
             normalizations=tuple(notes),
         )
 
-    # Backup the ALREADY-PARSED `state` dict rather than re-reading the
-    # on-disk file. Re-reading would race with any concurrent edit and
-    # turn an otherwise-recoverable failure (JSONDecodeError on a
-    # half-written file) into an unstructured exception — breaking
-    # this function's "never raises on normal failure cases" contract
-    # (Round-A finding 2026-05-26).
     try:
-        _atomic_write_json(backup_path, state)
+        _atomic_copy_json(state_path, backup_path)
     except OSError as exc:
         return MigrationResult(
             set_dir=set_dir,
@@ -720,3 +783,324 @@ __all__ = [
     "discover_session_sets",
     "main",
 ]
+
+```
+
+---
+
+## File: tools/dabbler-ai-orchestration/src/commands/externalVerification.ts
+
+```typescript
+import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import { SessionSet } from "../types";
+import { readAllSessionSets } from "../utils/fileSystem";
+
+interface SetItem extends vscode.TreeItem {
+  set: SessionSet;
+}
+
+const FILE_NAME = "external-verification.md";
+
+async function pickSet(sets: SessionSet[]): Promise<SessionSet | undefined> {
+  if (sets.length === 0) {
+    vscode.window.showInformationMessage(
+      "No session sets found in this workspace."
+    );
+    return undefined;
+  }
+  if (sets.length === 1) return sets[0];
+  const picked = await vscode.window.showQuickPick(
+    sets.map((s) => ({
+      label: s.name,
+      description: s.state,
+      detail: s.dir,
+      set: s,
+    })),
+    {
+      placeHolder: "Pick a session set to open external-verification.md for",
+    }
+  );
+  return picked?.set;
+}
+
+async function openOrCreate(set: SessionSet): Promise<void> {
+  const filePath = path.join(set.dir, FILE_NAME);
+  // Per §3.8 the file is intentionally free-form — no templated
+  // header. Create-if-missing with an empty file so the editor opens
+  // on an untouched canvas.
+  if (!fs.existsSync(filePath)) {
+    try {
+      fs.writeFileSync(filePath, "", { encoding: "utf-8", flag: "wx" });
+    } catch (err) {
+      // EEXIST is a benign race (another process / a parallel save
+      // already created it); fall through to open. Any other error is
+      // surface-worthy so the operator can fix permissions etc.
+      const e = err as NodeJS.ErrnoException;
+      if (e?.code !== "EEXIST") {
+        vscode.window.showErrorMessage(
+          `Could not create ${FILE_NAME} in ${set.name}: ${e?.message ?? String(err)}`
+        );
+        return;
+      }
+    }
+  }
+  await vscode.commands.executeCommand(
+    "vscode.open",
+    vscode.Uri.file(filePath)
+  );
+}
+
+export function registerExternalVerificationCommand(
+  context: vscode.ExtensionContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "dabbler.openExternalVerificationDoc",
+      async (item?: SetItem) => {
+        // Item-shape invocation (right-click context, programmatic
+        // callers passing a TreeItem) takes the bound set directly.
+        if (item?.set) {
+          await openOrCreate(item.set);
+          return;
+        }
+        // Command Palette invocation: enumerate workspace sets and
+        // pick. The picker is skipped when there's only one set so
+        // the common single-set case is one click.
+        const sets = readAllSessionSets();
+        const picked = await pickSet(sets);
+        if (picked) {
+          await openOrCreate(picked);
+        }
+      }
+    )
+  );
+}
+
+```
+
+---
+
+## File: docs/review-criteria/spec.md
+
+```markdown
+<!--
+  Repo-specific review criteria for session-set SPECS.
+
+  This file is read by the Dabbler extension's `Copy: Spec-review
+  prompt` command and embedded into the clipboard payload under
+  "Operator review criteria (from docs/review-criteria/spec.md)".
+
+  - Edit the bullets below to teach reviewers what THIS repo cares
+    about most when scoping a session set.
+  - Keep it short (≤ ~30 lines). The prompt is meant to be paste-
+    able into any AI chat with file access.
+  - Delete this file to fall back to the extension's default English
+    spec-review instructions.
+-->
+
+When reviewing a session-set spec, weight the following:
+
+- **Scope realism.** Can each session realistically be completed by a
+  single orchestrator in one sitting (1–4 hours of focused work)?
+  Flag any session whose stated deliverables span more than three
+  loosely-coupled subsystems.
+- **Verifiability.** Does the spec name concrete artifacts that prove
+  completion (file paths, command outputs, test counts)? Vague "ship
+  X" with no measurable signal is a yellow flag.
+- **Prerequisites + non-goals.** Are the cross-set dependencies
+  explicit, and are out-of-scope items called out so the orchestrator
+  doesn't drift?
+- **Audit-lock discipline.** If the set claims to implement a prior
+  audit's verdict, the §2 "operator-locked premises" should match the
+  audit doc exactly. Cite the verdict path.
+- **Backwards compatibility surfaces.** Any change to shared schemas,
+  CLIs, or extension command IDs must spell out the back-compat plan.
+- **Repo conventions.** Defer to `CLAUDE.md` at the repo root for any
+  rule the spec doesn't explicitly override.
+
+```
+
+---
+
+## File: docs/review-criteria/session.md
+
+```markdown
+<!--
+  Repo-specific review criteria for the MOST RECENT SESSION's
+  accomplishments.
+
+  This file is read by the Dabbler extension's `Copy: Session-
+  accomplishments review prompt` command and embedded into the
+  clipboard payload under "Operator review criteria (from
+  docs/review-criteria/session.md)".
+
+  - Edit the bullets below to teach reviewers what THIS repo cares
+    about most when judging a finished session.
+  - Keep it short (≤ ~30 lines).
+  - Delete this file to fall back to the extension's default English
+    session-review instructions.
+-->
+
+When reviewing a finished session, weight the following:
+
+- **Spec alignment.** Compare the session's commits and activity-log
+  entries against the spec's promised deliverables for THIS session
+  number. Flag scope creep (commits unrelated to the stated goal) and
+  missing deliverables.
+- **Activity-log honesty.** Each entry should correspond to a real
+  artifact (commit hash, file change, command invocation). Entries
+  that summarize work without naming concrete outputs are weak audit
+  trail.
+- **Round-A in-flight fixes.** If the session ran a cross-provider
+  verification, were Round-A findings addressed in-flight rather
+  than deferred? Per `feedback_dont_hide_behind_out_of_scope`, small
+  fixes belong in the same session.
+- **Test coverage.** New or behavior-changing code should ship with
+  at least unit-test coverage. Note any new code paths without a
+  matching test.
+- **Documentation drift.** If the session changed a public interface
+  (CLI flag, command ID, schema field), the relevant doc file must
+  be updated in the same session.
+- **Budget discipline.** Cumulative routed spend should be reported
+  in the session's close-out notes (per
+  `feedback_budget_question_scope`).
+
+```
+
+## File: docs/review-criteria/set.md
+
+(Similar shape to session.md — review-criteria header + 6-bullet
+checklist focused on whole-set-level review concerns: scope-vs-delivery,
+memory carry-forward, version-bump correctness, set-level Round-A
+discipline, cross-repo notice, cumulative budget. Reviewable at
+docs/review-criteria/set.md in the worktree.)
+
+---
+
+## Wizard tier-branch (Commit D)
+
+`tools/dabbler-ai-orchestration/webview/wizard.html` gained:
+
+1. A new `<h2>Choose adoption tier</h2>` section above
+   `<h2>Prerequisites</h2>` containing two radio buttons
+   `name="tier" value="full"|"lightweight"`, with `value="full"`
+   checked by default. The labels describe each tier's
+   prerequisites + spend implications in 1-2 sentences.
+2. Existing prerequisites + the cost-reality callout gained
+   `data-tier="full"` attributes. A new Lightweight
+   prerequisite (path-aware review agent) and a new no-API-
+   spend callout gained `data-tier="lightweight"`.
+3. The `Configure AI Router` and `Show cost dashboard` buttons
+   gained `data-tier="full"`. `Troubleshoot` was left untagged
+   (applies to both tiers).
+4. JS handler `applyTierVisibility(tier)` toggles `.hidden`
+   class on every `[data-tier]` element based on the active
+   radio. Runs once on script-load + on every radio change.
+5. CSS: `.hidden { display: none !important; }` plus tier-
+   toggle styling (border + accent-color on the active radio).
+6. The existing `pricingLink` click handler is now guarded by
+   `if (pricing)` because the link lives inside the cost-
+   reality callout which can be hidden.
+
+---
+
+## package.json delta
+
+`tools/dabbler-ai-orchestration/package.json` gains one new
+command entry under `contributes.commands`:
+
+```json
+{
+  "command": "dabbler.openExternalVerificationDoc",
+  "title": "Open External Verification Document",
+  "category": "Dabbler"
+}
+```
+
+No other contribute-section changes. The command is Command-
+Palette-only (not added to the right-click QuickPick).
+
+---
+
+## extension.ts delta
+
+One new import + one new `safeRegister` invocation:
+
+```typescript
+import { registerExternalVerificationCommand } from "./commands/externalVerification";
+// ...later in activate():
+  safeRegister("registerExternalVerificationCommand", () =>
+    registerExternalVerificationCommand(context),
+  );
+```
+
+The new import shifted the watcher pattern's
+`createFileSystemWatcher(pattern)` line from 149 to 150;
+the watcher-inventory pinned line was bumped accordingly.
+
+---
+
+## Doc revisions (Commit E)
+
+Five doc changes shipped:
+
+1. `docs/session-state-schema.md` § Tier expectations: the
+   Lightweight bullet was rewritten from "router writers don't
+   operate, hand-edit only" to the actual Set 048 model — 
+   router writers DO operate under `--no-router` mode; lazy LLM-
+   SDK imports keep credentials out of the Lightweight path;
+   verification short-circuits to manual attestation; the
+   external-verification.md soft gate fires when missing;
+   hand-maintained Lightweight files are still supported and
+   the new `migrate_lightweight_to_canonical_v4` CLI handles
+   non-canonical drift.
+2. `docs/ai-led-session-workflow.md` Step 6 gained a
+   `#### Lightweight tier — copyable review prompts replace
+   routed verification` subsection: 5-step flow covering when
+   the orchestrator triggers the copy-prompt commands, the
+   path-aware-agent requirement, the external-verification.md
+   paste-back convention, the close_session soft gate, and the
+   review-criteria file convention.
+3. `docs/planning/session-set-authoring-guide.md`:
+   - Session Set Configuration block example gains `tier: full`
+     and updates the requiresUAT/E2E comments to show the
+     `true | false | "suggested"` tri-state.
+   - Field semantics bullets added for `tier: "full"`,
+     `tier: "lightweight"`, `requiresUAT: "suggested"`,
+     `requiresE2E: "suggested"` — the suggested values
+     explicitly document the upfront-positive-confirmation
+     prompt mechanism that replaces the audit's originally-
+     proposed triple-redundancy reminder.
+   - Defaults section updated: `tier: full` joins the implicit
+     defaults when the configuration block is omitted.
+4. `docs/adoption-bootstrap.md` closing pointers for Lightweight
+   tier rewritten to describe Set 048's actual deliverables:
+   copyable prompts via the four `dabbler.copy*Prompt` commands;
+   external-verification.md paste-back via the new command;
+   optional `docs/review-criteria/*.md` files; hand-maintained
+   state files via the new Lightweight migrator; upgrade-to-Full
+   path stays.
+5. `docs/cross-repo-lightweight-notice.md` is a NEW file
+   following the established `cross-repo-checkout-notice.md` /
+   `cross-repo-harvest-notice.md` pattern. It's a one-time copy
+   source for consumer-repo CLAUDE.md authors. Documents the
+   --no-router activation knobs, the copyable-prompt + paste-
+   back flow, the agent-capability requirement, the optional
+   review-criteria files, the per-consumer migrator one-time
+   recipe, and the Get Started panel tier-branch.
+
+---
+
+## Test counts at close
+
+- Python: 1009 passed + 1 pre-existing skip (no Python
+  failures introduced; 16 new tests for the Lightweight
+  migrator under `ai_router/tests/test_migrate_lightweight_to_canonical_v4.py`).
+- TypeScript (unit): 665 passed + 2 pre-existing failures
+  unchanged from S2/S3 (configEditor-foundation +
+  notificationsSection). No new TS tests in S4 — the
+  external-verification command is a thin wrapper over
+  `vscode.commands.executeCommand`, `vscode.window.showQuickPick`,
+  and `fs.writeFileSync` with no testable pure-function seam.

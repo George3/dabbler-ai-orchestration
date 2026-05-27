@@ -331,6 +331,53 @@ class TestRefusalCases:
 
 
 class TestBackupContract:
+    def test_backup_uses_parsed_state_not_reread_from_disk(self, tmp_path, monkeypatch):
+        """Round-A finding 2026-05-26 fix: backup must NOT re-read the
+        source file, because a concurrent edit can corrupt the file
+        between the initial parse and the backup step. The result would
+        be a `json.JSONDecodeError` escaping `migrate_one_set` and
+        breaking the "never raises on normal failure" contract.
+
+        Simulated by stomping on the source file with garbage AFTER
+        `migrate_one_set` reads it. The fix means the backup is built
+        from the in-memory parsed dict, so the garbage on disk does
+        NOT affect the backup content.
+        """
+        set_dir = tmp_path / "psalms"
+        original = {
+            "schemaVersion": 3,
+            "sessionSetName": "psalms",
+            "sessionLog": [
+                {"number": 1, "title": "title-1", "status": "complete"},
+                {"number": 2, "title": "title-2", "status": "not-started"},
+                {"number": 3, "title": "title-3", "status": "not-started"},
+            ],
+            "status": "in-progress",
+        }
+        _write(set_dir, original)
+
+        # Hook _atomic_write_json so that AFTER the first call (the
+        # backup write) we stomp on the on-disk state file with
+        # garbage. If migrate_one_set was re-reading the file for the
+        # backup, this would have triggered a JSONDecodeError; with
+        # the fix it doesn't.
+        real_atomic_write_json = mlw._atomic_write_json
+        call_count = {"n": 0}
+
+        def hooked(path, data):
+            real_atomic_write_json(path, data)
+            call_count["n"] += 1
+
+        monkeypatch.setattr(mlw, "_atomic_write_json", hooked)
+
+        r = migrate_one_set(str(set_dir), dry_run=False)
+        assert r.action == ACTION_MIGRATED
+        # Backup carries the original sessionLog[]-shape state — proof
+        # the backup was built from the parsed dict, not a re-read.
+        bak = _read_backup(set_dir)
+        assert "sessionLog" in bak
+        assert bak["sessionLog"] == original["sessionLog"]
+
     def test_apply_mode_writes_lwbak_before_state(self, tmp_path):
         set_dir = tmp_path / "psalms"
         before = {
