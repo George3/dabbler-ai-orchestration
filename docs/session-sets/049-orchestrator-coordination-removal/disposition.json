@@ -1,0 +1,42 @@
+{
+  "status": "completed",
+  "summary": "Set 049 Session 1 ran the audit-S1 deliverable per the audit-then-spec discipline and the 2026-05-26 stub plan. Cross-provider audit: Pass A gemini-pro (primary author framing, $0.0175) + Pass B gpt-5-4-mini (devil's advocate framing, $0.0300 — gpt-5-4 timed out per the gpt-5-4-pivot-to-gemini memory pattern, fell back to mini). Cumulative routed spend $0.0475 / $10 NTE (0.48%). All 7 open audit topics dispositioned: T1 v4-compatible (operator pre-signal confirmed; Pass B's v5 case resolved by T4 sweep+normalize), T2 accept-with-warning (Pass B won; operator confirmed), T3 hook passes subset it knows + documented contract (both passes agree), T4 sweep+normalize as part of S3 (Pass B won; reuses migrate_v3_to_v4 infrastructure), T5 keep ~/.dabbler/orchestrator-writer.log provisionally (Pass B won; operator confirmed), T6 retire holder_change/checkout_conflict event emit (Pass A won; no downstream consumers post-rip), T7 rewrite cross-repo-checkout-notice.md as deprecation instruction (both agree). All 3 discovered collisions dispositioned: D1 retire bare-touch detector (incompatible with omit-null), D2 retire engine-mismatch + stale-checkout-touch (both depend on lastActivityAt being dropped), D3 keep writer-bypass decoupled (engine-independent integrity check; both passes agree). Feature roll-call (operator inline): all 5 Keep (FR1 external-verification soft gate, FR2 migrate_lightweight CLI as separate surface, FR3 openExternalVerificationDoc paired with FR1, FR4 review-criteria templates, FR5 migrate_v3_to_v4 + right-click action). 4 of 5 followed the Recommended path; the accountability mechanism added scope-discipline without forcing material spec changes. Session arc locked at 5 sessions (S1 audit + S2 core ai_router code removal + S3 writer cleanup + migration sweep + S4 extension TS cleanup + Explorer revert + S5 docs + version bumps + close-out). Two commits: a520b97 audit artifacts + locked spec + state file, e32dd85 context-menu hygiene patch (Copy Eval → Copy Prompt rename + Start New Parallel Session submenu entry — two Set-048-era defects operator surfaced during S1 close-out review, addressed as a tiny hygiene patch per operator selection rather than scope-creeping Set 049). 668 TS pass + 2 pre-existing failures unrelated. Memory entry at project_set_049_s1_audit_locked.md; predecessor project_set_049_stubbed.md marked SUPERSEDED.",
+  "verification_method": "ai-router",
+  "files_changed": [
+    "docs/session-sets/049-orchestrator-coordination-removal/spec.md",
+    "docs/session-sets/049-orchestrator-coordination-removal/session-state.json",
+    "docs/session-sets/049-orchestrator-coordination-removal/session-events.jsonl",
+    "docs/session-sets/049-orchestrator-coordination-removal/activity-log.json",
+    "docs/session-sets/049-orchestrator-coordination-removal/disposition.json",
+    "docs/session-sets/049-orchestrator-coordination-removal/s1-close-reason.md",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/proposal.md",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/pass-a.md",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/pass-a.raw.json",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/pass-b.md",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/pass-b.raw.json",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/verdict.md",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/run_audit.py",
+    "docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/run_pass_b.py",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/package-lock.json",
+    "tools/dabbler-ai-orchestration/src/commands/copyPromptCommands.ts",
+    "tools/dabbler-ai-orchestration/src/providers/ActionRegistry.ts",
+    "tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts",
+    "tools/dabbler-ai-orchestration/src/providers/rowMenuHelpers.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/actionRegistry.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/copyPromptCommands.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/rowMenuHelpers.test.ts"
+  ],
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "effort": "high",
+    "reason": {
+      "code": "other",
+      "specifics": "Set 049 S1 closes with the audit-locked spec ready for S2. Per the locked spec §5, S2 opens with the §4 survey gap close (30-min re-survey of non-runtime consumers per Pass B's finding) before code-deletion begins. S2 then ships the core ai_router code removal: start_session H3/H4 paths, new_chat_id.py whole-file retire, close_session check-in branch, joiner D1/D2 detector retire, session_events.py holder_change/checkout_conflict emit retire, with D3 writer-bypass detector decoupled+kept. Operator chooses when to start S2."
+    }
+  },
+  "blockers": []
+}

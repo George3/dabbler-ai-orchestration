@@ -1,0 +1,101 @@
+{
+  "sessionSetName": "049-orchestrator-coordination-removal",
+  "createdDate": "2026-05-27",
+  "totalSessions": 5,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/budget-and-scope-confirmation",
+      "dateTime": "2026-05-27T13:55:00-04:00",
+      "description": "Confirmed prerequisites at session start: Set 047 closed 2026-05-26 and Set 048 closed 2026-05-27 (both spec-required predecessors). Operator answers via AskUserQuestion: (1) NTE budget $10 for Set 049 (matches Set 048 pattern), (2) Audit-S1 feature roll-call surfaced inline rather than batched at end (operator-accountability mechanism added 2026-05-27 to the Set 049 stub memory).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/register-session-start",
+      "dateTime": "2026-05-27T13:59:19-04:00",
+      "description": "Invoked python -m ai_router.start_session with engine=claude, provider=anthropic, model=claude-opus-4-7, effort=high. State-file flipped from not-started to in-progress; orchestrator block populated. Note: a Codex hook fired during the session and rewrote the orchestrator block to engine=codex/model=gpt-5.4/effort=medium mid-work — exactly the unreliable-data pattern that triggered Set 049 to begin with. Left as-is per operator-locked premise P3 (Set 049 rip-out will fix this).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/pre-audit-code-surface-survey",
+      "dateTime": "2026-05-27T14:05:00-04:00",
+      "description": "Pre-audit survey grounded the audit in 4 areas: (1) read-sites for the 3 dropped fields — 18 Python files + ~20 TS files reference chatSessionId/checkedOutAt/lastActivityAt; all readers outside the coordination path are themselves retiring. (2) joiner conflict-kinds — surveyed conflicts.py to surface the discovered collisions D1/D2/D3. (3) hook + CLI invocation path — claude-session-start-invoker.js currently passes --chat-session-id from SessionStart payload + hard-codes engine/provider + recovers model/effort from prior block. (4) coordination enforcement gate — DABBLER_ENFORCE_CHECKOUT_COORDINATION env var disables H3 refusal by default since Set 046.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/cross-provider-audit-pass-a",
+      "dateTime": "2026-05-27T14:30:00-04:00",
+      "description": "Pass A authored proposal.md at docs/proposals/2026-05-27-set-049-orchestrator-coordination-removal/ covering operator-locked premises P1-P5, open topics T1-T7, discovered collisions D1-D3, read-site survey, and 5 feature roll-call items. Pass A routed to gemini-pro (primary author framing: agreeing with the operator that rip-out is right, focused on disposing topics). Cost $0.0175. Result at pass-a.md: v4-compatible (T1), accept-and-ignore (T2), retire writer-log (T5), retire emit (T6), retire all 3 conflict detectors with writer-bypass decoupled+kept (D3), all 5 FRs Keep (1 Defer for FR2).",
+      "status": "complete",
+      "routedApiCalls": [
+        {"model": "gemini-pro", "tier": 2, "task_type": "architecture", "cost_usd": 0.0175}
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/cross-provider-audit-pass-b",
+      "dateTime": "2026-05-27T14:50:00-04:00",
+      "description": "Pass B (devil's advocate) initially routed to gpt-5-4 which timed out (read operation timeout after 3 attempts) — matching gpt-5-4-pivot-to-gemini memory pattern. Fallback chain ran gpt-5-4-mini first, which succeeded. Cost $0.0300. Result at pass-b.md: counter-positions on T1 (prefer v5 bump), T2 (accept-with-warning), T4 (don't rely on readers-ignore-extras), T5 (keep writer-log), T6 (compat window), session arc estimate 5-7 not 3-5. Identified survey gap (non-runtime consumers: types files, JSON schemas, consumer-repo hooks).",
+      "status": "complete",
+      "routedApiCalls": [
+        {"model": "gpt-5-4-mini", "tier": 2, "task_type": "architecture", "cost_usd": 0.0300}
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/synthesis-and-verdict",
+      "dateTime": "2026-05-27T15:10:00-04:00",
+      "description": "Authored verdict.md synthesizing Pass A + Pass B. Pass A won T1/T6, Pass B won T2/T4/T5, both agreed on T3/T7/D1/D2/D3, session arc synthesis at 5 (Pass B additions folded into S3 sweep+normalize rather than a 6th session). Cumulative routed spend $0.0475 / $10 NTE (0.48%).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/feature-roll-call-inline",
+      "dateTime": "2026-05-27T15:20:00-04:00",
+      "description": "Operator inline decisions via 2 AskUserQuestion batches (4 + 4 max-per-call): all 5 FRs Keep (FR1/FR2/FR3/FR4/FR5), T1 v4-compatible (confirmed), T2 accept-with-warning (Pass B won), T5 keep provisionally (Pass B won). 4 of 5 FR answers followed the Recommended path (Pass A position). The accountability mechanism added scope-discipline without forcing material spec changes.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/spec-authoring",
+      "dateTime": "2026-05-27T15:30:00-04:00",
+      "description": "Authored docs/session-sets/049-orchestrator-coordination-removal/spec.md replacing the STUB. Sections: operator-locked premises (P1-P5), audit-locked dispositions (T1-T7 + D1-D3), feature roll-call (5 Keep), §4 survey gap to close before S2 code-deletion, §5 session arc (5 sessions with per-session theme breakdown), §6 non-goals, §7 cross-references. Added Session Set Configuration YAML block (totalSessions: 5, prerequisites, requiresUAT: true, tier: full). Pre-populated session-state.json sessions[] with 5 entries (S1 in-progress + S2-S5 not-started placeholders matching the locked arc).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-001/hygiene-patch-context-menu-defects",
+      "dateTime": "2026-05-27T15:45:00-04:00",
+      "description": "Operator surfaced two Set-048-era context-menu defects during S1 close-out review: (1) 'Copy Eval ▸' submenu label inaccurate because it contains non-evaluation entries like 'Start Next Session' — renamed user-visible to 'Copy Prompt ▸' (internal copyEval identifier preserved). (2) dabblerSessionSets.copyStartCommand.parallel command existed in copyCommand.ts but had no ActionRegistry entry — added 'Start New Parallel Session' submenu entry with new buildStartNextParallelSessionPrompt helper + dabbler.copyStartNextParallelSessionPrompt registration. Test coverage: ROW_ACTIONS membership bumped 14→15, new gating tests, copyPromptCommands tests for parallel-variant. 668 TS pass + 2 pre-existing failures unrelated.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-001/commit-push-close",
+      "dateTime": "2026-05-27T16:00:00-04:00",
+      "description": "Two commits: a520b97 (audit S1 artifacts + locked spec + state file) and e32dd85 (context-menu hygiene patch). Pushed to origin/master (5024677..e32dd85). Memory entry written at project_set_049_s1_audit_locked.md; predecessor project_set_049_stubbed.md marked SUPERSEDED in MEMORY.md index. close_session ran clean.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}
