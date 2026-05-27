@@ -8,6 +8,7 @@ import { registerMigrateSetV4Command } from "./commands/migrateSetV4";
 import { discoverRoots, readAllSessionSets } from "./utils/fileSystem";
 import { registerOpenFileCommands } from "./commands/openFile";
 import { registerCopyCommands } from "./commands/copyCommand";
+import { registerCopyPromptCommands } from "./commands/copyPromptCommands";
 import { registerGitScaffoldCommand } from "./commands/gitScaffold";
 import { registerCopyAdoptionBootstrapPromptCommand } from "./commands/copyAdoptionBootstrapPrompt";
 import { registerTroubleshootCommand } from "./commands/troubleshoot";
@@ -211,6 +212,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   safeRegister("registerOpenFileCommands", () => registerOpenFileCommands(context));
   safeRegister("registerCopyCommands", () => registerCopyCommands(context));
+  safeRegister("registerCopyPromptCommands", () => registerCopyPromptCommands(context));
   safeRegister("registerGitScaffoldCommand", () => registerGitScaffoldCommand(context));
   safeRegister("registerCopyAdoptionBootstrapPromptCommand", () =>
     registerCopyAdoptionBootstrapPromptCommand(context),

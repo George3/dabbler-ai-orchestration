@@ -337,48 +337,10 @@ body.vscode-light, body.vscode-high-contrast-light {
   color: rgb(40, 40, 40);
 }
 
-/* ---- Cursor-anchored context menu (Set 034) ---- */
 /*
- * Right-clicking a row paints a native-style popup AT THE CURSOR
- * (replacing the v0.18.1 showQuickPick that opened at the top of the
- * window). Items come from ActionRegistry.applicableActions via the
- * new `renderContextMenu` host → webview message.
- *
- * Theme variables (--vscode-menu-*) come from VS Code automatically
- * inside the webview; the fallbacks below cover the standalone-
- * preview render path.
+ * Set 048 S3 (spec §3.3, Bias 3 flip): the Set 034 cursor-anchored
+ * popup is retired. The right-click menu is now opened by the host
+ * via `vscode.window.showQuickPick`, so no `.context-menu*` styles
+ * live in the webview anymore.
  */
-.context-menu {
-  position: fixed;
-  display: none;
-  z-index: 10000;
-  min-width: 220px;
-  padding: 4px 0;
-  background: var(--vscode-menu-background, #252526);
-  color: var(--vscode-menu-foreground, #cccccc);
-  border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border, #454545));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
-  font-size: 13px;
-  user-select: none;
-  line-height: 1.4;
-}
-.context-menu.is-open { display: block; }
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  padding: 3px 18px 3px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.context-menu-item:hover,
-.context-menu-item.is-active {
-  background: var(--vscode-menu-selectionBackground, #094771);
-  color: var(--vscode-menu-selectionForeground, #ffffff);
-}
-.context-menu-separator {
-  height: 1px;
-  background: var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border, #454545));
-  margin: 4px 0;
-}
 

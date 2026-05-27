@@ -1,14 +1,26 @@
 import * as assert from "assert";
-import { ROW_ACTIONS, applicableActions, ActionSupports } from "../../providers/ActionRegistry";
+import {
+  ROW_ACTIONS,
+  applicableActions,
+  categorizedActions,
+  ActionSupports,
+} from "../../providers/ActionRegistry";
 import { SessionSet, SessionState } from "../../types";
 
 // Set 029 Session 4 — ActionRegistry covers what `view/item/context`
 // rules USED to declaratively gate in package.json before the custom-
 // tree pivot. Per audit GPT-5.4 M2: one typed registry drives every
-// menu entrypoint — right-click, Shift+F10, Context Menu key, and
-// any future inline overflow button. This suite exercises every
-// action's applicability across every relevant state combination so
-// drift between menu surfaces is impossible.
+// menu entrypoint — right-click QuickPick, Shift+F10, Context Menu
+// key, and any future inline overflow button. This suite exercises
+// every action's applicability + category across every relevant state
+// combination so drift between menu surfaces is impossible.
+//
+// Set 048 Session 3: the registry gained an `ActionCategory`
+// discriminator (`openFile` / `copyEval` / `flat`) so the two-step
+// QuickPick rebuild can group items without inferring from id
+// prefixes. L3 removed `dabblerSessionSets.openAiAssignment` and the
+// `view/item/context` mirror; the four copy-prompt commands moved into
+// the `copyEval` submenu and "Open AI Assignment" is gone entirely.
 
 function fakeSet(
   state: SessionState,
@@ -40,38 +52,40 @@ function fakeSet(
 }
 
 const ALL_SUPPORTED: ActionSupports = { uat: true, e2e: true };
-const NEITHER_SUPPORTED: ActionSupports = { uat: false, e2e: false };
 
 function ids(set: SessionSet, supports: ActionSupports): string[] {
   return applicableActions(set, supports).map((a) => a.id);
 }
 
 suite("ActionRegistry", () => {
-  test("ROW_ACTIONS exposes the 15 non-orchestrator actions (Set 047 added migrateToV4)", () => {
-    // Set 034: orchestrator group (dabbler.checkOutOrchestrator,
-    // dabbler.releaseCheckOut, dabbler.openOrchestratorWriterLog)
-    // removed from the right-click menu in lockstep with the per-row
-    // orchestrator-tracking accordion retiring. The commands stay
-    // registered in extension.ts (Command Palette access preserved)
-    // but no longer appear in this typed registry.
-    //
-    // Set 047 Session 3: dabblerSessionSets.migrateToV4 added so the
-    // right-click menu surfaces "Migrate to v4 schema" on canonical
-    // v3 rows. Mutually exclusive with the v3 entry — a single row
-    // shows at most one of them at a time (see the
-    // migrationTargetSchemaVersion predicate split in ActionRegistry).
+  test("ROW_ACTIONS exposes the 13 menu-surface actions (Set 048 S3 reshape)", () => {
+    // Set 048 S3 reshape:
+    //   - L3 removed `dabblerSessionSets.openAiAssignment`.
+    //   - L2 narrowed the Open File submenu to exactly 4 entries
+    //     (Spec / Activity Log / Change Log / Session State). The
+    //     pre-existing openUatChecklist / revealPlaywrightTests /
+    //     openFolder commands remain registered (Command Palette
+    //     accessible) but no longer surface on the right-click menu.
+    //   - copyStartCommand.default / .parallel and copySlug are kept
+    //     in copyCommand.ts (palette-accessible) but the right-click
+    //     menu surfaces the new dabbler.copy*Prompt commands instead.
+    //   - Four new copyEval entries: copySpecReviewPrompt,
+    //     copySessionAccomplishmentsPrompt, copySetAccomplishmentsPrompt,
+    //     copyStartNextSessionPrompt.
+    //   - Two flat orchestrator entries promoted into the menu
+    //     surface: dabbler.checkOutOrchestrator (gated to in-progress)
+    //     and dabbler.openOrchestratorWriterLog.
     const expected = new Set([
       "dabblerSessionSets.openSpec",
       "dabblerSessionSets.openActivityLog",
       "dabblerSessionSets.openChangeLog",
-      "dabblerSessionSets.openAiAssignment",
-      "dabblerSessionSets.openUatChecklist",
-      "dabblerSessionSets.revealPlaywrightTests",
       "dabblerSessionSets.openSessionState",
-      "dabblerSessionSets.openFolder",
-      "dabblerSessionSets.copyStartCommand.default",
-      "dabblerSessionSets.copyStartCommand.parallel",
-      "dabblerSessionSets.copySlug",
+      "dabbler.copySpecReviewPrompt",
+      "dabbler.copySessionAccomplishmentsPrompt",
+      "dabbler.copySetAccomplishmentsPrompt",
+      "dabbler.copyStartNextSessionPrompt",
+      "dabbler.checkOutOrchestrator",
+      "dabbler.openOrchestratorWriterLog",
       "dabblerSessionSets.migrate",
       "dabblerSessionSets.migrateToV4",
       "dabblerSessionSets.cancel",
@@ -79,24 +93,40 @@ suite("ActionRegistry", () => {
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 15);
+    assert.strictEqual(ROW_ACTIONS.length, 14);
   });
 
-  test("orchestrator group is NOT exposed by the registry (Set 034 retirement)", () => {
-    const ids14 = ROW_ACTIONS.map((a) => a.id);
-    for (const id of [
-      "dabbler.checkOutOrchestrator",
-      "dabbler.releaseCheckOut",
-      "dabbler.openOrchestratorWriterLog",
-    ]) {
-      assert.ok(
-        !ids14.includes(id),
-        `${id} should NOT appear in ROW_ACTIONS — Set 034 retired the orchestrator group`,
-      );
+  test("openAiAssignment fully removed (L3)", () => {
+    for (const a of ROW_ACTIONS) {
+      assert.notStrictEqual(a.id, "dabblerSessionSets.openAiAssignment",
+        "openAiAssignment must not appear in ROW_ACTIONS — L3 operator-locked removal");
     }
   });
 
-  test("always-available actions appear for any state when supports are full", () => {
+  test("category discriminator partitions actions for the two-step QuickPick", () => {
+    const cats = new Set(ROW_ACTIONS.map((a) => a.category));
+    assert.deepStrictEqual(
+      cats,
+      new Set(["openFile", "copyEval", "flat"]),
+      "every action must declare one of the three menu categories",
+    );
+  });
+
+  test("Open File submenu locked to exactly four entries (L2)", () => {
+    const openFile = ROW_ACTIONS.filter((a) => a.category === "openFile").map((a) => a.id);
+    assert.deepStrictEqual(
+      openFile,
+      [
+        "dabblerSessionSets.openSpec",
+        "dabblerSessionSets.openActivityLog",
+        "dabblerSessionSets.openChangeLog",
+        "dabblerSessionSets.openSessionState",
+      ],
+      "L2 locks Open File ▸ to [Spec | Activity Log | Change Log | Session State]",
+    );
+  });
+
+  test("always-available openFile entries appear for any state", () => {
     const states: SessionState[] = ["in-progress", "not-started", "complete", "cancelled"];
     for (const st of states) {
       const got = ids(fakeSet(st), ALL_SUPPORTED);
@@ -104,49 +134,86 @@ suite("ActionRegistry", () => {
         "dabblerSessionSets.openSpec",
         "dabblerSessionSets.openActivityLog",
         "dabblerSessionSets.openChangeLog",
-        "dabblerSessionSets.openAiAssignment",
         "dabblerSessionSets.openSessionState",
-        "dabblerSessionSets.openFolder",
-        "dabblerSessionSets.copySlug",
       ]) {
         assert.ok(got.includes(id), `expected ${id} for state=${st}; got ${got.join(",")}`);
       }
     }
   });
 
-  test("UAT entry gated on both supports.uat AND set.config.requiresUAT", () => {
-    const uatSet = fakeSet("in-progress", { config: { requiresUAT: true, requiresE2E: false, uatScope: "", tier: "full" } });
-    const nonUatSet = fakeSet("in-progress");
-    assert.ok(ids(uatSet, ALL_SUPPORTED).includes("dabblerSessionSets.openUatChecklist"));
-    assert.ok(!ids(uatSet, NEITHER_SUPPORTED).includes("dabblerSessionSets.openUatChecklist"),
-      "supports.uat=false suppresses the menu entry even when set declares requiresUAT");
-    assert.ok(!ids(nonUatSet, ALL_SUPPORTED).includes("dabblerSessionSets.openUatChecklist"),
-      "set without requiresUAT never shows the menu entry");
+  test("copyEval submenu — spec-review is always enabled", () => {
+    for (const st of ["in-progress", "not-started", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.copySpecReviewPrompt"),
+        `copySpecReviewPrompt missing for state=${st}`,
+      );
+    }
   });
 
-  test("E2E entry gated on both supports.e2e AND set.config.requiresE2E", () => {
-    const e2eSet = fakeSet("in-progress", { config: { requiresUAT: false, requiresE2E: true, uatScope: "none", tier: "full" } });
-    assert.ok(ids(e2eSet, ALL_SUPPORTED).includes("dabblerSessionSets.revealPlaywrightTests"));
-    assert.ok(!ids(e2eSet, NEITHER_SUPPORTED).includes("dabblerSessionSets.revealPlaywrightTests"));
-    assert.ok(!ids(fakeSet("in-progress"), ALL_SUPPORTED).includes("dabblerSessionSets.revealPlaywrightTests"));
+  test("copyEval submenu — session-accomplishments gated on sessionsCompleted > 0", () => {
+    const zero = fakeSet("in-progress", { sessionsCompleted: 0 });
+    const one = fakeSet("in-progress", { sessionsCompleted: 1 });
+    const three = fakeSet("complete", { sessionsCompleted: 3 });
+    assert.ok(
+      !ids(zero, ALL_SUPPORTED).includes("dabbler.copySessionAccomplishmentsPrompt"),
+      "session-accomplishments should NOT surface before any session completes",
+    );
+    assert.ok(
+      ids(one, ALL_SUPPORTED).includes("dabbler.copySessionAccomplishmentsPrompt"),
+      "session-accomplishments should surface once one session is closed",
+    );
+    assert.ok(
+      ids(three, ALL_SUPPORTED).includes("dabbler.copySessionAccomplishmentsPrompt"),
+      "session-accomplishments should surface on a completed set too",
+    );
   });
 
-  test("copyStartCommand entries appear only on in-progress / not-started rows", () => {
+  test("copyEval submenu — set-accomplishments gated on state === complete", () => {
+    for (const st of ["in-progress", "not-started", "cancelled"] as SessionState[]) {
+      assert.ok(
+        !ids(fakeSet(st, { sessionsCompleted: 5 }), ALL_SUPPORTED)
+          .includes("dabbler.copySetAccomplishmentsPrompt"),
+        `set-accomplishments leaked onto state=${st}`,
+      );
+    }
+    assert.ok(
+      ids(fakeSet("complete"), ALL_SUPPORTED).includes("dabbler.copySetAccomplishmentsPrompt"),
+      "set-accomplishments should surface only on complete state",
+    );
+  });
+
+  test("copyEval submenu — start-next-session gated on non-terminal rows (L5)", () => {
     for (const st of ["in-progress", "not-started"] as SessionState[]) {
-      const got = ids(fakeSet(st), ALL_SUPPORTED);
-      assert.ok(got.includes("dabblerSessionSets.copyStartCommand.default"), `default missing for ${st}`);
-      assert.ok(got.includes("dabblerSessionSets.copyStartCommand.parallel"), `parallel missing for ${st}`);
+      assert.ok(
+        ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.copyStartNextSessionPrompt"),
+        `start-next-session missing for state=${st}`,
+      );
     }
     for (const st of ["complete", "cancelled"] as SessionState[]) {
-      const got = ids(fakeSet(st), ALL_SUPPORTED);
-      assert.ok(!got.includes("dabblerSessionSets.copyStartCommand.default"), `default leaked to ${st}`);
-      assert.ok(!got.includes("dabblerSessionSets.copyStartCommand.parallel"), `parallel leaked to ${st}`);
+      assert.ok(
+        !ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.copyStartNextSessionPrompt"),
+        `start-next-session leaked onto terminal state=${st}`,
+      );
+    }
+  });
+
+  test("Set Orchestrator… is gated to in-progress rows only", () => {
+    assert.ok(
+      ids(fakeSet("in-progress"), ALL_SUPPORTED).includes("dabbler.checkOutOrchestrator"),
+      "checkOutOrchestrator should surface on in-progress rows",
+    );
+    for (const st of ["not-started", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        !ids(fakeSet(st), ALL_SUPPORTED).includes("dabbler.checkOutOrchestrator"),
+        `checkOutOrchestrator leaked onto state=${st}`,
+      );
     }
   });
 
   test("cancel appears for in-progress / not-started / complete, not for cancelled", () => {
     for (const st of ["in-progress", "not-started", "complete"] as SessionState[]) {
-      assert.ok(ids(fakeSet(st), ALL_SUPPORTED).includes("dabblerSessionSets.cancel"), `cancel missing for ${st}`);
+      assert.ok(ids(fakeSet(st), ALL_SUPPORTED).includes("dabblerSessionSets.cancel"),
+        `cancel missing for ${st}`);
     }
     assert.ok(!ids(fakeSet("cancelled"), ALL_SUPPORTED).includes("dabblerSessionSets.cancel"),
       "cancel leaked onto a cancelled row");
@@ -195,8 +262,6 @@ suite("ActionRegistry", () => {
   });
 
   test("v3 and v4 migrate entries are mutually exclusive — never both at once", () => {
-    // A SessionSet can have at most one migration target; ensure no
-    // pathological combination of flags surfaces both menu entries.
     for (const target of [3, 4, null] as const) {
       const set = fakeSet("complete", {
         needsMigration: target !== null,
@@ -214,6 +279,7 @@ suite("ActionRegistry", () => {
     const got = applicableActions(
       fakeSet("in-progress", {
         config: { requiresUAT: true, requiresE2E: true, uatScope: "", tier: "full" },
+        sessionsCompleted: 2,
         needsMigration: true,
         migrationTargetSchemaVersion: 4,
       }),
@@ -222,5 +288,32 @@ suite("ActionRegistry", () => {
     const groups = got.map((a) => a.group);
     const sorted = [...groups].sort((a, b) => a - b);
     assert.deepStrictEqual(groups, sorted, "applicableActions should pre-sort by group");
+  });
+
+  test("categorizedActions partitions and pre-sorts within each category", () => {
+    const cats = categorizedActions(
+      fakeSet("in-progress", { sessionsCompleted: 2 }),
+      ALL_SUPPORTED,
+    );
+    assert.ok(cats.openFile.length === 4, "openFile should hold exactly the four L2 entries");
+    assert.ok(cats.copyEval.length >= 1, "copyEval should hold at least the spec-review entry");
+    assert.ok(cats.flat.length >= 1, "flat should hold at least one flat action");
+
+    for (const cat of [cats.openFile, cats.copyEval, cats.flat]) {
+      const groups = cat.map((a) => a.group);
+      const sorted = [...groups].sort((a, b) => a - b);
+      assert.deepStrictEqual(groups, sorted);
+    }
+  });
+
+  test("categorizedActions on a complete set surfaces set-accomplishments and NOT start-next", () => {
+    const cats = categorizedActions(
+      fakeSet("complete", { sessionsCompleted: 5 }),
+      ALL_SUPPORTED,
+    );
+    const ids = cats.copyEval.map((a) => a.id);
+    assert.ok(ids.includes("dabbler.copySetAccomplishmentsPrompt"));
+    assert.ok(!ids.includes("dabbler.copyStartNextSessionPrompt"),
+      "start-next-session must not surface on complete (terminal) state");
   });
 });

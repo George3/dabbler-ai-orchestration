@@ -72,9 +72,10 @@ export function registerOpenFileCommands(context: vscode.ExtensionContext): void
     vscode.commands.registerCommand("dabblerSessionSets.openChangeLog", (item: SetItem) =>
       openIfExists(item?.set?.changeLogPath, "Change log")
     ),
-    vscode.commands.registerCommand("dabblerSessionSets.openAiAssignment", (item: SetItem) =>
-      openIfExists(item?.set?.aiAssignmentPath, "AI assignment")
-    ),
+    // Set 048 S3 (operator-locked L3): `Open AI Assignment` is fully
+    // removed. The `ai-assignment.md` file on disk continues to exist
+    // for any consumer that reads it directly; the menu / palette
+    // entry to open it does not.
     vscode.commands.registerCommand("dabblerSessionSets.openUatChecklist", (item: SetItem) =>
       openIfExists(item?.set?.uatChecklistPath, "UAT checklist")
     ),

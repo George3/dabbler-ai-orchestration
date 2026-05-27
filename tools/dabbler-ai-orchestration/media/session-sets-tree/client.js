@@ -1,8 +1,15 @@
 // Webview-side client for the Set 029 Session 4 custom Session Sets
 // view. Owns: ARIA tree rendering (roving tabindex), keyboard nav,
-// contextmenu / Shift+F10 / Context Menu key dispatch, manual expand/
+// contextmenu / Shift+F10 / Context Menu key dispatch (signals the
+// host to open a `vscode.window.showQuickPick`), manual expand /
 // collapse, postMessage protocol with monotonic-version drop per
 // S4 audit GPT-5.4 M3.
+//
+// Set 048 S3 (spec §3.3, Bias 3 flip): the Set 034 cursor-anchored
+// HTML popup is gone. The webview no longer renders or manages a
+// context-menu DOM element — the host opens native QuickPick(s)
+// instead, which is more accessible (keyboard nav + theme honoring)
+// and dismisses naturally on click-outside / Escape.
 //
 // All dynamic text from the host snapshot is HTML-escaped here on the
 // webview side too (defense-in-depth) before any innerHTML
@@ -29,12 +36,6 @@
   // re-renders for the session so a watcher tick doesn't snap a
   // user-collapsed bucket back open.
   const bucketCollapsed = {};
-  // Set 034: cursor-anchored context menu state. The contextmenu
-  // event captures the cursor position; when the host responds with
-  // `renderContextMenu`, the popup is painted at that position. One
-  // popup element is appended to the body lazily on first use.
-  let lastContextMenuPos = { x: 0, y: 0 };
-  let contextMenuEl = null;
 
   // ----- Escape helpers (defense-in-depth) -----
   function escHtml(s) {
@@ -73,96 +74,8 @@
         suppressed = msg.suppressed || {};
         render();
         return;
-      case "renderContextMenu":
-        // Set 034: cursor-anchored context menu. Host computed
-        // applicable actions from ActionRegistry; paint the popup at
-        // the cursor position we captured on the contextmenu event.
-        showCursorContextMenu(msg.slug, msg.items || []);
-        return;
     }
   });
-
-  // ----- Cursor-anchored context menu (Set 034) -----
-  function ensureContextMenuEl() {
-    if (contextMenuEl) return contextMenuEl;
-    contextMenuEl = document.createElement("div");
-    contextMenuEl.className = "context-menu";
-    document.body.appendChild(contextMenuEl);
-    return contextMenuEl;
-  }
-  function hideContextMenu() {
-    if (contextMenuEl) {
-      contextMenuEl.classList.remove("is-open");
-      contextMenuEl.innerHTML = "";
-    }
-  }
-  function showCursorContextMenu(slug, items) {
-    if (!items || items.length === 0) return;
-    const menu = ensureContextMenuEl();
-    let html = "";
-    let lastBand = -1;
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      // Group-band separators are implicit in ActionRegistry's group
-      // numbering (100s = open, 200s = navigate, 300s = copy command,
-      // 400s = copy meta, 800s = migrate, 900s = lifecycle). The host
-      // ships items pre-sorted; insert separators on band transitions.
-      // We can't know the band from {label, commandId} alone, so derive
-      // by commandId prefix as a best-effort.
-      const band = bandForCommandId(it.commandId);
-      if (lastBand !== -1 && band !== lastBand) {
-        html += '<div class="context-menu-separator"></div>';
-      }
-      lastBand = band;
-      html +=
-        '<div class="context-menu-item" data-command="' + escAttr(it.commandId) +
-        '" data-slug="' + escAttr(slug) + '">' + escHtml(it.label) + '</div>';
-    }
-    menu.innerHTML = html;
-    menu.style.left = lastContextMenuPos.x + "px";
-    menu.style.top = lastContextMenuPos.y + "px";
-    menu.classList.add("is-open");
-    // Flip if overflowing the viewport's right or bottom edge.
-    const rect = menu.getBoundingClientRect();
-    if (rect.right > window.innerWidth - 4) {
-      menu.style.left = Math.max(4, lastContextMenuPos.x - rect.width) + "px";
-    }
-    if (rect.bottom > window.innerHeight - 4) {
-      menu.style.top = Math.max(4, lastContextMenuPos.y - rect.height) + "px";
-    }
-  }
-  function bandForCommandId(id) {
-    if (id.indexOf("open") >= 0 || id.indexOf("revealPlaywright") >= 0) return 1;
-    if (id.indexOf("openFolder") >= 0) return 2;
-    if (id.indexOf("copyStartCommand") >= 0) return 3;
-    if (id.indexOf("copySlug") >= 0) return 4;
-    if (id.indexOf("migrate") >= 0) return 8;
-    if (id.indexOf("cancel") >= 0 || id.indexOf("restore") >= 0) return 9;
-    return 0;
-  }
-  // Clicks on menu items dispatch to the host; clicks elsewhere close.
-  document.addEventListener("click", function (ev) {
-    if (!contextMenuEl || !contextMenuEl.classList.contains("is-open")) return;
-    const item = ev.target.closest(".context-menu-item");
-    if (item && contextMenuEl.contains(item)) {
-      const commandId = item.getAttribute("data-command");
-      const slug = item.getAttribute("data-slug");
-      if (commandId && slug) {
-        vscode.postMessage({ type: "executeRowCommand", slug: slug, commandId: commandId });
-      }
-      hideContextMenu();
-      return;
-    }
-    hideContextMenu();
-  });
-  document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape" && contextMenuEl && contextMenuEl.classList.contains("is-open")) {
-      hideContextMenu();
-    }
-  });
-  // Close on resize / scroll so the menu doesn't float untethered.
-  window.addEventListener("resize", hideContextMenu);
-  window.addEventListener("scroll", hideContextMenu, true);
 
   // ----- Render -----
   function render() {
@@ -439,15 +352,14 @@
 
     // Right-click → context menu. Set 034: capture cursor position
     // so the cursor-anchored popup (rendered when host responds with
-    // `renderContextMenu`) appears AT the cursor instead of at the
-    // top of the window.
+    // showQuickPick lives in the extension host and opens centered
+    // on the VS Code window — no cursor position to capture.
     Array.from(root.querySelectorAll('[role="treeitem"]')).forEach(function (item) {
       item.addEventListener("contextmenu", function (ev) {
         ev.preventDefault();
         focusItem(item);
         const slug = item.getAttribute("data-slug");
         if (slug) {
-          lastContextMenuPos = { x: ev.clientX, y: ev.clientY };
           vscode.postMessage({ type: "showRowContextMenu", slug: slug });
         }
       });

@@ -47,9 +47,15 @@ import {
 // in-progress ordering helper survives in inProgressSetsService.
 import { listInProgressSets } from "./inProgressSetsService";
 import {
-  applicableActions,
   ActionSupports,
+  RowAction,
+  categorizedActions,
 } from "./ActionRegistry";
+import {
+  buildSubmenuItems,
+  buildTopLevelItems,
+  planLeftClickActivation,
+} from "./rowMenuHelpers";
 import {
   SuppressionState,
   clearSuppression,
@@ -69,36 +75,29 @@ import { HarvestService } from "./HarvestService";
 const SUPPRESSION_KEY = "dabbler.sessionSets.suppressedExpand";
 const RENDER_DEBOUNCE_MS = 50;
 
-// Allowlist for executeCommand dispatch from the webview. Defense-
-// in-depth: even if a malicious string slipped through the protocol
-// type check, only these commands fire. Holds the 14 row-context
-// actions; the orchestrator-control buttons that used to live in the
-// per-row accordion body were retired in Set 034 and no longer
-// dispatch from this surface (they remain accessible via the Command
-// Palette and the right-click menu).
+// Set 048 S3 — internal discriminated union for the two-step QuickPick.
+type TopLevelChoice =
+  | { kind: "openFile" }
+  | { kind: "copyEval" }
+  | { kind: "action"; action: RowAction };
+
+// Allowlist for executeCommand dispatch ORIGINATING IN THE WEBVIEW
+// (i.e., messages the webview posts and the host then forwards to
+// `vscode.commands.executeCommand`). Defense-in-depth: even if a
+// malicious string slipped through the typed protocol, only these
+// commands fire.
+//
+// Set 048 S3 (spec §3.3 + L3) rebuilt the right-click menu on
+// `vscode.window.showQuickPick`. QuickPick selections execute via
+// `executeRowAction` → `vscode.commands.executeCommand` directly,
+// which does NOT pass through this allowlist (the host-side picker
+// is fully trusted). So the allowlist now governs ONLY the L5
+// left-click `activateRow` path. Any new webview→host dispatch
+// channel introduced later MUST add its allowed command ids here
+// explicitly — adding a code path that bypasses this set undoes the
+// defense-in-depth guarantee.
 const COMMAND_ALLOWLIST: ReadonlySet<string> = new Set([
-  // 14 row-context actions
   "dabblerSessionSets.openSpec",
-  "dabblerSessionSets.openActivityLog",
-  "dabblerSessionSets.openChangeLog",
-  "dabblerSessionSets.openAiAssignment",
-  "dabblerSessionSets.openUatChecklist",
-  "dabblerSessionSets.revealPlaywrightTests",
-  "dabblerSessionSets.openSessionState",
-  "dabblerSessionSets.openFolder",
-  "dabblerSessionSets.copyStartCommand.default",
-  "dabblerSessionSets.copyStartCommand.parallel",
-  "dabblerSessionSets.copySlug",
-  "dabblerSessionSets.migrate",
-  "dabblerSessionSets.migrateToV4",
-  "dabblerSessionSets.cancel",
-  "dabblerSessionSets.restore",
-  // Set 034: the orchestrator-control commands (checkOutOrchestrator /
-  // releaseCheckOut / openOrchestratorWriterLog / installOrchestratorHook.*)
-  // are no longer dispatched from the webview — they're removed from
-  // both ActionRegistry (right-click menu) and the empty-state CTA
-  // (which itself is gone). The commands remain registered in
-  // extension.ts and are still accessible via the Command Palette.
 ]);
 
 function contextValueFor(set: SessionSet): string {
@@ -227,14 +226,6 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       case "executeCommand":
         this.dispatchCommand(msg.commandId, msg.args);
         return;
-      case "executeRowCommand": {
-        // Set 034: cursor-anchored context-menu item selection. Look
-        // up the set by slug and dispatch the command with [{ set }].
-        const set = this.findSetBySlug(msg.slug);
-        if (!set) return;
-        this.dispatchCommand(msg.commandId, [{ set }]);
-        return;
-      }
       case "showRowContextMenu":
         void this.showContextMenu(msg.slug);
         return;
@@ -242,9 +233,29 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
         this.handleToggle(msg.slug, msg.expanded, msg.accordionUpdatedAt);
         return;
       case "activateRow":
-        // Default activation: openSpec (per S4 step 3 / GPT M3).
-        this.dispatchCommand("dabblerSessionSets.openSpec", [{ set: this.findSetBySlug(msg.slug) }]);
+        // Set 048 S3 (spec §3.3, L5): left-click ALWAYS opens spec.md
+        // (preserved S4 default). On non-terminal rows the activation
+        // ALSO writes "Start the next session of `<slug>`." to the
+        // clipboard and shows a one-line info toast, so the high-
+        // frequency starting-shortcut surfaces without a separate
+        // affordance. Terminal-state rows (complete/cancelled) skip
+        // the clipboard write and toast — spec.md opens only.
+        void this.handleActivateRow(msg.slug);
         return;
+    }
+  }
+
+  private async handleActivateRow(slug: string): Promise<void> {
+    const set = this.findSetBySlug(slug);
+    if (!set) return;
+    const plan = planLeftClickActivation(set.name, set.state);
+    this.dispatchCommand(plan.openCommand.commandId, [{ set }]);
+    if (!plan.clipboardWrite) return;
+    try {
+      await vscode.env.clipboard.writeText(plan.clipboardWrite.text);
+      vscode.window.showInformationMessage(plan.clipboardWrite.toast);
+    } catch (err) {
+      console.warn(`[CustomSessionSetsView] left-click clipboard write failed for "${slug}"`, err);
     }
   }
 
@@ -256,24 +267,76 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     void vscode.commands.executeCommand(commandId, ...(args ?? []));
   }
 
-  // Set 034: replaced the v0.18.1 showQuickPick-at-top-of-window flow
-  // with a cursor-anchored popup rendered by the webview. The host
-  // computes applicable actions and posts them back as a flat
-  // `renderContextMenu` message; the webview paints the popup at the
-  // cursor position it captured on the contextmenu event.
-  private async showContextMenu(slug: string): Promise<void> {
-    if (!this.view) return;
+  // Set 048 S3 (spec §3.3, audit Bias 3 flip): the Set 034 cursor-
+  // anchored HTML popup is retired. The right-click menu is rebuilt
+  // on `vscode.window.showQuickPick` as a two-step flow:
+  //
+  //   Level 1 → top-level items:
+  //     - "Open File ▸"   (if any openFile entries are applicable)
+  //     - "Copy Eval ▸"   (if any copyEval entries are applicable)
+  //     - each flat action as its own item
+  //
+  //   Level 2 → submenu items for the chosen "▸" branch. Escape /
+  //   dismiss cancels the second-level pick and is treated as "no
+  //   selection" (the operator returns to whatever they were doing).
+  //
+  // Native QuickPick handles click-outside, Escape, and focus-loss
+  // (L4 close-on-blur is a free byproduct) and respects theme +
+  // accessibility settings.
+  private async showContextMenu(
+    slug: string,
+    opts?: { showQuickPick?: typeof vscode.window.showQuickPick },
+  ): Promise<void> {
     const set = this.findSetBySlug(slug);
     if (!set) return;
     const supports: ActionSupports = await this.readSupports();
-    const actions = applicableActions(set, supports);
-    if (actions.length === 0) return;
-    const msg: HostToWebview = {
-      type: "renderContextMenu",
-      slug,
-      items: actions.map((a) => ({ label: a.label, commandId: a.id })),
-    };
-    this.view.webview.postMessage(msg);
+    const categorized = categorizedActions(set, supports);
+    const totalActions = categorized.openFile.length + categorized.copyEval.length + categorized.flat.length;
+    if (totalActions === 0) return;
+
+    const showQuickPick = opts?.showQuickPick ?? vscode.window.showQuickPick;
+    const topLevelChoice = await this.pickTopLevel(categorized, set.name, showQuickPick);
+    if (!topLevelChoice) return;
+
+    if (topLevelChoice.kind === "action") {
+      this.executeRowAction(topLevelChoice.action, set);
+      return;
+    }
+    const submenu = topLevelChoice.kind === "openFile" ? categorized.openFile : categorized.copyEval;
+    const placeHolder = topLevelChoice.kind === "openFile"
+      ? `Open File — ${set.name}`
+      : `Copy Eval — ${set.name}`;
+    const submenuChoice = await this.pickSubmenu(submenu, placeHolder, showQuickPick);
+    if (!submenuChoice) return;
+    this.executeRowAction(submenuChoice, set);
+  }
+
+  private async pickTopLevel(
+    categorized: ReturnType<typeof categorizedActions>,
+    slug: string,
+    showQuickPick: typeof vscode.window.showQuickPick,
+  ): Promise<TopLevelChoice | undefined> {
+    const items = buildTopLevelItems(categorized);
+    const picked = await showQuickPick(items, { placeHolder: slug, matchOnDescription: false });
+    if (!picked) return undefined;
+    if (picked.dabblerKind === "action" && picked.action) {
+      return { kind: "action", action: picked.action };
+    }
+    return { kind: picked.dabblerKind === "openFile" ? "openFile" : "copyEval" };
+  }
+
+  private async pickSubmenu(
+    submenu: RowAction[],
+    placeHolder: string,
+    showQuickPick: typeof vscode.window.showQuickPick,
+  ): Promise<RowAction | undefined> {
+    const items = buildSubmenuItems(submenu);
+    const picked = await showQuickPick(items, { placeHolder });
+    return picked?.action;
+  }
+
+  private executeRowAction(action: RowAction, set: SessionSet): void {
+    void vscode.commands.executeCommand(action.id, { set });
   }
 
   private async readSupports(): Promise<ActionSupports> {

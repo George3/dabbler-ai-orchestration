@@ -1,22 +1,26 @@
 // Typed action registry for the Set 029 Session 4 custom-tree view.
-// Replaces the lost `package.json` `view/item/context` declarative
-// rules per S4 audit GPT-5.4 M2: one source of truth for
-// command-applicability that drives right-click QuickPick,
-// `Shift+F10` / Context Menu key, and any future inline overflow
-// button. Same predicates everywhere — no scatter, no drift.
 //
-// Each action has:
-//   id      — the VS Code command id (registered elsewhere; this
-//             module never calls executeCommand directly)
-//   label   — operator-facing menu label
-//   group   — numeric sort key (matches the @1/@2 numerals from the
-//             retired package.json `view/item/context` groups so the
-//             menu order survives the pivot)
-//   when    — pure predicate: (set, supports) → bool
+// Set 048 Session 3 reshape (spec §3.3 + L3): the menu structure
+// gained two top-level submenus (`Open File ▸`, `Copy Eval ▸`) plus a
+// row of flat actions. Each registry entry now carries a `category`
+// discriminator so the runtime can group submenu items without having
+// to infer from the command id. The cursor-anchored HTML popup that
+// Set 034 introduced is retired in favor of `vscode.window.showQuickPick`
+// (two-step pattern); see `CustomSessionSetsView.showContextMenu` for
+// the consumer.
 //
-// The 14 actions are the same 14 that S3 had in package.json's
-// `view/item/context`. The single difference is mechanism:
-// declarative → typed code.
+// L3 (operator-locked addition): `Open AI Assignment` is fully removed
+// from the menu schema, the command registration, and the dispatch
+// allowlist. The `ai-assignment.md` file on disk continues to exist —
+// any future surface that needs to read it should depend on the
+// `aiAssignmentPath` field, not on this menu entry.
+//
+// Set 047 Session 3 split the migration predicate by target version.
+// `needsMigrationToV3` covers v1/v2 + broken-v3 (the operator runs
+// "Migrate to v3 schema" first); `needsMigrationToV4` covers canonical
+// v3 with sessions[] (the new "Migrate to v4 schema" affordance).
+// A set has at most one migration target at a time — the two
+// predicates are mutually exclusive by construction.
 
 import { SessionSet } from "../types";
 
@@ -25,10 +29,18 @@ export interface ActionSupports {
   e2e: boolean;
 }
 
+// Set 048 S3: category discriminator drives the two-step QuickPick
+// grouping in `CustomSessionSetsView.showContextMenu`.
+//   "openFile" → top-level "Open File ▸" submenu
+//   "copyEval" → top-level "Copy Eval ▸" submenu
+//   "flat"     → rendered inline on the top-level QuickPick
+export type ActionCategory = "openFile" | "copyEval" | "flat";
+
 export interface RowAction {
   id: string;
   label: string;
   group: number;
+  category: ActionCategory;
   when: (set: SessionSet, supports: ActionSupports) => boolean;
 }
 
@@ -40,61 +52,85 @@ const cancellable = (s: SessionSet): boolean =>
 
 const isCancelled = (s: SessionSet): boolean => s.state === "cancelled";
 
-// Set 047 Session 3: split the migration predicate by target version.
-// `needsMigrationToV3` covers v1/v2 + broken-v3 (the operator runs
-// "Migrate to v3 schema" first); `needsMigrationToV4` covers canonical
-// v3 with sessions[] (the new "Migrate to v4 schema" affordance).
-// A set has at most one migration target at a time — the two
-// predicates are mutually exclusive by construction.
+const hasCompletedSession = (s: SessionSet): boolean => s.sessionsCompleted > 0;
+
+const isCompleteState = (s: SessionSet): boolean => s.state === "complete";
+
 const needsMigrationToV3 = (s: SessionSet): boolean =>
   s.needsMigration && s.migrationTargetSchemaVersion === 3;
 const needsMigrationToV4 = (s: SessionSet): boolean =>
   s.needsMigration && s.migrationTargetSchemaVersion === 4;
 
-// Ordered list — `group` controls QuickPick / context-menu sort.
-// Anything in group 1xx is "open", 2xx is "navigate", 3xx is "copy
-// command", 4xx is "copy meta", 5xx is "orchestrator", 8xx is
-// "migrate", 9xx is "lifecycle".
+// Ordered list. `group` controls QuickPick sort within a category;
+// `category` controls which top-level item or submenu the entry lands
+// under. The numeric bands:
+//   1xx — Open File submenu
+//   3xx — Copy Eval submenu
+//   5xx — flat actions (orchestrator-related quick-access)
+//   8xx — flat migrate actions
+//   9xx — flat lifecycle actions (cancel / restore)
 export const ROW_ACTIONS: RowAction[] = [
-  { id: "dabblerSessionSets.openSpec",          label: "Open Spec",                          group: 101, when: () => true },
-  { id: "dabblerSessionSets.openActivityLog",   label: "Open Activity Log",                  group: 102, when: () => true },
-  { id: "dabblerSessionSets.openChangeLog",     label: "Open Change Log",                    group: 103, when: () => true },
-  { id: "dabblerSessionSets.openAiAssignment",  label: "Open AI Assignment",                 group: 104, when: () => true },
-  { id: "dabblerSessionSets.openUatChecklist",  label: "Open UAT Checklist",                 group: 105,
-    when: (s, sup) => sup.uat && s.config?.requiresUAT === true },
-  { id: "dabblerSessionSets.revealPlaywrightTests", label: "Reveal Playwright Tests for This Set", group: 106,
-    when: (s, sup) => sup.e2e && s.config?.requiresE2E === true },
-  { id: "dabblerSessionSets.openSessionState",  label: "Open Session State",                 group: 107, when: () => true },
-  { id: "dabblerSessionSets.openFolder",        label: "Reveal Folder",                      group: 201, when: () => true },
-  { id: "dabblerSessionSets.copyStartCommand.default",  label: "Copy: Start next session",          group: 301,
+  // Open File ▸ submenu. L2 locks the four entries to: Spec, Activity
+  // Log, Change Log, Session State. "Open AI Assignment" removed per
+  // L3. Open UAT Checklist / Reveal Playwright Tests / Reveal Folder
+  // remain registered as Command-Palette-only commands — they are not
+  // surfaced on the right-click menu under L2.
+  { id: "dabblerSessionSets.openSpec",          label: "Spec",                    group: 101, category: "openFile", when: () => true },
+  { id: "dabblerSessionSets.openActivityLog",   label: "Activity Log",            group: 102, category: "openFile", when: () => true },
+  { id: "dabblerSessionSets.openChangeLog",     label: "Change Log",              group: 103, category: "openFile", when: () => true },
+  { id: "dabblerSessionSets.openSessionState",  label: "Session State",           group: 104, category: "openFile", when: () => true },
+
+  // Copy Eval ▸ submenu — L2 labels match the spec §3.3 table.
+  { id: "dabbler.copySpecReviewPrompt",         label: "Evaluate Specification",       group: 301, category: "copyEval", when: () => true },
+  { id: "dabbler.copySessionAccomplishmentsPrompt", label: "Evaluate Most Recent Session", group: 302, category: "copyEval",
+    when: (s) => hasCompletedSession(s) },
+  { id: "dabbler.copySetAccomplishmentsPrompt", label: "Evaluate Session Set",         group: 303, category: "copyEval",
+    when: (s) => isCompleteState(s) },
+  { id: "dabbler.copyStartNextSessionPrompt",   label: "Start Next Session",           group: 304, category: "copyEval",
     when: (s) => inFlightLike(s) },
-  { id: "dabblerSessionSets.copyStartCommand.parallel", label: "Copy: Start next parallel session", group: 302,
-    when: (s) => inFlightLike(s) },
-  { id: "dabblerSessionSets.copySlug",          label: "Copy: Slug only",                    group: 401, when: () => true },
-  // Set 034: orchestrator group (Check Out As… / Release Check-Out /
-  // Open Orchestrator Writer Log) RETIRED from the right-click menu.
-  // The per-row orchestrator-tracking accordion is also gone; without
-  // the gauges + model-description display, surfacing these manual-
-  // override commands here misled operators into thinking the menu
-  // controlled a live signal. The commands stay registered in
-  // extension.ts and are still callable from the Command Palette as
-  // a power-user / recovery affordance. Re-enable here when Set 036+
-  // lands a real chatSessionId-backed signal so the manual override
-  // surface has something to coordinate with.
-  { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",               group: 801, when: needsMigrationToV3 },
-  { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",               group: 802, when: needsMigrationToV4 },
-  { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",                 group: 901,
+
+  // Flat actions — appear at the top level of the QuickPick. The
+  // spec §3.3 table lists v4 only because v4 is the canonical target;
+  // the v3 entry is kept here for legacy v1/v2 sets (mutually exclusive
+  // with v4 — at most one of the two ever appears per row).
+  { id: "dabbler.checkOutOrchestrator",         label: "Set Orchestrator…",            group: 501, category: "flat",
+    when: (s) => s.state === "in-progress" },
+  { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log", group: 502, category: "flat", when: () => true },
+  { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",         group: 801, category: "flat", when: needsMigrationToV3 },
+  { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",         group: 802, category: "flat", when: needsMigrationToV4 },
+  { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",           group: 901, category: "flat",
     when: (s) => cancellable(s) },
-  { id: "dabblerSessionSets.restore",           label: "Restore Session Set",                group: 902,
+  { id: "dabblerSessionSets.restore",           label: "Restore Session Set",          group: 902, category: "flat",
     when: (s) => isCancelled(s) },
 ];
 
 // Resolve the applicable subset for a given set + support flags,
 // pre-sorted by `group` so the QuickPick / context-menu order is
-// deterministic.
+// deterministic. `.filter()` already returns a fresh array, so no
+// defensive copy is needed before `.sort()`.
 export function applicableActions(set: SessionSet, supports: ActionSupports): RowAction[] {
   return ROW_ACTIONS
     .filter((a) => a.when(set, supports))
-    .slice()
     .sort((a, b) => a.group - b.group);
+}
+
+// Set 048 S3: split applicable actions into the three menu categories.
+// The consumer presents `flat` inline on the top-level QuickPick and
+// uses `openFile` / `copyEval` to populate the second-level pickers.
+export interface CategorizedActions {
+  openFile: RowAction[];
+  copyEval: RowAction[];
+  flat: RowAction[];
+}
+
+export function categorizedActions(
+  set: SessionSet,
+  supports: ActionSupports,
+): CategorizedActions {
+  const applicable = applicableActions(set, supports);
+  return {
+    openFile: applicable.filter((a) => a.category === "openFile"),
+    copyEval: applicable.filter((a) => a.category === "copyEval"),
+    flat: applicable.filter((a) => a.category === "flat"),
+  };
 }

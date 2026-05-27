@@ -126,27 +126,17 @@ export interface SuppressionEchoMsg {
   suppressed: Record<string, string>;  // slug → accordion.updatedAt
 }
 
-// Set 034: cursor-anchored context menu. The host computes
-// applicable actions from ActionRegistry and posts them back as a
-// flat list of {label, commandId} pairs; the webview paints the
-// popup at the cursor position it captured on the contextmenu event.
-// Replaces the v0.18.1 host-side `showQuickPick` that opened at the
-// top of the window.
-export interface ContextMenuItem {
-  label: string;
-  commandId: string;
-}
-export interface RenderContextMenuMsg {
-  type: "renderContextMenu";
-  slug: string;
-  items: ContextMenuItem[];
-}
+// Set 048 S3 (spec §3.3, Bias 3 flip): the Set 034 cursor-anchored
+// HTML popup is retired. The right-click context menu is rebuilt on
+// `vscode.window.showQuickPick` (two-step submenu pattern); the
+// `RenderContextMenuMsg` host→webview message and the
+// `ExecuteRowCommandMsg` webview→host message were removed because
+// the QuickPick lives entirely in the extension host.
 
 export type HostToWebview =
   | RowsSnapshotMsg
   | ScanStateChangedMsg
-  | SuppressionEchoMsg
-  | RenderContextMenuMsg;
+  | SuppressionEchoMsg;
 
 // ----- Webview → Host -----
 
@@ -195,20 +185,8 @@ export interface ReadyMsg {
   type: "ready";
 }
 
-// Set 034: cursor-anchored context-menu item selection. The webview
-// emits this when the operator clicks an item in the popup; the host
-// looks up the SessionSet by slug and dispatches the underlying
-// vscode command with `[{ set }]` as args (same shape commands have
-// expected since the original showQuickPick flow).
-export interface ExecuteRowCommandMsg {
-  type: "executeRowCommand";
-  slug: string;
-  commandId: string;
-}
-
 export type WebviewToHost =
   | ExecuteCommandMsg
-  | ExecuteRowCommandMsg
   | ShowRowContextMenuMsg
   | ToggleRowMsg
   | ActivateRowMsg

@@ -90,11 +90,6 @@
         "category": "Dabbler"
       },
       {
-        "command": "dabblerSessionSets.openAiAssignment",
-        "title": "Open AI Assignment",
-        "category": "Dabbler"
-      },
-      {
         "command": "dabblerSessionSets.openUatChecklist",
         "title": "Open UAT Checklist",
         "category": "Dabbler"
@@ -127,6 +122,26 @@
       {
         "command": "dabblerSessionSets.copySlug",
         "title": "Copy: Slug only",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.copySpecReviewPrompt",
+        "title": "Copy: Spec-review prompt",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.copySessionAccomplishmentsPrompt",
+        "title": "Copy: Session-accomplishments review prompt",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.copySetAccomplishmentsPrompt",
+        "title": "Copy: Set-accomplishments review prompt",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabbler.copyStartNextSessionPrompt",
+        "title": "Copy: Start the next session",
         "category": "Dabbler"
       },
       {
