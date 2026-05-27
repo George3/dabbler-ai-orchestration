@@ -23,9 +23,9 @@
     {
       "number": 2,
       "title": "Core ai_router code removal",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-05-27T16:06:31.182020-04:00",
-      "completedAt": null,
+      "completedAt": "2026-05-27T16:12:10.536836-04:00",
       "orchestrator": {
         "engine": "claude",
         "provider": "anthropic",
