@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "048-lightweight-tier-parity",
-  "status": "in-progress",
+  "status": "complete",
   "sessions": [
     {
       "number": 1,
@@ -74,9 +74,9 @@
     {
       "number": 5,
       "title": "UAT + change-log + version bumps + publish",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-05-27T02:35:56.592953-04:00",
-      "completedAt": null,
+      "completedAt": "2026-05-27T03:35:43.547645-04:00",
       "orchestrator": {
         "engine": "claude-code",
         "provider": "anthropic",
