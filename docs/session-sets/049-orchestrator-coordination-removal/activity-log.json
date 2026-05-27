@@ -295,6 +295,96 @@
       "description": "Committed S3 code deliverable (d99bdb7) with 6 files staged: CLAUDE.md, ai_router/migrate_v3_to_v4.py, ai_router/tests/test_migrate_v3_to_v4.py, docs/session-state-schema.md, tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js, tools/dabbler-ai-orchestration/src/utils/migrateSessionStateV4.ts. Net diff: +862/-393 lines across 6 files. Pushed to origin/master. start_session pre-close writes (session-state.json + session-events.jsonl) intentionally excluded from this commit per the Set 049 S2 pattern \u2014 they land in a separate close-out commit alongside activity-log + close-out artifacts.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/register-session-start",
+      "dateTime": "2026-05-27T17:35:48-04:00",
+      "description": "Invoked python -m ai_router.start_session with engine=claude, provider=anthropic, model=claude-opus-4-7, effort=high. State-file flipped session 4 from not-started to in-progress with the post-Set-049 4-field omit-null orchestrator block ({engine, provider, model, effort}); work_started event appended to session-events.jsonl. No --chat-session-id passed (post-S2 the writer ignores it anyway per T2).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/preflight-survey-section-4",
+      "dateTime": "2026-05-27T17:42:00-04:00",
+      "description": "Pre-flight survey per spec \u00a74 closed gaps Pass B identified as under-weighted by the original audit. Surveyed sessionSetsWebviewProtocol.ts (4 retiring types + 2 RowPayload fields confirmed solo-consumed by client.js), HarvestService.ts (sole caller is CustomSessionSetsView.buildRow; load-bearing log-harvest scaffolding lives in Python joiner, not the TS cache wrapper), consumer-repo hooks (none ship custom claude-session-start-invoker), and Gemini/Copilot installer shims (both broken-by-construction post-rip \u2014 wrap retired surfaces with no remaining purpose). Two divergences from the spec's literal retire list documented in s4-close-reason.md \u00a7Spec divergences: HarvestService.ts deleted (not stubbed) and Gemini+Copilot installer shims deleted (not on retire list but broken post-rip).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/delete-retired-source-files",
+      "dateTime": "2026-05-27T17:48:00-04:00",
+      "description": "Deleted 8 retired source files: src/commands/{checkOutOrchestrator,releaseCheckOut,newChatIdWorkflowToast,installOrchestratorHookGemini,installOrchestratorHookCopilot}.ts + src/providers/{CheckoutPollService,chatSessionMismatchModal,ReadOnlyIntentService}.ts. Plus src/providers/HarvestService.ts (spec divergence \u2014 see s4-close-reason.md).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/delete-retired-test-files",
+      "dateTime": "2026-05-27T17:50:00-04:00",
+      "description": "Deleted 13 retired test files: src/test/suite/{checkOutOrchestrator,checkOutOrchestratorChatSessionMismatch,releaseCheckOut,chatSessionMismatchModal,checkoutPollService,readOnlyIntentService,readOnlyIntentTiming}.test.ts + src/test/playwright/{new-chat-id-cli-flow,chatsessionid-takeover,chatsessionid-missing-tolerance,checkout-polling,checkout-conflict,harvest-signals}.spec.ts.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-004/package-json-and-extension-ts-trim",
+      "dateTime": "2026-05-27T17:55:00-04:00",
+      "description": "package.json: removed 5 command entries (dabbler.checkOutOrchestrator, dabbler.releaseCheckOut, dabbler.installOrchestratorHook.gemini, dabbler.installOrchestratorHook.copilot) + the dabblerSessionSets.checkoutPollTimeoutMinutes config setting. extension.ts: removed 5 imports + 5 safeRegister calls + the inline CheckoutPollService instantiation block + the ReadOnlyIntentService dispose wiring. Added a new Set 049 comment block documenting the rip and the surviving surfaces.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "session-004/set-045-explorer-revert",
+      "dateTime": "2026-05-27T18:02:00-04:00",
+      "description": "Set 045 Explorer surface revert per operator-locked P4. CustomSessionSetsView.ts: dropped HarvestService import + instance + cache calls; buildRow no longer attaches harvestSignals/conflicts; dispose/refresh no longer touch the harvest cache. sessionSetsWebviewProtocol.ts: retired ConflictKind + ConflictSeverity + HarvestSignalsPayload + ConflictPayload types + RowPayload.harvestSignals + RowPayload.conflicts fields. media/session-sets-tree/tree.css: removed .harvest-badges + .harvest-badge* + .conflict-pills + .conflict-pill + .conflict-severity-* rules (~95 lines). media/session-sets-tree/client.js: deleted renderHarvestBadges() + renderConflictPills() functions and their call sites in renderRow() (~50 lines). Row layout reverts to pre-Set-045 shape: name + fraction + description only.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 7,
+      "stepKey": "session-004/action-registry-and-test-updates",
+      "dateTime": "2026-05-27T18:08:00-04:00",
+      "description": "ActionRegistry.ts: removed dabbler.checkOutOrchestrator entry from ROW_ACTIONS (14 entries, was 15); dabbler.openOrchestratorWriterLog retained per T5. actionRegistry.test.ts: updated count assertion 15\u219214 + expected-id set; replaced 'Set Orchestrator\u2026 gated to in-progress' test with 'checkOutOrchestrator fully retired' + new 'openOrchestratorWriterLog stays for all states' test. rowMenuHelpers.test.ts: replaced dabbler.checkOutOrchestrator fixture in the flat-actions test with dabbler.openOrchestratorWriterLog. watcherInventory.test.ts: WATCHER_ALLOWLIST trimmed from 3 entries to 1 (CheckoutPollService's 2 entries removed; extension.ts tree-refresh line number updated from 150 to 141 after the wiring trim); baseline-count assertion 3\u21921.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 8,
+      "stepKey": "session-004/trim-claudeSessionStartInvoker-test",
+      "dateTime": "2026-05-27T18:14:00-04:00",
+      "description": "claudeSessionStartInvoker.test.ts rewritten to match the post-S3 shim exports. The pre-rip test imported extractSessionId + preserveExistingClaude \u2014 both removed from the shim in S3 (the shim now exports parsePayload + recoverPriorClaudeModelEffort only). Without this update the test was broken since S3 (silent failure at suiteSetup import). New suites cover the surviving surface: parsePayload happy/error paths + recoverPriorClaudeModelEffort with the v4 sessions[]-active branch, the fallback-to-last-completed branch, the legacy-top-level-orchestrator branch, and the no-'unknown'-fallback T3 contract.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 9,
+      "stepKey": "session-004/rewrite-cross-repo-checkout-notice",
+      "dateTime": "2026-05-27T18:18:00-04:00",
+      "description": "docs/cross-repo-checkout-notice.md rewritten as the T7 deprecation instruction. The doc now opens with a status banner directing consumer-repo authors to remove the H3 'Orchestrator check-out / check-in' block from their CLAUDE.md (covers both the Set 033 'engine + provider' and Set 036 'engine + provider + chatSessionId' shapes). Body includes step-by-step removal instructions, a 'what survives' list (state-file orchestrator block, --chat-session-id accept-with-warning, writer-log, writer-bypass detector), and a 'what was retired' list (coordination, new_chat_id CLI, checkOutOrchestrator/releaseCheckOut/installer shims, takeover modal + poll service, Set 045 harvest badges + conflict pills).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 10,
+      "stepKey": "session-004/test-suite-verification",
+      "dateTime": "2026-05-27T18:25:00-04:00",
+      "description": "Ran npm run compile + npm run test:unit + npm run test:playwright. Layer-1: 553 passing, 2 failing (both pre-existing \u2014 configEditor-foundation vscode-stub ViewColumn.One gap + notificationsSection s5-test-notification disabled-attribute regex; verified by git-stash comparison against master HEAD before S4 edits). Layer-3: 14 passing, 4 failing (all pre-existing \u2014 3 blocked-by-prereqs.spec.ts FileExistsError races on Windows temp-dir + 1 migration-cta-v4.spec.ts needs-migration badge missing; same stash-comparison evidence). S4 added no regressions; net Layer-1 test-count drop (\u224880 tests) matches the test-file deletion footprint.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

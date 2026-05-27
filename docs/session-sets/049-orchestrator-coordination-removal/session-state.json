@@ -51,10 +51,15 @@
     {
       "number": 4,
       "title": "Extension TS cleanup + Explorer revert",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-05-27T17:35:48.662856-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "effort": "high"
+      },
       "verificationVerdict": null
     },
     {
