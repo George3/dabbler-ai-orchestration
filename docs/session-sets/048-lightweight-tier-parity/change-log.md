@@ -449,3 +449,170 @@ Marketplace `0.23.0`, and bundle Set 047's HELD publishes
 together with Set 048's into a single PyPI + Marketplace release
 pair per the audit verdict §4.2 + operator confirmation.
 
+## Session 5 — UAT + change-log + version bumps + publish
+
+Closed 2026-05-27 with disposition `completed`. Final session of
+the Set 048 arc.
+
+### What ships in S5
+
+S5 is the UAT + close-out session for the audit-locked Lightweight-
+tier parity arc. The distinct deliverable beyond the UAT artifact and
+the dual version bumps is the **UAT-discovered Critical bare-import
+bug fix** — running the smoke test on the route()/verify() short-
+circuit under simulated pip-install sys.path surfaced that the entire
+`--no-router` mode shipped in S2 was a silent no-op for pip-installed
+consumers. The original S2 Round-A verifier had flagged this and the
+dismissal as a false positive turned out to be wrong; S5 fixes it and
+locks the invariant out with a static-analysis test.
+
+**Commits land in three logical chunks:**
+
+- **A** ([`58a8f35`](../../../../commit/58a8f35)) — UAT-discovered
+  Critical bare-import fix. All 5 production-code sites
+  (`__init__.py:317` + `:617`, `start_session.py:843`,
+  `close_session.py:1644`, `runtime_mode.py:75`) switched from
+  `from <mod> import …` (bare) to `from .<mod> import …`
+  (relative). New `test_no_bare_imports_of_set048_modules_
+  in_production_code` static-analysis guard. `conftest.py`
+  module-aliasing block makes `sys.modules[<bare>]` and
+  `sys.modules['ai_router.<bare>']` resolve to the same module
+  object so the existing test convention (`import runtime_mode`)
+  shares module-level state with production's relative imports.
+  `test_runtime_mode.py` caplog filter updated from
+  `logger="runtime_mode"` to `logger="ai_router.runtime_mode"`
+  (matches the relative-import-resolved `__name__`).
+- **B** ([`5ad1baa`](../../../../commit/5ad1baa)) — dual version
+  bumps + UAT checklist + doc walks. `pyproject.toml` version
+  0.9.0 -> 0.10.0; `tools/dabbler-ai-orchestration/package.json`
+  version 0.22.0 -> 0.23.0; CHANGELOG.md prepends a `[0.23.0] —
+  2026-05-27` section with Added / Changed / Removed / Fixed
+  subsections; CLAUDE.md `Current:` rewritten for v0.23.0,
+  `Previous:` walked to v0.22.0 (Set 047), v0.21.0 entry added
+  to the prior-version walk. `048-lightweight-tier-parity-uat-
+  checklist.json` ships the 42-item ad-hoc UAT in the Set-045
+  schema (Dabbler UAT-Checklist-Editor compatible). `.vsix` build
+  sanity-check (`npx vsce package --allow-missing-repository`)
+  succeeded — 23 files, 881.47 KB; local artifact removed.
+- **C** ([`a24ab8a`](../../../../commit/a24ab8a)) — cross-provider
+  verification artifacts + all 3 Round-A findings dispositioned
+  in-flight (see verification round below).
+
+### UAT checklist artifact
+
+`docs/session-sets/048-lightweight-tier-parity/048-lightweight-tier-
+parity-uat-checklist.json` ships the canonical UAT in the schema the
+existing Dabbler UAT-Checklist-Editor renders. 42 items map to:
+
+- §3.1 three-knob precedence + override logging + free-form-prose
+  rejection (items 1-4).
+- §3.1 A3 route()/verify() short-circuit + fail-CLOSED (items 5-6).
+- §3.5 external-verification.md soft gate — TTY + non-TTY +
+  `--accept-suggestions` (items 7-9).
+- §3.4 + §3.6 tri-state schema + tier-field default (items 10-12).
+- §3.2 path-reference format + git-range + set-accomp gating +
+  review-criteria embed + slug sanitization (items 13-17).
+- L5 left-click dual-action — non-terminal vs terminal (items
+  18-19).
+- §3.3 context-menu IA refresh — QuickPick + submenu + L4
+  close-on-blur + L3 openAiAssignment removal (items 20-23).
+- §3.7 migrator CLI — happy path + idempotence + refusal +
+  backup-race fix (items 24-27).
+- §3.8 external-verification command — single-set + multi-set
+  picker (items 28-29).
+- §3.9 review-criteria templates (item 30).
+- E8 wizard tier-branch (items 31-33).
+- Doc-revision compliance (items 34-36).
+- Test + packaging surface (items 37-40).
+- P1 parity — identification + state-file updates + events ledger
+  (items 41-43; added in S5 Round-A Minor #3 in-flight fix).
+- S5 UAT-discovered bare-import fix proof (item 42 in original
+  numbering; the P1 items moved this to item 44 in the final
+  numbered list).
+
+Of the 42+3=45 final items, 31 are marked `Passes=true /
+Result=complete` with `Feedback` documenting the verification path
+(unit test, CLI smoke test, file inspection, grep invariant). 14
+are flagged `Passes=false / Result=pending` with `Feedback`
+explicitly stating 'Manual operator UAT post-publish' for the live-
+VS-Code surfaces.
+
+### Cross-provider verification round
+
+Route (`gpt-5-4`, tier 3, $0.1806) returned `pass_with_findings`
+with 3 findings. Verify-of-verify skipped — no cross-provider
+verifier configured for gpt-5-4; the route() call already used
+`task_type="session-verification"` cross-provider routing so the
+route response IS the Round-A verdict.
+
+| # | Severity | Disposition |
+|---|---|---|
+| 1 | Major — static-analysis guard narrower than docstring claimed (only `from <mod> import …` form + only top-level *.py; misses bare `import <mod>`, whitespace variants, subpackages) | **FIXED** in-flight — `test_production_imports.py` rewritten on `ast.walk` over `ai_router/**/*.py` excluding tests/; rejects both `ImportFrom` (level==0, module in set) AND `Import` (alias.name in set); 9 new scanner self-tests cover bare-from + indented-from + bare-import + import-alias + relative-accept + package-absolute-accept + unrelated-accept + subpackage walk + tests-dir exclusion |
+| 2 | Minor — conftest aliasing is import-order sensitive | **FIXED** in-flight — defensive check raises `RuntimeError` if `sys.modules[<bare>]` already exists and is a different object than `ai_router.<bare>`. Fail-fast beats silent split-identity bug. No early offender exists at conftest load time today |
+| 3 | Minor — UAT checklist covered §3.x + L3-L5 but not explicitly P1 | **FIXED** in-flight — 3 new UAT items (P1 parity Identification / State-file updates / Events ledger) with Feedback documenting the architectural invariant that --no-router short-circuits only route()/verify() calls, never the state-file writers |
+
+### Test counts at close
+
+- **Python:** 1020 passed + 1 skipped (was 1010 + 1 pre-S5; +1
+  static-analysis invariant test + 9 scanner self-tests; 0
+  regressions).
+- **TypeScript (unit):** 665 passed + 2 pre-existing failures
+  unchanged from S2/S3/S4 (`configEditor-foundation` panel-
+  lifecycle + `notificationsSection` rendering — both predate
+  Set 048).
+- Cumulative Set 048 routed spend: **$0.94 of $10 NTE (9.4%)**
+  (S1 $0.103 + S2 $0.147 + S3 $0.161 + S4 $0.350 + S5 $0.181).
+
+---
+
+## Set 048 cumulative summary — what shipped
+
+Across 5 sessions (audit pass + 4 implementation):
+
+- **S1** — audit-locked spec rewrite, two-pass devil's-advocate
+  consensus on 8 biases + 5 open questions; cross-provider verifier
+  caught L1 violation on BOTH primary passes.
+- **S2** — `--no-router` mode infrastructure: `runtime_mode.py`
+  three-knob resolver, route/verify short-circuit, soft gate, tri-
+  state schema additions. **The bare-import bug fixed in S5 was
+  introduced here**; the Round-A verifier flagged it as Major #2
+  but the dismissal as false-positive went uncaught.
+- **S3** — copyable-prompt commands + context-menu IA refresh
+  combined (Bias 7 flip); QuickPick rebuild + ActionRegistry reshape
+  + L5 dual-action + Open AI Assignment removal.
+- **S4** — per-consumer migrator CLI + external-verification
+  command + review-criteria template files + wizard tier-branch +
+  four doc rewrites + cross-repo Lightweight notice.
+- **S5** — UAT pass discovers + fixes Critical bare-import bug;
+  42-item UAT checklist artifact; dual version bumps
+  (`dabbler-ai-router 0.10.0` + Marketplace `0.23.0`); CHANGELOG.md
+  + CLAUDE.md walks; set-level close-out.
+
+**Cumulative routed spend: $0.94 of $10 NTE (9.4%).**
+
+**Verifier-catch trend across S1 -> S5:**
+- S1: 1 Critical L1 violation caught on BOTH primary passes
+  (content-embed proposal violates L1 lock).
+- S2: 7 findings (1 Critical, 3 Major, 1 Important, 1 Minor, 1
+  Suggestion); 5 fixed in-flight, 1 false positive, 1 deferred.
+  **The dismissed Major #2 was the bug S5 had to fix.**
+- S3: 8 findings (2 Critical false-positives on inspection, 2
+  Important, 4 Minor); all 6 actionable items fixed in-flight.
+- S4: 1 Medium (apply-mode backup re-read race); fixed in-flight.
+- S5: 3 findings (1 Major, 2 Minor); all 3 fixed in-flight.
+
+The trend confirms `feedback_split_large_verification_bundles`
+applied in practice — single-route verifications stay cheap and
+catch most issues; the multi-pass S1 audit caught the highest-
+severity issue (L1 violation in proposals); the verifier dismissed
+as "false positive" in S2 turned out to be a real Critical bug, so
+**dismissing verifier findings as false positives without
+empirically reproducing them is itself a risk pattern**.
+
+**Set 047's HELD Marketplace 0.22.0 publish status:** queued but
+failed at the `/_apis/gallery` upload step on 2026-05-26 per
+`project_marketplace_0_22_0_queued_unshipped`. PyPI 0.9.0 IS live.
+The Set 048 publish at Marketplace 0.23.0 supersedes the queued
+0.22.0 (Marketplace consumers only see the latest artifact); no
+separate retry needed.
+
