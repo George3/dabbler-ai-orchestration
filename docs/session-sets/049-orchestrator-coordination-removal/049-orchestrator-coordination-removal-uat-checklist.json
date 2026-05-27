@@ -11,8 +11,8 @@
       "FunctionalArea": "Orchestrator block shape",
       "Subarea": "Full-tier writer",
       "ItemLabel": "start_session writes 4-field omit-null block",
-      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude-code --provider anthropic --model claude-opus-4-7 --effort high`. Inspect the resulting `session-state.json`.",
-      "Expectation": "sessions[0].orchestrator = {engine: 'claude-code', provider: 'anthropic', model: 'claude-opus-4-7', effort: 'high'}. NO chatSessionId, checkedOutAt, lastActivityAt fields. NO `null` values.",
+      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude --provider anthropic --model claude-opus-4-7 --effort high`. Inspect the resulting `session-state.json`.",
+      "Expectation": "sessions[0].orchestrator = {engine: 'claude', provider: 'anthropic', model: 'claude-opus-4-7', effort: 'high'}. NO chatSessionId, checkedOutAt, lastActivityAt fields. NO `null` values. (Engine value matches the canonical T3 contract — Claude hook passes `engine=claude`, not `claude-code`.)",
       "Passes": true,
       "Feedback": "Verified by `test_session_state_v4_writers.py::test_orchestrator_block_applies_omit_null` + the live S5 start_session run on this very set (sessions[4].orchestrator confirmed at session-state.json line 71-76).",
       "Result": "complete"
@@ -21,7 +21,7 @@
       "FunctionalArea": "Orchestrator block shape",
       "Subarea": "Full-tier writer",
       "ItemLabel": "Omit-null when caller omits model/effort",
-      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude-code --provider anthropic` (omit --model and --effort). Inspect resulting block.",
+      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude --provider anthropic` (omit --model and --effort). Inspect resulting block.",
       "Expectation": "sessions[0].orchestrator = {engine, provider} only — model and effort keys ABSENT (not null, not 'unknown').",
       "Passes": true,
       "Feedback": "Covered by `test_session_state_v4_writers.py::test_orchestrator_block_applies_omit_null`. The writer reshape in S2 made `orchestrator_model` and `orchestrator_effort` Optional with conditional dict construction.",
@@ -41,7 +41,7 @@
       "FunctionalArea": "CLI backward compatibility",
       "Subarea": "Accept-with-warning",
       "ItemLabel": "--chat-session-id accepted, ignored, warns",
-      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude-code --provider anthropic --chat-session-id deadbeef-cafe`. Observe stderr. Inspect resulting orchestrator block.",
+      "HumanAction": "Run `python -m ai_router.start_session --session-set-dir <fresh-set> --session-number 1 --engine claude --provider anthropic --chat-session-id deadbeef-cafe`. Observe stderr. Inspect resulting orchestrator block.",
       "Expectation": "stderr contains one line: `start_session: --chat-session-id is no longer used (Set 049); ignoring`. Exit 0. The orchestrator block has NO `chatSessionId` field.",
       "Passes": true,
       "Feedback": "Covered by `test_start_session_accept_with_warning.py` (S2). Verified by inspection of `_warn_chat_session_id_ignored()` in start_session.py.",
@@ -176,6 +176,26 @@
       "Passes": true,
       "Feedback": "Covered by `test_restore_session_set.py` + `test_session_state_v4_writers.py::test_register_session_start_after_restore`.",
       "Result": "complete"
+    },
+    {
+      "FunctionalArea": "Lifecycle — full session end-to-end",
+      "Subarea": "Full-tier clean cycle",
+      "ItemLabel": "start_session → work → close_session round-trips cleanly",
+      "HumanAction": "On a fresh Full-tier set, run `python -m ai_router.start_session --session-set-dir <set> --session-number 1 --engine claude --provider anthropic --model claude-opus-4-7 --effort high`. Make a trivial activity-log entry. Then author disposition.json, commit, push, run `python -m ai_router.close_session --session-set-dir <set>`. Inspect post-close session-state.json.",
+      "Expectation": "All 5 gate checks PASS (working_tree_clean, pushed_to_remote, activity_log_entry, next_orchestrator_present, change_log_fresh). sessions[0].status = 'complete'; completedAt populated. closeout_requested + closeout_succeeded events appended to ledger. Orchestrator block survives the close as a 4-field historical record (no top-level clearing).",
+      "Passes": true,
+      "Feedback": "Verified by the S5 close-out itself: this very session ran start_session → work → close_session and produced the expected state transitions (see session-events.jsonl). Set 049 S5 is the worked example.",
+      "Result": "complete"
+    },
+    {
+      "FunctionalArea": "Lifecycle — cancel/restore",
+      "Subarea": "Post-restore close",
+      "ItemLabel": "close_session is clean after restore_session_set",
+      "HumanAction": "Cancel a set, restore it, run start_session on the next un-closed session, do trivial work, author disposition, commit/push, run close_session. Inspect resulting state and ledger.",
+      "Expectation": "close_session succeeds with all gate checks PASS. No legacy coordination-block carry-over from the pre-cancel period interferes with the close. Events ledger gains canonical closeout events. The just-closed session's orchestrator block is a clean 4-field record.",
+      "Passes": false,
+      "Feedback": "Manual operator UAT. Programmatically verified that the writers don't read or condition on coordination-layer fields, so the cancel-restore-close path traverses the same code path as a normal close.",
+      "Result": "pending"
     },
     {
       "FunctionalArea": "Documentation",

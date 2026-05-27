@@ -144,15 +144,28 @@ upload` invoked locally.
 
 ## Cost
 
-S5 ran without invoking the router mid-session per the
-memory-locked discipline. The only routed cost is `close_session`'s
-Round-A cross-provider verification, which under default `tier:
-full` + `requiresE2E: false` runs the routed call (the Set 048
-`runtime_mode` short-circuit applies only to `--no-router` /
-Lightweight). Round-B (final session per spec §5) is a separate
-explicit route() call after close_session returns VERIFIED.
+S5 ran without invoking the router mid-session for orchestrator
+work per the memory-locked discipline. The routed costs at
+close-out were:
 
-Cumulative across S1-S5 expected to land well under the $10 NTE.
+- $0.0000 — `close_session` Round-A. The run returned `succeeded`
+  with all 5 gate checks PASS and no routed verifier-call entry
+  in its output. (The `runtime_mode` short-circuit applies under
+  `--no-router` / Lightweight; Full-tier default does NOT
+  short-circuit at the router layer. Why close_session didn't
+  visibly route a verifier call on this Full-tier run is a
+  follow-on hygiene item; the gate-only path passed.)
+- $0.5446 — Round-B explicit verification (gpt-5-4 via
+  `route(task_type='session-verification')`). The first two
+  invocations crashed on RouteResult attribute access ($0.366
+  wasted, exactly the pattern the operator's locked
+  `feedback_ai_router_route_result_handling` memory was guarding
+  against). The third dumped fields to disk before attribute
+  access per that discipline and produced the VERIFIED verdict
+  with 6 ISSUES_FOUND, all dispositioned as in-flight doc fixes.
+
+Cumulative across S1-S5: **$0.5921 of $10 NTE (5.92%)** — well
+under budget.
 
 ## Why this S5 is documentation-dominant
 

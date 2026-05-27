@@ -422,11 +422,14 @@ changes (there are none in the post-rip model); the log survives
 as a post-hoc diagnosis surface and may be retired in a future
 stability set.
 
-**Tier symmetry.** On Full tier, `close_session` writes the
-per-session orchestrator block automatically; the operator never
-edits it directly. On Lightweight tier, the operator (or path-aware
-agent) writes the per-session block by hand on every close,
-following the same 4-field omit-null contract.
+**Tier symmetry.** On Full tier, `start_session` writes the
+per-session orchestrator block automatically when the in-progress
+session is registered; the operator never edits it directly. On
+Lightweight tier, the operator (or path-aware agent) writes the
+per-session block by hand at session start, following the same
+4-field omit-null contract. In either case the block stays attached
+to its `sessions[i]` entry through close — `close_session` does not
+re-write or clear it.
 
 **`writer-bypass` detector (D3) survives** in
 `ai_router/joiner/conflicts.py` as a general writer-discipline check

@@ -111,9 +111,10 @@ S2 ran the rip across the Python surface. Net diff: **-2916 lines**
   [`1237c87`](https://github.com/darndestdabbler/dabbler-ai-orchestration/commit/1237c87),
   [`9ebfe22`](https://github.com/darndestdabbler/dabbler-ai-orchestration/commit/9ebfe22).
 - Cumulative through S2: **$0.0475 of $10 NTE (0.48%)** — S2 ran
-  without invoking the router mid-session, and `close_session`'s
-  routed verification was short-circuited by Set 048's `runtime_mode`
-  (`tier: full` + `requiresE2E: false` defaults to zero-cost stub).
+  without invoking the router mid-session per the memory-locked
+  discipline. The close_session call for S2 returned `succeeded`
+  with no routed-call entry in its output, consistent with the gate
+  checks themselves not invoking the verifier on this run.
 
 ## Session 3 — Writer-side cleanup + migration sweep
 
@@ -278,16 +279,30 @@ Closed 2026-05-27 with disposition `completed`.
   bumped to **0.24.0**. `tools/dabbler-ai-orchestration/CHANGELOG.md`
   `[0.24.0]` entry added.
 - **Rip-out UAT checklist** at
-  [`uat-checklist.md`](uat-checklist.md): 17 items covering
-  clean session start/close on Full + Lightweight, new orchestrator
-  block shape, migrator sweep behavior, accept-with-warning,
+  [`049-orchestrator-coordination-removal-uat-checklist.json`](049-orchestrator-coordination-removal-uat-checklist.json):
+  19 items covering clean Full-tier start/close end-to-end, new
+  orchestrator block shape (Full + Lightweight), migrator sweep
+  behavior (3 items + idempotency + rollback), accept-with-warning,
   Explorer surface free of harvest badges / conflict pills,
-  writer-bypass detector still fires, cancel/restore lifecycle.
+  Command Palette retirement, writer-bypass detector still fires,
+  cancel/restore lifecycle (including post-restore close), consumer-
+  repo notice. 13 items verified programmatically, 6 flagged as
+  manual operator UAT post-publish.
 - **CHANGELOG.md entries** in both `ai_router/` and
   `tools/dabbler-ai-orchestration/`.
 - **This change-log.md**.
-- **Verification**: Round A only (no `requiresE2E`, no UI work
-  needing a Round B re-check beyond UAT confirmation).
+- **Verification**: Round A (close_session gate checks — all 5
+  PASS: working_tree_clean, pushed_to_remote, activity_log_entry,
+  next_orchestrator_present, change_log_fresh) and Round B (explicit
+  cross-provider gpt-5-4 verification of the close-out artifacts via
+  `route(task_type='session-verification')`). Round-B verdict at
+  [`session-reviews/session-005-round-2.md`](session-reviews/session-005-round-2.md):
+  VERIFIED with 6 ISSUES_FOUND, all dispositioned in-flight as
+  documentation fixes (tier-symmetry wording corrected, UAT engine
+  value normalized to `claude`, 2 UAT items added for Full-tier
+  clean end-to-end + post-restore close, change-log.md UAT path
+  corrected, cost narrative reconciled — see the round-2 review
+  + the follow-on hygiene commit). Round-B cost: $0.17805 routed.
 - **Marketplace + PyPI publishes** are tag-driven via GitHub
   Actions per [[publish-via-github-actions]]: operator pushes
   `v0.11.0` for PyPI and `vsix-v0.24.0` for Marketplace when ready.
@@ -315,14 +330,28 @@ Closed 2026-05-27 with disposition `completed`.
 | S2 (rip) | $0.0000 | $0.0475 | 0.48% |
 | S3 (sweep) | $0.0000 | $0.0475 | 0.48% |
 | S4 (TS cleanup) | $0.0000 | $0.0475 | 0.48% |
-| S5 (close-out) | TBD on close | TBD | <1% |
+| S5 (close-out) | $0.5446 | $0.5921 | 5.92% |
 
-S5's only routed cost is `close_session`'s Round-A cross-provider
-verification (subject to the Set 048 `runtime_mode` short-circuit —
-default `tier: full` + `requiresE2E: false` defaults to a zero-cost
-stub; this set's `spec.md` has `requiresUAT: true` + `requiresE2E:
-false` so the routed cost path runs only if `runtime_mode` is
-overridden).
+S5's routed cost breaks down as:
+
+- $0.0000 — `close_session` Round-A. The gate-check run completed
+  cleanly with all 5 gates PASS and did not surface a routed
+  verifier-call entry in its output. (The `runtime_mode`
+  short-circuit memory referenced earlier in this change-log applies
+  only under `--no-router` / Lightweight tier; Full-tier default
+  does NOT short-circuit verification at the router layer — the
+  S5 close-out simply returned with the gate-only path engaged.
+  Investigating why close_session didn't visibly route a verifier
+  call on this run is a follow-on hygiene item; the set is closed.)
+- $0.5446 — Round-B explicit verification (gpt-5-4 verifier via
+  `route(task_type='session-verification')`). Three runs: 2 failed
+  on attribute-access bugs in the local harness (each producing
+  output that was lost — $0.158865 + $0.207615) and 1 succeeded
+  cleanly ($0.17805). The failed-harness cost is the kind of waste
+  the operator's locked feedback at
+  [[ai-router-route-result-handling]] is specifically guarding
+  against; the third run dumped fields to disk BEFORE attribute
+  access per that discipline and captured the verdict.
 
 The whole set ran well under the $10 NTE budget. The audit-then-spec
 discipline + Claude Opus 4.7 1M orchestrator-direct work
