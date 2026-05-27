@@ -42,13 +42,21 @@ and paste it into a fresh AI chat (Claude Code, Gemini Code Assist,
 or any GPT-based tool). The AI fetches the canonical setup
 instructions and walks you through:
 
-1. **A budget dialog** — set a not-to-exceed (NTE) dollar cap for
-   verification spend. Verification calls typically cost $0.05–$0.80
-   each; entering $0 switches to manual cross-provider review at
-   no API cost.
-2. **A plan alignment** — the AI proposes a session-set
+1. **Tier choice** — Full or Lightweight. Full uses the AI router
+   for cost-minded routing and automatic cross-provider
+   verification at session end; Lightweight skips the router
+   (no API spend on verification) and uses copyable review
+   prompts you paste into a path-aware AI chat for manual review.
+   Both tiers share the same session/state-file lifecycle and
+   Session Set Explorer surface — only the verification mechanism
+   differs.
+2. **A budget dialog** — Full tier only — set a not-to-exceed (NTE)
+   dollar cap for verification spend. Verification calls typically
+   cost $0.05–$0.80 each; entering $0 switches to manual cross-
+   provider review at no API cost.
+3. **A plan alignment** — the AI proposes a session-set
    decomposition based on what you describe.
-3. **A numbered action checklist** — *every* intended write, config,
+4. **A numbered action checklist** — *every* intended write, config,
    and scaffolding step is listed. You batch-approve before anything
    touches disk. No per-write confirmation prompts. You can
    interrupt at any time.
@@ -58,9 +66,12 @@ and the standard activity-bar tree takes over.
 
 If you'd rather drive the setup from VS Code's UI directly, run
 **`Dabbler: Get Started`** from the command palette
-(`Ctrl+Shift+P` / `Cmd+Shift+P`). The wizard includes a
-**Configure AI Router** button that opens the visual config editor
-once your project is set up.
+(`Ctrl+Shift+P` / `Cmd+Shift+P`). The wizard opens with a
+**Choose adoption tier** radio group above the prerequisites
+section; the Full and Lightweight paths surface different
+prerequisites and helper buttons. The **Configure AI Router**
+button (Full only) opens the visual config editor once your project
+is set up.
 
 ---
 
@@ -116,21 +127,49 @@ Sign-up links and a full prerequisites checklist live in the
 
 ## Other features
 
-- **Orchestrator indicator on in-progress rows.** Every in-progress
-  session set's row expands to an accordion-body with two side-by-side
-  gauges — the model tier (low / mid / flagship, IBM colorblind-safe
-  palette) and the current effort (low / medium / high / extra-high /
-  max). The gauges read a per-set marker (`<workspace>/docs/session-
-  sets/<slug>/.dabbler/orchestrator.json`) populated automatically by
-  the Claude Code `SessionStart` hook (run **`Dabbler: Install
-  Orchestrator Hook (Claude Code)`** once per workspace) and the Codex
-  `~/.codex/config.toml` watcher. Right-click any in-progress row to
-  open **Set Orchestrator Model & Effort…** (universal manual override
-  for Gemini Code Assist + GitHub Copilot, or any time you want to
-  declare what's running) or **Open Orchestrator Writer Log**
-  (diagnostic — appended when multi-writer precedence skips a write).
-  Both are also reachable via the Command Palette under the **Dabbler**
-  category.
+- **Row interactions.** Left-click a session-set row to open its
+  `spec.md` in an editor tab; on non-terminal rows (in-progress or
+  not-started) the click also copies `Start the next session of
+  \`<slug>\`.` to your clipboard with a one-line confirmation toast,
+  so you can paste straight into the AI chat and resume work in two
+  keystrokes. Right-click opens a native VS Code QuickPick with
+  two-step submenus: **Open File ▸** (Spec / Activity Log / Change
+  Log / Session State), **Copy Eval ▸** (four copyable review
+  prompts — Evaluate Specification / Most Recent Session / Session
+  Set / Start Next Session), and flat actions for Set Orchestrator,
+  Open Orchestrator Writer Log, Migrate to v4 schema, Cancel set,
+  and Restore set. The right-click menu honors light/dark theme
+  natively and dismisses on Escape or click-outside.
+- **Copyable review prompts.** Four `Dabbler: Copy …` commands
+  (also under Copy Eval ▸ in the right-click menu) author review
+  prompts that reference your session-set artifacts by path rather
+  than embedding their contents, then write to the clipboard. Paste
+  into any path-aware AI chat (Claude Code, Codex, Cline, Cursor,
+  etc.) and the agent reads the files itself. Optional per-repo
+  files at `docs/review-criteria/{spec,session,set}.md` override
+  the default review instructions if present.
+- **Lightweight tier (no API spend).** Run
+  `python -m ai_router.start_session … --no-router`, or set
+  `tier: lightweight` in `spec.md`, or `DABBLER_NO_ROUTER=1` in
+  your environment. The router stops making LLM calls (no
+  credentials needed), `close_session` accepts a manual
+  attestation, and the soft gate prompts when an
+  `external-verification.md` artifact is missing
+  (`Dabbler: Open External Verification Document` creates or opens
+  it). Same Session Set Explorer, same `session-state.json`
+  lifecycle, same close-out gates — just no API spend on
+  verification.
+- **Schema-v4 migrator + prerequisites.** Set 047 introduced the v4
+  `session-state.json` shape where every per-session lifecycle field
+  (orchestrator, startedAt, completedAt, verdict) lives in a
+  per-session `sessions[]` ledger. The **Migrate to v4 schema**
+  right-click action (also `python -m ai_router.migrate_v3_to_v4`)
+  upgrades v1/v2/v3 state files with a `.bak.json` rollback
+  contract. Lightweight consumers with hand-edited shapes can run
+  `python -m ai_router.migrate_lightweight_to_canonical_v4`.
+  Specs can declare a `prerequisites:` field listing other session-
+  set slugs; rows with unmet prereqs render a
+  **[BLOCKED BY PREREQS]** badge until their dependencies close.
 - **Visual config editor** (`Dabbler: Open Dabbler Config Editor`) —
   edit `router-config.yaml`, `budget.yaml`, and the gitignored
   `local-overrides.yaml` through a six-section panel without touching
@@ -147,12 +186,14 @@ Sign-up links and a full prerequisites checklist live in the
 - **Cancel/Restore lifecycle** — cancel a session set mid-stream
   with a recorded reason; restore later if priorities shift. The
   audit trail accumulates across cycles.
-- **UAT checklist editor integration** — for sets that opt in with
-  `requiresUAT: true`, the orchestrator authors a checklist that
-  pairs with the freely-available
+- **UAT checklist integration (tri-state).** Specs declare
+  `requiresUAT` and `requiresE2E` as `true | false | "suggested"`.
+  When the value is `"suggested"` and the session has UX scope, the
+  orchestrator asks at session start which review path you want
+  (E2E tests, UAT checklist, both, or neither) and records your
+  choice once; close-out gates derive from that recorded answer.
+  UAT checklists pair with the freely-available
   [UAT checklist editor](https://darndestdabbler.github.io/uat-checklist-editor/).
-  Pending review blocks downstream sessions unless explicitly
-  overridden.
 - **Worktree auto-discovery** — parallel session sets running in
   sibling git worktrees show up in the activity-bar tree even when
   the worktree isn't open as a separate workspace folder.

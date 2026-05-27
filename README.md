@@ -74,13 +74,23 @@ deeper feature descriptions live at
   attempts fail. The work is preserved in git for human review
   either way.
   [Deep dive](docs/repository-reference.md#5-batching-and-robust-fallbacks).
-- **UAT + E2E support (opt-in)** — Repos that flag `requiresUAT: true`
-  and/or `requiresE2E: true` get a UAT checklist with E2E pre-
-  screening; functional checklist items must have matching Playwright
-  coverage before the human is asked to review. No-UI repos default to
-  the universal core (build, test, verify, commit) with no UAT/E2E
-  surface area.
+- **UAT + E2E support (tri-state, opt-in).** Specs declare
+  `requiresUAT` and `requiresE2E` as `true | false | "suggested"`.
+  `true` enforces a UAT checklist + matching Playwright coverage as
+  a close-out gate; `false` skips both surfaces; `"suggested"` asks
+  you at session start whether you want E2E tests, UAT checklist,
+  both, or neither, records your choice, and gates close-out
+  accordingly. No-UI repos default to the universal core (build,
+  test, verify, commit) with no UAT/E2E surface area.
   [Deep dive](docs/repository-reference.md#uat-and-e2e-support-when-to-opt-in).
+- **Full and Lightweight tiers.** Specs declare `tier: full` (default)
+  or `tier: lightweight`. Full uses the AI router for cost-minded
+  routing and automatic cross-provider verification. Lightweight
+  skips the router (no API spend on verification) and uses copyable
+  review prompts that reference your session-set files by path,
+  pasted into any path-aware AI chat for manual review. Same
+  Session Set Explorer, same `session-state.json` lifecycle, same
+  close-out gates — only the verification mechanism differs.
 
 ---
 
@@ -92,9 +102,10 @@ deeper feature descriptions live at
    - Or from a terminal: `code --install-extension DarndestDabbler.dabbler-ai-orchestration`.
    - Or directly from the
      [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=DarndestDabbler.dabbler-ai-orchestration).
-   - Offline / firewall fallback: the most recent VSIX is committed at
-     [`tools/dabbler-ai-orchestration/dabbler-ai-orchestration-0.13.3.vsix`](tools/dabbler-ai-orchestration/dabbler-ai-orchestration-0.13.3.vsix);
-     **Extensions → ... → Install from VSIX...** picks it up.
+   - Offline / firewall fallback: each tagged release attaches the
+     `.vsix` as a downloadable asset on the
+     [GitHub Releases page](https://github.com/darndestdabbler/dabbler-ai-orchestration/releases);
+     pick the latest, then **Extensions → ... → Install from VSIX...**.
 2. **Open your workspace.** Any folder with — or destined for — a
    `docs/session-sets/` directory. The activity-bar **Session Set
    Explorer** icon appears automatically once that path is present.

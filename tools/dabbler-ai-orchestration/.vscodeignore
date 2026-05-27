@@ -11,3 +11,4 @@ tsconfig.json
 *.bak
 **/*.ts
 !dist/**
+media/screenshot-mockup.html
