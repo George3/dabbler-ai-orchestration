@@ -109,6 +109,7 @@ export const ROW_ACTIONS: RowAction[] = [
   // Orchestrator…") retired alongside the check-out / check-in
   // coordination layer. The writer-log opener stays as a diagnostic
   // surface (the log itself is preserved provisionally per T5).
+  { id: "dabblerSessionSets.copySlug",          label: "Copy Slug",                    group: 501, category: "flat", when: () => true },
   { id: "dabbler.openOrchestratorWriterLog",    label: "Open Orchestrator Writer Log", group: 502, category: "flat", when: () => true },
   { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",         group: 801, category: "flat", when: needsMigrationToV3 },
   { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",         group: 802, category: "flat", when: needsMigrationToV4 },

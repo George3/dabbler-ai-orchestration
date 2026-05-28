@@ -93,6 +93,7 @@ suite("ActionRegistry", () => {
       "dabbler.copySetAccomplishmentsPrompt",
       "dabbler.copyStartNextSessionPrompt",
       "dabbler.copyStartNextParallelSessionPrompt",
+      "dabblerSessionSets.copySlug",
       "dabbler.openOrchestratorWriterLog",
       "dabblerSessionSets.migrate",
       "dabblerSessionSets.migrateToV4",
@@ -101,7 +102,7 @@ suite("ActionRegistry", () => {
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 14);
+    assert.strictEqual(ROW_ACTIONS.length, 15);
   });
 
   test("openAiAssignment fully removed (L3)", () => {

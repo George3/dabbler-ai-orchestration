@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.24.1] — 2026-05-28 (patch — Copy Slug context menu item)
+
+### Fixed
+
+- **`dabblerSessionSets.copySlug` now appears in the Session Set
+  Explorer right-click menu.** The command was registered in
+  `package.json` and implemented in `copyCommand.ts` but was never
+  added to `ROW_ACTIONS` in `ActionRegistry.ts`, making it invisible
+  from the context menu. Added as a `flat` action at group 501
+  (above the Orchestrator Writer Log entry). Copies the raw session-set
+  slug to the clipboard — useful when communicating session state to
+  an AI engine mid-session.
+
 ## [0.24.0] — 2026-05-27 (Set 049 — Orchestrator coordination removal)
 
 Rips out the extension-side surfaces that paired with the
