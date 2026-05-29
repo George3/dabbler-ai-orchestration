@@ -167,6 +167,16 @@
     const descSpan = row.description
       ? '<span class="row-description">' + escHtml(row.description) + '</span>'
       : "";
+    // Set 050 S4: unobtrusive schema-drift marker. A single asterisk
+    // after the row name, carrying the "Ran under schema v<N>" tooltip
+    // as its title attribute. Replaces the old intrusive
+    // "(needs migration)" description label. Empty marker → no span.
+    const migrationSpan = row.migrationMarker
+      ? '<span class="row-migration-marker" title="' +
+          escAttr(row.migrationTooltip || "") + '" aria-label="' +
+          escAttr(row.migrationTooltip || "") + '">' +
+          escHtml(row.migrationMarker) + '</span>'
+      : "";
     return (
       '<div role="treeitem" tabindex="-1" aria-level="2"' +
       ' aria-selected="false" data-slug="' + escAttr(row.slug) + '"' +
@@ -177,6 +187,7 @@
           '<span class="' + fractionCls + '" aria-hidden="true">' + escHtml(row.fraction || "") + '</span>' +
           '<span class="row-text">' +
             '<span class="row-name">' + escHtml(row.name) + '</span>' +
+            migrationSpan +
             descSpan +
           '</span>' +
         '</div>' +

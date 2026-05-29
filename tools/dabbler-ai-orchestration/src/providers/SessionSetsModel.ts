@@ -9,12 +9,35 @@ import { SessionSet, SessionState } from "../types";
 // The provider becomes a thin shim that calls into the model and the
 // shared `fileSystem.readAllSessionSets()` scan.
 
-// Set 030 Session 5: badge surfaced on any v2 (or broken-v3) state
-// file. Tracked separately from the lifecycle-state badges so reviewers
-// can see at a glance which sets still need a one-shot v3 migration
-// even if they're otherwise healthy.
-export function needsMigrationBadge(set: SessionSet): string {
-  return set.needsMigration ? "(needs migration)" : "";
+// Set 050 Session 4 (Explorer UX revision): the old intrusive
+// "(needs migration)" row label is retired (operator non-goal: "Old
+// schema is acceptable; no per-row nag"). A set on a sub-current schema
+// now carries only an unobtrusive asterisk next to its name; the detail
+// lives in the asterisk's hover tooltip. Upgrading is offered as a
+// single repo-level title-bar action, never a per-row obligation.
+//
+// `migrationMarker` is the visible glyph ("*" or ""); `migrationTooltip`
+// is the hover text ("Ran under schema v<N>"). Both are pure functions
+// of the SessionSet so the renderer and tests share one source.
+export function migrationMarker(set: SessionSet): string {
+  return set.needsMigration ? "*" : "";
+}
+
+export function migrationTooltip(set: SessionSet): string {
+  if (!set.needsMigration) return "";
+  const v = set.schemaVersionOnDisk;
+  return typeof v === "number"
+    ? `Ran under schema v${v}`
+    : "Ran under an older schema";
+}
+
+// Set 050 S4: drives the `dabblerSessionSets.hasSubCurrentSets` context
+// key that gates the title-bar "Upgrade older session sets" icon. True
+// iff at least one scanned set is on a sub-current schema. Pure +
+// exported so the gating logic is unit-tested without launching VS Code
+// (the package.json `when` clause that consumes the key is declarative).
+export function hasSubCurrentSets(allSets: SessionSet[]): boolean {
+  return allSets.some((s) => s.needsMigration);
 }
 
 export const ICON_FILES: Record<SessionState, string> = {

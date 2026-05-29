@@ -149,7 +149,7 @@ var require_ms = __commonJS({
 // node_modules/debug/src/common.js
 var require_common = __commonJS({
   "node_modules/debug/src/common.js"(exports2, module2) {
-    function setup(env8) {
+    function setup(env10) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
       createDebug.coerce = coerce;
@@ -158,8 +158,8 @@ var require_common = __commonJS({
       createDebug.enabled = enabled;
       createDebug.humanize = require_ms();
       createDebug.destroy = destroy;
-      Object.keys(env8).forEach((key) => {
-        createDebug[key] = env8[key];
+      Object.keys(env10).forEach((key) => {
+        createDebug[key] = env10[key];
       });
       createDebug.names = [];
       createDebug.skips = [];
@@ -513,20 +513,20 @@ var require_supports_color = __commonJS({
     var os4 = require("os");
     var tty = require("tty");
     var hasFlag = require_has_flag();
-    var { env: env8 } = process;
+    var { env: env10 } = process;
     var forceColor;
     if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
       forceColor = 0;
     } else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
       forceColor = 1;
     }
-    if ("FORCE_COLOR" in env8) {
-      if (env8.FORCE_COLOR === "true") {
+    if ("FORCE_COLOR" in env10) {
+      if (env10.FORCE_COLOR === "true") {
         forceColor = 1;
-      } else if (env8.FORCE_COLOR === "false") {
+      } else if (env10.FORCE_COLOR === "false") {
         forceColor = 0;
       } else {
-        forceColor = env8.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env8.FORCE_COLOR, 10), 3);
+        forceColor = env10.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env10.FORCE_COLOR, 10), 3);
       }
     }
     function translateLevel(level) {
@@ -554,7 +554,7 @@ var require_supports_color = __commonJS({
         return 0;
       }
       const min = forceColor || 0;
-      if (env8.TERM === "dumb") {
+      if (env10.TERM === "dumb") {
         return min;
       }
       if (process.platform === "win32") {
@@ -564,34 +564,34 @@ var require_supports_color = __commonJS({
         }
         return 1;
       }
-      if ("CI" in env8) {
-        if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "GITHUB_ACTIONS", "BUILDKITE"].some((sign) => sign in env8) || env8.CI_NAME === "codeship") {
+      if ("CI" in env10) {
+        if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "GITHUB_ACTIONS", "BUILDKITE"].some((sign) => sign in env10) || env10.CI_NAME === "codeship") {
           return 1;
         }
         return min;
       }
-      if ("TEAMCITY_VERSION" in env8) {
-        return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env8.TEAMCITY_VERSION) ? 1 : 0;
+      if ("TEAMCITY_VERSION" in env10) {
+        return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env10.TEAMCITY_VERSION) ? 1 : 0;
       }
-      if (env8.COLORTERM === "truecolor") {
+      if (env10.COLORTERM === "truecolor") {
         return 3;
       }
-      if ("TERM_PROGRAM" in env8) {
-        const version = parseInt((env8.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
-        switch (env8.TERM_PROGRAM) {
+      if ("TERM_PROGRAM" in env10) {
+        const version = parseInt((env10.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+        switch (env10.TERM_PROGRAM) {
           case "iTerm.app":
             return version >= 3 ? 3 : 2;
           case "Apple_Terminal":
             return 2;
         }
       }
-      if (/-256(color)?$/i.test(env8.TERM)) {
+      if (/-256(color)?$/i.test(env10.TERM)) {
         return 2;
       }
-      if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env8.TERM)) {
+      if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env10.TERM)) {
         return 1;
       }
-      if ("COLORTERM" in env8) {
+      if ("COLORTERM" in env10) {
         return 1;
       }
       return min;
@@ -804,10 +804,10 @@ var require_src2 = __commonJS({
     var fs_1 = require("fs");
     var debug_1 = __importDefault(require_src());
     var log = debug_1.default("@kwsites/file-exists");
-    function check(path27, isFile, isDirectory) {
-      log(`checking %s`, path27);
+    function check(path28, isFile, isDirectory) {
+      log(`checking %s`, path28);
       try {
-        const stat = fs_1.statSync(path27);
+        const stat = fs_1.statSync(path28);
         if (stat.isFile() && isFile) {
           log(`[OK] path represents a file`);
           return true;
@@ -827,8 +827,8 @@ var require_src2 = __commonJS({
         throw e;
       }
     }
-    function exists2(path27, type = exports2.READABLE) {
-      return check(path27, (type & exports2.FILE) > 0, (type & exports2.FOLDER) > 0);
+    function exists2(path28, type = exports2.READABLE) {
+      return check(path28, (type & exports2.FILE) > 0, (type & exports2.FOLDER) > 0);
     }
     exports2.exists = exists2;
     exports2.FILE = 1;
@@ -970,17 +970,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path27) {
-      const ctrl = callVisitor(key, node, visitor, path27);
+    function visit_(key, node, visitor, path28) {
+      const ctrl = callVisitor(key, node, visitor, path28);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path27, ctrl);
-        return visit_(key, ctrl, visitor, path27);
+        replaceNode(key, path28, ctrl);
+        return visit_(key, ctrl, visitor, path28);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path27 = Object.freeze(path27.concat(node));
+          path28 = Object.freeze(path28.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = visit_(i2, node.items[i2], visitor, path27);
+            const ci = visit_(i2, node.items[i2], visitor, path28);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -991,13 +991,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path27 = Object.freeze(path27.concat(node));
-          const ck = visit_("key", node.key, visitor, path27);
+          path28 = Object.freeze(path28.concat(node));
+          const ck = visit_("key", node.key, visitor, path28);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path27);
+          const cv = visit_("value", node.value, visitor, path28);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -1018,17 +1018,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path27) {
-      const ctrl = await callVisitor(key, node, visitor, path27);
+    async function visitAsync_(key, node, visitor, path28) {
+      const ctrl = await callVisitor(key, node, visitor, path28);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path27, ctrl);
-        return visitAsync_(key, ctrl, visitor, path27);
+        replaceNode(key, path28, ctrl);
+        return visitAsync_(key, ctrl, visitor, path28);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path27 = Object.freeze(path27.concat(node));
+          path28 = Object.freeze(path28.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = await visitAsync_(i2, node.items[i2], visitor, path27);
+            const ci = await visitAsync_(i2, node.items[i2], visitor, path28);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -1039,13 +1039,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path27 = Object.freeze(path27.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path27);
+          path28 = Object.freeze(path28.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path28);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path27);
+          const cv = await visitAsync_("value", node.value, visitor, path28);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -1072,23 +1072,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path27) {
+    function callVisitor(key, node, visitor, path28) {
       if (typeof visitor === "function")
-        return visitor(key, node, path27);
+        return visitor(key, node, path28);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path27);
+        return visitor.Map?.(key, node, path28);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path27);
+        return visitor.Seq?.(key, node, path28);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path27);
+        return visitor.Pair?.(key, node, path28);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path27);
+        return visitor.Scalar?.(key, node, path28);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path27);
+        return visitor.Alias?.(key, node, path28);
       return void 0;
     }
-    function replaceNode(key, path27, node) {
-      const parent = path27[path27.length - 1];
+    function replaceNode(key, path28, node) {
+      const parent = path28[path28.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -1698,10 +1698,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path27, value) {
+    function collectionFromPath(schema, path28, value) {
       let v = value;
-      for (let i2 = path27.length - 1; i2 >= 0; --i2) {
-        const k2 = path27[i2];
+      for (let i2 = path28.length - 1; i2 >= 0; --i2) {
+        const k2 = path28[i2];
         if (typeof k2 === "number" && Number.isInteger(k2) && k2 >= 0) {
           const a = [];
           a[k2] = v;
@@ -1720,7 +1720,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path27) => path27 == null || typeof path27 === "object" && !!path27[Symbol.iterator]().next().done;
+    var isEmptyPath = (path28) => path28 == null || typeof path28 === "object" && !!path28[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -1750,11 +1750,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path27, value) {
-        if (isEmptyPath(path27))
+      addIn(path28, value) {
+        if (isEmptyPath(path28))
           this.add(value);
         else {
-          const [key, ...rest] = path27;
+          const [key, ...rest] = path28;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -1768,8 +1768,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path27) {
-        const [key, ...rest] = path27;
+      deleteIn(path28) {
+        const [key, ...rest] = path28;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -1783,8 +1783,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path27, keepScalar) {
-        const [key, ...rest] = path27;
+      getIn(path28, keepScalar) {
+        const [key, ...rest] = path28;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -1802,8 +1802,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path27) {
-        const [key, ...rest] = path27;
+      hasIn(path28) {
+        const [key, ...rest] = path28;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -1813,8 +1813,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path27, value) {
-        const [key, ...rest] = path27;
+      setIn(path28, value) {
+        const [key, ...rest] = path28;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -4329,9 +4329,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path27, value) {
+      addIn(path28, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path27, value);
+          this.contents.addIn(path28, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -4406,14 +4406,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path27) {
-        if (Collection.isEmptyPath(path27)) {
+      deleteIn(path28) {
+        if (Collection.isEmptyPath(path28)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path27) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path28) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -4428,10 +4428,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path27, keepScalar) {
-        if (Collection.isEmptyPath(path27))
+      getIn(path28, keepScalar) {
+        if (Collection.isEmptyPath(path28))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path27, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path28, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -4442,10 +4442,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path27) {
-        if (Collection.isEmptyPath(path27))
+      hasIn(path28) {
+        if (Collection.isEmptyPath(path28))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path27) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path28) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -4462,13 +4462,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path27, value) {
-        if (Collection.isEmptyPath(path27)) {
+      setIn(path28, value) {
+        if (Collection.isEmptyPath(path28)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path27), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path28), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path27, value);
+          this.contents.setIn(path28, value);
         }
       }
       /**
@@ -6424,9 +6424,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path27) => {
+    visit.itemAtPath = (cst, path28) => {
       let item = cst;
-      for (const [field, index] of path27) {
+      for (const [field, index] of path28) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -6435,23 +6435,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path27) => {
-      const parent = visit.itemAtPath(cst, path27.slice(0, -1));
-      const field = path27[path27.length - 1][0];
+    visit.parentCollection = (cst, path28) => {
+      const parent = visit.itemAtPath(cst, path28.slice(0, -1));
+      const field = path28[path28.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path27, item, visitor) {
-      let ctrl = visitor(item, path27);
+    function _visit(path28, item, visitor) {
+      let ctrl = visitor(item, path28);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i2 = 0; i2 < token.items.length; ++i2) {
-            const ci = _visit(Object.freeze(path27.concat([[field, i2]])), token.items[i2], visitor);
+            const ci = _visit(Object.freeze(path28.concat([[field, i2]])), token.items[i2], visitor);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -6462,10 +6462,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path27);
+            ctrl = ctrl(item, path28);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path27) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path28) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -7762,14 +7762,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs27 = this.flowScalar(this.type);
+              const fs28 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs27, sep: [] });
+                map.items.push({ start, key: fs28, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs27);
+                this.stack.push(fs28);
               } else {
-                Object.assign(it, { key: fs27, sep: [] });
+                Object.assign(it, { key: fs28, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7897,13 +7897,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs27 = this.flowScalar(this.type);
+              const fs28 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs27, sep: [] });
+                fc.items.push({ start: [], key: fs28, sep: [] });
               else if (it.sep)
-                this.stack.push(fs27);
+                this.stack.push(fs28);
               else
-                Object.assign(it, { key: fs27, sep: [] });
+                Object.assign(it, { key: fs28, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -11060,20 +11060,20 @@ var require_compile = __commonJS({
     var util_1 = require_util();
     var validate_1 = require_validate();
     var SchemaEnv = class {
-      constructor(env8) {
+      constructor(env10) {
         var _a2;
         this.refs = {};
         this.dynamicAnchors = {};
         let schema;
-        if (typeof env8.schema == "object")
-          schema = env8.schema;
-        this.schema = env8.schema;
-        this.schemaId = env8.schemaId;
-        this.root = env8.root || this;
-        this.baseId = (_a2 = env8.baseId) !== null && _a2 !== void 0 ? _a2 : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env8.schemaId || "$id"]);
-        this.schemaPath = env8.schemaPath;
-        this.localRefs = env8.localRefs;
-        this.meta = env8.meta;
+        if (typeof env10.schema == "object")
+          schema = env10.schema;
+        this.schema = env10.schema;
+        this.schemaId = env10.schemaId;
+        this.root = env10.root || this;
+        this.baseId = (_a2 = env10.baseId) !== null && _a2 !== void 0 ? _a2 : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env10.schemaId || "$id"]);
+        this.schemaPath = env10.schemaPath;
+        this.localRefs = env10.localRefs;
+        this.meta = env10.meta;
         this.$async = schema === null || schema === void 0 ? void 0 : schema.$async;
         this.refs = {};
       }
@@ -11257,15 +11257,15 @@ var require_compile = __commonJS({
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
         }
       }
-      let env8;
+      let env10;
       if (typeof schema != "boolean" && schema.$ref && !(0, util_1.schemaHasRulesButRef)(schema, this.RULES)) {
         const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema.$ref);
-        env8 = resolveSchema.call(this, root, $ref);
+        env10 = resolveSchema.call(this, root, $ref);
       }
       const { schemaId } = this.opts;
-      env8 = env8 || new SchemaEnv({ schema, schemaId, root, baseId });
-      if (env8.schema !== env8.root.schema)
-        return env8;
+      env10 = env10 || new SchemaEnv({ schema, schemaId, root, baseId });
+      if (env10.schema !== env10.root.schema)
+        return env10;
       return void 0;
     }
   }
@@ -11414,8 +11414,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path27) {
-      let input = path27;
+    function removeDotSegments(path28) {
+      let input = path28;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -11614,8 +11614,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path27, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path27 && path27 !== "/" ? path27 : void 0;
+        const [path28, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path28 && path28 !== "/" ? path28 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -12668,8 +12668,8 @@ var require_ref = __commonJS({
       schemaType: "string",
       code(cxt) {
         const { gen, schema: $ref, it } = cxt;
-        const { baseId, schemaEnv: env8, validateName, opts, self } = it;
-        const { root } = env8;
+        const { baseId, schemaEnv: env10, validateName, opts, self } = it;
+        const { root } = env10;
         if (($ref === "#" || $ref === "#/") && baseId === root.baseId)
           return callRootRef();
         const schOrEnv = compile_1.resolveRef.call(self, root, baseId, $ref);
@@ -12679,8 +12679,8 @@ var require_ref = __commonJS({
           return callValidate(schOrEnv);
         return inlineRefSchema(schOrEnv);
         function callRootRef() {
-          if (env8 === root)
-            return callRef(cxt, validateName, env8, env8.$async);
+          if (env10 === root)
+            return callRef(cxt, validateName, env10, env10.$async);
           const rootName = gen.scopeValue("root", { ref: root });
           return callRef(cxt, (0, codegen_1._)`${rootName}.validate`, root, root.$async);
         }
@@ -12710,14 +12710,14 @@ var require_ref = __commonJS({
     exports2.getValidate = getValidate;
     function callRef(cxt, v, sch, $async) {
       const { gen, it } = cxt;
-      const { allErrors, schemaEnv: env8, opts } = it;
+      const { allErrors, schemaEnv: env10, opts } = it;
       const passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
       if ($async)
         callAsyncRef();
       else
         callSyncRef();
       function callAsyncRef() {
-        if (!env8.$async)
+        if (!env10.$async)
           throw new Error("async schema referenced by sync schema");
         const valid = gen.let("valid");
         gen.try(() => {
@@ -14681,9 +14681,9 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode26 = __toESM(require("vscode"));
-var fs26 = __toESM(require("fs"));
-var path26 = __toESM(require("path"));
+var vscode28 = __toESM(require("vscode"));
+var fs27 = __toESM(require("fs"));
+var path27 = __toESM(require("path"));
 
 // src/providers/CustomSessionSetsView.ts
 var vscode3 = __toESM(require("vscode"));
@@ -15824,6 +15824,7 @@ function readSessionSets(root) {
     let liveSession = null;
     let needsMigration = false;
     let migrationTargetSchemaVersion = null;
+    let schemaVersionOnDisk = null;
     const eventsPath = path4.join(dir, "session-events.jsonl");
     if (fs4.existsSync(activityPath)) {
       try {
@@ -15842,6 +15843,7 @@ function readSessionSets(root) {
         const rawSd = JSON.parse(fs4.readFileSync(statePath, "utf8"));
         if (rawSd && typeof rawSd === "object" && !Array.isArray(rawSd)) {
           const sv = rawSd.schemaVersion;
+          schemaVersionOnDisk = typeof sv === "number" ? sv : null;
           if (typeof sv === "number" && sv >= 4) {
             needsMigration = false;
             migrationTargetSchemaVersion = null;
@@ -15931,6 +15933,7 @@ function readSessionSets(root) {
       root,
       needsMigration,
       migrationTargetSchemaVersion,
+      schemaVersionOnDisk,
       prerequisites,
       // Default false; the cross-reference pass below overwrites this
       // once every set's `state` is known so each prereq can resolve
@@ -16004,8 +16007,17 @@ function readAllSessionSets() {
 
 // src/providers/SessionSetsModel.ts
 var vscode2 = __toESM(require("vscode"));
-function needsMigrationBadge(set) {
-  return set.needsMigration ? "(needs migration)" : "";
+function migrationMarker(set) {
+  return set.needsMigration ? "*" : "";
+}
+function migrationTooltip(set) {
+  if (!set.needsMigration)
+    return "";
+  const v = set.schemaVersionOnDisk;
+  return typeof v === "number" ? `Ran under schema v${v}` : "Ran under an older schema";
+}
+function hasSubCurrentSets(allSets) {
+  return allSets.some((s) => s.needsMigration);
 }
 var ICON_FILES = {
   complete: "done.svg",
@@ -16128,6 +16140,7 @@ var ROW_ACTIONS = [
   // Orchestrator…") retired alongside the check-out / check-in
   // coordination layer. The writer-log opener stays as a diagnostic
   // surface (the log itself is preserved provisionally per T5).
+  { id: "dabblerSessionSets.copySlug", label: "Copy Slug", group: 501, category: "flat", when: () => true },
   { id: "dabbler.openOrchestratorWriterLog", label: "Open Orchestrator Writer Log", group: 502, category: "flat", when: () => true },
   { id: "dabblerSessionSets.migrate", label: "Migrate to v3 schema", group: 801, category: "flat", when: needsMigrationToV3 },
   { id: "dabblerSessionSets.migrateToV4", label: "Migrate to v4 schema", group: 802, category: "flat", when: needsMigrationToV4 },
@@ -16242,7 +16255,6 @@ function descriptionFor(set) {
     touchedDate(set),
     uatBadge(set),
     forceClosedBadge(set),
-    needsMigrationBadge(set),
     blockedByPrereqsBadge(set)
   ].filter(Boolean);
   bits.push(...extras);
@@ -16522,6 +16534,10 @@ var CustomSessionSetsView = class _CustomSessionSetsView {
       contextValue: contextValueFor(set),
       iconSlug: ICON_FILES[set.state] ?? "",
       needsMigration: set.needsMigration,
+      // Set 050 S4: unobtrusive asterisk + tooltip replacing the old
+      // "(needs migration)" description label.
+      migrationMarker: migrationMarker(set),
+      migrationTooltip: migrationTooltip(set),
       accordionHtml: null,
       accordionUpdatedAt: null
     };
@@ -16534,8 +16550,8 @@ var CustomSessionSetsView = class _CustomSessionSetsView {
   loadWelcomeHtmlFromPackageJson() {
     try {
       const pkgPath = vscode3.Uri.joinPath(this.context.extensionUri, "package.json").fsPath;
-      const fs27 = require("fs");
-      const pkg = JSON.parse(fs27.readFileSync(pkgPath, "utf8"));
+      const fs28 = require("fs");
+      const pkg = JSON.parse(fs28.readFileSync(pkgPath, "utf8"));
       const entries = pkg?.contributes?.viewsWelcome ?? [];
       const ours = entries.find((e) => e.view === _CustomSessionSetsView.viewType);
       if (!ours?.contents)
@@ -18361,8 +18377,8 @@ function toLinesWithContent(input = "", trimmed2 = true, separator = "\n") {
 function forEachLineWithContent(input, callback) {
   return toLinesWithContent(input, true).map((line) => callback(line));
 }
-function folderExists(path27) {
-  return (0, import_file_exists.exists)(path27, import_file_exists.FOLDER);
+function folderExists(path28) {
+  return (0, import_file_exists.exists)(path28, import_file_exists.FOLDER);
 }
 function append(target, item) {
   if (Array.isArray(target)) {
@@ -18600,27 +18616,27 @@ var init_simple_git_options = __esm({
     };
   }
 });
-function appendTaskOptions(options, commands25 = []) {
+function appendTaskOptions(options, commands27 = []) {
   if (!filterPlainObject(options)) {
-    return commands25;
+    return commands27;
   }
-  return Object.keys(options).reduce((commands26, key) => {
+  return Object.keys(options).reduce((commands28, key) => {
     const value = options[key];
     if (r(value)) {
-      commands26.push(value);
+      commands28.push(value);
     } else if (filterPrimitives(value, ["boolean"])) {
-      commands26.push(key + "=" + value);
+      commands28.push(key + "=" + value);
     } else if (Array.isArray(value)) {
       for (const v of value) {
         if (!filterPrimitives(v, ["string", "number"])) {
-          commands26.push(key + "=" + v);
+          commands28.push(key + "=" + v);
         }
       }
     } else {
-      commands26.push(key);
+      commands28.push(key);
     }
-    return commands26;
-  }, commands25);
+    return commands28;
+  }, commands27);
 }
 function getTrailingOptions(args, initialPrimitive = 0, objectOnly = false) {
   const command = [];
@@ -18750,29 +18766,29 @@ function checkIsRepoTask(action) {
     case "root":
       return checkIsRepoRootTask();
   }
-  const commands25 = ["rev-parse", "--is-inside-work-tree"];
+  const commands27 = ["rev-parse", "--is-inside-work-tree"];
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     onError,
     parser
   };
 }
 function checkIsRepoRootTask() {
-  const commands25 = ["rev-parse", "--git-dir"];
+  const commands27 = ["rev-parse", "--git-dir"];
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     onError,
-    parser(path27) {
-      return /^\.(git)?$/.test(path27.trim());
+    parser(path28) {
+      return /^\.(git)?$/.test(path28.trim());
     }
   };
 }
 function checkIsBareRepoTask() {
-  const commands25 = ["rev-parse", "--is-bare-repository"];
+  const commands27 = ["rev-parse", "--is-bare-repository"];
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     onError,
     parser
@@ -18862,18 +18878,18 @@ function configurationErrorTask(error) {
     }
   };
 }
-function straightThroughStringTask(commands25, trimmed2 = false) {
+function straightThroughStringTask(commands27, trimmed2 = false) {
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
       return trimmed2 ? String(text).trim() : text;
     }
   };
 }
-function straightThroughBufferTask(commands25) {
+function straightThroughBufferTask(commands27) {
   return {
-    commands: commands25,
+    commands: commands27,
     format: "buffer",
     parser(buffer) {
       return buffer;
@@ -18919,9 +18935,9 @@ function cleanWithOptionsTask(mode, customArgs) {
   return cleanTask(cleanMode, options);
 }
 function cleanTask(mode, customArgs) {
-  const commands25 = ["clean", `-${mode}`, ...customArgs];
+  const commands27 = ["clean", `-${mode}`, ...customArgs];
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
       return cleanSummaryParser(mode === "n", text);
@@ -19084,13 +19100,13 @@ function asConfigScope(scope, fallback) {
   return fallback;
 }
 function addConfigTask(key, value, append2, scope) {
-  const commands25 = ["config", `--${scope}`];
+  const commands27 = ["config", `--${scope}`];
   if (append2) {
-    commands25.push("--add");
+    commands27.push("--add");
   }
-  commands25.push(key, value);
+  commands27.push(key, value);
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
       return text;
@@ -19098,12 +19114,12 @@ function addConfigTask(key, value, append2, scope) {
   };
 }
 function getConfigTask(key, scope) {
-  const commands25 = ["config", "--null", "--show-origin", "--get-all", key];
+  const commands27 = ["config", "--null", "--show-origin", "--get-all", key];
   if (scope) {
-    commands25.splice(1, 0, `--${scope}`);
+    commands27.splice(1, 0, `--${scope}`);
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
       return configGetParser(text, key);
@@ -19111,12 +19127,12 @@ function getConfigTask(key, scope) {
   };
 }
 function listConfigTask(scope) {
-  const commands25 = ["config", "--list", "--show-origin", "--null"];
+  const commands27 = ["config", "--list", "--show-origin", "--null"];
   if (scope) {
-    commands25.push(`--${scope}`);
+    commands27.push(`--${scope}`);
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
       return configListParser(text);
@@ -19199,11 +19215,11 @@ function parseGrep(grep) {
   const paths = /* @__PURE__ */ new Set();
   const results = {};
   forEachLineWithContent(grep, (input) => {
-    const [path27, line, preview] = input.split(NULL);
-    paths.add(path27);
-    (results[path27] = results[path27] || []).push({
+    const [path28, line, preview] = input.split(NULL);
+    paths.add(path28);
+    (results[path28] = results[path28] || []).push({
       line: asNumber(line),
-      path: path27,
+      path: path28,
       preview
     });
   });
@@ -19228,10 +19244,10 @@ function grep_default() {
       if (typeof searchTerm === "string") {
         searchTerm = grepQueryBuilder().param(searchTerm);
       }
-      const commands25 = ["grep", "--null", "-n", "--full-name", ...options, ...searchTerm];
+      const commands27 = ["grep", "--null", "-n", "--full-name", ...options, ...searchTerm];
       return this._runTask(
         {
-          commands: commands25,
+          commands: commands27,
           format: "utf-8",
           parser(stdOut) {
             return parseGrep(stdOut);
@@ -19280,12 +19296,12 @@ __export2(reset_exports, {
   resetTask: () => resetTask
 });
 function resetTask(mode, customArgs) {
-  const commands25 = ["reset"];
+  const commands27 = ["reset"];
   if (isValidResetMode(mode)) {
-    commands25.push(`--${mode}`);
+    commands27.push(`--${mode}`);
   }
-  commands25.push(...customArgs);
-  return straightThroughStringTask(commands25);
+  commands27.push(...customArgs);
+  return straightThroughStringTask(commands27);
 }
 function getResetMode(mode) {
   if (isValidResetMode(mode)) {
@@ -19454,10 +19470,10 @@ var init_tasks_pending_queue = __esm({
     };
   }
 });
-function pluginContext(task, commands25) {
+function pluginContext(task, commands27) {
   return {
     method: first(task.commands) || "",
-    commands: commands25
+    commands: commands27
   };
 }
 function onErrorReceived(target, logger) {
@@ -19758,11 +19774,11 @@ var init_change_working_directory = __esm({
   }
 });
 function checkoutTask(args) {
-  const commands25 = ["checkout", ...args];
-  if (commands25[1] === "-b" && commands25.includes("-B")) {
-    commands25[1] = remove(commands25, "-B");
+  const commands27 = ["checkout", ...args];
+  if (commands27[1] === "-b" && commands27.includes("-B")) {
+    commands27[1] = remove(commands27, "-B");
   }
-  return straightThroughStringTask(commands25);
+  return straightThroughStringTask(commands27);
 }
 function checkout_default() {
   return {
@@ -19894,7 +19910,7 @@ var init_parse_commit = __esm({
   }
 });
 function commitTask(message, files, customArgs) {
-  const commands25 = [
+  const commands27 = [
     "-c",
     "core.abbrev=40",
     "commit",
@@ -19903,7 +19919,7 @@ function commitTask(message, files, customArgs) {
     ...customArgs
   ];
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser: parseCommitResult
   };
@@ -19955,11 +19971,11 @@ var init_first_commit = __esm({
   }
 });
 function hashObjectTask(filePath, write) {
-  const commands25 = ["hash-object", filePath];
+  const commands27 = ["hash-object", filePath];
   if (write) {
-    commands25.push("-w");
+    commands27.push("-w");
   }
-  return straightThroughStringTask(commands25, true);
+  return straightThroughStringTask(commands27, true);
 }
 var init_hash_object = __esm({
   "src/lib/tasks/hash-object.ts"() {
@@ -19967,14 +19983,14 @@ var init_hash_object = __esm({
     init_task();
   }
 });
-function parseInit(bare, path27, text) {
+function parseInit(bare, path28, text) {
   const response = String(text).trim();
   let result;
   if (result = initResponseRegex.exec(response)) {
-    return new InitSummary(bare, path27, false, result[1]);
+    return new InitSummary(bare, path28, false, result[1]);
   }
   if (result = reInitResponseRegex.exec(response)) {
-    return new InitSummary(bare, path27, true, result[1]);
+    return new InitSummary(bare, path28, true, result[1]);
   }
   let gitDir = "";
   const tokens = response.split(" ");
@@ -19985,7 +20001,7 @@ function parseInit(bare, path27, text) {
       break;
     }
   }
-  return new InitSummary(bare, path27, /^re/i.test(response), gitDir);
+  return new InitSummary(bare, path28, /^re/i.test(response), gitDir);
 }
 var InitSummary;
 var initResponseRegex;
@@ -19994,9 +20010,9 @@ var init_InitSummary = __esm({
   "src/lib/responses/InitSummary.ts"() {
     "use strict";
     InitSummary = class {
-      constructor(bare, path27, existing, gitDir) {
+      constructor(bare, path28, existing, gitDir) {
         this.bare = bare;
-        this.path = path27;
+        this.path = path28;
         this.existing = existing;
         this.gitDir = gitDir;
       }
@@ -20008,16 +20024,16 @@ var init_InitSummary = __esm({
 function hasBareCommand(command) {
   return command.includes(bareCommand);
 }
-function initTask(bare = false, path27, customArgs) {
-  const commands25 = ["init", ...customArgs];
-  if (bare && !hasBareCommand(commands25)) {
-    commands25.splice(1, 0, bareCommand);
+function initTask(bare = false, path28, customArgs) {
+  const commands27 = ["init", ...customArgs];
+  if (bare && !hasBareCommand(commands27)) {
+    commands27.splice(1, 0, bareCommand);
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(text) {
-      return parseInit(commands25.includes("--bare"), path27, text);
+      return parseInit(commands27.includes("--bare"), path28, text);
     }
   };
 }
@@ -20249,14 +20265,14 @@ __export2(diff_exports, {
 });
 function diffSummaryTask(customArgs) {
   let logFormat = logFormatFromCommand(customArgs);
-  const commands25 = ["diff"];
+  const commands27 = ["diff"];
   if (logFormat === "") {
     logFormat = "--stat";
-    commands25.push("--stat=4096");
+    commands27.push("--stat=4096");
   }
-  commands25.push(...customArgs);
-  return validateLogFormatConfig(commands25) || {
-    commands: commands25,
+  commands27.push(...customArgs);
+  return validateLogFormatConfig(commands27) || {
+    commands: commands27,
     format: "utf-8",
     parser: getDiffParser(logFormat)
   };
@@ -20774,18 +20790,18 @@ function pushTagsTask(ref = {}, customArgs) {
   return pushTask(ref, customArgs);
 }
 function pushTask(ref = {}, customArgs) {
-  const commands25 = ["push", ...customArgs];
+  const commands27 = ["push", ...customArgs];
   if (ref.branch) {
-    commands25.splice(1, 0, ref.branch);
+    commands27.splice(1, 0, ref.branch);
   }
   if (ref.remote) {
-    commands25.splice(1, 0, ref.remote);
+    commands27.splice(1, 0, ref.remote);
   }
-  remove(commands25, "-v");
-  append(commands25, "--verbose");
-  append(commands25, "--porcelain");
+  remove(commands27, "-v");
+  append(commands27, "--verbose");
+  append(commands27, "--porcelain");
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser: parsePushResult
   };
@@ -20800,19 +20816,19 @@ var init_push = __esm({
 function show_default() {
   return {
     showBuffer() {
-      const commands25 = ["show", ...getTrailingOptions(arguments, 1)];
-      if (!commands25.includes("--binary")) {
-        commands25.splice(1, 0, "--binary");
+      const commands27 = ["show", ...getTrailingOptions(arguments, 1)];
+      if (!commands27.includes("--binary")) {
+        commands27.splice(1, 0, "--binary");
       }
       return this._runTask(
-        straightThroughBufferTask(commands25),
+        straightThroughBufferTask(commands27),
         trailingFunctionArgument(arguments)
       );
     },
     show() {
-      const commands25 = ["show", ...getTrailingOptions(arguments, 1)];
+      const commands27 = ["show", ...getTrailingOptions(arguments, 1)];
       return this._runTask(
-        straightThroughStringTask(commands25),
+        straightThroughStringTask(commands27),
         trailingFunctionArgument(arguments)
       );
     }
@@ -20832,12 +20848,12 @@ var init_FileStatusSummary = __esm({
     "use strict";
     fromPathRegex = /^(.+)\0(.+)$/;
     FileStatusSummary = class {
-      constructor(path27, index, working_dir) {
-        this.path = path27;
+      constructor(path28, index, working_dir) {
+        this.path = path28;
         this.index = index;
         this.working_dir = working_dir;
         if (index === "R" || working_dir === "R") {
-          const detail = fromPathRegex.exec(path27) || [null, path27, path27];
+          const detail = fromPathRegex.exec(path28) || [null, path28, path28];
           this.from = detail[2] || "";
           this.path = detail[1] || "";
         }
@@ -20868,14 +20884,14 @@ function splitLine(result, lineStr) {
     default:
       return;
   }
-  function data(index, workingDir, path27) {
+  function data(index, workingDir, path28) {
     const raw = `${index}${workingDir}`;
     const handler = parsers6.get(raw);
     if (handler) {
-      handler(result, path27);
+      handler(result, path28);
     }
     if (raw !== "##" && raw !== "!!") {
-      result.files.push(new FileStatusSummary(path27, index, workingDir));
+      result.files.push(new FileStatusSummary(path28, index, workingDir));
     }
   }
 }
@@ -21022,7 +21038,7 @@ var init_StatusSummary = __esm({
   }
 });
 function statusTask(customArgs) {
-  const commands25 = [
+  const commands27 = [
     "status",
     "--porcelain",
     "-b",
@@ -21032,7 +21048,7 @@ function statusTask(customArgs) {
   ];
   return {
     format: "utf-8",
-    commands: commands25,
+    commands: commands27,
     parser(text) {
       return parseStatusSummary(text);
     }
@@ -21147,10 +21163,10 @@ var init_clone = __esm({
     init_task();
     init_utils();
     cloneTask = (repo, directory, customArgs) => {
-      const commands25 = ["clone", ...customArgs];
-      filterString(repo) && commands25.push(c(repo));
-      filterString(directory) && commands25.push(c(directory));
-      return straightThroughStringTask(commands25);
+      const commands27 = ["clone", ...customArgs];
+      filterString(repo) && commands27.push(c(repo));
+      filterString(directory) && commands27.push(c(directory));
+      return straightThroughStringTask(commands27);
     };
     cloneMirrorTask = (repo, directory, customArgs) => {
       append(customArgs, "--mirror");
@@ -21226,9 +21242,9 @@ var init_simple_git_api = __esm({
           next
         );
       }
-      hashObject(path27, write) {
+      hashObject(path28, write) {
         return this._runTask(
-          hashObjectTask(path27, write === true),
+          hashObjectTask(path28, write === true),
           trailingFunctionArgument(arguments)
         );
       }
@@ -21504,23 +21520,23 @@ __export2(branch_exports, {
   deleteBranchTask: () => deleteBranchTask,
   deleteBranchesTask: () => deleteBranchesTask
 });
-function containsDeleteBranchCommand(commands25) {
+function containsDeleteBranchCommand(commands27) {
   const deleteCommands = ["-d", "-D", "--delete"];
-  return commands25.some((command) => deleteCommands.includes(command));
+  return commands27.some((command) => deleteCommands.includes(command));
 }
 function branchTask(customArgs) {
   const isDelete = containsDeleteBranchCommand(customArgs);
   const isCurrentOnly = customArgs.includes("--show-current");
-  const commands25 = ["branch", ...customArgs];
-  if (commands25.length === 1) {
-    commands25.push("-a");
+  const commands27 = ["branch", ...customArgs];
+  if (commands27.length === 1) {
+    commands27.push("-a");
   }
-  if (!commands25.includes("-v")) {
-    commands25.splice(1, 0, "-v");
+  if (!commands27.includes("-v")) {
+    commands27.splice(1, 0, "-v");
   }
   return {
     format: "utf-8",
-    commands: commands25,
+    commands: commands27,
     parser(stdOut, stdErr) {
       if (isDelete) {
         return parseBranchDeletions(stdOut, stdErr).all[0];
@@ -21582,8 +21598,8 @@ var init_branch = __esm({
   }
 });
 function toPath(input) {
-  const path27 = input.trim().replace(/^["']|["']$/g, "");
-  return path27 && (0, import_node_path.normalize)(path27);
+  const path28 = input.trim().replace(/^["']|["']$/g, "");
+  return path28 && (0, import_node_path.normalize)(path28);
 }
 var parseCheckIgnore;
 var init_CheckIgnore = __esm({
@@ -21670,16 +21686,16 @@ function disallowedCommand(command) {
   return /^--upload-pack(=|$)/.test(command);
 }
 function fetchTask(remote, branch, customArgs) {
-  const commands25 = ["fetch", ...customArgs];
+  const commands27 = ["fetch", ...customArgs];
   if (remote && branch) {
-    commands25.push(remote, branch);
+    commands27.push(remote, branch);
   }
-  const banned = commands25.find(disallowedCommand);
+  const banned = commands27.find(disallowedCommand);
   if (banned) {
     return configurationErrorTask(`git.fetch: potential exploit argument blocked.`);
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser: parseFetchResult
   };
@@ -21729,12 +21745,12 @@ __export2(pull_exports, {
   pullTask: () => pullTask
 });
 function pullTask(remote, branch, customArgs) {
-  const commands25 = ["pull", ...customArgs];
+  const commands27 = ["pull", ...customArgs];
   if (remote && branch) {
-    commands25.splice(1, 0, remote, branch);
+    commands27.splice(1, 0, remote, branch);
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser(stdOut, stdErr) {
       return parsePullResult(stdOut, stdErr);
@@ -21800,29 +21816,29 @@ function addRemoteTask(remoteName, remoteRepo, customArgs) {
   return straightThroughStringTask(["remote", "add", ...customArgs, remoteName, remoteRepo]);
 }
 function getRemotesTask(verbose) {
-  const commands25 = ["remote"];
+  const commands27 = ["remote"];
   if (verbose) {
-    commands25.push("-v");
+    commands27.push("-v");
   }
   return {
-    commands: commands25,
+    commands: commands27,
     format: "utf-8",
     parser: verbose ? parseGetRemotesVerbose : parseGetRemotes
   };
 }
 function listRemotesTask(customArgs) {
-  const commands25 = [...customArgs];
-  if (commands25[0] !== "ls-remote") {
-    commands25.unshift("ls-remote");
+  const commands27 = [...customArgs];
+  if (commands27[0] !== "ls-remote") {
+    commands27.unshift("ls-remote");
   }
-  return straightThroughStringTask(commands25);
+  return straightThroughStringTask(commands27);
 }
 function remoteTask(customArgs) {
-  const commands25 = [...customArgs];
-  if (commands25[0] !== "remote") {
-    commands25.unshift("remote");
+  const commands27 = [...customArgs];
+  if (commands27[0] !== "remote") {
+    commands27.unshift("remote");
   }
-  return straightThroughStringTask(commands25);
+  return straightThroughStringTask(commands27);
 }
 function removeRemoteTask(remoteName) {
   return straightThroughStringTask(["remote", "remove", remoteName]);
@@ -21840,14 +21856,14 @@ __export2(stash_list_exports, {
 });
 function stashListTask(opt = {}, customArgs) {
   const options = parseLogOptions(opt);
-  const commands25 = ["stash", "list", ...options.commands, ...customArgs];
+  const commands27 = ["stash", "list", ...options.commands, ...customArgs];
   const parser4 = createListLogSummaryParser(
     options.splitter,
     options.fields,
-    logFormatFromCommand(commands25)
+    logFormatFromCommand(commands27)
   );
-  return validateLogFormatConfig(commands25) || {
-    commands: commands25,
+  return validateLogFormatConfig(commands27) || {
+    commands: commands27,
     format: "utf-8",
     parser: parser4
   };
@@ -21868,18 +21884,18 @@ __export2(sub_module_exports, {
   subModuleTask: () => subModuleTask,
   updateSubModuleTask: () => updateSubModuleTask
 });
-function addSubModuleTask(repo, path27) {
-  return subModuleTask(["add", repo, path27]);
+function addSubModuleTask(repo, path28) {
+  return subModuleTask(["add", repo, path28]);
 }
 function initSubModuleTask(customArgs) {
   return subModuleTask(["init", ...customArgs]);
 }
 function subModuleTask(customArgs) {
-  const commands25 = [...customArgs];
-  if (commands25[0] !== "submodule") {
-    commands25.unshift("submodule");
+  const commands27 = [...customArgs];
+  if (commands27[0] !== "submodule") {
+    commands27.unshift("submodule");
   }
-  return straightThroughStringTask(commands25);
+  return straightThroughStringTask(commands27);
 }
 function updateSubModuleTask(customArgs) {
   return subModuleTask(["update", ...customArgs]);
@@ -22164,9 +22180,9 @@ var require_git = __commonJS2({
     Git2.prototype.branchLocal = function(then) {
       return this._runTask(branchLocalTask2(), trailingFunctionArgument2(arguments));
     };
-    Git2.prototype.raw = function(commands25) {
-      const createRestCommands = !Array.isArray(commands25);
-      const command = [].slice.call(createRestCommands ? arguments : commands25, 0);
+    Git2.prototype.raw = function(commands27) {
+      const createRestCommands = !Array.isArray(commands27);
+      const command = [].slice.call(createRestCommands ? arguments : commands27, 0);
       for (let i2 = 0; i2 < command.length && createRestCommands; i2++) {
         if (!filterPrimitives2(command[i2])) {
           command.splice(i2, command.length - i2);
@@ -22183,8 +22199,8 @@ var require_git = __commonJS2({
       }
       return this._runTask(straightThroughStringTask2(command, this._trimmed), next);
     };
-    Git2.prototype.submoduleAdd = function(repo, path27, then) {
-      return this._runTask(addSubModuleTask2(repo, path27), trailingFunctionArgument2(arguments));
+    Git2.prototype.submoduleAdd = function(repo, path28, then) {
+      return this._runTask(addSubModuleTask2(repo, path28), trailingFunctionArgument2(arguments));
     };
     Git2.prototype.submoduleUpdate = function(args, then) {
       return this._runTask(
@@ -22301,9 +22317,9 @@ var require_git = __commonJS2({
       return this._runTask(task, trailingFunctionArgument2(arguments));
     };
     Git2.prototype.revparse = function() {
-      const commands25 = ["rev-parse", ...getTrailingOptions2(arguments, true)];
+      const commands27 = ["rev-parse", ...getTrailingOptions2(arguments, true)];
       return this._runTask(
-        straightThroughStringTask2(commands25, true),
+        straightThroughStringTask2(commands27, true),
         trailingFunctionArgument2(arguments)
       );
     };
@@ -22404,8 +22420,8 @@ function abortPlugin(signal) {
 function blockUnsafeOperationsPlugin(options = {}) {
   return {
     type: "spawn.args",
-    action(args, { env: env8 }) {
-      for (const vulnerability of ne(args, env8)) {
+    action(args, { env: env10 }) {
+      for (const vulnerability of ne(args, env10)) {
         if (options[vulnerability.category] !== true) {
           throw new GitPluginError(void 0, "unsafe", vulnerability.message);
         }
@@ -24444,10 +24460,10 @@ function _checkLocalOverridesAllowlist(localOverrides, routerConfig, errors) {
 function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function getByPath(obj, path27) {
+function getByPath(obj, path28) {
   if (!obj)
     return void 0;
-  const parts = path27.split(".");
+  const parts = path28.split(".");
   let cur = obj;
   for (const p2 of parts) {
     if (cur === null || cur === void 0 || typeof cur !== "object")
@@ -24888,9 +24904,9 @@ function collectOverrideRows(localOverrides, state) {
   if (!localOverrides)
     return [];
   const rows = [];
-  walk(localOverrides, [], (path27, value) => {
-    const dotted = path27.join(".");
-    const sharedSource = pickSharedSource(path27[0]);
+  walk(localOverrides, [], (path28, value) => {
+    const dotted = path28.join(".");
+    const sharedSource = pickSharedSource(path28[0]);
     const sharedVal = sharedSource === "routerConfig" ? getByPath(state.routerConfig, dotted) : sharedSource === "budget" ? getByPath(state.budget, dotted) : void 0;
     rows.push({
       path: dotted,
@@ -24922,11 +24938,11 @@ function formatValue(v) {
 }
 function walk(obj, prefix, emit) {
   for (const [k2, v] of Object.entries(obj)) {
-    const path27 = [...prefix, k2];
+    const path28 = [...prefix, k2];
     if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-      walk(v, path27, emit);
+      walk(v, path28, emit);
     } else {
-      emit(path27, v);
+      emit(path28, v);
     }
   }
 }
@@ -25061,40 +25077,40 @@ function applyPatch(routerConfigDoc, budgetDoc, localOverridesDoc, payload) {
   }
   return result;
 }
-function applyOverridableField(routerConfigDoc, localOverridesDoc, path27, value, source, result) {
+function applyOverridableField(routerConfigDoc, localOverridesDoc, path28, value, source, result) {
   if (source === "local") {
-    if (setIfChanged(localOverridesDoc, path27, value)) {
+    if (setIfChanged(localOverridesDoc, path28, value)) {
       result.localOverridesChanged = true;
     }
-    deleteIfPresent(routerConfigDoc, path27, result, "routerConfigChanged");
+    deleteIfPresent(routerConfigDoc, path28, result, "routerConfigChanged");
   } else {
-    if (setIfChanged(routerConfigDoc, path27, value)) {
+    if (setIfChanged(routerConfigDoc, path28, value)) {
       result.routerConfigChanged = true;
     }
-    deleteIfPresent(localOverridesDoc, path27, result, "localOverridesChanged");
+    deleteIfPresent(localOverridesDoc, path28, result, "localOverridesChanged");
   }
 }
-function setIfChanged(doc, path27, value) {
-  const current = doc.getIn(path27);
+function setIfChanged(doc, path28, value) {
+  const current = doc.getIn(path28);
   if (current === value)
     return false;
-  doc.setIn(path27, value);
+  doc.setIn(path28, value);
   return true;
 }
-function deleteIfPresent(doc, path27, result, flag) {
-  if (doc.hasIn(path27)) {
-    doc.deleteIn(path27);
+function deleteIfPresent(doc, path28, result, flag) {
+  if (doc.hasIn(path28)) {
+    doc.deleteIn(path28);
     result[flag] = true;
   }
 }
-function pruneEmptyContainer(doc, path27, result, flag) {
-  if (!doc.hasIn(path27))
+function pruneEmptyContainer(doc, path28, result, flag) {
+  if (!doc.hasIn(path28))
     return;
-  const node = doc.getIn(path27);
+  const node = doc.getIn(path28);
   if (node && typeof node === "object" && "items" in node) {
     const items = node.items;
     if (Array.isArray(items) && items.length === 0) {
-      doc.deleteIn(path27);
+      doc.deleteIn(path28);
       result[flag] = true;
     }
   }
@@ -25665,10 +25681,10 @@ ${msgs}`,
       "except Exception as e:",
       "  print(json.dumps({'ok': False, 'error': str(e)}))"
     ].join("\n");
-    const env8 = { ...process.env, PUSHOVER_API_KEY: apiKeyValue, PUSHOVER_USER_KEY: userKeyValue };
+    const env10 = { ...process.env, PUSHOVER_API_KEY: apiKeyValue, PUSHOVER_USER_KEY: userKeyValue };
     const child = cp4.spawn(pythonPath, ["-c", script], {
       cwd: path17.dirname(aiRouterDir),
-      env: env8,
+      env: env10,
       windowsHide: true
     });
     let stdout = "";
@@ -26537,12 +26553,46 @@ async function installClaudeCodeOrchestratorHook(extensionUri) {
   }
   const verbWasWord = exists2 ? "Updated" : "Created";
   vscode22.window.showInformationMessage(
-    `${verbWasWord} ~/.claude/settings.json with the Dabbler orchestrator hook (SessionStart \u2192 start_session). Restart Claude Code or run /clear in an active session to claim the check-out.`,
-    "Open settings.json"
+    `${verbWasWord} ~/.claude/settings.json with the Dabbler orchestrator hook (SessionStart \u2192 start_session + schema-drift scan). Restart Claude Code or run /clear in an active session to activate.`,
+    "Open settings.json",
+    "Copy manual setup"
   ).then((picked) => {
     if (picked === "Open settings.json") {
       vscode22.workspace.openTextDocument(settingsPath).then(
         (doc) => vscode22.window.showTextDocument(doc),
+        () => void 0
+      );
+    } else if (picked === "Copy manual setup") {
+      const rawInvokerUrl = "https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js";
+      const snippet = [
+        "# Manual hook setup (no extension required):",
+        "# 1. Download the invoker script:",
+        `#    curl -o scripts/claude-session-start-invoker.js "${rawInvokerUrl}"`,
+        "# 2. Add to ~/.claude/settings.json (replace <absolute-path> with your repo path):",
+        JSON.stringify(
+          {
+            hooks: {
+              SessionStart: [
+                {
+                  matcher: "startup",
+                  hooks: [
+                    {
+                      type: "command",
+                      command: 'node "<absolute-path>/scripts/claude-session-start-invoker.js"'
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          null,
+          2
+        )
+      ].join("\n");
+      vscode22.env.clipboard.writeText(snippet).then(
+        () => vscode22.window.showInformationMessage(
+          "Manual setup snippet copied to clipboard."
+        ),
         () => void 0
       );
     }
@@ -26845,21 +26895,272 @@ function registerExternalVerificationCommand(context) {
   );
 }
 
-// src/extension.ts
+// src/commands/resolveSetNumber.ts
+var vscode26 = __toESM(require("vscode"));
+
+// src/utils/resolveSetNumber.ts
+var PREFIX_RE = /^(\d+)-/;
+function numericPrefix(slug) {
+  const m = PREFIX_RE.exec(slug);
+  return m ? parseInt(m[1], 10) : null;
+}
+function resolveSetNumber(slugs, n) {
+  const matches = slugs.filter((s) => numericPrefix(s) === n);
+  if (matches.length === 0) {
+    const available = Array.from(
+      new Set(
+        slugs.map(numericPrefix).filter((p2) => p2 !== null)
+      )
+    ).sort((a, b2) => a - b2);
+    return { kind: "no-match", available };
+  }
+  if (matches.length > 1) {
+    return { kind: "collision", matches: matches.slice().sort() };
+  }
+  return { kind: "match", slug: matches[0] };
+}
+function parseSetHandle(raw) {
+  const trimmed2 = raw.trim().replace(/^set\s+/i, "");
+  if (!/^\d+$/.test(trimmed2))
+    return null;
+  return parseInt(trimmed2, 10);
+}
+
+// src/commands/resolveSetNumber.ts
+function registerResolveSetNumberCommand(context, deps = {}) {
+  const readSets = deps.readSets ?? readAllSessionSets;
+  context.subscriptions.push(
+    vscode26.commands.registerCommand(
+      "dabblerSessionSets.resolveSetNumber",
+      async () => {
+        const raw = await vscode26.window.showInputBox({
+          title: "Resolve session set by number",
+          prompt: "Enter a session-set number (e.g. 50 or 050)",
+          placeHolder: "50",
+          ignoreFocusOut: true,
+          validateInput: (value) => value.trim() === "" || parseSetHandle(value) !== null ? void 0 : "Enter a bare number (e.g. 50). Leading zeros and a 'Set ' prefix are OK."
+        });
+        if (raw === void 0)
+          return;
+        const n = parseSetHandle(raw);
+        if (n === null) {
+          vscode26.window.showErrorMessage(
+            `"${raw}" is not a session-set number. Enter a bare integer like 50.`
+          );
+          return;
+        }
+        const sets = readSets();
+        const slugs = sets.map((s) => s.name);
+        const result = resolveSetNumber(slugs, n);
+        if (result.kind === "no-match") {
+          const avail = result.available.length > 0 ? result.available.join(", ") : "(none)";
+          vscode26.window.showErrorMessage(
+            `No session set numbered ${n}. Available numbers: ${avail}.`
+          );
+          return;
+        }
+        if (result.kind === "collision") {
+          vscode26.window.showErrorMessage(
+            `Number ${n} is ambiguous \u2014 it matches ${result.matches.join(
+              " and "
+            )}. Two session sets must not share a numeric prefix; rename one.`
+          );
+          return;
+        }
+        const slug = result.slug;
+        const set = sets.find((s) => s.name === slug);
+        await presentActions(slug, set);
+      }
+    )
+  );
+}
+async function presentActions(slug, set) {
+  const actions = [
+    {
+      label: "$(clippy) Copy slug",
+      description: slug,
+      run: async () => {
+        await vscode26.env.clipboard.writeText(slug);
+        vscode26.window.setStatusBarMessage(`Copied: ${slug}`, 4e3);
+      }
+    },
+    {
+      label: "$(clippy) Copy \u201CStart the next session\u201D prompt",
+      description: `Start the next session of \`${slug}\`.`,
+      run: async () => {
+        await vscode26.env.clipboard.writeText(
+          `Start the next session of \`${slug}\`.`
+        );
+        vscode26.window.setStatusBarMessage("Copied: start next session", 4e3);
+      }
+    }
+  ];
+  if (set?.specPath) {
+    actions.push({
+      label: "$(go-to-file) Open spec",
+      description: slug,
+      run: () => void vscode26.commands.executeCommand("dabblerSessionSets.openSpec", {
+        set
+      })
+    });
+  }
+  const pick2 = await vscode26.window.showQuickPick(actions, {
+    title: `Set ${slug}`,
+    placeHolder: "What would you like to do with this set?"
+  });
+  if (pick2)
+    await pick2.run();
+}
+
+// src/commands/upgradeOlderSets.ts
+var vscode27 = __toESM(require("vscode"));
+var cp6 = __toESM(require("child_process"));
+var path26 = __toESM(require("path"));
+var fs26 = __toESM(require("fs"));
+var BULK_UPGRADE_MODULES = [
+  "ai_router.migrate_session_state",
+  "ai_router.migrate_lightweight_to_canonical_v4",
+  "ai_router.migrate_v3_to_v4"
+];
 var SESSION_SETS_REL2 = path26.join("docs", "session-sets");
+function resolvePythonPath3() {
+  const cfg = vscode27.workspace.getConfiguration("dabblerSessionSets");
+  const inspected = cfg.inspect("pythonPath");
+  const raw = inspected?.workspaceFolderValue ?? inspected?.workspaceValue ?? inspected?.globalValue ?? "python";
+  return (raw || "python").trim() || "python";
+}
+function runMigrator2(pythonPath, module2, cwd) {
+  return new Promise((resolve5) => {
+    const args = [
+      "-m",
+      module2,
+      "--scan",
+      SESSION_SETS_REL2,
+      "--in-place",
+      "--json"
+    ];
+    const child = cp6.spawn(pythonPath, args, { cwd, windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    let spawnErrored = false;
+    child.stdout?.on("data", (c3) => stdout += c3.toString("utf8"));
+    child.stderr?.on("data", (c3) => stderr += c3.toString("utf8"));
+    child.on("error", (err) => {
+      spawnErrored = true;
+      resolve5({
+        ok: false,
+        module: module2,
+        detail: `could not spawn Python (${err.message})`
+      });
+    });
+    child.on("close", (code) => {
+      if (spawnErrored)
+        return;
+      if (code === 0) {
+        resolve5({ ok: true, module: module2, detail: summarizeJson(stdout) });
+      } else {
+        resolve5({
+          ok: false,
+          module: module2,
+          detail: (stderr.trim() || stdout.trim() || `exit ${code}`).slice(0, 400)
+        });
+      }
+    });
+  });
+}
+function summarizeJson(stdout) {
+  try {
+    const data = JSON.parse(stdout.trim());
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const migrated = results.filter(
+      (r2) => typeof r2?.action === "string" ? r2.action.startsWith("migrated") : false
+    ).length;
+    return `${migrated} migrated, ${results.length} scanned`;
+  } catch {
+    return "ran";
+  }
+}
+function registerUpgradeOlderSetsCommand(context, deps) {
+  context.subscriptions.push(
+    vscode27.commands.registerCommand(
+      "dabblerSessionSets.upgradeOlderSets",
+      async () => {
+        const roots = discoverRoots().filter(
+          (r2) => fs26.existsSync(path26.join(r2, SESSION_SETS_REL2))
+        );
+        if (roots.length === 0) {
+          vscode27.window.showInformationMessage(
+            "No docs/session-sets directory found in the workspace \u2014 nothing to upgrade."
+          );
+          return;
+        }
+        const confirm = await vscode27.window.showInformationMessage(
+          "Upgrade all older session sets to the current schema? This runs the three schema migrators in sequence, in-place, across every set. Each migrator writes a backup alongside any file it rewrites and is a no-op on already-current sets.",
+          { modal: true },
+          "Upgrade"
+        );
+        if (confirm !== "Upgrade")
+          return;
+        const pythonPath = resolvePythonPath3();
+        await vscode27.window.withProgress(
+          {
+            location: vscode27.ProgressLocation.Notification,
+            title: "Upgrading older session sets\u2026",
+            cancellable: false
+          },
+          async (progress) => {
+            const failures = [];
+            const summaries = [];
+            for (const root of roots) {
+              for (const module2 of BULK_UPGRADE_MODULES) {
+                progress.report({ message: `${path26.basename(root)}: ${module2}` });
+                const res = await runMigrator2(pythonPath, module2, root);
+                if (res.ok) {
+                  summaries.push(`${module2}: ${res.detail}`);
+                } else {
+                  failures.push(`${module2} \u2014 ${res.detail}`);
+                }
+              }
+            }
+            deps.refreshView();
+            if (failures.length === 0) {
+              vscode27.window.showInformationMessage(
+                `Session sets upgraded. ${summaries.join("; ")}. The tree refreshes shortly; the schema markers clear on the next read.`
+              );
+            } else {
+              vscode27.window.showErrorMessage(
+                `Bulk upgrade hit ${failures.length} error(s): ${failures.join(
+                  " | "
+                )}. If Python / dabbler-ai-router isn't installed, set dabblerSessionSets.pythonPath to a venv with the router, or run the migrator chain manually from the repo root.`
+              );
+            }
+          }
+        );
+      }
+    )
+  );
+}
+
+// src/extension.ts
+var SESSION_SETS_REL3 = path27.join("docs", "session-sets");
 function evaluateSupportContextKeys(allSets) {
-  const cfg = vscode26.workspace.getConfiguration("dabblerSessionSets");
+  const cfg = vscode28.workspace.getConfiguration("dabblerSessionSets");
   const uatPref = cfg.get("uatSupport.enabled", "auto");
   const e2ePref = cfg.get("e2eSupport.enabled", "auto");
   const anyUat = allSets.some((s) => s.config?.requiresUAT);
   const anyE2e = allSets.some((s) => s.config?.requiresE2E);
   const uatActive = uatPref === "always" || uatPref === "auto" && anyUat;
   const e2eActive = e2ePref === "always" || e2ePref === "auto" && anyE2e;
-  vscode26.commands.executeCommand("setContext", "dabblerSessionSets.uatSupportActive", uatActive);
-  vscode26.commands.executeCommand("setContext", "dabblerSessionSets.e2eSupportActive", e2eActive);
+  vscode28.commands.executeCommand("setContext", "dabblerSessionSets.uatSupportActive", uatActive);
+  vscode28.commands.executeCommand("setContext", "dabblerSessionSets.e2eSupportActive", e2eActive);
+  vscode28.commands.executeCommand(
+    "setContext",
+    "dabblerSessionSets.hasSubCurrentSets",
+    hasSubCurrentSets(allSets)
+  );
 }
 function activate(context) {
-  if (!vscode26.workspace.workspaceFolders?.length)
+  if (!vscode28.workspace.workspaceFolders?.length)
     return;
   const scanState = new ScanState();
   context.subscriptions.push({ dispose: () => scanState.dispose() });
@@ -26867,7 +27168,7 @@ function activate(context) {
   const provider = new CustomSessionSetsView(context, scanState);
   context.subscriptions.push({ dispose: () => provider.dispose() });
   context.subscriptions.push(
-    vscode26.window.registerWebviewViewProvider(CustomSessionSetsView.viewType, provider)
+    vscode28.window.registerWebviewViewProvider(CustomSessionSetsView.viewType, provider)
   );
   const evaluateContextKeys = () => {
     evaluateSupportContextKeys(readAllSessionSets());
@@ -26881,7 +27182,7 @@ function activate(context) {
     );
   }
   context.subscriptions.push(
-    vscode26.workspace.onDidChangeConfiguration((e) => {
+    vscode28.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("dabblerSessionSets.uatSupport.enabled") || e.affectsConfiguration("dabblerSessionSets.e2eSupport.enabled")) {
         evaluateContextKeys();
       }
@@ -26900,12 +27201,12 @@ function activate(context) {
     watcherSubs = [];
     boundRoots = want;
     for (const root of roots) {
-      const sessionSetsAbs = path26.join(root, SESSION_SETS_REL2);
-      const pattern = new vscode26.RelativePattern(
+      const sessionSetsAbs = path27.join(root, SESSION_SETS_REL3);
+      const pattern = new vscode28.RelativePattern(
         sessionSetsAbs,
         "**/{spec.md,session-state.json,session-events.jsonl,activity-log.json,change-log.md,CANCELLED.md,*-uat-checklist.json}"
       );
-      const watcher = vscode26.workspace.createFileSystemWatcher(pattern);
+      const watcher = vscode28.workspace.createFileSystemWatcher(pattern);
       const onEvent = () => provider.refresh();
       watcher.onDidCreate(onEvent);
       watcher.onDidDelete(onEvent);
@@ -26927,11 +27228,11 @@ function activate(context) {
       err
     );
   }
-  context.subscriptions.push(vscode26.workspace.onDidChangeWorkspaceFolders(refreshAll));
+  context.subscriptions.push(vscode28.workspace.onDidChangeWorkspaceFolders(refreshAll));
   const pollHandle = setInterval(refreshAll, 3e4);
   context.subscriptions.push({ dispose: () => clearInterval(pollHandle) });
   context.subscriptions.push(
-    vscode26.commands.registerCommand("dabblerSessionSets.refresh", refreshAll)
+    vscode28.commands.registerCommand("dabblerSessionSets.refresh", refreshAll)
   );
   const safeRegister = (name, fn) => {
     try {
@@ -26998,6 +27299,14 @@ function activate(context) {
     "registerExternalVerificationCommand",
     () => registerExternalVerificationCommand(context)
   );
+  safeRegister(
+    "registerResolveSetNumberCommand",
+    () => registerResolveSetNumberCommand(context)
+  );
+  safeRegister(
+    "registerUpgradeOlderSetsCommand",
+    () => registerUpgradeOlderSetsCommand(context, { refreshView: refreshAll })
+  );
   setImmediate(() => {
     scanState.setReady();
   });
@@ -27006,14 +27315,14 @@ function activate(context) {
     const roots = discoverRoots();
     const hasSessionSets = roots.some((r2) => {
       try {
-        return fs26.existsSync(path26.join(r2, SESSION_SETS_REL2));
+        return fs27.existsSync(path27.join(r2, SESSION_SETS_REL3));
       } catch {
         return false;
       }
     });
     if (!hasSessionSets) {
       context.workspaceState.update("hasSeenOnboarding", true);
-      vscode26.commands.executeCommand("dabbler.getStarted");
+      vscode28.commands.executeCommand("dabbler.getStarted");
     }
   }
 }

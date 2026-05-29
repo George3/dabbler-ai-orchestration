@@ -72,7 +72,7 @@ async function treeitemTexts(
 // badge on row. This is the new Set 047 Session 3 behavior — under
 // Set 030 Session 5 the badge only fired on v2 / broken-v3 files.
 // ---------------------------------------------------------------------
-test("renders (needs migration) badge on a canonical v3 set (v3 → v4 target)", async () => {
+test("renders schema-drift asterisk + tooltip on a canonical v3 set (v3 → v4 target)", async () => {
   const per: PerTest = {};
   try {
     per.tmpPath = makeTmpDir("dabbler-pw-v3-needs-v4");
@@ -87,7 +87,15 @@ test("renders (needs migration) badge on a canonical v3 set (v3 → v4 target)",
 
     const joined = (await treeitemTexts(tree)).join("\n");
     expect(joined).toContain("scenario-v3-needs-v4");
-    expect(joined).toContain("(needs migration)");
+    // Set 050 S4: the old "(needs migration)" label is replaced by an
+    // unobtrusive asterisk carrying a "Ran under schema v3" tooltip.
+    expect(joined).not.toContain("(needs migration)");
+
+    const marker = tree.locator(".row-migration-marker");
+    await expect(marker).toHaveCount(1);
+    await expect(marker).toHaveText("*");
+    expect(await marker.getAttribute("title")).toBe("Ran under schema v3");
+
     // Negative control: only one set in this fixture; no other badge
     // should appear.
     expect(joined).not.toContain("[FORCED]");

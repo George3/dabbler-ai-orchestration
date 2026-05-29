@@ -45,6 +45,7 @@ function fakeSet(
     root: "/x",
     needsMigration: false,
     migrationTargetSchemaVersion: null,
+    schemaVersionOnDisk: null,
     prerequisites: null,
     blockedByPrereqs: false,
     ...over,

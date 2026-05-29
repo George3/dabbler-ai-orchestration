@@ -44,6 +44,13 @@ export interface RowPayload {
   contextValue: string;            // for ActionRegistry membership tests (e.g., "sessionSet:in-progress:uat")
   iconSlug: string;                // "in-progress.svg" / "done.svg" / etc.
   needsMigration: boolean;
+  // Set 050 S4 (Explorer UX revision): the unobtrusive asterisk that
+  // replaces the old "(needs migration)" description label. `marker` is
+  // "*" on sub-current sets (else ""); `tooltip` is the hover text
+  // ("Ran under schema v<N>"). The webview renders the marker next to
+  // the row name with the tooltip as its `title` attribute.
+  migrationMarker: string;
+  migrationTooltip: string;
   // Set 034: the per-row orchestrator-tracking accordion is retired.
   // These fields remain on the protocol so older host/webview pairings
   // stay structurally compatible, but the host always emits null and

@@ -75,12 +75,32 @@ see `docs/ai-led-session-workflow.md`.
 ## Slug naming
 
 The slug is the directory name and the identifier the trigger phrase
-references ("Start the next session of `<slug>`."). Conventions:
+references ("Start the next session of `<slug>`." — or, with the
+Set-050 number handle, "Start the next session of `50`."). Conventions:
+
+- **A monotonic `NNN-` sequence prefix**, then a kebab-case descriptive
+  body: `050-schema-drift-detection-and-migration-guard`. The prefix is
+  the set's creation-order sequence number, zero-padded to at least three
+  digits, and it is **required for newly-created sets** in this canonical
+  repo and in any scaffolder output. The number gives every set a short,
+  stable handle (`Set 50`) and makes the Session Set Explorer sort in
+  creation order instead of alphabetically. See **Numbering** below for
+  how the next number is chosen.
+
+  > The prefix is a *sequence* number, not a *semantic* one — it carries
+  > no meaning beyond "created after 049, before 051." This is the
+  > distinction the next bullet draws.
 
 - **kebab-case**, lowercase, no leading underscore. (Underscore is
   reserved for `_archived/`.)
-- Descriptive of feature or initiative, not session number or date.
-  `role-administration-foundations` is a slug; `phase-3-week-2` is not.
+- The descriptive body is **descriptive of feature or initiative, not a
+  semantic date / phase / session count.** A monotonic creation-order
+  `NNN-` prefix is fine (encouraged, above); a *semantic* number is not —
+  `050-role-administration-foundations` is a good slug;
+  `phase-3-week-2` / `sprint-7` / `2026-q2-cleanup` are not. The test:
+  the leading `NNN-` answers "which set is this" (an opaque handle); a
+  banned semantic name tries to answer "where in some external schedule
+  does this fall" (drifts, collides, ages badly).
 - **Disambiguation suffixes** when one initiative spans multiple sets:
   - `-foundations` for the structural/scaffolding set that precedes the
     behavior work.
@@ -93,9 +113,55 @@ references ("Start the next session of `<slug>`."). Conventions:
   - `-discovery` for read-only investigative sets that produce a
     written deliverable but do not change shipping code.
 
-Pick a slug that will still make sense six months later. If you find
-yourself appending the date or session count to disambiguate, the
-underlying initiative is probably too broad — split it.
+Pick a descriptive body that will still make sense six months later. If
+you find yourself appending the date or session count to the *body* to
+disambiguate, the underlying initiative is probably too broad — split it.
+(The `NNN-` prefix is the exception that proves the rule: it disambiguates
+by creation order, which never ages or drifts.)
+
+### Numbering
+
+The `NNN-` prefix is a per-repo monotonic counter:
+
+- **Next number = `max(existing numeric prefix) + 1`.** Slugs without a
+  numeric prefix (legacy bare names like `harvester-cli-distribution`) are
+  ignored when finding the max. A repo with no numbered sets starts at
+  `001`.
+- **Zero-pad width = `max(3, widest existing prefix)`** — three digits by
+  default, wider once a repo grows past `999`. Resolve the next value with
+  the shipped helper rather than counting by hand:
+
+  ```bash
+  python -m ai_router.resolve_set --next          # prints e.g. 051
+  python -m ai_router.resolve_set 50              # prints the full slug for Set 50
+  ```
+
+  (`next_session_set_number(scan_root)` is the underlying function; it
+  returns both the integer and the zero-padded string.)
+- **Forward-only — never mass-rename.** A retroactive renumber would break
+  every `prerequisites:` slug reference, each state file's
+  `sessionSetName`, the on-disk artifact names, and git history. New sets
+  get a prefix; existing dirs are left alone.
+
+**Authority by repo:**
+
+- **This canonical repo and any scaffolder output** — the `NNN-` prefix is
+  **required**. Soft adoption leaves addressing spotty and reintroduces the
+  alphabetical-sort confusion the prefix exists to fix.
+- **Consumer repos** (`dabbler-access-harvester`, `dabbler-platform`,
+  `dabbler-homehealthcare-accessdb`, …) — the prefix is
+  **recommended and forward-only**. Adopt it for new sets; do not rename
+  the existing bare-named sets. The number→slug resolver works per-repo, so
+  a consumer that has adopted the prefix gets `Set N` addressing
+  immediately; one that has not keeps using full slugs until it does.
+
+> **Why number handles at all?** Without a sequence prefix, referring to a
+> set in conversation means typing or pasting a long slug, and the Explorer
+> sorts alphabetically so "what's the latest set" is not obvious. A
+> monotonic prefix plus the `Set N`→slug resolver fixes both. (Set 050
+> itself is a small illustration: its slug,
+> `050-schema-drift-detection-and-migration-guard`, under-describes the
+> broadened scope — but `Set 50` addresses it unambiguously regardless.)
 
 ---
 

@@ -257,6 +257,17 @@
         "command": "dabbler.regenerateNarrationTemplates",
         "title": "Regenerate Narration Templates",
         "category": "Dabbler"
+      },
+      {
+        "command": "dabblerSessionSets.resolveSetNumber",
+        "title": "Resolve Session Set by Number",
+        "category": "Dabbler"
+      },
+      {
+        "command": "dabblerSessionSets.upgradeOlderSets",
+        "title": "Upgrade Older Session Sets",
+        "category": "Dabbler",
+        "icon": "$(arrow-up)"
       }
     ],
     "menus": {
@@ -285,6 +296,11 @@
           "command": "dabbler.getStarted",
           "when": "view == dabblerSessionSets",
           "group": "navigation@3"
+        },
+        {
+          "command": "dabblerSessionSets.upgradeOlderSets",
+          "when": "view == dabblerSessionSets && dabblerSessionSets.hasSubCurrentSets",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": []

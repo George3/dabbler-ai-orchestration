@@ -387,6 +387,46 @@ def test_main_returns_zero_on_success(tmp_path: Path):
     assert start_session.main(argv) == start_session.EXIT_OK
 
 
+def test_session_set_dir_accepts_bare_number(tmp_path: Path, monkeypatch):
+    """Set 050 S4 (Feature 2): ``--session-set-dir 50`` resolves to the
+    full ``050-...`` slug within the active repo's docs/session-sets."""
+    sets_root = tmp_path / "docs" / "session-sets"
+    sets_root.mkdir(parents=True)
+    set_dir = _fresh_set(sets_root)  # default name "test-set"; rename below
+    # _fresh_set names the dir; recreate under a numbered slug so the
+    # resolver has something to match.
+    numbered = sets_root / "050-schema-drift"
+    set_dir.rename(numbered)
+    monkeypatch.chdir(tmp_path)
+
+    rc = start_session.main([
+        "--session-set-dir", "50",
+        "--engine", "claude",
+        "--provider", "anthropic",
+    ])
+    assert rc == start_session.EXIT_OK
+    state = read_session_state(str(numbered)) or {}
+    assert state.get("status") == "in-progress"
+
+
+def test_session_set_dir_bare_number_no_match_is_usage_error(
+    tmp_path: Path, monkeypatch, capsys
+):
+    """A bare number with no matching set is a usage error naming the
+    available numbers, not a bare 'directory not found'."""
+    sets_root = tmp_path / "docs" / "session-sets"
+    sets_root.mkdir(parents=True)
+    (sets_root / "047-foo").mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    rc = start_session.main([
+        "--session-set-dir", "99",
+        "--engine", "claude",
+    ])
+    assert rc == start_session.EXIT_USAGE
+    assert "Available numbers" in capsys.readouterr().err
+
+
 def test_main_returns_boundary_exit_on_violation(tmp_path: Path):
     """The boundary-violation exit code (3) propagates from
     run() through main() so shell callers can branch on it."""

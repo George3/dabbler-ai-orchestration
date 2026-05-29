@@ -238,6 +238,23 @@ body.vscode-light, body.vscode-high-contrast-light {
 }
 
 /*
+ * Set 050 S4 (Explorer UX revision): the unobtrusive schema-drift
+ * marker — a single asterisk after the row name carrying the
+ * "Ran under schema v<N>" tooltip. Deliberately quiet: it uses the
+ * theme's de-emphasized foreground and a help cursor on hover so it
+ * reads as "there's a note here," not as the old nagging
+ * "(needs migration)" label. Upgrading is offered via the view's
+ * title-bar bulk action, never as a per-row obligation.
+ */
+.row-migration-marker {
+  display: inline;
+  margin-left: 3px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground, #8a8a8a);
+  cursor: help;
+}
+
+/*
  * Set 049 S4 (rip-out): the Set 045 harvest-record badges
  * (`.harvest-badges` / `.harvest-badge*`) and coordination-conflict
  * pills (`.conflict-pills` / `.conflict-pill` / `.conflict-severity-*`)

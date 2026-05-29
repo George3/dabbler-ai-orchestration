@@ -23,6 +23,9 @@ import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/ins
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { registerRegenerateNarrationTemplatesCommand } from "./commands/regenerateNarrationTemplates";
 import { registerExternalVerificationCommand } from "./commands/externalVerification";
+import { registerResolveSetNumberCommand } from "./commands/resolveSetNumber";
+import { registerUpgradeOlderSetsCommand } from "./commands/upgradeOlderSets";
+import { hasSubCurrentSets } from "./providers/SessionSetsModel";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
@@ -40,6 +43,16 @@ function evaluateSupportContextKeys(allSets: SessionSet[]): void {
 
   vscode.commands.executeCommand("setContext", "dabblerSessionSets.uatSupportActive", uatActive);
   vscode.commands.executeCommand("setContext", "dabblerSessionSets.e2eSupportActive", e2eActive);
+
+  // Set 050 S4 (Explorer UX revision): gate the title-bar "Upgrade older
+  // session sets" icon on at least one set being sub-current. Hidden
+  // when every set is already on the current schema so the bulk action
+  // never appears as a standing nag.
+  vscode.commands.executeCommand(
+    "setContext",
+    "dabblerSessionSets.hasSubCurrentSets",
+    hasSubCurrentSets(allSets),
+  );
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -257,6 +270,15 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("registerExternalVerificationCommand", () =>
     registerExternalVerificationCommand(context),
+  );
+  // Set 050 S4 (Feature 2 + Explorer UX revision): the number->slug
+  // quick-input resolver and the repo-level bulk-upgrade title-bar
+  // action.
+  safeRegister("registerResolveSetNumberCommand", () =>
+    registerResolveSetNumberCommand(context),
+  );
+  safeRegister("registerUpgradeOlderSetsCommand", () =>
+    registerUpgradeOlderSetsCommand(context, { refreshView: refreshAll }),
   );
 
   // Set 030 Session 5: flip scanState to "ready" once activation

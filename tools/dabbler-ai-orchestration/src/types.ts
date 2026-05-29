@@ -159,6 +159,14 @@ export interface SessionSet {
   // → no migration needed (already at v4 or no state file to act on).
   // Reading the badge: `needsMigration === (migrationTargetSchemaVersion !== null)`.
   migrationTargetSchemaVersion: 3 | 4 | null;
+  // Set 050 Session 4 (Explorer UX revision): the raw `schemaVersion`
+  // the set's state file carries on disk — the version it "ran under" —
+  // or null when the field is absent / unreadable. Surfaced ONLY to
+  // populate the unobtrusive asterisk's "Ran under schema v<N>" tooltip
+  // that replaces the old intrusive "(needs migration)" row label
+  // (operator non-goal: old schema is acceptable; no per-row nag). Not
+  // a migration signal itself — `needsMigration` remains the driver.
+  schemaVersionOnDisk: number | null;
   // Set 047 Session 5 (spec §3.3): prerequisites authored under the
   // set's ``spec.md`` ``Session Set Configuration`` block. `null`
   // when the field is absent (no dependency declared); empty array

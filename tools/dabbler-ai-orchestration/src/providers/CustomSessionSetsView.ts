@@ -36,7 +36,8 @@ import {
   forceClosedBadge,
   ICON_FILES,
   isCurrentSessionInFlight,
-  needsMigrationBadge,
+  migrationMarker,
+  migrationTooltip,
   sortBucket,
   touchedDate,
   uatBadge,
@@ -114,8 +115,13 @@ function contextValueFor(set: SessionSet): string {
 // in the right-aligned fraction list-icon column) and the trailing
 // "Complete" word. For in-progress rows: just "session N in flight".
 // For not-started / complete / cancelled rows: empty (the fraction
-// IS the signal). UAT / force-closed / needs-migration / touched-date
-// badges still tack on if present.
+// IS the signal). UAT / force-closed / touched-date badges still tack
+// on if present.
+//
+// Set 050 S4: the "(needs migration)" badge is removed from the
+// description entirely — it now renders as an unobtrusive asterisk next
+// to the row name (see migrationMarker / migrationTooltip on RowPayload)
+// rather than as an intrusive trailing label.
 function descriptionFor(set: SessionSet): string {
   const bits: string[] = [];
   if (set.state === "in-progress" && set.liveSession?.currentSession != null) {
@@ -125,7 +131,6 @@ function descriptionFor(set: SessionSet): string {
     touchedDate(set),
     uatBadge(set),
     forceClosedBadge(set),
-    needsMigrationBadge(set),
     blockedByPrereqsBadge(set),
   ].filter(Boolean);
   bits.push(...extras);
@@ -504,6 +509,10 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       contextValue: contextValueFor(set),
       iconSlug: ICON_FILES[set.state] ?? "",
       needsMigration: set.needsMigration,
+      // Set 050 S4: unobtrusive asterisk + tooltip replacing the old
+      // "(needs migration)" description label.
+      migrationMarker: migrationMarker(set),
+      migrationTooltip: migrationTooltip(set),
       accordionHtml: null,
       accordionUpdatedAt: null,
     };

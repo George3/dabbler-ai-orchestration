@@ -476,6 +476,10 @@ export function readSessionSets(root: string): SessionSet[] {
     // command without re-reading the file.
     let needsMigration = false;
     let migrationTargetSchemaVersion: 3 | 4 | null = null;
+    // Set 050 S4: the raw on-disk schemaVersion, surfaced only for the
+    // asterisk tooltip ("Ran under schema v<N>"). null when absent /
+    // non-numeric (the asterisk then reads "an older schema").
+    let schemaVersionOnDisk: number | null = null;
     const eventsPath = path.join(dir, "session-events.jsonl");
 
     // Activity log is a step log, not a count source. The activity-log
@@ -546,6 +550,7 @@ export function readSessionSets(root: string): SessionSet[] {
         //     migrator's target. Flag with target=3.
         if (rawSd && typeof rawSd === "object" && !Array.isArray(rawSd)) {
           const sv = rawSd.schemaVersion;
+          schemaVersionOnDisk = typeof sv === "number" ? sv : null;
           if (typeof sv === "number" && sv >= 4) {
             needsMigration = false;
             migrationTargetSchemaVersion = null;
@@ -714,6 +719,7 @@ export function readSessionSets(root: string): SessionSet[] {
       root,
       needsMigration,
       migrationTargetSchemaVersion,
+      schemaVersionOnDisk,
       prerequisites,
       // Default false; the cross-reference pass below overwrites this
       // once every set's `state` is known so each prereq can resolve

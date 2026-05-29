@@ -128,6 +128,7 @@ function fakeSet(
     root: "/tmp",
     needsMigration: false,
     migrationTargetSchemaVersion: null,
+    schemaVersionOnDisk: null,
     prerequisites: null,
     blockedByPrereqs: false,
   };

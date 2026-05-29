@@ -383,6 +383,7 @@ suite("Set 047 / S5 — blockedByPrereqsBadge", () => {
       root: "/x",
       needsMigration: false,
       migrationTargetSchemaVersion: null,
+      schemaVersionOnDisk: null,
       prerequisites: null,
       blockedByPrereqs: false,
       ...over,

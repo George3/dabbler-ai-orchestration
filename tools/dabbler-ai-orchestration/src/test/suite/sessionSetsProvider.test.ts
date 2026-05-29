@@ -48,6 +48,7 @@ function fakeSet(over: Partial<SessionSet> = {}): SessionSet {
     root: "/x",
     needsMigration: false,
     migrationTargetSchemaVersion: null,
+    schemaVersionOnDisk: null,
     prerequisites: null,
     blockedByPrereqs: false,
     ...over,

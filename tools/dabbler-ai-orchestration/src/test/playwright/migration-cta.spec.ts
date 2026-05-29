@@ -73,9 +73,11 @@ async function treeitemTexts(
 }
 
 // ---------------------------------------------------------------------
-// Scenario 1: v2 state file on disk → "(needs migration)" badge on row.
+// Scenario 1: v2 state file on disk → unobtrusive asterisk marker with a
+// "Ran under schema v2" tooltip on the row (Set 050 S4 Explorer UX
+// revision). The old intrusive "(needs migration)" text label is gone.
 // ---------------------------------------------------------------------
-test("renders (needs migration) badge on a v2 set", async () => {
+test("renders schema-drift asterisk + tooltip on a v2 set", async () => {
   const per: PerTest = {};
   try {
     per.tmpPath = makeTmpDir("dabbler-pw-v2");
@@ -91,7 +93,14 @@ test("renders (needs migration) badge on a v2 set", async () => {
 
     const joined = (await treeitemTexts(tree)).join("\n");
     expect(joined).toContain("scenario-v2-pending");
-    expect(joined).toContain("(needs migration)");
+    // The marker is a single asterisk; the old nag label is retired.
+    expect(joined).not.toContain("(needs migration)");
+
+    const marker = tree.locator(".row-migration-marker");
+    await expect(marker).toHaveCount(1);
+    await expect(marker).toHaveText("*");
+    expect(await marker.getAttribute("title")).toBe("Ran under schema v2");
+
     // Negative control: only one set in this fixture; no other badge
     // should appear.
     expect(joined).not.toContain("[FORCED]");

@@ -105,6 +105,10 @@ try:
         acquire_lock_with_timeout,
         release_lock,
     )
+    from resolve_set import (  # type: ignore[import-not-found]
+        SetResolutionError,
+        resolve_session_set_dir,
+    )
 except ImportError:
     from .progress import (  # type: ignore[no-redef]
         SessionStateInvariantError,
@@ -120,6 +124,10 @@ except ImportError:
         LockContention,
         acquire_lock_with_timeout,
         release_lock,
+    )
+    from .resolve_set import (  # type: ignore[no-redef]
+        SetResolutionError,
+        resolve_session_set_dir,
     )
 
 
@@ -345,7 +353,21 @@ def run(args: argparse.Namespace) -> int:
     namespace built from :func:`_build_arg_parser` without needing
     to capture stdout/stderr from argparse error exits.
     """
-    session_set_dir = args.session_set_dir
+    # Set 050 S4 (Feature 2): --session-set-dir accepts a bare number
+    # ("50" / "050") as a handle that resolves to the full slug within
+    # the active repo's docs/session-sets. A path value (the pre-Set-050
+    # contract) passes through unchanged. Resolution happens before the
+    # isdir check so a number that resolves to a real dir proceeds, and
+    # an unresolvable number reports the resolver's helpful error
+    # (available numbers / --next) rather than a bare "not found".
+    try:
+        session_set_dir = resolve_session_set_dir(args.session_set_dir)
+    except SetResolutionError as exc:
+        print(f"start_session: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    # Keep args in sync so _run_under_lock (which re-reads args) sees the
+    # resolved path.
+    args.session_set_dir = session_set_dir
     if not os.path.isdir(session_set_dir):
         print(
             f"start_session: session-set directory not found: "
