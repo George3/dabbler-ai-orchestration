@@ -1,12 +1,13 @@
 {
   "status": "completed",
-  "summary": "S2 — declarative manifest + detect-only check_migrations CLI. Shipped docs/schema-current.json (declarative, advisory, off-hot-path: manifestVersion/currentSchemaVersion/minimumAiRouterVersion/doc-URLs + symbolic migrator IDs, NO shell strings) and ai_router/check_migrations.py (detect-only scanner; classifies clean/drift/ahead/unreadable vs LOCAL_SCHEMA_VERSION; terse/--verbose/--json; exit-non-zero-on-drift with --exit-zero; advisory --manifest-url fail-open+cached, --strict-manifest fail-loud; ASCII-only output for Windows). 21 new tests incl. the manifest==SESSION_STATE_SCHEMA_VERSION CI guard and the carried-risk-#2 v2-needs-chain test. Full suite: 988 passed, 1 skipped, 0 regressions. KEY DEVIATION (flagged): the carried-risk-#2 test empirically falsified the verdict's locked two-migrator bulk sequence — a genuine v2 file (explicit schemaVersion:2 + legacy triple) is skipped by BOTH lightweight-to-v4 and v3-to-v4; the v2->v3 step is a third existing migrator (migrate_session_state) the verdict omitted. Corrected bulk chain (no new migrator logic): migrate_session_state -> migrate_lightweight_to_canonical_v4 -> migrate_v3_to_v4. S2 invoked no router (self-verified via the test suite); $0 added to the $10 set NTE.",
+  "summary": "S3 — pure-JS hot-path schema-drift scan + install path + CI constant guard. The implementation was committed (b8b2066) by a prior claude-sonnet-4-6 chat that registered the session start (3859066) but stopped without closing out; this claude-opus-4-8 chat took over, critically reviewed the diff, verified it green, and closed out. Deliverable per the S1-locked S3 scope: (1) claude-session-start-invoker.js gains CURRENT_SCHEMA_VERSION = 4 + scanSchemaDrift(workspaceRoot) — reads docs/session-sets/*/session-state.json, compares each schemaVersion to the bundled constant, emits a terse one-line summary on drift (clean = silent, fail-open), NO ai_router import + NO network so it works with an absent/stale router; chained after start_session in main() with start_session errors logged-not-fatal so the scan always runs. (2) installOrchestratorHookClaudeCode.ts: success toast mentions both start_session + drift scan, plus a 'Copy manual setup' button (invoker download URL + settings.json stanza) for extension-less repos. (3) test_invoker_schema_constant.py: CI guard pinning the JS constant == ai_router SCHEMA_VERSION. (4) ai-led-session-workflow.md Step 1 documents the guard. Verification: Python 22 passed (constant guard + check_migrations); TS 561 passing / 2 failing where both failures pre-exist in unrelated files (commit c2a336f, Set 026) and the invoker's own suite passes. SCOPE FLAG (carried to S4/S5): the end-of-set 'Explorer UX revision' deliverable (asterisk + 'Ran under schema v<N>' tooltip replacing the (needs migration) row description; single title-bar 'Upgrade older session sets' icon running the corrected three-migrator bulk chain) is in End-of-set deliverables but unassigned to any session's Steps and was NOT done in S3 — it needs a home in S4 or S5. No router invoked; $0 added to the $10 set NTE.",
   "verification_method": "manual",
   "files_changed": [
-    "ai_router/check_migrations.py",
-    "ai_router/tests/test_check_migrations.py",
-    "docs/schema-current.json",
-    "ai_router/CHANGELOG.md",
+    "tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js",
+    "tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookClaudeCode.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/claudeSessionStartInvoker.test.ts",
+    "ai_router/tests/test_invoker_schema_constant.py",
+    "docs/ai-led-session-workflow.md",
     "docs/session-sets/050-schema-drift-detection-and-migration-guard/activity-log.json",
     "docs/session-sets/050-schema-drift-detection-and-migration-guard/disposition.json"
   ],
@@ -17,8 +18,8 @@
     "model": "claude-opus-4-8",
     "effort": "high",
     "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "S3 (pure-JS hot-path drift scan in claude-session-start-invoker.js + install path + the CI test pinning the JS constant to SESSION_STATE_SCHEMA_VERSION) builds directly on the S2 manifest/constant and the corrected bulk chain; same orchestrator keeps the drift-detection design and the verdict-deviation context warm."
+      "code": "scope-decision-pending",
+      "specifics": "S4 implements Feature 2 (NNN- prefix convention + two-surface number->slug resolver in ai_router and a minimal extension command) AND must absorb the carried scope decision: where the unassigned end-of-set 'Explorer UX revision' deliverable (asterisk/tooltip + bulk-upgrade title-bar icon) lands — S4 (natural fit, S4 already touches the extension) vs. S5. The cross-surface coordination (ai_router resolver + start_session integration + extension command + authoring-guide reconciliation + the corrected three-migrator bulk chain wired into a title-bar action) plus that open scope call warrant high effort."
     }
   }
 }
