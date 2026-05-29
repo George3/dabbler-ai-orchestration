@@ -34,9 +34,9 @@
     {
       "number": 3,
       "title": "Session 3",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-05-29T11:34:53.606547-04:00",
-      "completedAt": null,
+      "completedAt": "2026-05-29T11:52:57.967280-04:00",
       "orchestrator": {
         "engine": "claude",
         "provider": "anthropic",
