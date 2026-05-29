@@ -1,0 +1,66 @@
+{
+  "sessionSetName": "050-schema-drift-detection-and-migration-guard",
+  "createdDate": "2026-05-29",
+  "totalSessions": 5,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/register-and-budget",
+      "dateTime": "2026-05-29T10:33:50-04:00",
+      "description": "Registered S1 via python -m ai_router.start_session (engine=claude, provider=anthropic, model=claude-opus-4-8, effort=high). On-disk state had 4 sessions vs the spec's 5 (scope was broadened); passed --total-sessions 5 to reconcile (the 5th session was appended). Confirmed set NTE budget $10 via AskUserQuestion (matches Sets 047/048/049).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/inventory-surfaces",
+      "dateTime": "2026-05-29T10:40:00-04:00",
+      "description": "Inventoried both features' composition points via two Explore agents. Feature 1: needsMigration detector (fileSystem.ts ~L547-564), the two migrator CLIs (migrate_v3_to_v4 .v3.bak.json, migrate_lightweight_to_canonical_v4 .lwbak.json), normalize_to_v4_shape shim (progress.py:312), SCHEMA_VERSION_V4 constant (progress.py:31, re-exported as SESSION_STATE_SCHEMA_VERSION), the existing claude-session-start-invoker.js + installOrchestratorHook.claudeCode command, cross-repo notice blob-URL pattern. Feature 2: trigger phrase (rowMenuHelpers.ts:85 / copyPromptCommands.ts), copy* commands incl. copySlug, slug=directory basename (fileSystem.ts:699), ActionRegistry flat actions, authoring-guide slug section (discourages number prefixes), no existing prefix-parsing.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/router-api-grounding",
+      "dateTime": "2026-05-29T10:46:00-04:00",
+      "description": "Confirmed RouteResult exposes model_name/model_id/tier but NO .provider attribute (the recurring crash trap from prior sets). Chose to call providers.call_model directly with config=cfg['providers'][provider_name], avoiding route() and the trap entirely. Identified consensus engines: gemini-pro (google/gemini-2.5-pro), gpt-5-4 (openai/gpt-5.4) with gpt-5-4-mini fallback.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/proposal",
+      "dateTime": "2026-05-29T10:50:00-04:00",
+      "description": "Authored proposal.md with recommended dispositions on all 11 open questions (7 Feature-1, 4 Feature-2) plus rationale, carried risks, and S2-S5 scope.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/cross-provider-consensus",
+      "dateTime": "2026-05-29T10:53:00-04:00",
+      "description": "Ran devil's-advocate two-pass consensus: Pass A (evaluate each disposition) + Pass B (devil's advocate challenging the author's minimal-surface bias) against gemini-pro and gpt-5-4. All four calls succeeded (no 429 cascade). Total $0.2829 (gemini $0.0128+$0.0226; gpt-5-4 $0.1167+$0.1309). Convergent direction; 8 of 11 dispositions flipped. Biggest correction (gpt-5-4 pass-b): the SessionStart drift scan must be pure-JS / no-router because the incident repo had an ancient router with no check_migrations.",
+      "status": "complete",
+      "routedApiCalls": [
+        {"pass": "A", "engine": "gemini-pro", "provider": "google", "costUsd": 0.0128, "outputTokens": 729},
+        {"pass": "A", "engine": "gpt-5-4", "provider": "openai", "costUsd": 0.1167, "outputTokens": 7100},
+        {"pass": "B", "engine": "gemini-pro", "provider": "google", "costUsd": 0.0226, "outputTokens": 1668},
+        {"pass": "B", "engine": "gpt-5-4", "provider": "openai", "costUsd": 0.1309, "outputTokens": 8000}
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/verdict-and-scope-lock",
+      "dateTime": "2026-05-29T10:58:00-04:00",
+      "description": "Wrote verdict.md (locked dispositions, net-change table, carried risks, S2-S5 scope-lock). Journaled the consensus to ai_router/consensus-decisions.jsonl (category spec-clarification, agreement partial). Scope-locked spec.md: audit-locked banner over the open-questions section, refined S2 (declarative manifest + detect-only CLI), S3 (pure-JS hot-path scan + CI constant-equality test), S4 (two-surface resolver), deliverables, and the --apply non-goal.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}
