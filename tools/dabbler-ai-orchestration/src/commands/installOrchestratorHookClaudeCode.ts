@@ -251,14 +251,55 @@ export async function installClaudeCodeOrchestratorHook(
   vscode.window
     .showInformationMessage(
       `${verbWasWord} ~/.claude/settings.json with the Dabbler orchestrator hook ` +
-      `(SessionStart → start_session). Restart Claude Code or run /clear in ` +
-      `an active session to claim the check-out.`,
+      `(SessionStart → start_session + schema-drift scan). Restart Claude Code ` +
+      `or run /clear in an active session to activate.`,
       "Open settings.json",
+      "Copy manual setup",
     )
     .then((picked) => {
       if (picked === "Open settings.json") {
         vscode.workspace.openTextDocument(settingsPath).then(
           (doc) => vscode.window.showTextDocument(doc),
+          () => undefined,
+        );
+      } else if (picked === "Copy manual setup") {
+        // Fallback for repos without the extension: copy the minimal
+        // settings.json stanza + invoker download URL so any operator
+        // can install the hook by hand (no extension, no router required).
+        const rawInvokerUrl =
+          "https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/" +
+          "tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js";
+        const snippet = [
+          "# Manual hook setup (no extension required):",
+          "# 1. Download the invoker script:",
+          `#    curl -o scripts/claude-session-start-invoker.js "${rawInvokerUrl}"`,
+          "# 2. Add to ~/.claude/settings.json (replace <absolute-path> with your repo path):",
+          JSON.stringify(
+            {
+              hooks: {
+                SessionStart: [
+                  {
+                    matcher: "startup",
+                    hooks: [
+                      {
+                        type: "command",
+                        command:
+                          'node "<absolute-path>/scripts/claude-session-start-invoker.js"',
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            null,
+            2,
+          ),
+        ].join("\n");
+        vscode.env.clipboard.writeText(snippet).then(
+          () =>
+            vscode.window.showInformationMessage(
+              "Manual setup snippet copied to clipboard.",
+            ),
           () => undefined,
         );
       }

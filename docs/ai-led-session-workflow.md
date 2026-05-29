@@ -1051,6 +1051,37 @@ layout, or `<container>/<slug>` for repos still on the retired bare-
 repo + flat-worktree layout. See
 `docs/planning/repo-worktree-layout.md`.
 
+#### Schema-drift guard (Set 050 S3)
+
+When the `dabbler.installOrchestratorHook.claudeCode` command has been
+used to install the `SessionStart` hook, the hook now runs **two chained
+steps**:
+
+1. `python -m ai_router.start_session` — registers the session (as before).
+2. A **pure-JS schema-drift scan** — reads every
+   `docs/session-sets/*/session-state.json`, compares each file's
+   `schemaVersion` against a bundled current-version constant, and writes
+   one summary line to stdout when any sets are behind:
+
+   ```
+   [Dabbler] 2 session-set(s) at v2, v3 need schema migration to v4. Run: python -m ai_router.check_migrations --verbose
+   ```
+
+   Clean repos produce no output. The scan has **no `ai_router` dependency
+   and makes no network requests** — it works even when the locally installed
+   router is absent or stale.
+
+If you see this message in your session context: run
+`python -m ai_router.check_migrations --verbose` to see the exact sets
+and remediation steps. Old-schema sets are still readable (the
+`normalize_to_v4_shape` shim handles v2/v3 transparently), so the
+warning is advisory — existing work is not at risk.
+
+To install or refresh the hook, run `Dabbler: Install Orchestrator Hook
+(Claude Code)` from the Command Palette. For repos without the extension,
+use the "Copy manual setup" option from that command's result toast, or
+see `docs/cross-repo-migration-guard-notice.md` (Set 050 S5).
+
 #### State first, work second (Set 022)
 
 The orchestrator declares "session N is in flight" on disk **before

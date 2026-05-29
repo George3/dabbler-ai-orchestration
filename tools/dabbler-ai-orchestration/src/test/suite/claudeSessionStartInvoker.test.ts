@@ -1,23 +1,27 @@
-// Set 049 S4 — Layer-2 coverage of the Claude Code SessionStart hook
-// invoker shim's post-rip shape. The Set 033 / 036 chatSessionId +
-// coordination assertions were dropped alongside the upstream rip-out;
-// this file now covers the surviving exports:
+// Set 049 S4 + Set 050 S3 — Layer-2 coverage of the Claude Code SessionStart
+// hook invoker shim.
 //
-//   - `parsePayload(raw)` — JSON.parse the hook payload, return `{}`
-//     for empty / malformed input.
-//   - `recoverPriorClaudeModelEffort(state)` — when the prior
-//     orchestrator block is `engine: "claude", provider: "anthropic"`,
-//     recover its `model` / `effort` for forwarding. Per the Set 049
-//     T3 omit-null contract, the recovered values are `undefined` when
-//     the prior block omitted them — no `"unknown"` fallback.
+// Exports under test:
+//   - `parsePayload(raw)` — JSON.parse the hook payload, return `{}` for
+//     empty / malformed input.
+//   - `recoverPriorClaudeModelEffort(state)` — when the prior orchestrator
+//     block is `engine: "claude", provider: "anthropic"`, recover its
+//     `model` / `effort` for forwarding. Per Set 049 T3 omit-null contract,
+//     recovered values are `undefined` when the prior block omitted them.
+//   - `scanSchemaDrift(workspaceRoot)` — Set 050 S3. Pure-JS scan of
+//     docs/session-sets/*/session-state.json vs CURRENT_SCHEMA_VERSION;
+//     returns a terse string on drift, null when clean. Fail-open.
+//   - `CURRENT_SCHEMA_VERSION` — the bundled constant. The Python CI test
+//     (test_invoker_schema_constant.py) asserts it equals ai_router's
+//     SESSION_STATE_SCHEMA_VERSION; this suite validates the exported value
+//     is a positive integer.
 //
-// The shim is plain Node (no vscode imports); the test loads it via
-// dynamic import so the helper exports are available without firing
-// `main()`. The chatSessionId / `extractSessionId` / fallback-to-
-// "unknown" assertions from the pre-rip suite are gone — none of those
-// behaviors survived the Set 049 S2 / S3 simplifications.
+// The shim is plain Node (no vscode imports); the test loads it via dynamic
+// import so exports are available without firing `main()`.
 
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
 
@@ -26,6 +30,8 @@ interface InvokerExports {
   recoverPriorClaudeModelEffort: (
     state: unknown,
   ) => { model: string | undefined; effort: string | undefined };
+  scanSchemaDrift: (workspaceRoot: string) => string | null;
+  CURRENT_SCHEMA_VERSION: number;
 }
 
 let invoker: InvokerExports;
@@ -208,5 +214,137 @@ suite("claude-session-start-invoker — recoverPriorClaudeModelEffort", () => {
       model: undefined,
       effort: undefined,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Set 050 S3 — scanSchemaDrift + CURRENT_SCHEMA_VERSION
+// ---------------------------------------------------------------------------
+
+// Helper: write a minimal session-state.json with the given schemaVersion
+// into a temp directory. Returns the workspaceRoot path.
+function makeTmpWorkspace(sets: Array<{ slug: string; schemaVersion: number | null | "bad" }>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-drift-test-"));
+  const setsDir = path.join(root, "docs", "session-sets");
+  fs.mkdirSync(setsDir, { recursive: true });
+  for (const { slug, schemaVersion } of sets) {
+    const setDir = path.join(setsDir, slug);
+    fs.mkdirSync(setDir, { recursive: true });
+    if (schemaVersion === "bad") {
+      // corrupt file — not valid JSON
+      fs.writeFileSync(path.join(setDir, "session-state.json"), "{ not json", "utf8");
+    } else {
+      const payload = schemaVersion === null
+        ? { status: "complete" }
+        : { schemaVersion, status: "complete" };
+      fs.writeFileSync(
+        path.join(setDir, "session-state.json"),
+        JSON.stringify(payload),
+        "utf8",
+      );
+    }
+  }
+  return root;
+}
+
+suite("claude-session-start-invoker — CURRENT_SCHEMA_VERSION", () => {
+  suiteSetup(async () => {
+    invoker = await loadInvoker();
+  });
+
+  test("CURRENT_SCHEMA_VERSION is a positive integer", () => {
+    assert.ok(
+      typeof invoker.CURRENT_SCHEMA_VERSION === "number" &&
+        Number.isInteger(invoker.CURRENT_SCHEMA_VERSION) &&
+        invoker.CURRENT_SCHEMA_VERSION > 0,
+      `Expected CURRENT_SCHEMA_VERSION to be a positive integer, got ${invoker.CURRENT_SCHEMA_VERSION}`,
+    );
+  });
+});
+
+suite("claude-session-start-invoker — scanSchemaDrift", () => {
+  suiteSetup(async () => {
+    invoker = await loadInvoker();
+  });
+
+  test("returns null when all sets are at the current version", () => {
+    const root = makeTmpWorkspace([
+      { slug: "001-first", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+      { slug: "002-second", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+    ]);
+    assert.strictEqual(invoker.scanSchemaDrift(root), null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("returns a terse message when sets are at older versions", () => {
+    const root = makeTmpWorkspace([
+      { slug: "old-v2", schemaVersion: 2 },
+      { slug: "old-v3", schemaVersion: 3 },
+      { slug: "current", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+    ]);
+    const msg = invoker.scanSchemaDrift(root);
+    assert.ok(msg !== null, "Expected a drift message");
+    assert.ok(
+      msg.includes("[Dabbler]"),
+      `Expected '[Dabbler]' prefix in: ${msg}`,
+    );
+    assert.ok(
+      msg.includes("2 session-set(s)"),
+      `Expected '2 session-set(s)' in: ${msg}`,
+    );
+    assert.ok(
+      msg.includes("v2") && msg.includes("v3"),
+      `Expected both v2 and v3 in: ${msg}`,
+    );
+    assert.ok(
+      msg.includes("check_migrations"),
+      `Expected 'check_migrations' in: ${msg}`,
+    );
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("returns null when only one set is present at current version", () => {
+    const root = makeTmpWorkspace([
+      { slug: "only-current", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+    ]);
+    assert.strictEqual(invoker.scanSchemaDrift(root), null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("skips corrupt state files without crashing (fail-open)", () => {
+    const root = makeTmpWorkspace([
+      { slug: "corrupt", schemaVersion: "bad" },
+      { slug: "current", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+    ]);
+    // Both clean (corrupt skipped) or a drift message; must NOT throw.
+    const msg = invoker.scanSchemaDrift(root);
+    // corrupt file is skipped → 0 drift → null
+    assert.strictEqual(msg, null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("returns null when no session-sets directory exists (fail-open)", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-drift-empty-"));
+    assert.strictEqual(invoker.scanSchemaDrift(root), null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("skips files with missing schemaVersion field without counting as drift", () => {
+    const root = makeTmpWorkspace([
+      { slug: "no-version", schemaVersion: null },
+      { slug: "current", schemaVersion: invoker.CURRENT_SCHEMA_VERSION },
+    ]);
+    // null schemaVersion → skipped, not drift
+    assert.strictEqual(invoker.scanSchemaDrift(root), null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("drift message lists a single old version correctly (singular count)", () => {
+    const root = makeTmpWorkspace([
+      { slug: "old", schemaVersion: 3 },
+    ]);
+    const msg = invoker.scanSchemaDrift(root);
+    assert.ok(msg !== null && msg.includes("1 session-set(s)"), `Got: ${msg}`);
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });

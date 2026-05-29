@@ -50,6 +50,12 @@ const cp = require("child_process");
 const CLAUDE_ENGINE = "claude";
 const CLAUDE_PROVIDER = "anthropic";
 
+// Set 050 S3: bundled schema-version constant kept == ai_router's
+// SESSION_STATE_SCHEMA_VERSION by a CI test (test_invoker_schema_constant.py).
+// This is the ONLY source of "current version" the hot-path scan reads —
+// no ai_router import, no network, no router needed at all.
+const CURRENT_SCHEMA_VERSION = 4;
+
 function readStdinSync() {
   try {
     return fs.readFileSync(0, "utf8");
@@ -187,6 +193,51 @@ function spawnStartSession(setDir, model, effort) {
   });
 }
 
+// Set 050 S3: pure-JS schema-drift scan.
+//
+// Reads docs/session-sets/*/session-state.json under workspaceRoot and
+// compares each file's schemaVersion against CURRENT_SCHEMA_VERSION. Returns
+// a terse one-line summary when drift is found, null when clean. Fail-open:
+// unreadable or missing files are skipped without warning — a transient I/O
+// error must not block a session start. The scan has NO ai_router dependency
+// and NO network I/O so it works even when the router is absent or stale.
+function scanSchemaDrift(workspaceRoot) {
+  const sessionSetsDir = path.join(workspaceRoot, "docs", "session-sets");
+  let entries;
+  try {
+    entries = fs.readdirSync(sessionSetsDir, { withFileTypes: true });
+  } catch {
+    return null; // no session-sets dir — not a concern for this workspace
+  }
+
+  let driftCount = 0;
+  const driftVersions = new Set();
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const statePath = path.join(sessionSetsDir, entry.name, "session-state.json");
+    try {
+      const raw = fs.readFileSync(statePath, "utf8");
+      const state = JSON.parse(raw);
+      const sv = typeof state.schemaVersion === "number" ? state.schemaVersion : null;
+      if (sv !== null && sv < CURRENT_SCHEMA_VERSION) {
+        driftCount++;
+        driftVersions.add(sv);
+      }
+    } catch {
+      // skip — unreadable / missing / invalid JSON
+    }
+  }
+
+  if (driftCount === 0) return null;
+
+  const versionsStr = Array.from(driftVersions).sort().map((v) => `v${v}`).join(", ");
+  return (
+    `[Dabbler] ${driftCount} session-set(s) at ${versionsStr} ` +
+    `need schema migration to v${CURRENT_SCHEMA_VERSION}. ` +
+    `Run: python -m ai_router.check_migrations --verbose`
+  );
+}
+
 function main() {
   const payload = parsePayload(readStdinSync());
   const startCwd = (typeof payload.cwd === "string" && payload.cwd)
@@ -205,14 +256,13 @@ function main() {
 
   const result = spawnStartSession(resolution.setDir, model, effort);
 
+  // Log start_session errors to stderr but do NOT exit early — the drift
+  // scan below is an independent concern and should still run.
   if (result.error) {
     process.stderr.write(
       `claude-session-start-invoker: spawn failed: ${result.error.message}\n`,
     );
-    process.exit(0);
-  }
-
-  if (result.status !== 0) {
+  } else if (result.status !== 0) {
     if (result.stderr) {
       process.stderr.write(
         `claude-session-start-invoker: start_session exit ${result.status}:\n${result.stderr}`,
@@ -222,7 +272,12 @@ function main() {
         `claude-session-start-invoker: start_session exit ${result.status}\n`,
       );
     }
-    process.exit(0);
+  }
+
+  // Set 050 S3: schema-drift scan — independent of start_session, fail-open.
+  const driftMsg = scanSchemaDrift(resolution.workspaceRoot);
+  if (driftMsg) {
+    process.stdout.write(driftMsg + "\n");
   }
 
   process.exit(0);
@@ -235,5 +290,5 @@ function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { parsePayload, recoverPriorClaudeModelEffort };
+  module.exports = { parsePayload, recoverPriorClaudeModelEffort, scanSchemaDrift, CURRENT_SCHEMA_VERSION };
 }
