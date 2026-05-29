@@ -1,17 +1,14 @@
 {
   "status": "completed",
-  "summary": "S1 audit + design-lock. Ran cross-provider consensus (devil's-advocate two-pass, gemini-pro + gpt-5-4, both passes) on all 11 open design questions; 8 of 11 dispositions changed. Locked: pure-JS hot-path drift scan (no ai_router dependency, no network) so stale/no-router consumers stay protected; declarative advisory off-hot-path schema-current.json manifest (no shell strings); check_migrations detect-only (--apply cut), bulk upgrade = two existing migrators in sequence; Feature 2 ships both an ai_router resolver and a minimal extension quick-input command; NNN- prefix required for new sets. Produced proposal.md + verdict.md + per-pass artifacts; scope-locked spec.md; journaled consensus ($0.2829 of the $10 set NTE).",
+  "summary": "S2 — declarative manifest + detect-only check_migrations CLI. Shipped docs/schema-current.json (declarative, advisory, off-hot-path: manifestVersion/currentSchemaVersion/minimumAiRouterVersion/doc-URLs + symbolic migrator IDs, NO shell strings) and ai_router/check_migrations.py (detect-only scanner; classifies clean/drift/ahead/unreadable vs LOCAL_SCHEMA_VERSION; terse/--verbose/--json; exit-non-zero-on-drift with --exit-zero; advisory --manifest-url fail-open+cached, --strict-manifest fail-loud; ASCII-only output for Windows). 21 new tests incl. the manifest==SESSION_STATE_SCHEMA_VERSION CI guard and the carried-risk-#2 v2-needs-chain test. Full suite: 988 passed, 1 skipped, 0 regressions. KEY DEVIATION (flagged): the carried-risk-#2 test empirically falsified the verdict's locked two-migrator bulk sequence — a genuine v2 file (explicit schemaVersion:2 + legacy triple) is skipped by BOTH lightweight-to-v4 and v3-to-v4; the v2->v3 step is a third existing migrator (migrate_session_state) the verdict omitted. Corrected bulk chain (no new migrator logic): migrate_session_state -> migrate_lightweight_to_canonical_v4 -> migrate_v3_to_v4. S2 invoked no router (self-verified via the test suite); $0 added to the $10 set NTE.",
   "verification_method": "manual",
   "files_changed": [
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/proposal.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/verdict.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/pass-a-gemini.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/pass-a-openai.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/pass-b-gemini.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/pass-b-openai.md",
-    "docs/proposals/2026-05-29-session-set-currency-and-addressing/run_consensus.py",
-    "docs/session-sets/050-schema-drift-detection-and-migration-guard/spec.md",
-    "ai_router/consensus-decisions.jsonl"
+    "ai_router/check_migrations.py",
+    "ai_router/tests/test_check_migrations.py",
+    "docs/schema-current.json",
+    "ai_router/CHANGELOG.md",
+    "docs/session-sets/050-schema-drift-detection-and-migration-guard/activity-log.json",
+    "docs/session-sets/050-schema-drift-detection-and-migration-guard/disposition.json"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -21,7 +18,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "S2 (manifest + detect-only check_migrations CLI) is straightforward Python implementation off the S1-locked verdict; same orchestrator keeps the design context warm and the audit rationale at hand."
+      "specifics": "S3 (pure-JS hot-path drift scan in claude-session-start-invoker.js + install path + the CI test pinning the JS constant to SESSION_STATE_SCHEMA_VERSION) builds directly on the S2 manifest/constant and the corrected bulk chain; same orchestrator keeps the drift-detection design and the verdict-deviation context warm."
     }
   }
 }

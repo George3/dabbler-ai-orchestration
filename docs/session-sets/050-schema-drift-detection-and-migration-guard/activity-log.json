@@ -61,6 +61,42 @@
       "description": "Wrote verdict.md (locked dispositions, net-change table, carried risks, S2-S5 scope-lock). Journaled the consensus to ai_router/consensus-decisions.jsonl (category spec-clarification, agreement partial). Scope-locked spec.md: audit-locked banner over the open-questions section, refined S2 (declarative manifest + detect-only CLI), S3 (pure-JS hot-path scan + CI constant-equality test), S4 (two-surface resolver), deliverables, and the --apply non-goal.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/manifest",
+      "dateTime": "2026-05-29T13:10:00-04:00",
+      "description": "Authored docs/schema-current.json per the S1-locked Q3 schema: declarative only (manifestVersion 1, currentSchemaVersion 4, minimumAiRouterVersion 0.10.0, raw-on-master schemaDocUrl, blob migrationGuideUrl) with migrators as symbolic IDs + version ranges (NO executable shell strings). Migrators array carries three entries (v2-to-v3, lightweight-to-v4, v3-to-v4) — see step 4 for why the verdict's two-entry example was corrected.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/check-migrations-cli",
+      "dateTime": "2026-05-29T13:25:00-04:00",
+      "description": "Implemented ai_router/check_migrations.py (detect-only). Scans <scan>/*/session-state.json (reuses discover_session_sets from migrate_v3_to_v4), classifies each as clean/drift/ahead/unreadable against LOCAL_SCHEMA_VERSION (= session_state.SCHEMA_VERSION). Terse one-line default, --verbose/--json detail, exit non-zero on drift (--exit-zero suppresses). Optional --manifest-url advisory fetch (fail-open + ~/.dabbler cache, injectable fetch_fn for tests); --strict-manifest flips to fail-loud. Migrator-ID→module map + ordered bulk chain live in local code (manifest stays declarative). ASCII-only output (Windows cp1252 console crashes on non-ASCII, empirically confirmed). Relative-import fallback per the Set 048 bare-import lesson. No pyproject entry-point needed — sibling migrators also use python -m invocation.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/tests-and-verification",
+      "dateTime": "2026-05-29T13:45:00-04:00",
+      "description": "Wrote ai_router/tests/test_check_migrations.py (21 tests): clean repo, mixed v2/v3/v4/missing-version classification, corrupt/non-object unreadable (non-fatal), ahead-file, bool-not-int guard, manifest success+cache-fallback+no-cache+strict-raises, manifest==SESSION_STATE_SCHEMA_VERSION CI guard, migrator-IDs-known, the carried-risk-#2 v2-needs-chain end-to-end test, bulk-command shape, and CLI exit-code/json/exit-zero/ascii-only/manifest-note cases. Full suite green: 988 passed, 1 skipped, 0 regressions. Real-CLI harvester-mirror (2 v2 among 3 v4) reports exit 1 with both v2 sets flagged and the corrected chain recommended.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/verdict-deviation",
+      "dateTime": "2026-05-29T13:55:00-04:00",
+      "description": "DEVIATION FROM S1 VERDICT (flagged for S5 verifier + operator). Verdict Q7 locked the bulk-upgrade sequence as two migrators (lightweight-to-v4 then v3-to-v4) claiming it handles 'a v2 set that needs both steps'. The S2 carried-risk-#2 test empirically falsified this: a genuine v2 file (explicit schemaVersion:2 + legacy currentSession/totalSessions/completedSessions triple) is SKIPPED by both (lightweight→skipped-pre-v3, v3-to-v4→skipped-not-v3). The v2→v3 step is a THIRD existing migrator, migrate_session_state, which the verdict omitted. Corrected bulk chain (no new migrator logic — orchestrates an existing one): migrate_session_state → migrate_lightweight_to_canonical_v4 → migrate_v3_to_v4, each --in-place/idempotent; verified to take genuine v2 losslessly to v4. Documented in module docstring (CHAIN NOTE) + CHANGELOG; manifest migrators array reflects all three.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

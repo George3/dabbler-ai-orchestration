@@ -5,6 +5,38 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Set 050 S2 — schema-drift detection, detect-only)
+
+- **`python -m ai_router.check_migrations`** — a detect-only schema-drift
+  scanner. Walks `<scan>/*/session-state.json`, compares each
+  `schemaVersion` to the version this installation supports
+  (`SESSION_STATE_SCHEMA_VERSION`), and reports any set on an older schema
+  with the bulk-upgrade command. Never writes state files. Exits non-zero on
+  drift/ahead/unreadable for CI use (`--exit-zero` suppresses). Flags:
+  `--scan`, `--target`, `--verbose`, `--json`, `--manifest-url`,
+  `--strict-manifest`. Output is ASCII-only (Windows cp1252 consoles cannot
+  encode non-ASCII glyphs).
+- **`docs/schema-current.json`** — a declarative, advisory schema manifest
+  (manifest version, current schema version, minimum router version, doc
+  URLs, and symbolic migrator IDs + version ranges). Consulted **off the
+  hot path** via `check_migrations --manifest-url` (cached, fail-open);
+  `--strict-manifest` flips it to fail-loud for CI. Carries **no executable
+  shell strings** — migrator-ID→command resolution lives in local code. A CI
+  test pins `manifest.currentSchemaVersion == SESSION_STATE_SCHEMA_VERSION`.
+
+  **Bulk-upgrade chain correction (deviation from the S1 verdict).** The S1
+  audit (verdict Q7) locked the bulk sequence as two migrators
+  (`lightweight-to-v4` then `v3-to-v4`) and claimed it handled "a v2 set
+  that needs both steps." The S2 carried-risk-#2 test falsified that
+  empirically: a genuine v2 file (explicit `schemaVersion: 2` with the
+  legacy currentSession/totalSessions/completedSessions triple) is **skipped
+  by both** of those migrators. The v2→v3 step belongs to a third existing
+  migrator, `migrate_session_state`, which the verdict omitted. The corrected,
+  test-verified bulk chain (adds no new migrator logic — orchestrates an
+  existing one) is: `migrate_session_state` → `migrate_lightweight_to_canonical_v4`
+  → `migrate_v3_to_v4`, each `--in-place`, each idempotent. Flagged for the
+  S5 cross-provider verifier.
+
 ## [0.11.0] — 2026-05-27 (Set 049 — Orchestrator coordination removal)
 
 Rips out the hard-coordination layer shipped in Set 033 (0.6.0) and
