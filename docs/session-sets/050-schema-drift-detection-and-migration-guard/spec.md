@@ -329,7 +329,13 @@ copy-paste path.
 
 ---
 
-### Session 4 of 5: Number-prefix convention + number→slug resolver (Feature 2)
+### Session 4 of 5: Number-prefix convention + number→slug resolver (Feature 2) + Explorer UX revision
+
+> **Scope assignment (operator-directed 2026-05-29, post-S3 close-out):**
+> the end-of-set **Explorer UX revision** deliverable — previously listed
+> only under End-of-set deliverables with no session owner — lands here in
+> **S4** (the natural fit; S4 already touches the extension). Added as
+> Step 5 below.
 
 **Steps:**
 1. Update `docs/planning/session-set-authoring-guide.md` per the
@@ -351,14 +357,35 @@ copy-paste path.
 4. Tests: resolver match/collision/no-match unit tests; authoring-guide
    prose has no machine contract so no test, but add a convention-lint
    check if S1 calls for one. Layer-appropriate extension coverage.
+5. **Explorer UX revision (operator-directed; assigned to S4 2026-05-29).**
+   Per the End-of-set deliverables item and the operator non-goal
+   ("Old schema is acceptable; no per-row nag"): replace the intrusive
+   `(needs migration)` row description in `fileSystem.ts` needsMigration
+   rendering with an **unobtrusive asterisk + hover tooltip** ("Ran under
+   schema v\<N\>"). Add a single **Explorer title-bar icon** ("Upgrade
+   older session sets", enabled only when sub-current sets exist) via an
+   `ActionRegistry` entry + the view's title-bar `menus` contribution in
+   `package.json`; the action runs the **corrected three-migrator bulk
+   chain** (`migrate_session_state` → `migrate_lightweight_to_canonical_v4`
+   → `migrate_v3_to_v4`, each `--in-place`/idempotent — the S2 empirical
+   correction, NOT the verdict's two) across all sub-current sets at once,
+   never as a per-row obligation. Layer-3 Playwright covers the rendered
+   asterisk/tooltip + the title-bar-icon enabled/disabled states
+   (`requiresUAT` stays `false` — small render tweak, S1-locked).
 
 **Creates:** resolver module/tests.
 **Touches:** `docs/planning/session-set-authoring-guide.md`, extension
-trigger-phrase + copy-prompt command code, `package.json` if commands
-change.
+trigger-phrase + copy-prompt command code, `fileSystem.ts` (needsMigration
+rendering), `ActionRegistry`, `package.json` (resolver command + title-bar
+`menus` contribution).
 **Ends with:** "Set 50" resolves to the full slug in the targeted
-surfaces; authoring guide reconciled; tests green.
-**Progress keys:** authoring guide updated; resolver shipped + tested.
+surfaces; authoring guide reconciled; the `(needs migration)` row label is
+replaced by the asterisk/tooltip; the "Upgrade older session sets"
+title-bar icon runs the three-migrator chain across sub-current sets;
+tests green.
+**Progress keys:** authoring guide updated; resolver shipped + tested;
+Explorer UX revision shipped (asterisk/tooltip + bulk-upgrade title-bar
+icon).
 
 ---
 
@@ -408,11 +435,13 @@ versions bumped; close-out verdict recorded.
   `installOrchestratorHook.claudeCode` command + copy-paste fallback; a CI
   test pins the bundled JS constant to `SESSION_STATE_SCHEMA_VERSION`.
   **[changed]**
-- **Explorer UX revision (operator-directed):** replace the
+- **Explorer UX revision (operator-directed; assigned to S4 Step 5
+  on 2026-05-29):** replace the
   `(needs migration)` row description with an asterisk + "Ran under
   schema v\<N\>" tooltip, plus a single **Explorer title-bar icon**
   ("Upgrade older session sets", enabled only when sub-current sets
-  exist) that runs the migrator chain across all of them at once.
+  exist) that runs the corrected three-migrator chain across all of
+  them at once.
   (Touches `fileSystem.ts` needsMigration rendering + `ActionRegistry`
   + the view's title-bar `menus` contribution in `package.json`.)
 - Number→slug resolver: `ai_router` resolver (start_session + standalone
