@@ -1,13 +1,30 @@
 {
   "status": "completed",
-  "summary": "S3 — pure-JS hot-path schema-drift scan + install path + CI constant guard. The implementation was committed (b8b2066) by a prior claude-sonnet-4-6 chat that registered the session start (3859066) but stopped without closing out; this claude-opus-4-8 chat took over, critically reviewed the diff, verified it green, and closed out. Deliverable per the S1-locked S3 scope: (1) claude-session-start-invoker.js gains CURRENT_SCHEMA_VERSION = 4 + scanSchemaDrift(workspaceRoot) — reads docs/session-sets/*/session-state.json, compares each schemaVersion to the bundled constant, emits a terse one-line summary on drift (clean = silent, fail-open), NO ai_router import + NO network so it works with an absent/stale router; chained after start_session in main() with start_session errors logged-not-fatal so the scan always runs. (2) installOrchestratorHookClaudeCode.ts: success toast mentions both start_session + drift scan, plus a 'Copy manual setup' button (invoker download URL + settings.json stanza) for extension-less repos. (3) test_invoker_schema_constant.py: CI guard pinning the JS constant == ai_router SCHEMA_VERSION. (4) ai-led-session-workflow.md Step 1 documents the guard. Verification: Python 22 passed (constant guard + check_migrations); TS 561 passing / 2 failing where both failures pre-exist in unrelated files (commit c2a336f, Set 026) and the invoker's own suite passes. SCOPE FLAG (carried to S4/S5): the end-of-set 'Explorer UX revision' deliverable (asterisk + 'Ran under schema v<N>' tooltip replacing the (needs migration) row description; single title-bar 'Upgrade older session sets' icon running the corrected three-migrator bulk chain) is in End-of-set deliverables but unassigned to any session's Steps and was NOT done in S3 — it needs a home in S4 or S5. No router invoked; $0 added to the $10 set NTE.",
+  "summary": "S4 shipped Feature 2 (number-prefix addressing) AND the operator-reassigned Explorer UX revision. Feature 2 (verdict Q8-Q11): ai_router/resolve_set.py (resolve_slug/resolve_set exact integer-prefix match with leading-zeros normalized, collision names both, no-match lists available numbers + --next, no fuzzy nearest; next_session_set_number returns int + zero-padded string with width=max(3, widest existing prefix); resolve_session_set_dir bare-number->path passthrough; standalone CLI `python -m ai_router.resolve_set <n>`/`--next`/`--json`); start_session --session-set-dir now accepts a bare number resolving within ./docs/session-sets; authoring guide reconciled (NNN- monotonic sequence prefix REQUIRED for new/scaffolded sets, RECOMMENDED + forward-only for consumers, semantic date/phase names still banned, Numbering section added); minimal extension Command-Palette quick-input resolver command (dabblerSessionSets.resolveSetNumber) backed by a pure TS resolver (utils/resolveSetNumber.ts) mirroring the Python contract so router-less Lightweight consumers still get the handle. Explorer UX revision (operator-directed to S4; non-goal 'old schema OK, no per-row nag'): the intrusive '(needs migration)' row description is replaced by an unobtrusive asterisk + 'Ran under schema v<N>' hover tooltip (SessionSetsModel.migrationMarker/migrationTooltip; schemaVersionOnDisk surfaced from fileSystem.ts; rendered in client.js + tree.css); a single title-bar 'Upgrade older session sets' icon (commands/upgradeOlderSets.ts) gated on the dabblerSessionSets.hasSubCurrentSets context key runs the corrected THREE-migrator bulk chain (migrate_session_state -> migrate_lightweight_to_canonical_v4 -> migrate_v3_to_v4, each --in-place via Python subprocess) across all sub-current sets at once -- the S2 empirical correction, NOT the verdict's two. Per-row right-click migrate actions left intact (manual option, not a nag). Verification (manual; cross-provider deferred to S5 per the per-set pattern): Python 1025 passed / 1 skipped (15 new resolver + 2 new start_session integration tests, 0 regressions); TS test:unit 573 passing / 2 failing (BOTH pre-existing Set-026 stub-harness failures in configEditor-foundation + notificationsSection, unrelated to S4); tsc --noEmit clean; esbuild clean. Layer-3 migration-cta Playwright specs updated to assert asterisk+tooltip (not run locally -- CI-fragile launchVSCode); title-bar enabled/disabled gating unit-tested via hasSubCurrentSets (the package.json `when` clause is declarative). No router invoked; $0 added to the $10 set NTE. NOTE for S5 verifier: (a) confirm the THREE-migrator bulk chain order/correctness vs the verdict's two (S2 empirical correction carried forward); (b) the bulk-upgrade title-bar action shells to Python (the per-row v4 migrate stays in-process) -- a deliberate divergence since only v3->v4 has a TS in-process twin and the bulk path genuinely needs all three migrators; (c) cross-provider verification of S2-S4 deferred here is S5's to perform.",
   "verification_method": "manual",
   "files_changed": [
-    "tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js",
-    "tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookClaudeCode.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/claudeSessionStartInvoker.test.ts",
-    "ai_router/tests/test_invoker_schema_constant.py",
-    "docs/ai-led-session-workflow.md",
+    "ai_router/resolve_set.py",
+    "ai_router/tests/test_resolve_set.py",
+    "ai_router/start_session.py",
+    "ai_router/tests/test_start_session.py",
+    "docs/planning/session-set-authoring-guide.md",
+    "tools/dabbler-ai-orchestration/src/utils/resolveSetNumber.ts",
+    "tools/dabbler-ai-orchestration/src/commands/resolveSetNumber.ts",
+    "tools/dabbler-ai-orchestration/src/commands/upgradeOlderSets.ts",
+    "tools/dabbler-ai-orchestration/src/providers/SessionSetsModel.ts",
+    "tools/dabbler-ai-orchestration/src/providers/CustomSessionSetsView.ts",
+    "tools/dabbler-ai-orchestration/src/utils/fileSystem.ts",
+    "tools/dabbler-ai-orchestration/src/types.ts",
+    "tools/dabbler-ai-orchestration/src/types/sessionSetsWebviewProtocol.ts",
+    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/media/session-sets-tree/client.js",
+    "tools/dabbler-ai-orchestration/media/session-sets-tree/tree.css",
+    "tools/dabbler-ai-orchestration/src/test/suite/resolveSetNumber.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/migrationMarker.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/playwright/migration-cta.spec.ts",
+    "tools/dabbler-ai-orchestration/src/test/playwright/migration-cta-v4.spec.ts",
     "docs/session-sets/050-schema-drift-detection-and-migration-guard/activity-log.json",
     "docs/session-sets/050-schema-drift-detection-and-migration-guard/disposition.json"
   ],
@@ -19,7 +36,7 @@
     "effort": "high",
     "reason": {
       "code": "other",
-      "specifics": "S4 implements Feature 2 (NNN- prefix convention + two-surface number->slug resolver in ai_router and a minimal extension command) AND must absorb the carried scope decision: where the unassigned end-of-set 'Explorer UX revision' deliverable (asterisk/tooltip + bulk-upgrade title-bar icon) lands — S4 (natural fit, S4 already touches the extension) vs. S5. The cross-surface coordination (ai_router resolver + start_session integration + extension command + authoring-guide reconciliation + the corrected three-migrator bulk chain wired into a title-bar action) plus that open scope call warrant high effort."
+      "specifics": "S5 is the final session: consumer rollout (docs/cross-repo-migration-guard-notice.md), harvester first-adopter hook install (operator-scoped), publish the held v0.24.1 Copy-Slug fix, dual version bumps (PyPI dabbler-ai-router + Marketplace extension) + CHANGELOG + CLAUDE.md version walk + change-log.md, and the cross-provider verification of the S2-S4 deferred work (including the THREE-migrator bulk-chain correctness and the bulk-action-shells-to-Python divergence flagged above), then close-out with publishes held for operator tag-push. High effort: cross-repo coordination + release mechanics + the accumulated verification pass warrant it."
     }
   }
 }
