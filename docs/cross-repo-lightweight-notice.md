@@ -69,12 +69,25 @@ Specifically:
   `DABBLER_NO_ROUTER=1`; spec.md `tier: "lightweight"` field.
 - **Verification step (Step 6 of the workflow):** the routed
   cross-provider verification call is short-circuited. Instead, the
-  orchestrator triggers one of the copyable-review-prompt commands
-  (`dabbler.copySpecReviewPrompt`,
-  `dabbler.copySessionAccomplishmentsPrompt`,
-  `dabbler.copySetAccomplishmentsPrompt`,
-  `dabbler.copyStartNextSessionPrompt`). Each writes a
-  path-reference prompt (NEVER file contents) to the clipboard.
+  operator copies a review prompt and pastes it into a different
+  path-aware AI assistant. **Access the prompts via the Dabbler
+  "Session Sets" view — NOT the Command Palette** (the commands no-op
+  without a session-set row). Open the **Dabbler AI Orchestration** icon
+  in the Activity Bar, **right-click the set's row**, and pick from the
+  **`Copy Prompt ▸`** submenu. Which entry is offered tracks the set's
+  lifecycle state:
+  - **Evaluate Specification** (`dabbler.copySpecReviewPrompt`) — always.
+  - **Evaluate Most Recent Session**
+    (`dabbler.copySessionAccomplishmentsPrompt`) — once ≥1 session is
+    complete.
+  - **Evaluate Session Set** (`dabbler.copySetAccomplishmentsPrompt`) —
+    only when the set's top-level `status` is `complete` (on Lightweight,
+    hand-flip the final session + set status to `complete` first).
+  - **Start Next Session** (`dabbler.copyStartNextSessionPrompt`) — while
+    the set is in-flight.
+
+  Each writes a path-reference prompt (NEVER file contents) to the
+  clipboard.
 - **Paste-back convention:** the operator pastes the second AI
   assistant's verdict into
   `docs/session-sets/<slug>/external-verification.md`. The Dabbler

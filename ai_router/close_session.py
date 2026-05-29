@@ -1536,10 +1536,13 @@ def run(
                 ) or not sys.stdin.isatty()
                 warning_msg = (
                     f"external-verification.md missing at "
-                    f"{ext_verify_path} (--no-router mode); the "
-                    f"copyable-prompt commands document the expected "
-                    f"format. Per Set 048 §3.5 this is a soft gate, "
-                    f"not a hard failure."
+                    f"{ext_verify_path} (--no-router mode). To produce a "
+                    f"verdict: in the Dabbler 'Session Sets' view, "
+                    f"right-click the set row -> Copy Prompt -> Evaluate "
+                    f"Session Set (or Evaluate Most Recent Session mid-set), "
+                    f"paste into a path-aware AI assistant, and save its "
+                    f"reply here. Per Set 048 section 3.5 this is a soft "
+                    f"gate, not a hard failure."
                 )
                 if non_interactive:
                     print(f"WARNING: {warning_msg}", file=sys.stderr)

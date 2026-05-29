@@ -1397,12 +1397,36 @@ env var, Step 6 changes shape:
    accepts a manual attestation in `verificationVerdict` (default
    `"manual"`).
 2. Instead, the orchestrator triggers one of the copyable-review-prompt
-   commands shipped in the Dabbler extension (Set 048 §3.2):
-   - **`dabbler.copySessionAccomplishmentsPrompt`** — places a
-     path-reference prompt on the clipboard that names the spec,
-     activity log, and (if present) change log. The operator pastes
-     this into a **different** AI assistant (Claude, GPT-based tool,
-     Gemini, Cline, Cursor) and gets back a free-form review verdict.
+   commands shipped in the Dabbler extension (Set 048 §3.2). Each places
+   a path-reference prompt on the clipboard (naming the spec, activity
+   log, and — if present — change log; NEVER file contents). The operator
+   pastes it into a **different** AI assistant (Claude, a GPT-based tool,
+   Gemini, Cline, Cursor) and gets back a free-form review verdict.
+
+   **How to invoke them (this is the part that trips people up).** These
+   commands are **not usable from the Command Palette** — the handlers
+   no-op without a session-set row argument. Access them only via the
+   Dabbler **"Session Sets"** view: click the **Dabbler AI Orchestration**
+   icon in the Activity Bar (NOT the file Explorer), **right-click the
+   set's row**, and pick from the **`Copy Prompt ▸`** submenu. The view is
+   a webview, so the "right-click" surfaces a QuickPick dropdown rather
+   than a native context menu. Which entry is offered depends on the set's
+   lifecycle state:
+
+   | `Copy Prompt ▸` entry | Command id | Available when |
+   |---|---|---|
+   | Evaluate Specification | `dabbler.copySpecReviewPrompt` | always |
+   | Evaluate Most Recent Session | `dabbler.copySessionAccomplishmentsPrompt` | ≥1 session complete |
+   | Evaluate Session Set | `dabbler.copySetAccomplishmentsPrompt` | **set status = `complete`** |
+   | Start Next Session | `dabbler.copyStartNextSessionPrompt` | set in-flight |
+   | Start New Parallel Session | `dabbler.copyStartNextParallelSessionPrompt` | set in-flight |
+
+   So a **set-level** review prompt only appears once the whole set is
+   `complete` — on Lightweight there is no `close_session` writer, so the
+   orchestrator must hand-flip the final session's and the set's
+   top-level `status` to `complete` first (the set row then shows N/N).
+   Mid-set, use **Evaluate Most Recent Session** instead.
+
    - The reviewing assistant MUST be path-aware (it reads files
      itself rather than receiving them inline). Path-aware assistants
      include Claude Code, Codex, Cline, Cursor, and any agent with
