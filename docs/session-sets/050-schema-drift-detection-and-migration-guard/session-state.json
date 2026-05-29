@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "050-schema-drift-detection-and-migration-guard",
+  "status": "in-progress",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Session 1",
+      "status": "in-progress",
+      "startedAt": "2026-05-29T10:33:50.759341-04:00",
+      "completedAt": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "high"
+      },
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "Session 2",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Session 3",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 4,
+      "title": "Session 4",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 5,
+      "title": "Consumer rollout, docs, close-out",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}
