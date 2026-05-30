@@ -1,0 +1,26 @@
+{
+  "status": "completed",
+  "summary": "S1 (audit & design-lock) of Set 053. Inventoried every session-state.json writer (Python + TS) and the Set 050 trigger surface; LOAD-BEARING FINDING: every writer already stamps schemaVersion from the constant, so a file written through the framework's CLI is never stale -- the only real failure vector is hand-authoring that bypasses the writers (the harvester incident). Authored a CI-centric proposal (CI required-check + git hooks + baseline-allowlist + Azure/GitHub wrappers) and ran a 2-provider adversarial consensus (gemini-pro + gpt-5-4, $0.0362): both confirmed CI-as-centerpiece and both rejected the baseline-allowlist. The OPERATOR then rejected the entire CI frame -- 'stop adding sophistication; just add the check to the script that writes session-state.json; CI OFTEN FAILS' -- which was correct: the session-lifecycle CLI (start_session/close_session) is the universal AI/host/CI-agnostic trigger (run by every orchestrator at every boundary), and the inventory's load-bearing fact had pointed there all along. LOCKED minimal design: embed the existing detect_drift scan into start_session as a NON-BLOCKING warning (+ optional soft close_session note); check_migrations stays an OPTIONAL manual tool; CI / git-hooks / baseline-allowlist all DROPPED; 'old schema acceptable' honored by the warning being non-fatal. Scope collapsed 3->2 sessions. Process lesson (LLMs favor good-sounding architecture; cross-provider 'consensus' on a shared frame is correlated error, not independent validation; prefer baking logic into the existing lifecycle; ask APIs 'simplest thing?' not 'critique my architecture') banked to memory. Wrote proposal.md + consensus-output.md + run_consensus.py + verdict.md; rewrote spec.md to the minimal design; reshaped session-state.json to 2 sessions. Routed cost $0.0362 of $10 NTE (0.36%).",
+  "verification_method": "manual",
+  "files_changed": [
+    "docs/proposals/2026-05-29-ci-agnostic-drift-enforcement/proposal.md",
+    "docs/proposals/2026-05-29-ci-agnostic-drift-enforcement/consensus-output.md",
+    "docs/proposals/2026-05-29-ci-agnostic-drift-enforcement/run_consensus.py",
+    "docs/proposals/2026-05-29-ci-agnostic-drift-enforcement/verdict.md",
+    "docs/session-sets/053-ci-agnostic-schema-drift-enforcement/spec.md",
+    "docs/session-sets/053-ci-agnostic-schema-drift-enforcement/session-state.json",
+    "docs/session-sets/053-ci-agnostic-schema-drift-enforcement/activity-log.json",
+    "docs/session-sets/053-ci-agnostic-schema-drift-enforcement/disposition.json"
+  ],
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-8",
+    "effort": "high",
+    "reason": {
+      "code": "other",
+      "specifics": "S2 (final, 2 of 2): implement the lifecycle-embedded drift scan -- add a detect_drift call to start_session after the state write (non-blocking one-line warning, fail-open on scan error) + optional soft note in close_session; tests (drift/clean/scan-error-non-fatal, reusing check_migrations fixtures); doc note in ai-led-session-workflow.md that the guard rides the CLI lifecycle (Copilot/Codex/human all covered); ai_router version bump + CHANGELOG + CLAUDE.md walk + change-log.md; cross-provider verification; close-out with publish held for operator tag-push. Small ai_router-only change; Marketplace extension untouched. High effort retained for release mechanics + verification, though the code change itself is ~15-30 lines reusing detect_drift."
+    }
+  }
+}
