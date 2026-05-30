@@ -156,6 +156,9 @@ export function computeStaleness(
   if (!info.pricingReviewed) {
     return { stale: true, ageDays: null, reviewFrequencyDays };
   }
+  // `pricing_reviewed` is an ISO calendar date (`YYYY-MM-DD`); anchor it to
+  // UTC midnight so day arithmetic is timezone-stable. An unparseable value
+  // (caught below) is treated as stale rather than crashing.
   const reviewed = new Date(`${info.pricingReviewed}T00:00:00Z`);
   if (Number.isNaN(reviewed.getTime())) {
     return { stale: true, ageDays: null, reviewFrequencyDays };

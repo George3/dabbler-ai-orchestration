@@ -5,6 +5,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-05-30 (Set 052 — Cost-metrics icon redesign)
+
+Fixes the dead cost-dashboard icon. The root cause was a **read/write
+path mismatch**, not a disabled flag: the router *writes*
+`ai_router/router-metrics.jsonl` (`metrics.log_filename`) while the
+dashboard *read* a hardcoded `ai_router/metrics.jsonl` it never wrote to,
+so the panel was always empty and showed a "set `METRICS_ENABLED = True`"
+placeholder naming a flag that does not exist. This set points the reader
+at the file the router actually writes, gates the surface to workspaces
+that actually route, replaces the fictional-flag placeholder with three
+honest states, and prompts to refresh stale per-provider rate estimates.
+TS-only — no companion PyPI release.
+
+### Fixed
+
+- **Cost-dashboard read path (root cause).** The reader and the CSV
+  export now resolve the metrics filename from `router-config.yaml` →
+  `metrics.log_filename` (default `router-metrics.jsonl`) through a single
+  shared resolver (`src/utils/routerConfig.ts`) — no second hardcoded
+  name. The dashboard now renders real data instead of looking dead.
+- **CSV export session column.** `MetricsEntry` reconciled to the on-disk
+  schema: the export now keys off `session_number` (the router never
+  emitted `session_num`, so that column was silently blank), an optional
+  `call_type` is carried, and `adjudication` bookkeeping rows (no model,
+  zero cost) are dropped from the reader.
+
+### Added
+
+- **Router-capability tier gate.** A new `dabblerSessionSets.routesCost`
+  context key is set in `extension.ts` from whether a workspace folder
+  carries a resolvable `ai_router/router-config.yaml` (folder existence
+  alone is insufficient). `package.json` gates both the `view/title` icon
+  and the Command-Palette entry on it, so the cost surface is **absent on
+  Lightweight** and present only where the workspace actually routes.
+- **Cost-estimate staleness banner.** On open, staleness is computed
+  in-extension from `metadata.pricing_reviewed` vs
+  `metadata.review_frequency_days` (default 30; missing/invalid metadata
+  is treated as stale). When stale, a non-blocking banner with an "Update
+  cost estimates" action opens `router-config.yaml` at the
+  `pricing_reviewed` line. Shares the staleness definition with the
+  router's `config.py:_check_pricing_staleness`.
+- **Three honest dashboard states.** disabled (`metrics.enabled == false`
+  — names the real knob in `router-config.yaml`, **never** the fictional
+  `config.py METRICS_ENABLED`) / on-but-empty (distinct copy, shows the
+  resolved read path) / on-with-data, plus a defensive no-router state.
+  Pure HTML builders extracted to `src/dashboard/dashboardHtml.ts`;
+  `CostDashboard` is now a state machine over `selectCostState`. Button
+  wiring is CSP-safe (delegated click, no inline `onclick`).
+- **16-item UAT checklist** for the set
+  (`docs/session-sets/052-cost-metrics-icon-redesign/052-cost-metrics-icon-redesign-uat-checklist.json`)
+  — UAT was elected at session start.
+
+### Changed
+
+- Removed the fictional-flag copy from `webview/dashboard.html`. Docs
+  reconciled to the new behavior (`docs/repository-reference.md`,
+  extension `README.md`).
+
+### Testing notes
+
+- New `routerConfig.test.ts` (gate predicate, read-path resolution incl.
+  custom `log_filename`, staleness fresh/stale/missing/invalid, three-state
+  selection), `dashboardHtml.test.ts` (honest copy, banner states, config
+  anchor resolution), `costDashboardGate.test.ts` (manifest gate-wiring
+  guard), and a `metrics.test.ts` schema update.
+- The planned Layer-3 Playwright icon-visibility smoke was **pivoted** to
+  the deterministic `costDashboardGate.test.ts` manifest guard: VS Code
+  `view/title` actions duplicate-render in the DOM and overflow past the
+  first action, making them non-deterministic to assert in Playwright (no
+  codebase precedent; mirrors `migration-cta-v4.spec.ts`). The deferred
+  live icon-visibility coverage is carried as manual operator UAT items.
+
 ## [0.26.1] — 2026-05-30 (New Activity Bar icon)
 
 Patch release. Ships the new sidebar icon that landed one commit after

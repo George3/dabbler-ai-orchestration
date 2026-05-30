@@ -74,7 +74,56 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.26.0** (Set 051 — ai_router hygiene & dead-code audit;
+- Current: **v0.27.0** (Set 052 — Cost-metrics icon redesign; shipped
+  end-to-end across 3 sessions). Fixes the dead cost-dashboard icon. The
+  root cause (S1 re-diagnosis) was a **read/write path mismatch**, not a
+  disabled flag: the router *writes*
+  `ai_router/router-metrics.jsonl` (`metrics.log_filename`) while the
+  dashboard *read* a hardcoded `ai_router/metrics.jsonl` it never wrote
+  to → always empty, then showed a "set `METRICS_ENABLED = True`"
+  placeholder naming a **fictional** flag (`config.py METRICS_ENABLED`
+  does not exist; `metrics.enabled` in `router-config.yaml` is the real
+  knob, and it already defaults ON). S2 shipped: (D1) the reader
+  (`utils/metrics.ts`) and the CSV export both resolve the metrics
+  filename through one shared `src/utils/routerConfig.ts` (default
+  `router-metrics.jsonl`) — no second hardcoded name; `MetricsEntry`
+  reconciled to the on-disk schema (`session_number` not the
+  never-emitted `session_num`; optional `call_type`; reader drops
+  zero-cost `adjudication` rows). (D3) a router-capability tier gate —
+  the new `dabblerSessionSets.routesCost` context key, set in
+  `extension.ts` from a resolvable workspace `ai_router/router-config.yaml`
+  (folder existence alone is insufficient), gates both the `view/title`
+  icon and the Command-Palette entry; **absent on Lightweight**. (D4) a
+  non-blocking staleness banner computed in-extension from
+  `metadata.pricing_reviewed` vs `review_frequency_days` (default 30;
+  missing/invalid = stale), sharing the router's
+  `config.py:_check_pricing_staleness` definition, with an "Update cost
+  estimates" action that opens `router-config.yaml` at the
+  `pricing_reviewed` line. (D5) three honest states — disabled (names the
+  real `metrics.enabled` knob, never the fictional flag) / on-but-empty /
+  on-with-data + a defensive no-router state — via pure
+  `dashboard/dashboardHtml.ts` builders, with `CostDashboard` now a
+  `selectCostState` state machine and CSP-safe button wiring. (D6)
+  update-rates opens the config at the `metadata`/`metrics` anchor; no
+  Config Editor pricing section (not cheap; declined). (D2) no
+  `metrics.enabled` default change (already on). **TS-only — no companion
+  PyPI release.** S2's planned Layer-3 Playwright icon-visibility smoke
+  was **pivoted** to a deterministic `costDashboardGate.test.ts` manifest
+  gate-wiring guard (VS Code `view/title` actions duplicate-render in the
+  DOM + overflow past the first action → non-deterministic to assert in
+  Playwright; no codebase precedent; mirrors `migration-cta-v4.spec.ts`),
+  with the deferred live icon coverage carried as manual operator UAT
+  items (UAT was elected at session start). S3 (this set's close): docs
+  reconciled (`docs/repository-reference.md`, extension `README.md`;
+  no live doc referenced the fictional flag — S2 removed it from
+  `webview/dashboard.html`), 16-item UAT checklist, version bump,
+  CHANGELOG + change-log + this walk, cross-provider verification of the
+  S2 code, publishes **held** for operator tag-push (Marketplace
+  `vsix-v0.27.0`; confirm `VSCE_PAT` freshness first — it expired during
+  the 0.24.0 publish). The interim **v0.26.1** (Set 051 follow-on, icon
+  patch) is superseded by this release.
+
+- Previous: **v0.26.0** (Set 051 — ai_router hygiene & dead-code audit;
   the extension half retires the superseded Set 050 Claude-only
   `SessionStart` hook). Set 053 moved schema-drift detection into the
   router session lifecycle (`start_session` / `close_session` via
@@ -112,7 +161,7 @@ is a required duplicate — `vsce package` expects the file alongside
   `vsix-v0.26.0`; confirm `VSCE_PAT` freshness first — it expired during
   the 0.24.0 publish).
 
-- Previous: **v0.25.0** (Set 050 — Schema-drift guard + number-prefix
+- Pre-Previous: **v0.25.0** (Set 050 — Schema-drift guard + number-prefix
   addressing; shipped end-to-end across 5 sessions; publishes the held
   v0.24.1 Copy-Slug fix as part of the release). The guard the incident
   required is a **pure-JS, no-`ai_router`, no-network drift scan** chained
@@ -160,13 +209,13 @@ is a required duplicate — `vsce package` expects the file alongside
   > `SessionStart` entries from `~/.claude/settings.json` — see
   > [`docs/cross-repo-hook-retirement-notice.md`](docs/cross-repo-hook-retirement-notice.md).
 
-- Pre-Previous: **v0.24.1** (patch — `Copy Slug` context menu item wired
+- Pre-Pre-Previous: **v0.24.1** (patch — `Copy Slug` context menu item wired
   into `ROW_ACTIONS`; command existed in `package.json` and
   `copyCommand.ts` since Set 048 S3 but was never added to
   `ActionRegistry.ts`; copies the raw session-set slug to the
   clipboard from the Explorer right-click menu top level).
 
-- Pre-Pre-Previous: **v0.24.0** (Set 049 — Orchestrator coordination
+- Pre-Pre-Pre-Previous: **v0.24.0** (Set 049 — Orchestrator coordination
   removal; full rip-out of the Set 033 H3 + Set 036 H4
   hard-coordination check shipped end-to-end across 5 sessions;
   `session-state.json` orchestrator block reshaped from 7 fields
@@ -360,19 +409,19 @@ is a required duplicate — `vsce package` expects the file alongside
     block) to the cancellation lifecycle. See below for the prior
     Set 035 description.
 
-- Pre-Pre-Pre-Previous: **v0.23.0** (Set 048 — Lightweight-tier parity.
+- Pre-Pre-Pre-Pre-Previous: **v0.23.0** (Set 048 — Lightweight-tier parity.
   Companion PyPI release: `dabbler-ai-router 0.10.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Pre-Previous: **v0.22.0** (Set 047 — state-file schema v4 audit.
+- Pre-Pre-Pre-Pre-Pre-Previous: **v0.22.0** (Set 047 — state-file schema v4 audit.
   Companion PyPI release: `dabbler-ai-router 0.9.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Pre-Pre-Previous: **v0.21.0** (Set 045 — log-harvest implementation.
+- Pre-Pre-Pre-Pre-Pre-Pre-Previous: **v0.21.0** (Set 045 — log-harvest implementation.
   Companion PyPI release: `dabbler-ai-router 0.8.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Pre-Pre-Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
+- Pre-Pre-Pre-Pre-Pre-Pre-Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
   cancellation/restoration; Marketplace publish gated on operator
   confirmation). No companion PyPI release this set
   (`ai_router/session_lifecycle.py` verified byte-equivalent with the

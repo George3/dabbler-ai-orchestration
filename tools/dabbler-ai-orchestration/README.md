@@ -93,7 +93,10 @@ appetite. Honest framing:
 The router writes one JSON line per call to
 `ai_router/router-metrics.jsonl` so you can audit spend at any
 time. The **Cost Dashboard** command surfaces cumulative spend
-visually; `python -m ai_router.report` produces a full markdown
+visually — it appears only in workspaces that actually route (it is
+absent on Lightweight) and, on open, prompts you to refresh the
+per-provider rate estimates if they have gone stale (older than
+`metadata.review_frequency_days`, default 30 days). `python -m ai_router.report` produces a full markdown
 manager-report with the Opus-baseline savings headline,
 per-task-type unreliability rates, and auto-generated action
 items. The framework is open-source (MIT) — your costs are entirely
