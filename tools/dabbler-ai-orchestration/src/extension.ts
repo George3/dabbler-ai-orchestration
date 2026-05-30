@@ -19,7 +19,6 @@ import { registerCostDashboardCommand } from "./dashboard/CostDashboard";
 import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
 import { registerScanAnnotationsForActiveSet } from "./commands/scanAnnotationsForActiveSet";
-import { registerInstallOrchestratorHookClaudeCodeCommand } from "./commands/installOrchestratorHookClaudeCode";
 import { registerOpenOrchestratorWriterLog } from "./commands/openOrchestratorWriterLog";
 import { registerRegenerateNarrationTemplatesCommand } from "./commands/regenerateNarrationTemplates";
 import { registerExternalVerificationCommand } from "./commands/externalVerification";
@@ -248,20 +247,26 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Set 049 S4 (rip-out): the orchestrator check-out / check-in
-  // coordination layer is removed. Claude Code remains the sole
-  // engine with an auto-attribution path via the SessionStart hook
-  // installed below; other engines write `engine + provider [+ model
-  // + effort]` into `session-state.json`'s orchestrator block by
-  // invoking `python -m ai_router.start_session` directly. The
-  // standalone Gemini / Copilot / manual-override / release-check-out
-  // commands and their backing CheckoutPollService + chatSessionId
-  // takeover modal + ReadOnlyIntentService were retired alongside.
+  // coordination layer is removed. Every engine (Claude, Copilot,
+  // Codex, human) writes `engine + provider [+ model + effort]` into
+  // `session-state.json`'s orchestrator block by invoking `python -m
+  // ai_router.start_session` directly. The standalone Gemini / Copilot
+  // / manual-override / release-check-out commands and their backing
+  // CheckoutPollService + chatSessionId takeover modal +
+  // ReadOnlyIntentService were retired alongside.
+  //
+  // Set 051 S3 (hook retirement): the Claude-only `SessionStart` hook
+  // installer (`installOrchestratorHook.claudeCode`) was removed. Its
+  // schema-drift scan duplicated Set 053's lifecycle advisory
+  // (`start_session` / `close_session` → `summarize_drift`, which fires
+  // for every orchestrator on every host), and its `start_session`
+  // invocation was a non-load-bearing Claude-only convenience under the
+  // portability rule. Drift coverage now rides the router lifecycle for
+  // all engines; there is no editor-hook installer to register.
+  //
   // The writer-log opener stays as a Command-Palette / right-click
   // diagnostic surface; the writer log itself is preserved
   // provisionally per Set 049 T5.
-  safeRegister("registerInstallOrchestratorHookClaudeCode", () =>
-    registerInstallOrchestratorHookClaudeCodeCommand(context),
-  );
   safeRegister("registerOpenOrchestratorWriterLog", () =>
     registerOpenOrchestratorWriterLog(context),
   );

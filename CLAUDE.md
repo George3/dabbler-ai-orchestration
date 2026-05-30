@@ -105,6 +105,20 @@ is a required duplicate — `vsce package` expects the file alongside
   correction, NOT the verdict's two (a genuine v2 file is skipped by both
   v4 migrators and needs the v2→v3 step first). Companion PyPI release:
   `dabbler-ai-router 0.12.0`.
+  > **Retired in Set 051 S3.** The Claude-only `SessionStart` hook
+  > described above — the `installOrchestratorHook.claudeCode` command,
+  > the `scripts/claude-session-start-invoker.js` invoker (incl. its
+  > `scanSchemaDrift` + `CURRENT_SCHEMA_VERSION`), the "Copy manual
+  > setup" toast action, and the `test_invoker_schema_constant.py` pin
+  > test — was removed. Set 053 moved the same drift advisory into the
+  > router lifecycle (`start_session` / `close_session` →
+  > `summarize_drift`), which fires for **every** orchestrator on every
+  > host, making the Claude-only hook a redundant, divergence-prone
+  > duplicate under the portability rule. Drift coverage now rides the
+  > router lifecycle only; the bundled JS constant + its CI pin are
+  > gone. Operators who installed the hook should remove the dabbler
+  > `SessionStart` entries from `~/.claude/settings.json` — see
+  > [`docs/cross-repo-hook-retirement-notice.md`](docs/cross-repo-hook-retirement-notice.md).
 
 - Previous: **v0.24.1** (patch — `Copy Slug` context menu item wired
   into `ROW_ACTIONS`; command existed in `package.json` and

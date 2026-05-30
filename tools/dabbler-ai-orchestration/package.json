@@ -244,11 +244,6 @@
         "icon": "$(arrow-up)"
       },
       {
-        "command": "dabbler.installOrchestratorHook.claudeCode",
-        "title": "Install Orchestrator Hook (Claude Code)",
-        "category": "Dabbler"
-      },
-      {
         "command": "dabbler.openOrchestratorWriterLog",
         "title": "Open Orchestrator Writer Log",
         "category": "Dabbler"

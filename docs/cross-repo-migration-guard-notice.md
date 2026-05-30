@@ -5,6 +5,19 @@
 dabbler-access-harvester, dabbler-homehealthcare-accessdb, and any
 consumer not yet listed).
 
+> **⚠️ Partially superseded — Set 051 S3 (2026-05-30).** The
+> **"Install the SessionStart drift guard"** step below is **retired**.
+> Set 053 moved the drift advisory into the router lifecycle
+> (`start_session` / `close_session` → `summarize_drift`, fires for every
+> orchestrator), and Set 051 S3 removed the Claude-only `SessionStart`
+> hook + its installer command + the `claude-session-start-invoker.js`
+> script. **Do not install the hook**, and if you already did, remove the
+> dabbler `SessionStart` entry from `~/.claude/settings.json`. See
+> [`cross-repo-hook-retirement-notice.md`](cross-repo-hook-retirement-notice.md).
+> Everything else in this notice — the router pin, the one-time drift
+> check, the hand-authoring rules, and number-prefix addressing — still
+> applies.
+
 ## Purpose
 
 This is a one-time copy source. Paste the snippet below into each
@@ -52,56 +65,20 @@ Ships in `dabbler-ai-router` `0.12.0` (PyPI) and the
 
 ## One-time setup (per machine, operator-run)
 
-### 1. Install the SessionStart drift guard
+### 1. ~~Install the SessionStart drift guard~~ — RETIRED (Set 051 S3)
 
-**With the extension (recommended):** run **`Dabbler: Install
-Orchestrator Hook (Claude Code)`** from the Command Palette
-(`dabbler.installOrchestratorHook.claudeCode`). It writes (or refreshes)
-the `SessionStart` hook in `~/.claude/settings.json` so that, on every
-session boundary, it (a) invokes `python -m ai_router.start_session` to
-mark the in-progress set's orchestrator block, and (b) runs the pure-JS
-drift scan and prints a one-line summary into session context when any
-local set is behind the current schema. Restart Claude Code or run
-`/clear` to activate. The hook lives in the **shared global**
-`~/.claude/settings.json`, so installing it once covers **every** repo
-on the machine — the invoker walks up from `cwd` to find the in-progress
-set. The harvester is the first adopter via this same global install.
+**Skip this step.** The Claude-only `SessionStart` hook this step used to
+install was removed in Set 051 S3. Drift coverage now rides the router
+lifecycle (Set 053): `start_session` / `close_session` print the drift
+advisory for **every** orchestrator on every host — no editor hook to
+install. There is nothing to do here beyond keeping the router pin
+current (step 2) and running the one-time drift check (step 3).
 
-**Without the extension (router-less / manual):** in the install toast,
-click **"Copy manual setup"**, or do it by hand:
-
-```bash
-# 1. Download the invoker into the repo (no router needed to run it):
-curl -o scripts/claude-session-start-invoker.js \
-  "https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js"
-```
-
-```jsonc
-// 2. Merge into ~/.claude/settings.json (replace <absolute-path>):
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"<absolute-path>/scripts/claude-session-start-invoker.js\""
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-The invoker's drift scan is pure JS — it reads
-`docs/session-sets/*/session-state.json` and compares each
-`schemaVersion` to a bundled `CURRENT_SCHEMA_VERSION` constant. It needs
-**no `ai_router` import and no network**, so it still warns even if the
-repo's router pin is ancient. (The `start_session` spawn it also performs
-is best-effort: if no router is importable, that step logs to stderr and
-the scan still runs.)
+If you previously installed the hook on this machine, remove the dabbler
+`SessionStart` entry from `~/.claude/settings.json` per
+[`cross-repo-hook-retirement-notice.md`](cross-repo-hook-retirement-notice.md)
+(the invoker script no longer ships, so a stale entry just logs a benign
+file-not-found on each session start).
 
 ### 2. Raise the router pin
 
@@ -154,13 +131,14 @@ python -m ai_router.migrate_v3_to_v4 --in-place                    # v3 -> v4
 
 ### Schema-drift guard + number-prefix addressing (dabbler-ai-router 0.12.0 + dabbler-ai-orchestration 0.25.0)
 
-**Schema currency is now machine-enforced.** A `SessionStart` hook runs
-a pure-JS drift scan every session start: it reads
-`docs/session-sets/*/session-state.json`, compares each `schemaVersion`
-to the current canonical version, and prints a one-line summary into
-session context when any set is behind. You can no longer silently skip
-the check. If you see a `[Dabbler] N session-set(s) at vX need schema
-migration` line, run `python -m ai_router.check_migrations --verbose`.
+**Schema currency is machine-enforced via the router lifecycle.**
+`start_session` / `close_session` print a one-line drift advisory after
+every session boundary: each reads `docs/session-sets/*/session-state.json`,
+compares each `schemaVersion` to the current canonical version, and
+warns when any set is behind — no editor hook to install, fires for every
+orchestrator on every host. You can no longer silently skip the check. If
+you see a `[dabbler] N session-set(s) below the current schema vX` line,
+run `python -m ai_router.check_migrations --verbose`.
 
 **Hand-authoring a state file (still applies):**
 
@@ -213,15 +191,16 @@ a creation-order sequence number, not a semantic name.
 
 ## Adoption status (2026-05-29)
 
-| Repo | v4 migration | Router pin | CLAUDE.md stamp/raw-URL | Drift hook |
+| Repo | v4 migration | Router pin | CLAUDE.md stamp/raw-URL | Drift coverage |
 |---|---|---|---|---|
-| `dabbler-access-harvester` | ✅ all 49 sets v4 | ✅ `>=0.10.0` | ✅ done ahead of set | operator-run install (global hook) |
-| `dabbler-platform` | (re-scan) | (verify pin) | paste snippet | operator-run install |
-| `dabbler-homehealthcare-accessdb` | (re-scan) | Lightweight (no router) | paste snippet | operator-run install |
+| `dabbler-access-harvester` | ✅ all 49 sets v4 | ✅ `>=0.10.0` | ✅ done ahead of set | router lifecycle (automatic) |
+| `dabbler-platform` | (re-scan) | (verify pin) | paste snippet | router lifecycle (automatic) |
+| `dabbler-homehealthcare-accessdb` | (re-scan) | Lightweight (no router) | paste snippet | n/a (no router; manual `check_migrations`) |
 
 The harvester's v2→v4 migration, pin bump, and CLAUDE.md stamp/raw-URL
 edits were completed 2026-05-29 ahead of this set (the immediate
-incident unblock). The remaining adopter action is the one-time
-`SessionStart` hook install, which — because the hook lives in the
-shared global `~/.claude/settings.json` — covers the harvester and every
-other repo on the machine at once.
+incident unblock). Drift coverage no longer needs a per-machine hook
+install — as of Set 053 it rides the `start_session` / `close_session`
+lifecycle for every orchestrator. Operators who installed the retired
+Set 050 hook should remove it per
+[`cross-repo-hook-retirement-notice.md`](cross-repo-hook-retirement-notice.md).

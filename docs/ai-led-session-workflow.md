@@ -395,10 +395,12 @@ multiple in-progress sets natively.
 **Per-orchestrator declaration contract (T3).** Hooks pass only the
 fields they can declare authoritatively:
 
-- **Claude Code** — the shipped `claude-session-start-invoker.js`
-  hook passes `engine=claude`, `provider=anthropic`, and recovers
-  `model` / `effort` from the prior session's block when available
-  (no `"unknown"` fallback).
+- **Claude Code** — invokes `start_session --engine claude
+  --provider anthropic`, recovering `model` / `effort` from the prior
+  session's block when available (no `"unknown"` fallback). (Set 050's
+  Claude-only `SessionStart` hook that automated this invocation was
+  retired in Set 051 S3; the universal workflow already has every
+  orchestrator run `start_session` at each boundary.)
 - **Codex CLI / Gemini Code Assist / GitHub Copilot / manual
   Lightweight** — analogous; pass what you know, omit what you
   don't.
@@ -1051,52 +1053,49 @@ layout, or `<container>/<slug>` for repos still on the retired bare-
 repo + flat-worktree layout. See
 `docs/planning/repo-worktree-layout.md`.
 
-#### Schema-drift guard (Set 050 S3)
+#### Schema-drift guard (Set 053 lifecycle advisory)
 
-When the `dabbler.installOrchestratorHook.claudeCode` command has been
-used to install the `SessionStart` hook, the hook now runs **two chained
-steps**:
+The schema-drift warning **rides the router CLI lifecycle**. Every
+orchestrator (Claude, GitHub Copilot, Codex, a human) runs
+`start_session` / `close_session` at every session boundary, on every
+host (GitHub, Azure DevOps, none), so `summarize_drift` reaches everyone
+with **no editor hook, no CI job, and no git hook** required:
 
-1. `python -m ai_router.start_session` — registers the session (as before).
-2. A **pure-JS schema-drift scan** — reads every
-   `docs/session-sets/*/session-state.json`, compares each file's
-   `schemaVersion` against a bundled current-version constant, and writes
-   one summary line to stdout when any sets are behind:
+1. `start_session` registers the session, then prints a one-line drift
+   advisory to stderr after the boundary write.
+2. `close_session` emits the same advisory as a soft note.
 
-   ```
-   [Dabbler] 2 session-set(s) at v2, v3 need schema migration to v4. Run: python -m ai_router.check_migrations --verbose
-   ```
+The advisory reads:
 
-   Clean repos produce no output. The scan has **no `ai_router` dependency
-   and makes no network requests** — it works even when the locally installed
-   router is absent or stale.
+```
+[dabbler] N session-set(s) below the current schema v4. Run: python -m ai_router.check_migrations --verbose
+```
 
-If you see this message in your session context: run
-`python -m ai_router.check_migrations --verbose` to see the exact sets
-and remediation steps. Old-schema sets are still readable (the
-`normalize_to_v4_shape` shim handles v2/v3 transparently), so the
-warning is advisory — existing work is not at risk.
+Clean repos produce no output. The advisory is **non-blocking and
+fail-open**: a scan error is swallowed silently and the command's exit
+status is never changed by drift.
 
-To install or refresh the hook, run `Dabbler: Install Orchestrator Hook
-(Claude Code)` from the Command Palette. For repos without the extension,
-use the "Copy manual setup" option from that command's result toast, or
-see `docs/cross-repo-migration-guard-notice.md` (Set 050 S5).
-
-**The drift scan also rides the CLI lifecycle (Set 053).** The Claude
-`SessionStart` hook above is only one trigger, and it only fires for
-Claude Code. The same advisory is now emitted by `start_session` itself
-(and, as a soft note, by `close_session`) — to stderr, after the boundary
-write. Because **every** orchestrator (Claude, GitHub Copilot, Codex, a
-human) runs `start_session` / `close_session` at every session boundary,
-on every host (GitHub, Azure DevOps, none), the drift warning reaches
-everyone with **no editor hook, no CI job, and no git hook** required. It
-is non-blocking and fail-open: a sub-current sibling set prints
-`[dabbler] N session-set(s) below the current schema v4 …` and the
-command's exit status is unchanged; a scan error is swallowed silently.
-`check_migrations` remains the optional, richer manual tool (and anyone
-who wants a hard CI gate can wire it in themselves — it is never
-required). This is why the guard no longer depends on which editor or CI
+If you see this message: run `python -m ai_router.check_migrations
+--verbose` to see the exact sets and remediation steps. Old-schema sets
+are still readable (the `normalize_to_v4_shape` shim handles v2/v3
+transparently), so the warning is advisory — existing work is not at
+risk. `check_migrations` remains the optional, richer manual tool, and
+anyone who wants a hard CI gate can wire it in themselves — it is never
+required. This is why the guard does not depend on which editor or CI
 system a consumer happens to use.
+
+> **Historical note (Set 050 → retired in Set 051 S3).** Set 050
+> originally shipped this drift scan as a pure-JS step chained into a
+> Claude-only `SessionStart` hook (installed via the
+> `dabbler.installOrchestratorHook.claudeCode` command +
+> `scripts/claude-session-start-invoker.js`). Set 053 moved the same
+> advisory into the router lifecycle above, which fires for **every**
+> orchestrator rather than Claude Code only — making the hook a
+> redundant, divergence-prone duplicate. Set 051 S3 retired the hook,
+> its installer command, and the invoker script. Operators who installed
+> the hook should remove the dabbler `SessionStart` entries from
+> `~/.claude/settings.json`; see
+> [`docs/cross-repo-hook-retirement-notice.md`](cross-repo-hook-retirement-notice.md).
 
 #### State first, work second (Set 022)
 

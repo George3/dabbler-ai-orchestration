@@ -265,12 +265,17 @@ caller's CLI arguments, applying omit-null:
 - The writer emits exactly the fields the caller declared. No
   `"unknown"` fallback; no `null` placeholder. Missing keys are
   encoded as missing keys on disk.
-- The Claude `SessionStart` hook
-  (`tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js`)
-  recovers `model` / `effort` from the prior orchestrator block on
-  the same set when the prior holder was already `claude + anthropic`;
-  otherwise the hook omits both fields and the writer attributes the
-  set with engine + provider only.
+- A Claude Code `start_session --engine claude --provider anthropic`
+  invocation recovers `model` / `effort` from the prior orchestrator
+  block on the same set when the prior holder was already
+  `claude + anthropic`; otherwise it omits both fields and the writer
+  attributes the set with engine + provider only. (Set 050's
+  Claude-only `SessionStart` hook that automated this — the
+  `claude-session-start-invoker.js` script + its installer command —
+  was retired in Set 051 S3; drift coverage now rides the
+  `start_session` / `close_session` lifecycle advisory for every
+  orchestrator. See
+  [`docs/cross-repo-hook-retirement-notice.md`](cross-repo-hook-retirement-notice.md).)
 - Same-holder re-attach (subsequent `start_session` calls on the
   same in-progress session) replaces the block atomically with the
   new write. There is no per-field merge; the caller is the source
