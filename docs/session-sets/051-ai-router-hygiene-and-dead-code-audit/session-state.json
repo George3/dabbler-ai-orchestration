@@ -7,7 +7,7 @@
       "number": 1,
       "title": "Session 1",
       "status": "in-progress",
-      "startedAt": "2026-05-29T22:27:16.825768-04:00",
+      "startedAt": "2026-05-30T04:41:49.063189-04:00",
       "completedAt": null,
       "orchestrator": {
         "engine": "claude",
