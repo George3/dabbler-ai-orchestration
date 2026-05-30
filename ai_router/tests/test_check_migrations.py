@@ -33,6 +33,7 @@ from check_migrations import (
     DriftResult,
     detect_drift,
     fetch_manifest,
+    summarize_drift,
 )
 
 
@@ -345,3 +346,76 @@ def test_cli_manifest_note_when_upstream_newer(tmp_path, capsys, monkeypatch):
     assert "upstream publishes schema v7" in out
     # Local sets are all clean, so absent the manifest note this is exit 0.
     assert rc == 0
+
+
+# --- summarize_drift (Set 053 lifecycle-embedded advisory) --------------------
+
+
+def test_summarize_drift_returns_none_when_clean(tmp_path):
+    for i in range(3):
+        _write_set(tmp_path, f"00{i}-set", _v4(f"00{i}-set"))
+    assert summarize_drift(str(tmp_path)) is None
+
+
+def test_summarize_drift_reports_older_sets(tmp_path):
+    _write_set(tmp_path, "001-v4", _v4("001-v4"))
+    _write_set(tmp_path, "002-v3", _v3("002-v3"))
+    _write_set(tmp_path, "003-v2", _genuine_v2("003-v2"))
+    line = summarize_drift(str(tmp_path))
+    assert line is not None
+    # Two older sets (v3 + v2); v4 is current so excluded.
+    assert "2 session-set(s) below the current schema v4" in line
+    assert "older: v2, v3" in line
+    # Non-directive: old schema is acceptable, points at the review command.
+    assert "Old schema is acceptable" in line
+    assert "check_migrations --verbose" in line
+
+
+def test_summarize_drift_counts_missing_version(tmp_path):
+    _write_set(tmp_path, "001-nover", {"sessionSetName": "x", "status": "y", "sessions": []})
+    line = summarize_drift(str(tmp_path))
+    assert line is not None
+    assert "1 session-set(s) below the current schema v4" in line
+    assert "no/unknown schemaVersion" in line
+
+
+def test_summarize_drift_is_ascii_only(tmp_path):
+    _write_set(tmp_path, "001-v3", _v3("001-v3"))
+    _write_set(tmp_path, "002-nover", {"sessionSetName": "x", "status": "y", "sessions": []})
+    summarize_drift(str(tmp_path)).encode("ascii")  # raises if non-ASCII slipped in
+
+
+def test_summarize_drift_fail_open_on_bad_root(tmp_path):
+    # Non-existent scan root -> fail-open -> None, never raises.
+    assert summarize_drift(str(tmp_path / "does" / "not" / "exist")) is None
+
+
+def test_summarize_drift_swallows_internal_errors(tmp_path, monkeypatch):
+    # If detect_drift itself raises, summarize_drift must return None, not propagate.
+    def boom(*a, **k):
+        raise RuntimeError("scan exploded")
+
+    monkeypatch.setattr(cm, "detect_drift", boom)
+    assert summarize_drift(str(tmp_path)) is None
+
+
+def test_summarize_drift_reports_unreadable_corrupt(tmp_path):
+    """Set 053 S2 IV&V (IMP-1): a corrupt session-state.json must be
+    surfaced, not hidden behind the older-schema count."""
+    _write_set(tmp_path, "001-v4", _v4("001-v4"))  # clean
+    _write_set(tmp_path, "002-corrupt", "{ not valid json ,,,")
+    line = summarize_drift(str(tmp_path))
+    assert line is not None
+    assert "unreadable/corrupt session-state.json" in line
+    assert "1 session-set(s) with an unreadable" in line
+
+
+def test_summarize_drift_combines_older_and_unreadable(tmp_path):
+    _write_set(tmp_path, "001-v3", _v3("001-v3"))
+    _write_set(tmp_path, "002-corrupt", "[1, 2, 3]")  # non-object -> unreadable
+    line = summarize_drift(str(tmp_path))
+    assert line is not None
+    assert "1 session-set(s) below the current schema v4 (older: v3)" in line
+    assert "1 session-set(s) with an unreadable/corrupt" in line
+    # both segments joined into one advisory line
+    assert line.count("[dabbler]") == 1

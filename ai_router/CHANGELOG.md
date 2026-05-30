@@ -5,6 +5,40 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-05-29 (Set 053 — Lifecycle-embedded schema-drift advisory)
+
+Moves the schema-drift warning out of the Claude-Code-only `SessionStart`
+editor hook (Set 050) and into the **script-driven session lifecycle**, so
+it fires for every orchestrator (Claude, GitHub Copilot, Codex, human) at
+every boundary on every host — with no editor hook, CI job, or git hook
+required. No Marketplace extension release this set (`ai_router`-only).
+
+### Added
+
+- **`check_migrations.summarize_drift(scan_root=None)`** — returns a terse,
+  ASCII-only one-line warning when any session set under `scan_root` is on
+  an older schema than this install supports, or `None` when clean. Reuses
+  `detect_drift`; **non-blocking and fail-open** (swallows its own errors
+  and returns `None` so a scan failure can never disrupt a session
+  boundary).
+
+### Changed
+
+- **`start_session`** now runs `summarize_drift` after the boundary write
+  and prints any warning to **stderr**. The warning **never** changes the
+  exit status. This is the primary lifecycle trigger — because every
+  orchestrator runs `start_session` regardless of editor/host/CI, the
+  drift advisory now reaches GitHub Copilot and other non-Claude
+  workflows that the Set 050 editor hook never covered.
+- **`close_session`** emits the same advisory as a soft note to stderr
+  after a close, under the identical non-blocking/fail-open contract.
+
+`check_migrations` itself is unchanged and remains the optional, richer
+manual tool; nothing about this set mandates CI. Design rationale and the
+audit record (including why a CI-centric design was proposed and then
+rejected in favor of the lifecycle approach) are in
+`docs/proposals/2026-05-29-ci-agnostic-drift-enforcement/`.
+
 ## [0.12.0] — 2026-05-29 (Set 050 — Schema-drift guard + number-prefix addressing)
 
 Ships the Python side of Set 050: a detect-only schema-drift scanner, a

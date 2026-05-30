@@ -126,6 +126,7 @@ try:
         acquire_lock,
         release_lock,
     )
+    from check_migrations import summarize_drift  # type: ignore[import-not-found]
 except ImportError:
     from .disposition import (  # type: ignore[no-redef]
         Disposition,
@@ -148,6 +149,7 @@ except ImportError:
         acquire_lock,
         release_lock,
     )
+    from .check_migrations import summarize_drift  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -1667,6 +1669,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         pass
     outcome = run(args)
     _emit_output(outcome, json_mode=args.json)
+
+    # Set 053: schema-drift advisory at the close boundary (soft note;
+    # start_session is the primary trigger). Same non-blocking, fail-open
+    # contract as start_session: printed to stderr, never affects the exit
+    # code, swallows its own errors. Scan the sibling sets under this set's
+    # parent dir.
+    try:
+        if outcome.session_set_dir:
+            drift_line = summarize_drift(
+                os.path.dirname(os.path.abspath(outcome.session_set_dir))
+            )
+            if drift_line:
+                print(drift_line, file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        pass
+
     return outcome.exit_code
 
 

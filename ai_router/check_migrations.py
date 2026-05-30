@@ -320,6 +320,72 @@ def _default_scan_root() -> str:
     return candidate if os.path.isdir(candidate) else os.getcwd()
 
 
+def summarize_drift(scan_root: Optional[str] = None) -> Optional[str]:
+    """Return a terse, ASCII-only drift warning for the lifecycle CLIs, or None.
+
+    Set 053: this is the helper chained into ``start_session`` (and, as a
+    soft note, ``close_session``) so a schema-drift warning rides the
+    script-driven session lifecycle — firing for every orchestrator
+    (Claude, Copilot, Codex, human) at every session boundary on every
+    host, with no editor hook, CI job, or git hook required.
+
+    Runs :func:`detect_drift` over ``scan_root`` (default: the cwd's
+    ``docs/session-sets``) and returns a single summary line when any set
+    is on an OLDER schema than this install supports, OR has an
+    unreadable/corrupt ``session-state.json``. Returns ``None`` when
+    everything is current and readable (silent), OR when the scan cannot
+    run at all — this is a **non-blocking, fail-open advisory**: a scan
+    failure must never disrupt a session boundary. "Old schema is
+    acceptable" (Set 050), so the line is informational, not a directive
+    to migrate.
+
+    Unreadable/corrupt files are surfaced too (not just older ones): a
+    corrupt state file is a more urgent problem than a benign old-schema
+    one and must not be hidden behind the drift count (Set 053 S2 IV&V).
+    ``AHEAD`` (this install is older than a set's schema) is intentionally
+    excluded — that is a tool-staleness signal, a different class of
+    problem from "this set is behind."
+
+    Output is ASCII-only (Windows cp1252 consoles cannot encode non-ASCII
+    glyphs — the same constraint the CLI honors).
+    """
+    try:
+        root = scan_root if scan_root is not None else _default_scan_root()
+        results = detect_drift(root)
+    except Exception:
+        # Fail-open: never let a drift-scan error break start/close_session.
+        return None
+
+    older = [r for r in results if r.status == STATUS_DRIFT]
+    unreadable = [r for r in results if r.status == STATUS_UNREADABLE]
+    if not older and not unreadable:
+        return None
+
+    segments = []
+    if older:
+        known = sorted({r.schema_version for r in older if r.schema_version is not None})
+        if known:
+            detail = "older: " + ", ".join(f"v{v}" for v in known)
+            n_unknown = sum(1 for r in older if r.schema_version is None)
+            if n_unknown:
+                detail += f", {n_unknown} with no/unknown version"
+        else:
+            detail = "no/unknown schemaVersion"
+        segments.append(
+            f"{len(older)} session-set(s) below the current schema "
+            f"v{LOCAL_SCHEMA_VERSION} ({detail})"
+        )
+    if unreadable:
+        segments.append(
+            f"{len(unreadable)} session-set(s) with an unreadable/corrupt "
+            f"session-state.json"
+        )
+    return (
+        "[dabbler] " + "; ".join(segments) + ". Old schema is acceptable; to "
+        "review or upgrade run: python -m ai_router.check_migrations --verbose"
+    )
+
+
 def _counts(results: List[DriftResult]) -> dict:
     return {
         "clean": sum(1 for r in results if r.status == STATUS_CLEAN),
@@ -515,6 +581,7 @@ __all__ = [
     "bulk_upgrade_commands",
     "bulk_upgrade_oneliner",
     "detect_drift",
+    "summarize_drift",
     "fetch_manifest",
     "load_local_manifest",
     "main",

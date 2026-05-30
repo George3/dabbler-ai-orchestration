@@ -99,6 +99,21 @@ subsystem plus packaging bugs:
    normalize core) or is the four-way split correct as-is?
 5. **Wheel-contents assertion.** Add a test that asserts the built wheel
    contains no `test_*` and no known-dead modules, to prevent regrowth?
+6. **File / CLI naming conventions (operator-flagged 2026-05-29).** The
+   script base grew organically and the names are inconsistent — most
+   acutely the migrators: `migrate_session_state` (actually v2→v3),
+   `migrate_v3_to_v4`, and `migrate_lightweight_to_canonical_v4` do NOT
+   share a naming scheme, so an AI engine or human cannot tell from the
+   names that **migrating v2→v4 requires running all three in sequence**
+   (the Set 050 S2 empirical finding). Audit the module/CLI names for a
+   consistent, version-legible convention (e.g. `migrate_v2_to_v3` /
+   `migrate_v3_to_v4` / a clearly-named lightweight normalizer, or a
+   single `migrate --from vN --to vM` front door that sequences them).
+   Weigh legibility against the churn of renaming public `python -m`
+   entry points consumer repos may call (keep deprecated aliases?).
+   Scope is naming/discoverability — distinct from Q4 (logic
+   consolidation). This is the most confusing surface for the
+   "how do I migrate?" question and a prime hygiene target.
 
 ---
 

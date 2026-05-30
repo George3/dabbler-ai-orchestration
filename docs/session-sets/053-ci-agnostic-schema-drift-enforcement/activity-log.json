@@ -41,6 +41,35 @@
       "description": "OPERATOR REFRAME (decisive): rejected the entire CI frame -- 'stop adding sophistication; just add the check to the script that writes session-state.json. CI OFTEN FAILS.' Correct. The inventory's load-bearing fact (writers already stamp; vector is hand-authoring) pointed at the session-lifecycle CLI as the natural check point all along -- start_session/close_session are run by EVERY orchestrator (Claude/Copilot/Codex/human) at every boundary on every host, editor/CI-agnostic by construction. The orchestrator had the fact and still steered to CI; the API consults inherited the CI frame and couldn't escape it (correlated error laundered as 'consensus'). LOCKED design: embed detect_drift into start_session (non-blocking warning) + optional soft close_session note; check_migrations stays an OPTIONAL manual tool; CI/git-hooks/baseline-allowlist all DROPPED. Scope collapsed 3->2 sessions. Wrote verdict.md; rewrote spec.md to the minimal design; reshaped session-state.json to 2 sessions. Process lesson banked to memory (feedback_prefer_lifecycle_simplicity_over_good_sounding_architecture).",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/implement-lifecycle-scan",
+      "dateTime": "2026-05-29T21:30:00-04:00",
+      "description": "Implemented the lifecycle-embedded drift advisory. New check_migrations.summarize_drift(scan_root) reuses detect_drift, returns a terse ASCII-only one-line warning when any set is older OR (post-IV&V) unreadable/corrupt, None when clean -- non-blocking + fail-open (swallows its own errors). start_session calls it after the boundary write and prints to stderr (primary trigger; never changes exit code; scans dirname(abspath(session_set_dir))). close_session emits the same as a soft note after _emit_output. Both wrapped in a belt-and-suspenders try/except. Imports added under the existing relative/absolute fallback pattern (bare-import lesson). Live dogfood: start_session in this repo warns about its 46 sub-current sets, exit 0.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/tests-and-doc",
+      "dateTime": "2026-05-29T21:45:00-04:00",
+      "description": "Tests: 8 summarize_drift unit tests (clean->None, older-reported with version list + 'Old schema is acceptable' + review command, missing-version counted, ASCII-only, fail-open-on-bad-root, swallows-internal-errors, unreadable-reported, older+unreadable-combined) + 3 start_session integration tests (emits-but-exit-OK, silent-when-clean, scan-error-non-fatal). Full Python suite 1034 passed/1 skipped/0 regressions (pre-fix); +2 tests after the IMP-1 fix. Doc: ai-led-session-workflow.md gains a 'the drift scan also rides the CLI lifecycle (Set 053)' note (Copilot/Codex/human covered; check_migrations stays optional; not editor/CI-dependent). Version bump dabbler-ai-router 0.12.0->0.13.0 (pyproject + __init__ + CHANGELOG [0.13.0]); set change-log.md. Marketplace extension UNCHANGED (ai_router-only set) -- CLAUDE.md extension-versioning walk intentionally NOT touched (extension still 0.25.0).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/cross-provider-verification",
+      "dateTime": "2026-05-29T21:55:00-04:00",
+      "description": "Cross-provider IV&V by gemini-pro (google), given the actual code (not a pre-framed architecture, per the S1 process lesson). Verdict VERIFIED, 0 critical. IMP-1 (Important): summarize_drift ignored STATUS_UNREADABLE, hiding corrupt state files behind the older-schema count -- FIXED in-flight (now reports unreadable/corrupt as a second segment; +2 tests). NTH-1 (perf on thousands of sets) DEFERRED (speculative; real repos have tens; caching machinery is the over-engineering this set rejected). NTH-2 (redundant call-site try/except) KEPT deliberately (also guards the print() against a closed/encoding-broken stderr). Confirmations: stderr isolation, dirname-based scan-root location robust, AHEAD-exclusion defensible. Cost $0.0106; cumulative $0.0468 of $10 NTE. Record at s2-verification.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {"role": "verifier", "engine": "gemini-pro", "provider": "google", "model_id": "gemini-2.5-pro", "costUsd": 0.0106, "inputTokens": 1245, "outputTokens": 900, "verdict": "VERIFIED"}
+      ]
     }
   ]
 }

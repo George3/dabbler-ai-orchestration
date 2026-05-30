@@ -109,6 +109,7 @@ try:
         SetResolutionError,
         resolve_session_set_dir,
     )
+    from check_migrations import summarize_drift  # type: ignore[import-not-found]
 except ImportError:
     from .progress import (  # type: ignore[no-redef]
         SessionStateInvariantError,
@@ -129,6 +130,7 @@ except ImportError:
         SetResolutionError,
         resolve_session_set_dir,
     )
+    from .check_migrations import summarize_drift  # type: ignore[no-redef]
 
 
 EXIT_OK = 0
@@ -564,6 +566,21 @@ def _run_under_lock(args: argparse.Namespace) -> int:
         engine=args.engine,
         provider=args.provider,
     )
+
+    # Set 053: schema-drift advisory riding the session lifecycle. Because
+    # every orchestrator (Claude, Copilot, Codex, human) runs start_session
+    # at every boundary on every host, this reaches everyone without an
+    # editor hook, CI job, or git hook. Scan the sibling sets under this
+    # set's parent dir. Non-blocking + fail-open (summarize_drift swallows
+    # its own errors and returns None); printed to stderr so it never
+    # pollutes machine-readable stdout. A drift warning must NEVER change
+    # start_session's exit status.
+    try:
+        drift_line = summarize_drift(os.path.dirname(os.path.abspath(session_set_dir)))
+        if drift_line:
+            print(drift_line, file=sys.stderr)
+    except Exception:
+        pass
 
     return EXIT_OK
 

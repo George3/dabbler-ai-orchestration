@@ -1082,6 +1082,22 @@ To install or refresh the hook, run `Dabbler: Install Orchestrator Hook
 use the "Copy manual setup" option from that command's result toast, or
 see `docs/cross-repo-migration-guard-notice.md` (Set 050 S5).
 
+**The drift scan also rides the CLI lifecycle (Set 053).** The Claude
+`SessionStart` hook above is only one trigger, and it only fires for
+Claude Code. The same advisory is now emitted by `start_session` itself
+(and, as a soft note, by `close_session`) — to stderr, after the boundary
+write. Because **every** orchestrator (Claude, GitHub Copilot, Codex, a
+human) runs `start_session` / `close_session` at every session boundary,
+on every host (GitHub, Azure DevOps, none), the drift warning reaches
+everyone with **no editor hook, no CI job, and no git hook** required. It
+is non-blocking and fail-open: a sub-current sibling set prints
+`[dabbler] N session-set(s) below the current schema v4 …` and the
+command's exit status is unchanged; a scan error is swallowed silently.
+`check_migrations` remains the optional, richer manual tool (and anyone
+who wants a hard CI gate can wire it in themselves — it is never
+required). This is why the guard no longer depends on which editor or CI
+system a consumer happens to use.
+
 #### State first, work second (Set 022)
 
 The orchestrator declares "session N is in flight" on disk **before

@@ -590,3 +590,63 @@ def test_planless_state_round_trips_through_read_progress(tmp_path: Path):
     with pytest.raises(SessionStateInvariantError) as excinfo:
         read_progress(raw, _Path(set_dir) / "spec.md")
     assert excinfo.value.rule == 1
+
+
+# ---------------------------------------------------------------------------
+# Group: Set 053 — schema-drift advisory rides the session lifecycle
+# ---------------------------------------------------------------------------
+
+
+def _sub_current_sibling(tmp_path: Path, name: str = "999-old-set") -> Path:
+    """Write a sub-current (v3) sibling set next to the active set so the
+    lifecycle drift scan (which scans the parent dir) finds drift."""
+    d = tmp_path / name
+    d.mkdir()
+    (d / "session-state.json").write_text(
+        json.dumps({
+            "schemaVersion": 3,
+            "sessionSetName": name,
+            "status": "complete",
+            "currentSession": 1,
+            "totalSessions": 1,
+            "completedSessions": [1],
+            "sessions": [{"number": 1, "title": "S1", "status": "complete"}],
+        }),
+        encoding="utf-8",
+    )
+    return d
+
+
+def test_start_session_emits_drift_warning_but_stays_exit_ok(tmp_path: Path, capsys):
+    """start_session prints the lifecycle drift advisory to stderr when a
+    sibling set is sub-current, and the warning never changes the exit code."""
+    set_dir = _fresh_set(tmp_path)
+    _sub_current_sibling(tmp_path)
+
+    rc = start_session.run(_args(set_dir))
+
+    assert rc == start_session.EXIT_OK
+    err = capsys.readouterr().err
+    assert "[dabbler]" in err
+    assert "below the current schema" in err
+
+
+def test_start_session_silent_when_no_drift(tmp_path: Path, capsys):
+    """No sub-current sibling -> no drift line on stderr (silent when clean)."""
+    set_dir = _fresh_set(tmp_path)
+
+    rc = start_session.run(_args(set_dir))
+
+    assert rc == start_session.EXIT_OK
+    assert "[dabbler]" not in capsys.readouterr().err
+
+
+def test_start_session_drift_scan_error_is_non_fatal(tmp_path: Path, monkeypatch):
+    """If the drift scan raises, start_session must still succeed (fail-open)."""
+    set_dir = _fresh_set(tmp_path)
+
+    def boom(*a, **k):
+        raise RuntimeError("scan blew up")
+
+    monkeypatch.setattr(start_session, "summarize_drift", boom)
+    assert start_session.run(_args(set_dir)) == start_session.EXIT_OK
