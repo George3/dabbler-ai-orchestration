@@ -5,6 +5,76 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-05-30 (Set 051 — ai_router hygiene & dead-code audit)
+
+Pure internal cleanup: removes a stranded subsystem, fixes packaging
+hygiene, and relocates misplaced tests — no behavior change to any live
+`ai_router` code path. Audit-first (Set 051 S1 cross-provider verdict,
+`docs/proposals/2026-05-29-ai-router-hygiene/`): every removal cites a
+zero-live-caller finding. Companion VS Code Marketplace release:
+`dabbler-ai-orchestration 0.26.0` (the superseded Claude `SessionStart`
+hook retirement — extension-only). The intervening `0.13.0` (Set 053)
+was never tagged/published to PyPI; this release supersedes it and the
+single `0.12.0 → 0.14.0` PyPI release carries both sets' changes.
+
+### Removed
+
+- **The orphaned `ai_router/joiner/` subpackage** (`__init__`, `__main__`,
+  `cli`, `coverage`, `parsers`, `schema`, `conflicts`) **and
+  `ai_router/dabbler_launch.py`**, plus their 7 dead tests (~3,700 LOC).
+  The joiner CLI's only live caller was the extension's `HarvestService`,
+  deleted in Set 049 when the harvest UI was reverted (P4); the island
+  then referenced only itself. Reachability was re-verified (no reflective
+  load, no `__init__` re-export, no consumer/entry-point caller). The
+  removal commit's parent is tagged **`pre-joiner-removal`** for zero-cost
+  recovery.
+- **The long-broken `backfill_session_state` console-script entry point.**
+  It pointed at a top-level `ai_router.backfill_session_state` module that
+  has never existed (the file lives at
+  `ai_router/scripts/backfill_session_state.py`), so the installed script
+  always `ModuleNotFoundError`'d. Retired rather than repointed: `scripts/`
+  has no `__init__.py` and is excluded from the wheel, so the target is not
+  importable from an installed package either. The utility remains runnable
+  from a source checkout via `python ai_router/scripts/backfill_session_state.py`.
+
+### Added
+
+- **`ai_router/writer_discipline.py`** — the D3 writer-bypass detector
+  (`detect_writer_bypass`), salvaged out of the deleted
+  `joiner/conflicts.py` before the island was removed. Set 049 deliberately
+  retained this check; it is preserved here as a self-contained module with
+  the needed island symbols inlined (`SessionStateView`,
+  `scan_session_states`, `canonicalize_cwd`, `parse_iso`) so it has **no
+  residual `joiner` import**. Covered by `test_writer_discipline.py`.
+- **`test_packaging_hygiene.py`** — wheel-contents regression assertion: the
+  built package contains no `test_*` module and none of the removed dead
+  modules, guarding against regrowth.
+- **`test_entry_points.py`** — import/acceptance test for every declared
+  `[project.scripts]` target, so a broken entry-point path cannot ship
+  again.
+- **`MIGRATIONS.md`** — documents the v2→v3→v4 migrator order so the
+  "how do I migrate?" question is answerable from the names; each
+  migrator's docstring states its from→to versions. No migrator logic was
+  consolidated (the four-way split is correct as-is; distinct shapes +
+  047/050 regression history make a merge high-risk, low-reward).
+
+### Fixed
+
+- **Relocated the two stray `test_*` files** from `ai_router/scripts/` to
+  `ai_router/tests/` (`test_session_state_backfill.py`,
+  `test_dump_session_state_schema.py`) — they previously shipped to PyPI
+  consumers and ran from neither location (`pytest.ini` `testpaths`
+  excluded `scripts/`). Fixing them surfaced and corrected three latent
+  bugs in the live `scripts/` utilities: `dump_session_state_schema.py`'s
+  `_FIELD_COMMENTS` still listed 7 legacy top-level keys dropped in v4
+  (trimmed to the 5 canonical); both utilities' standalone `sys.path`
+  bootstrap inserted the script's own dir instead of its parent, so the
+  pyproject "runnable from a source checkout" claim was false until fixed
+  (`parent` → `parent.parent`).
+- **Dependency audit** (V9): confirmed no `pyproject.toml` dependency was
+  used **only** by the deleted island — `httpx`/`pyyaml` etc. are used
+  broadly; nothing to drop.
+
 ## [0.13.0] — 2026-05-29 (Set 053 — Lifecycle-embedded schema-drift advisory)
 
 Moves the schema-drift warning out of the Claude-Code-only `SessionStart`

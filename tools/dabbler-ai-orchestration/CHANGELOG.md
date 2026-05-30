@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-05-30 (Set 051 — Retire the superseded Claude `SessionStart` hook)
+
+Removes the Set 050 Claude-only `SessionStart` hook. Set 053 moved
+schema-drift detection into the router session lifecycle
+(`start_session` / `close_session` via `summarize_drift`), which fires
+for **every** orchestrator (Claude, Copilot, Codex, human) on every
+host — making the editor hook a redundant, divergence-prone duplicate
+under the portability rule (its `scanSchemaDrift` JS could diverge from
+the router's `summarize_drift` message). Companion PyPI release:
+`dabbler-ai-router 0.14.0` (joiner/dead-code removal + packaging fixes).
+
+### Removed
+
+- **`scripts/claude-session-start-invoker.js`** — the invoker shim,
+  including its `scanSchemaDrift` drift scan and `CURRENT_SCHEMA_VERSION`
+  constant (both superseded by the router lifecycle's `summarize_drift`).
+  The extension `scripts/` directory is now empty.
+- **The `dabbler.installOrchestratorHook.claudeCode` command** and its
+  "Copy manual setup" toast/action (Set 050), the `package.json` command
+  contribution, and the `extension.ts` registration wiring.
+- **`ai_router/tests/test_invoker_schema_constant.py`** — the CI test
+  that pinned the now-deleted JS constant to `ai_router`'s
+  `SESSION_STATE_SCHEMA_VERSION`; with the constant gone the pin is dead.
+- **`src/test/suite/claudeSessionStartInvoker.test.ts`** — the Layer-2
+  suite that dynamic-imported the deleted invoker JS (could not pass
+  without it).
+
+### Changed
+
+- Docs reconciled to present the Set 053 lifecycle advisory as the sole
+  live drift mechanism and the hook as historical: `CLAUDE.md`,
+  `docs/ai-led-session-workflow.md`, `docs/session-state-schema.md`, and
+  `docs/cross-repo-migration-guard-notice.md` (superseded banner +
+  neutralized install step).
+- The `watcherInventory.test.ts` allowlist line pin was bumped (154→153)
+  to track the one-line import shift in `extension.ts`; no watcher was
+  added or removed.
+
+### Added
+
+- **`docs/cross-repo-hook-retirement-notice.md`** — consumer-repo +
+  operator remediation: remove the dabbler `SessionStart` entry (the one
+  invoking `claude-session-start-invoker.js`) from
+  `~/.claude/settings.json`; drift coverage now rides the router
+  lifecycle automatically. (Documents the removal only — does not edit
+  any machine settings.)
+
 ## [0.25.0] — 2026-05-29 (Set 050 — Schema-drift guard + number-prefix addressing)
 
 Ships the extension side of Set 050 and publishes the held 0.24.1

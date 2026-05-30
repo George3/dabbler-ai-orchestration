@@ -434,17 +434,22 @@ to its `sessions[i]` entry through close — `close_session` does not
 re-write or clear it.
 
 **`writer-bypass` detector (D3) survives** in
-`ai_router/joiner/conflicts.py` as a general writer-discipline check
+`ai_router/writer_discipline.py` as a general writer-discipline check
 — it fires when a state-file write isn't bracketed by an
 events-ledger entry, catching out-of-band writes regardless of
 which orchestrator did them. The Set 045 `bare-touch`,
 `engine-mismatch`, and `stale-checkout-touch` detectors are retired.
+(D3 was salvaged into the standalone `writer_discipline.py` module in
+Set 051 S2 when the orphaned `ai_router/joiner/` subpackage — whose
+only live caller, the Explorer harvest surface, was reverted in
+Set 049 — was deleted.)
 
 **Set 045 Explorer surface is reverted.** The Session Set Explorer
 does not render orchestrator info, harvest-record badges, or
-coordination-conflict pills (operator-locked P4). The log-harvest
-infrastructure in `ai_router/joiner/parsers.py` survives for
-non-conflict uses.
+coordination-conflict pills (operator-locked P4). The `ai_router/joiner/`
+log-harvest subpackage was removed entirely in Set 051 S2 (no live
+caller remained after the Set 049 revert); only the D3 writer-discipline
+check was salvaged.
 
 See [`docs/session-state-schema.md § Writer Contract`](session-state-schema.md)
 for the per-orchestrator declaration pattern and

@@ -57,8 +57,10 @@ generic "start_session ran" record (no holder-change semantics).
 The orchestrator block is not surfaced in the Session Set Explorer
 rendering (P4: no orchestrator info in the UI, no harvest-record
 badges, no coordination-conflict pills). The `writer-bypass` detector
-(D3) survives in `ai_router/joiner/conflicts.py` as a general
-writer-discipline check, decoupled from coordination context.
+(D3) survives in `ai_router/writer_discipline.py` as a general
+writer-discipline check, decoupled from coordination context. (It was
+salvaged there in Set 051 S2 when the orphaned `ai_router/joiner/`
+subpackage was deleted; the standalone module has no joiner import.)
 
 See `docs/session-state-schema.md § Writer Contract` for the
 per-orchestrator declaration pattern and `docs/cross-repo-checkout-notice.md`
@@ -72,7 +74,45 @@ is a required duplicate — `vsce package` expects the file alongside
 
 ## Extension versioning
 
-- Current: **v0.25.0** (Set 050 — Schema-drift guard + number-prefix
+- Current: **v0.26.0** (Set 051 — ai_router hygiene & dead-code audit;
+  the extension half retires the superseded Set 050 Claude-only
+  `SessionStart` hook). Set 053 moved schema-drift detection into the
+  router session lifecycle (`start_session` / `close_session` via
+  `summarize_drift`), which fires for **every** orchestrator on every
+  host — making the editor hook a redundant, divergence-prone duplicate
+  under the portability rule. **Removed** (S3):
+  `scripts/claude-session-start-invoker.js` (incl. its `scanSchemaDrift`
+  + `CURRENT_SCHEMA_VERSION`), the `installOrchestratorHook.claudeCode`
+  command + its "Copy manual setup" toast/action + `package.json`
+  contribution + `extension.ts` wiring, the dead
+  `test_invoker_schema_constant.py` CI pin, and the now-orphaned
+  `claudeSessionStartInvoker.test.ts` Layer-2 suite. Docs reconciled to
+  present the Set 053 lifecycle advisory as the sole live drift
+  mechanism (CLAUDE.md, `ai-led-session-workflow.md`,
+  `session-state-schema.md`, `cross-repo-migration-guard-notice.md`
+  superseded banner); the `watcherInventory.test.ts` allowlist pin
+  bumped 154→153 for the one-line import shift (no watcher
+  added/removed). New `docs/cross-repo-hook-retirement-notice.md` is the
+  consumer/operator remediation (remove the dabbler `SessionStart` entry
+  from `~/.claude/settings.json`; drift now automatic via the
+  lifecycle — does not edit machine settings). Companion PyPI release:
+  **`dabbler-ai-router 0.14.0`** — the ai_router half of Set 051:
+  deleted the orphaned `ai_router/joiner/` subpackage + `dabbler_launch.py`
+  (+ 7 dead tests, ~3,700 LOC; only live caller was the Set-049-deleted
+  `HarvestService`; parent tagged `pre-joiner-removal`), salvaged the D3
+  writer-bypass detector into the self-contained
+  `ai_router/writer_discipline.py` (no `joiner` import), retired the
+  long-broken `backfill_session_state` console-script entry point,
+  relocated two stray `scripts/test_*` files to `tests/` (fixing three
+  latent utility bugs surfaced en route), and added wheel-contents +
+  entry-point regression guards + `MIGRATIONS.md`. The intervening
+  ai_router `0.13.0` (Set 053) was never tagged to PyPI; the single
+  `0.12.0 → 0.14.0` release carries both sets. Both publishes **held**
+  for operator-initiated tag-push (PyPI `v0.14.0` + Marketplace
+  `vsix-v0.26.0`; confirm `VSCE_PAT` freshness first — it expired during
+  the 0.24.0 publish).
+
+- Previous: **v0.25.0** (Set 050 — Schema-drift guard + number-prefix
   addressing; shipped end-to-end across 5 sessions; publishes the held
   v0.24.1 Copy-Slug fix as part of the release). The guard the incident
   required is a **pure-JS, no-`ai_router`, no-network drift scan** chained
@@ -120,13 +160,13 @@ is a required duplicate — `vsce package` expects the file alongside
   > `SessionStart` entries from `~/.claude/settings.json` — see
   > [`docs/cross-repo-hook-retirement-notice.md`](docs/cross-repo-hook-retirement-notice.md).
 
-- Previous: **v0.24.1** (patch — `Copy Slug` context menu item wired
+- Pre-Previous: **v0.24.1** (patch — `Copy Slug` context menu item wired
   into `ROW_ACTIONS`; command existed in `package.json` and
   `copyCommand.ts` since Set 048 S3 but was never added to
   `ActionRegistry.ts`; copies the raw session-set slug to the
   clipboard from the Explorer right-click menu top level).
 
-- Pre-Previous: **v0.24.0** (Set 049 — Orchestrator coordination
+- Pre-Pre-Previous: **v0.24.0** (Set 049 — Orchestrator coordination
   removal; full rip-out of the Set 033 H3 + Set 036 H4
   hard-coordination check shipped end-to-end across 5 sessions;
   `session-state.json` orchestrator block reshaped from 7 fields
@@ -153,7 +193,9 @@ is a required duplicate — `vsce package` expects the file alongside
   `.harvest-badges` / `.conflict-pills` CSS rules removed
   (~145 lines CSS+JS); `HarvestService.ts` deleted (sole-caller
   disconnect made the stub pointless; load-bearing scaffolding
-  lives in `ai_router/joiner/`); `holder_change` /
+  then lived in `ai_router/joiner/` — itself deleted in Set 051 S2,
+  with the D3 detector salvaged to `ai_router/writer_discipline.py`);
+  `holder_change` /
   `checkout_conflict` event-type emission retired in
   `session_events.py` (existing JSONL entries intact);
   `~/.dabbler/orchestrator-writer.log` audit appender retained
@@ -318,19 +360,19 @@ is a required duplicate — `vsce package` expects the file alongside
     block) to the cancellation lifecycle. See below for the prior
     Set 035 description.
 
-- Pre-Pre-Previous: **v0.23.0** (Set 048 — Lightweight-tier parity.
+- Pre-Pre-Pre-Previous: **v0.23.0** (Set 048 — Lightweight-tier parity.
   Companion PyPI release: `dabbler-ai-router 0.10.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Previous: **v0.22.0** (Set 047 — state-file schema v4 audit.
+- Pre-Pre-Pre-Pre-Previous: **v0.22.0** (Set 047 — state-file schema v4 audit.
   Companion PyPI release: `dabbler-ai-router 0.9.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Pre-Previous: **v0.21.0** (Set 045 — log-harvest implementation.
+- Pre-Pre-Pre-Pre-Pre-Previous: **v0.21.0** (Set 045 — log-harvest implementation.
   Companion PyPI release: `dabbler-ai-router 0.8.0`). Full
   description preserved in the version walk above.
 
-- Pre-Pre-Pre-Pre-Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
+- Pre-Pre-Pre-Pre-Pre-Pre-Previous: **v0.18.1** (Set 035 — state-file sole truth for
   cancellation/restoration; Marketplace publish gated on operator
   confirmation). No companion PyPI release this set
   (`ai_router/session_lifecycle.py` verified byte-equivalent with the
