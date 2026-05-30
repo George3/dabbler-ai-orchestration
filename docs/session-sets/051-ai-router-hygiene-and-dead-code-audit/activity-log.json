@@ -95,6 +95,33 @@
       "description": "Verification MANUAL (spec quality bar = suite green + wheel inspection; cross-provider verification scoped to S4). Full suite 1029 passed / 1 skipped. Wheel built (dabbler_ai_router-0.13.0) + inspected: no test_*.py ships (F3 resolved), joiner/ + dabbler_launch.py absent, writer_discipline.py + 4 console scripts present, backfill entry point absent. Empirical: standalone scripts now run; ai_router.scripts.backfill confirmed non-importable. Two deviations flagged for the S4 verifier: V3 retire-vs-repoint, and the V4 sys.path bootstrap fixes (behavior changes to already-broken standalone paths). Code committed 59e2405. S2 invoked no router -- $0 routed; cumulative $0.0272 of $10 NTE.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/verify-premise-and-retire-hook",
+      "dateTime": "2026-05-30T06:05:00-04:00",
+      "description": "Re-verified the S3 premise before deleting: Set 053's summarize_drift IS imported AND called in both ai_router/start_session.py (stderr after boundary write) and close_session.py -- so retiring the Claude-only hook loses no drift coverage. (Pre-session memory said Set 053 was un-started; that was stale.) Deleted 4 files: scripts/claude-session-start-invoker.js (invoker shim; scanSchemaDrift + CURRENT_SCHEMA_VERSION duplicated summarize_drift), src/commands/installOrchestratorHookClaudeCode.ts (installer command + 'Copy manual setup' toast), ai_router/tests/test_invoker_schema_constant.py (dead JS-constant pin), and src/test/suite/claudeSessionStartInvoker.test.ts (Layer-2 suite that dynamic-imports the deleted JS -- spec-implied consequence, flagged for S4 verifier).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/wiring-and-docs",
+      "dateTime": "2026-05-30T06:12:00-04:00",
+      "description": "Wiring: dropped the registerInstallOrchestratorHookClaudeCodeCommand import + safeRegister in extension.ts (rewrote the stale Set-049 comment to record the retirement); removed the package.json command contribution; bumped the Q7 watcher-allowlist line 154->153 for the one-line import-removal shift (per the test's own same-commit maintenance contract); recompiled the dist bundle. Docs reconciled as historical pointing at the Set 053 lifecycle advisory: CLAUDE.md (v0.25.0 bullet retirement note), ai-led-session-workflow.md (Schema-drift guard section + T3 declaration bullet), session-state-schema.md (Writer-Contract bullet), cross-repo-migration-guard-notice.md (superseded banner + neutralized install step + snippet + adoption table). Created docs/cross-repo-hook-retirement-notice.md (consumer/operator remediation note; does not edit machine settings).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/verify-and-close-out",
+      "dateTime": "2026-05-30T06:18:00-04:00",
+      "description": "Verification MANUAL (spec quality bar = no extension/Python regressions; cross-provider verification scoped to S4). Python: pytest 1028 passed / 1 skipped (was 1029; -1 = deleted test_invoker_schema_constant.py). TypeScript: tsc --noEmit clean; test:unit 554 passing, 2 failing (the known pre-existing Set-026 scaffolding failures: configEditor panel-lifecycle + notificationsSection rendering -- unrelated to the hook; both watcher tests now pass). package.json re-validated as well-formed JSON. The close_session gate run itself emitted the Set 053 drift advisory (46 sets below v4, advisory-only) -- live-mechanism confirmation. Code committed d533b28 + pushed. S3 invoked no router -- $0 routed; cumulative $0.0272 of $10 NTE.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

@@ -1,24 +1,23 @@
 {
   "status": "completed",
-  "summary": "Set 051 Session 2 of 4 - executed the audit-locked ai_router removals + packaging fixes (verdict.md V1-V9). Deleted the orphaned joiner/ subpackage (7 files) + dabbler_launch.py + 7 dead tests (~3,734 LOC) after salvaging the D3 writer-bypass detector into a new self-contained ai_router/writer_discipline.py + test (V2). Retired the long-broken backfill_session_state console script (V3 EMPIRICAL CORRECTION of the verdict's 'repoint' disposition: ai_router/scripts/ has no __init__.py and namespaces=false, so the module is not importable as ai_router.scripts.backfill_session_state even from the built wheel -- repointing would still ship a broken script) + added test_entry_points.py import-checking every remaining [project.scripts] target. Relocated the two stray scripts/ tests into ai_router/tests/ (V4); they had never run (testpaths excluded scripts/), so relocation surfaced + fixed real latent issues per operator direction (relocate+fix, via AskUserQuestion): trimmed dump_session_state_schema.py _FIELD_COMMENTS of 7 stale legacy v4-dropped keys, corrected both scripts/ utilities' broken standalone sys.path bootstrap (parent -> parent.parent), and updated test_session_state_backfill.py stale pre-v4 assertions. Kept the four migrators (V5). Added test_packaging_hygiene.py regrowth guard (V6, caught a lingering empty joiner/ dir). MIGRATIONS.md + existing migrator docstrings cover V7. Marked cross-repo-harvest-notice.md + narration-templates.md historical (V8). Dependency audit confirmed no droppable dep (V9, deleted code stdlib-only). Suite: 1029 passed / 1 skipped. Wheel built + inspected: no test_* ships, island gone, writer_discipline.py + 4 console scripts present, backfill entry point absent. Two deviations flagged for S4 verifier: V3 retire-vs-repoint (empirical), and the V4 sys.path bootstrap fixes (behavior changes to already-broken standalone paths, justified under operator relocate+fix). S2 invoked no router -- $0 routed; cumulative $0.0272/$10.",
+  "summary": "Set 051 Session 3 of 4 - retired the superseded Set 050 Claude SessionStart hook in the VS Code extension (verdict V10; spec S3). Re-verified the premise before deleting: Set 053's summarize_drift IS imported and called in both ai_router/start_session.py and close_session.py, so retiring the Claude-only hook loses no drift coverage -- it removes a redundant, divergence-prone duplicate (its scanSchemaDrift JS duplicated summarize_drift, and its start_session invocation was a non-load-bearing Claude-only convenience under the portability rule). Deleted 4 files: scripts/claude-session-start-invoker.js, src/commands/installOrchestratorHookClaudeCode.ts (installer command + 'Copy manual setup' toast), ai_router/tests/test_invoker_schema_constant.py (dead JS-constant pin), and src/test/suite/claudeSessionStartInvoker.test.ts (Layer-2 suite that dynamic-imports the deleted JS -- spec-implied consequence, flagged for S4 verifier). Removed the package.json command contribution + the extension.ts import/safeRegister wiring (rewrote the stale Set-049 comment); bumped the Q7 watcher-allowlist line 154->153 for the one-line import shift; recompiled the dist bundle. Reconciled docs as historical pointing at the Set 053 lifecycle advisory: CLAUDE.md (v0.25.0 retirement note), ai-led-session-workflow.md, session-state-schema.md, cross-repo-migration-guard-notice.md (superseded banner + neutralized install step). Created docs/cross-repo-hook-retirement-notice.md (consumer/operator remediation; does NOT edit machine settings). Verification MANUAL (spec quality bar = no regressions; cross-provider verification scoped to S4): Python 1028 passed / 1 skipped (-1 = deleted pin test); TS tsc clean + test:unit 554 passing with only the 2 known pre-existing Set-026 scaffolding failures. The close_session gate run itself emitted the Set 053 drift advisory (live-mechanism confirmation). S3 invoked no router -- $0 routed; cumulative $0.0272/$10.",
   "verification_method": "manual",
   "files_changed": [
-    "ai_router/writer_discipline.py",
-    "ai_router/tests/test_writer_discipline.py",
-    "ai_router/tests/test_entry_points.py",
-    "ai_router/tests/test_packaging_hygiene.py",
-    "ai_router/MIGRATIONS.md",
-    "ai_router/dabbler_launch.py",
-    "ai_router/joiner/",
-    "ai_router/scripts/backfill_session_state.py",
-    "ai_router/scripts/dump_session_state_schema.py",
-    "ai_router/tests/test_dump_session_state_schema.py",
-    "ai_router/tests/test_session_state_backfill.py",
-    "ai_router/tests/conftest.py",
-    "pyproject.toml",
-    "docs/cross-repo-harvest-notice.md",
-    "docs/narration-templates.md",
-    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/s2-close-reason.md",
+    "tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js",
+    "tools/dabbler-ai-orchestration/src/commands/installOrchestratorHookClaudeCode.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/claudeSessionStartInvoker.test.ts",
+    "ai_router/tests/test_invoker_schema_constant.py",
+    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts",
+    "tools/dabbler-ai-orchestration/dist/extension.js",
+    "tools/dabbler-ai-orchestration/dist/extension.js.map",
+    "CLAUDE.md",
+    "docs/ai-led-session-workflow.md",
+    "docs/session-state-schema.md",
+    "docs/cross-repo-migration-guard-notice.md",
+    "docs/cross-repo-hook-retirement-notice.md",
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/s3-close-reason.md",
     "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/disposition.json",
     "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/activity-log.json"
   ],
@@ -30,7 +29,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "S3 retires the superseded Set 050 Claude SessionStart hook in the VS Code extension per spec: delete tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js, remove the installOrchestratorHook.claudeCode command + its 'Copy manual setup' toast + package.json registration + extension.ts wiring, delete the now-dead test_invoker_schema_constant.py, rewrite the CLAUDE.md/docs hook passages as historical pointing at Set 053's lifecycle drift advisory, and provide a consumer/operator hook-removal note (do NOT edit machine settings). Extension change -> Marketplace release, distinct from the ai_router PyPI release. Same Claude/Opus orchestrator keeps continuity of the removal-arc context."
+      "specifics": "S4 is the final session: reconcile ai_router/CHANGELOG.md + any docs still naming removed surfaces + CLAUDE.md (restructure the version walk for the new bump); dual version bumps -- PyPI dabbler-ai-router (S2 joiner/packaging removals) AND the VS Code Marketplace extension (S3 hook retirement) -- plus change-log.md; run cross-provider verification of the whole set (it must scrutinize the S2 V3/V4 deviations AND the S3 spec-implied deletion of claudeSessionStartInvoker.test.ts + the watcher-allowlist line bump); close-out; both publishes HELD for operator-initiated tag-push (PyPI v<X.Y.Z> + Marketplace vsix-v<X.Y.Z>). Same Claude/Opus orchestrator keeps continuity of the removal-arc context. NOTE: confirm VSCE_PAT freshness before the Marketplace tag-push (it expired during the 0.24.0 publish)."
     }
   }
 }
