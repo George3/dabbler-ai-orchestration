@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.26.1] — 2026-05-30 (New Activity Bar icon)
+
+Patch release. Ships the new sidebar icon that landed one commit after
+the `0.26.0` Marketplace tag and therefore missed that publish.
+
+### Changed (UI)
+
+- **New Activity Bar (sidebar) icon** — the `dabblerSessionSetsContainer`
+  view container now uses `media/dabbler-ai-orchestration-icon.svg`
+  (single-path, `fill:currentColor`, themes/states automatically) in
+  place of the previous `media/icon.svg`.
+
 ## [0.26.0] — 2026-05-30 (Set 051 — Retire the superseded Claude `SessionStart` hook)
 
 Removes the Set 050 Claude-only `SessionStart` hook. Set 053 moved
@@ -51,13 +63,6 @@ the router's `summarize_drift` message). Companion PyPI release:
   `~/.claude/settings.json`; drift coverage now rides the router
   lifecycle automatically. (Documents the removal only — does not edit
   any machine settings.)
-
-### Changed (UI)
-
-- **New Activity Bar (sidebar) icon** — the `dabblerSessionSetsContainer`
-  view container now uses `media/dabbler-ai-orchestration-icon.svg`
-  (single-path, `fill:currentColor`, themes/states automatically) in
-  place of the previous `media/icon.svg`.
 
 ## [0.25.0] — 2026-05-29 (Set 050 — Schema-drift guard + number-prefix addressing)
 
