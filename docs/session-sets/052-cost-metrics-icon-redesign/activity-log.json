@@ -41,6 +41,15 @@
           "purpose": "consensus"
         }
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/implementation",
+      "dateTime": "2026-05-30T08:30:00.000000-04:00",
+      "description": "S2 implementation (verdict D1-D7). D1 root-cause read-path fix: new shared utils/routerConfig.ts resolves the metrics filename from router-config.yaml metrics.log_filename (default router-metrics.jsonl); utils/metrics.ts reader + CSV export both route through it (no second hardcoded name); reconciled MetricsEntry to the on-disk schema (session_number not session_num; call_type; drop adjudication rows). D3 router-capability tier gate: dabblerSessionSets.routesCost context key set in extension.ts from a resolvable ai_router/router-config.yaml; package.json gates the view/title icon AND command-palette entry. D4 staleness banner reuses metadata.pricing_reviewed + review_frequency_days (default 30; missing/invalid = stale), computed in-extension. D5 three honest states (disabled names real metrics.enabled knob / empty / data) + no-router defensive state via pure dashboard/dashboardHtml.ts builders; CostDashboard is now a selectCostState state machine. D6 update-rates opens router-config.yaml at metadata/metrics anchor; CSP-safe button wiring. D7 tests: routerConfig.test.ts + dashboardHtml.test.ts + costDashboardGate.test.ts + metrics.test.ts schema update. Layer-3 icon spec PIVOTED to deterministic gate-wiring guard (VS Code view/title actions duplicate-render + overflow -> not reliably Playwright-assertable; flagged for S3 verifier). 584 unit pass / 2 pre-existing Set-026 fails; session-sets-tree Layer-3 5/5 green; tsc clean. Watcher allowlist line bumped 153->172 (line-shift gotcha). $0 routed.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

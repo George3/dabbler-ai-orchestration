@@ -1,17 +1,26 @@
 {
   "status": "completed",
-  "summary": "Set 052 Session 1 of 3 (Audit & design-lock). Mapped the cost path and re-diagnosed the dead-icon bug as a read/write path mismatch: the router writes ai_router/router-metrics.jsonl (metrics.log_filename, default) while the dashboard reads hardcoded ai_router/metrics.jsonl (utils/metrics.ts:5), so the dashboard is always empty regardless of the (already-default-ON) metrics.enabled flag; the placeholder's config.py METRICS_ENABLED flag is fictional. Found staleness infra already exists (metadata.pricing_reviewed + review_frequency_days + config.py:_check_pricing_staleness, currently firing at 40d>30d) and per-model rates live in router-config.yaml. Ran cross-provider consensus (gemini-2.5-pro + gpt-5.4) on the five open questions: agreement on four, genuine split on Q4 (tier gate) resolved to a router-capability gate (gpt-5.4 flagged that gemini's derive-from-session-sets re-creates the dead icon). Locked design D1-D8 in docs/proposals/2026-05-29-cost-metrics-icon/{proposal,verdict}.md (raw consensus in consensus-output.json) and reconciled spec.md. UAT elected by operator (suggestion_disposition: uat, session 1). Scope deltas for S2: NEW #1 deliverable = read-path fix; metrics-on-by-default dropped as a no-op; empty state -> three honest states (disabled/empty/data); tier gate -> router-capability. Routed cost $0.048427 (gemini-2.5-pro $0.006215 + gpt-5.4 $0.042213); cumulative Set 052 $0.048427 of $10 NTE.",
+  "summary": "Set 052 Session 2 of 3 (Implementation, verdict D1-D7). Shipped the dead-cost-icon fix. D1 (root cause): new shared tools/dabbler-ai-orchestration/src/utils/routerConfig.ts resolves the metrics filename from router-config.yaml metrics.log_filename (default router-metrics.jsonl); utils/metrics.ts reader (readMetrics + readMetricsFromPath) and the CSV export both route through it (no second hardcoded name) - the dashboard previously read a hardcoded ai_router/metrics.jsonl the router never wrote to. Reconciled MetricsEntry to the on-disk schema (session_number not the never-emitted session_num; optional call_type; reader drops adjudication rows). D3 (tier gate): dabblerSessionSets.routesCost context key set in extension.ts from a resolvable workspace ai_router/router-config.yaml (folder existence alone insufficient); package.json gates the view/title icon AND the command-palette entry; absent on Lightweight. D4 (staleness): computeStaleness reuses metadata.pricing_reviewed + review_frequency_days (default 30; missing/invalid = stale), computed in-extension; non-blocking banner with an Update-cost-estimates action. D5 (three honest states): disabled (names the REAL metrics.enabled knob, never the fictional config.py METRICS_ENABLED) / on-but-empty / on-with-data + a defensive no-router state, via pure dashboard/dashboardHtml.ts builders; CostDashboard is now a selectCostState state machine. D6: update-rates opens router-config.yaml at the metadata/metrics anchor; no Config Editor pricing section (not cheap); CSP-safe button wiring. D2: no metrics default change (already on). DEVIATION (flagged for S3 verifier): D7 Layer-3 icon smoke pivoted to a deterministic gate-wiring guard (costDashboardGate.test.ts) because VS Code view/title actions duplicate-render in the DOM and overflow past the first action, making them non-deterministic to assert in Playwright (no codebase precedent; mirrors migration-cta-v4.spec.ts reasoning) - net no Layer-3 coverage added for the new panel. Tests: 584 unit pass / 2 pre-existing Set-026 fails (untouched files); session-sets-tree Layer-3 5/5 green; tsc clean. Watcher allowlist line bumped 153->172 (line-shift gotcha). $0 routed; cumulative Set 052 $0.048427 of $10 NTE.",
   "verification_method": "manual",
   "files_changed": [
-    "docs/session-sets/052-cost-metrics-icon-redesign/spec.md",
+    "tools/dabbler-ai-orchestration/src/utils/routerConfig.ts",
+    "tools/dabbler-ai-orchestration/src/utils/metrics.ts",
+    "tools/dabbler-ai-orchestration/src/types.ts",
+    "tools/dabbler-ai-orchestration/src/dashboard/dashboardHtml.ts",
+    "tools/dabbler-ai-orchestration/src/dashboard/CostDashboard.ts",
+    "tools/dabbler-ai-orchestration/src/extension.ts",
+    "tools/dabbler-ai-orchestration/webview/dashboard.html",
+    "tools/dabbler-ai-orchestration/package.json",
+    "tools/dabbler-ai-orchestration/src/test/suite/routerConfig.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/dashboardHtml.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/costDashboardGate.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/metrics.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts",
     "docs/session-sets/052-cost-metrics-icon-redesign/session-state.json",
-    "docs/session-sets/052-cost-metrics-icon-redesign/activity-log.json",
     "docs/session-sets/052-cost-metrics-icon-redesign/session-events.jsonl",
-    "docs/session-sets/052-cost-metrics-icon-redesign/s1-close-reason.md",
-    "docs/session-sets/052-cost-metrics-icon-redesign/disposition.json",
-    "docs/proposals/2026-05-29-cost-metrics-icon/proposal.md",
-    "docs/proposals/2026-05-29-cost-metrics-icon/verdict.md",
-    "docs/proposals/2026-05-29-cost-metrics-icon/consensus-output.json"
+    "docs/session-sets/052-cost-metrics-icon-redesign/activity-log.json",
+    "docs/session-sets/052-cost-metrics-icon-redesign/s2-close-reason.md",
+    "docs/session-sets/052-cost-metrics-icon-redesign/disposition.json"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -21,7 +30,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "S2 (Implementation) continues the same Claude trajectory: a focused TS-mostly change set (read-path fix, router-capability tier gate, staleness banner, three honest states + tests) that benefits from the audit context already in this orchestrator's working memory. No blocker or cost reason to switch providers."
+      "specifics": "S3 (Docs, UAT, close-out) continues the same Claude trajectory: docs reconciliation (remove fictional config.py METRICS_ENABLED references), compiling the elected UAT checklist, version bump + CHANGELOG + CLAUDE.md walk, and cross-provider verification of the S2 implementation. The audit + implementation context already lives in this orchestrator's working memory; no blocker or cost reason to switch providers. S3 MUST run cross-provider IV&V covering the S2 code (deferred from S2 per spec) and ratify the D7 Layer-3 -> gate-wiring-guard deviation."
     }
   }
 }
