@@ -1,17 +1,26 @@
 {
   "status": "completed",
-  "summary": "Set 051 Session 1 of 4 - audit & removal plan. Scanned ai_router/ for dead code + packaging defects and produced an audit-locked, line-item removal plan with zero-live-caller citations. Findings: the joiner/ subpackage (7 files) + dabbler_launch.py form an orphaned island (15 files / ~3,734 LOC incl. 7 dead tests; sole live consumer was the extension HarvestService deleted in Set 049); the backfill_session_state console-script entry point is broken (points at a top-level module that lives under scripts/); two test_*.py under ai_router/scripts/ ship in the wheel; the four migrators are distinct + all live but their names do not encode the v2->v4 = 3-step sequence. Also added a 4th session: the Set 050 Claude SessionStart hook is now superseded by Set 053's lifecycle-embedded drift advisory and will be retired in the new S3. Ran a 2-provider adversarial cross-provider consensus (gemini-pro + gpt-5-4, $0.0272) that confirmed delete/keep-split/wheel-test/delete-not-archive and produced two corrections: V2 SALVAGE the D3 writer-bypass detector into a new live ai_router/writer_discipline.py + test before deleting the island (both reviewers' top objection; Set 049 deliberately retained it; operator-confirmed salvage), and V7 drop the proposed migrate --from/--to front door as over-engineering in favor of docstrings + MIGRATIONS.md + optional migrate_to_latest(). Verdict locked at docs/proposals/2026-05-29-ai-router-hygiene/verdict.md.",
+  "summary": "Set 051 Session 2 of 4 - executed the audit-locked ai_router removals + packaging fixes (verdict.md V1-V9). Deleted the orphaned joiner/ subpackage (7 files) + dabbler_launch.py + 7 dead tests (~3,734 LOC) after salvaging the D3 writer-bypass detector into a new self-contained ai_router/writer_discipline.py + test (V2). Retired the long-broken backfill_session_state console script (V3 EMPIRICAL CORRECTION of the verdict's 'repoint' disposition: ai_router/scripts/ has no __init__.py and namespaces=false, so the module is not importable as ai_router.scripts.backfill_session_state even from the built wheel -- repointing would still ship a broken script) + added test_entry_points.py import-checking every remaining [project.scripts] target. Relocated the two stray scripts/ tests into ai_router/tests/ (V4); they had never run (testpaths excluded scripts/), so relocation surfaced + fixed real latent issues per operator direction (relocate+fix, via AskUserQuestion): trimmed dump_session_state_schema.py _FIELD_COMMENTS of 7 stale legacy v4-dropped keys, corrected both scripts/ utilities' broken standalone sys.path bootstrap (parent -> parent.parent), and updated test_session_state_backfill.py stale pre-v4 assertions. Kept the four migrators (V5). Added test_packaging_hygiene.py regrowth guard (V6, caught a lingering empty joiner/ dir). MIGRATIONS.md + existing migrator docstrings cover V7. Marked cross-repo-harvest-notice.md + narration-templates.md historical (V8). Dependency audit confirmed no droppable dep (V9, deleted code stdlib-only). Suite: 1029 passed / 1 skipped. Wheel built + inspected: no test_* ships, island gone, writer_discipline.py + 4 console scripts present, backfill entry point absent. Two deviations flagged for S4 verifier: V3 retire-vs-repoint (empirical), and the V4 sys.path bootstrap fixes (behavior changes to already-broken standalone paths, justified under operator relocate+fix). S2 invoked no router -- $0 routed; cumulative $0.0272/$10.",
   "verification_method": "manual",
   "files_changed": [
-    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/spec.md",
-    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/session-state.json",
-    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/s1-close-reason.md",
+    "ai_router/writer_discipline.py",
+    "ai_router/tests/test_writer_discipline.py",
+    "ai_router/tests/test_entry_points.py",
+    "ai_router/tests/test_packaging_hygiene.py",
+    "ai_router/MIGRATIONS.md",
+    "ai_router/dabbler_launch.py",
+    "ai_router/joiner/",
+    "ai_router/scripts/backfill_session_state.py",
+    "ai_router/scripts/dump_session_state_schema.py",
+    "ai_router/tests/test_dump_session_state_schema.py",
+    "ai_router/tests/test_session_state_backfill.py",
+    "ai_router/tests/conftest.py",
+    "pyproject.toml",
+    "docs/cross-repo-harvest-notice.md",
+    "docs/narration-templates.md",
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/s2-close-reason.md",
     "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/disposition.json",
-    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/activity-log.json",
-    "docs/proposals/2026-05-29-ai-router-hygiene/proposal.md",
-    "docs/proposals/2026-05-29-ai-router-hygiene/verdict.md",
-    "docs/proposals/2026-05-29-ai-router-hygiene/consensus-output.md",
-    "docs/proposals/2026-05-29-ai-router-hygiene/run_consensus.py"
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/activity-log.json"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -21,7 +30,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "S2 executes the ai_router removals + packaging fixes per verdict.md V1-V9: salvage D3 into ai_router/writer_discipline.py + test (V2), then delete the joiner island + dabbler_launch.py + 7 dead tests (V1, tag the removal commit pre-joiner-removal), repoint the backfill entry point + add an entry-point import test (V3), move the 2 stray scripts/ tests to tests/ (V4), keep the 4 migrators (V5), add the wheel-contents regression test (V6), migrator docstrings + MIGRATIONS.md + optional migrate_to_latest() (V7), reconcile live docs naming the removed CLIs (V8), dependency audit (V9). Same Claude/Opus orchestrator keeps continuity of the audit context."
+      "specifics": "S3 retires the superseded Set 050 Claude SessionStart hook in the VS Code extension per spec: delete tools/dabbler-ai-orchestration/scripts/claude-session-start-invoker.js, remove the installOrchestratorHook.claudeCode command + its 'Copy manual setup' toast + package.json registration + extension.ts wiring, delete the now-dead test_invoker_schema_constant.py, rewrite the CLAUDE.md/docs hook passages as historical pointing at Set 053's lifecycle drift advisory, and provide a consumer/operator hook-removal note (do NOT edit machine settings). Extension change -> Marketplace release, distinct from the ai_router PyPI release. Same Claude/Opus orchestrator keeps continuity of the removal-arc context."
     }
   }
 }

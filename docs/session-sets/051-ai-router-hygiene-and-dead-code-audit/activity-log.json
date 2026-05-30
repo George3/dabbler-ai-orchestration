@@ -50,6 +50,51 @@
       "description": "S1 close-out: wrote s1-close-reason.md, disposition.json (status=completed, verification_method=manual -- audit/design session, consensus served as the design review, operator made the final D3 call), and this activity-log.json. Committed + pushed S1 artifacts. close_session --manual-verify flips session 1 -> complete; set 051 stays in-progress for S2. Routed cost $0.0272 of $10 NTE (0.27%).",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/island-removal-and-salvage",
+      "dateTime": "2026-05-30T05:30:00-04:00",
+      "description": "V1+V2: salvaged the D3 writer-bypass detector into a new self-contained ai_router/writer_discipline.py (no residual joiner import; inlined detect_writer_bypass + SessionStateView/scan_session_states/parse_iso/canonicalize_cwd) with test_writer_discipline.py, THEN deleted the joiner/ subpackage (7 files) + dabbler_launch.py + 7 dead tests. Verified no live importer remained. Removed the now-empty joiner/ directory (caught by the V6 hygiene test).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/packaging-entry-point",
+      "dateTime": "2026-05-30T05:35:00-04:00",
+      "description": "V3 (EMPIRICAL CORRECTION of verdict 'repoint'): confirmed ai_router/scripts/ has no __init__.py + namespaces=false, so ai_router.scripts.backfill_session_state is not importable even from the built wheel -- repointing would still ship a broken console script. Retired the backfill entry point instead. Added test_entry_points.py import-checking every remaining [project.scripts] target so a broken path can't ship again.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/relocate-stray-tests-and-fix-latent-bugs",
+      "dateTime": "2026-05-30T05:42:00-04:00",
+      "description": "V4: relocated the two stray scripts/ tests into ai_router/tests/. They had never run (pytest.ini testpaths=ai_router/tests excluded scripts/), so relocation surfaced real latent issues. Operator chose 'relocate + fix all' (AskUserQuestion) over the prior turn's silent delete. Fixed: (a) dump_session_state_schema.py _FIELD_COMMENTS carried 7 legacy top-level keys dropped at the Set 047 v4 migration -> trimmed to the 5 canonical v4 keys (+ added missing 'sessions' comment); (b) BOTH scripts/ utilities had a broken standalone sys.path bootstrap inserting the script's own dir while session_state lives one level up -> corrected parent -> parent.parent (python ai_router/scripts/<util>.py now actually runs; the pyproject 'runnable from source checkout' claim is now true); (c) updated test_session_state_backfill.py stale pre-v4 assertions to v4 shape; (d) conftest.py adds ai_router/scripts to sys.path for the bare-filename imports.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/migrators-docs-deps",
+      "dateTime": "2026-05-30T05:48:00-04:00",
+      "description": "V5 kept the four migrators split. V6 test_packaging_hygiene.py regrowth guard. V7 confirmed MIGRATIONS.md + the four migrator docstrings already state from->to. V8 marked cross-repo-harvest-notice.md (SUPERSEDED) + narration-templates.md (joiner consumer removed) historical so no release documents the deleted dabbler_launch/joiner CLIs as live. V9 dependency audit: deleted code used only stdlib; pyyaml/httpx used broadly -> no pyproject dependency droppable.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/verify-and-close-out",
+      "dateTime": "2026-05-30T05:55:00-04:00",
+      "description": "Verification MANUAL (spec quality bar = suite green + wheel inspection; cross-provider verification scoped to S4). Full suite 1029 passed / 1 skipped. Wheel built (dabbler_ai_router-0.13.0) + inspected: no test_*.py ships (F3 resolved), joiner/ + dabbler_launch.py absent, writer_discipline.py + 4 console scripts present, backfill entry point absent. Empirical: standalone scripts now run; ai_router.scripts.backfill confirmed non-importable. Two deviations flagged for the S4 verifier: V3 retire-vs-repoint, and the V4 sys.path bootstrap fixes (behavior changes to already-broken standalone paths). Code committed 59e2405. S2 invoked no router -- $0 routed; cumulative $0.0272 of $10 NTE.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }
