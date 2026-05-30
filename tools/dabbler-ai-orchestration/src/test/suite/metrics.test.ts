@@ -5,7 +5,7 @@ import { MetricsEntry } from "../../types";
 const SAMPLE: MetricsEntry[] = [
   {
     session_set: "user-auth",
-    session_num: 1,
+    session_number: 1,
     model: "claude-sonnet-4-6",
     effort: "normal",
     input_tokens: 10000,
@@ -15,7 +15,7 @@ const SAMPLE: MetricsEntry[] = [
   },
   {
     session_set: "user-auth",
-    session_num: 2,
+    session_number: 2,
     model: "claude-sonnet-4-6",
     effort: "normal",
     input_tokens: 8000,
@@ -25,7 +25,7 @@ const SAMPLE: MetricsEntry[] = [
   },
   {
     session_set: "product-catalog",
-    session_num: 1,
+    session_number: 1,
     model: "claude-opus-4-7",
     effort: "high",
     input_tokens: 20000,
@@ -80,7 +80,7 @@ suite("metrics", () => {
   test("exportToCsv includes header and all rows", () => {
     const csv = exportToCsv(SAMPLE);
     const lines = csv.split("\n");
-    assert.strictEqual(lines[0], "session_set,session_num,model,effort,input_tokens,output_tokens,cost_usd,timestamp");
+    assert.strictEqual(lines[0], "session_set,session_number,model,effort,input_tokens,output_tokens,cost_usd,timestamp");
     assert.strictEqual(lines.length, 4); // header + 3 rows
     assert.ok(lines[1].startsWith("user-auth,1,"));
   });

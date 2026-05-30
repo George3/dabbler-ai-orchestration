@@ -1,11 +1,29 @@
 import * as fs from "fs";
-import * as path from "path";
 import { MetricsEntry, CostSummary } from "../types";
+import { readRouterConfig } from "./routerConfig";
 
-export const METRICS_FILE = path.join("ai_router", "metrics.jsonl");
-
+/**
+ * Read the metrics log the router actually writes for *workspaceRoot*.
+ *
+ * Set 052 S2 (root-cause fix, D1): the path is resolved from
+ * `router-config.yaml`'s `metrics.log_filename` (default
+ * `router-metrics.jsonl`) via the shared `readRouterConfig` helper —
+ * NOT the pre-Set-052 hardcoded `ai_router/metrics.jsonl`, which the
+ * router never wrote to, leaving the dashboard permanently empty. The
+ * CSV export reads through the same path so the two cannot drift.
+ *
+ * Returns [] when the workspace does not route (no resolvable config).
+ */
 export function readMetrics(workspaceRoot: string): MetricsEntry[] {
-  const metricsPath = path.join(workspaceRoot, METRICS_FILE);
+  const info = readRouterConfig(workspaceRoot);
+  if (!info) return [];
+  return readMetricsFromPath(info.metricsPath);
+}
+
+/** Parse a metrics JSONL file by absolute path. Skips blank/unparseable
+ *  lines and `adjudication` records (no model, zero cost — bookkeeping,
+ *  not spend). */
+export function readMetricsFromPath(metricsPath: string): MetricsEntry[] {
   if (!fs.existsSync(metricsPath)) return [];
   try {
     const lines = fs.readFileSync(metricsPath, "utf8").split(/\r?\n/).filter(Boolean);
@@ -14,7 +32,7 @@ export function readMetrics(workspaceRoot: string): MetricsEntry[] {
         try { return JSON.parse(line) as MetricsEntry; }
         catch { return null; }
       })
-      .filter((e): e is MetricsEntry => e !== null);
+      .filter((e): e is MetricsEntry => e !== null && e.call_type !== "adjudication" && !!e.model);
   } catch {
     return [];
   }
@@ -70,11 +88,11 @@ export function buildSparkline(dailyCosts: Array<{ date: string; cost: number }>
 }
 
 export function exportToCsv(entries: MetricsEntry[]): string {
-  const header = "session_set,session_num,model,effort,input_tokens,output_tokens,cost_usd,timestamp";
+  const header = "session_set,session_number,model,effort,input_tokens,output_tokens,cost_usd,timestamp";
   const rows = entries.map((e) =>
     [
       e.session_set,
-      e.session_num,
+      e.session_number,
       e.model,
       e.effort,
       e.input_tokens,

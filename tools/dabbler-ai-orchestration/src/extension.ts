@@ -25,9 +25,27 @@ import { registerExternalVerificationCommand } from "./commands/externalVerifica
 import { registerResolveSetNumberCommand } from "./commands/resolveSetNumber";
 import { registerUpgradeOlderSetsCommand } from "./commands/upgradeOlderSets";
 import { hasSubCurrentSets } from "./providers/SessionSetsModel";
+import { routesCost } from "./utils/routerConfig";
 import { SessionSet } from "./types";
 
 const SESSION_SETS_REL = path.join("docs", "session-sets");
+
+// Set 052 S2 (D3 tier gate): project whether ANY open workspace folder
+// routes through the AI router (resolvable `ai_router/router-config.yaml`)
+// into a context key. The cost icon/command is contributed only when this
+// is true — present on Full-tier routing repos, absent on Lightweight.
+// Folder existence alone is insufficient; `routesCost` requires the
+// config file itself.
+function evaluateRouterCapabilityContextKey(): void {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  let routes = false;
+  try {
+    routes = folders.some((f) => routesCost(f.uri.fsPath));
+  } catch {
+    routes = false;
+  }
+  vscode.commands.executeCommand("setContext", "dabblerSessionSets.routesCost", routes);
+}
 
 function evaluateSupportContextKeys(allSets: SessionSet[]): void {
   const cfg = vscode.workspace.getConfiguration("dabblerSessionSets");
@@ -86,6 +104,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const evaluateContextKeys = () => {
     evaluateSupportContextKeys(readAllSessionSets());
+    evaluateRouterCapabilityContextKey();
   };
   // v0.13.2: defensive — `evaluateContextKeys()` calls `readAllSessionSets()`
   // which iterates every session set's session-state.json. A single

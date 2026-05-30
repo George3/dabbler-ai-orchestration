@@ -184,15 +184,23 @@ export interface SessionSet {
   blockedByPrereqs: boolean;
 }
 
+// Set 052 S2: reconciled with the on-disk schema the router actually
+// writes (`ai_router/metrics.py` → `router-metrics.jsonl`). The
+// pre-Set-052 shape used `session_num`, a field the router never
+// emits — it writes `session_number` — so the CSV export silently
+// produced blank columns. `call_type` is carried so the reader can
+// drop `adjudication` bookkeeping rows (no model, zero cost). Optional
+// fields tolerate older/sparser lines.
 export interface MetricsEntry {
   session_set: string;
-  session_num: number;
+  session_number: number;
   model: string;
   effort: string;
   input_tokens: number;
   output_tokens: number;
   cost_usd: number;
   timestamp: string;
+  call_type?: string;
 }
 
 export interface CostSummary {

@@ -274,6 +274,10 @@
         {
           "command": "dabblerSessionSets.revealPlaywrightTests",
           "when": "dabblerSessionSets.e2eSupportActive"
+        },
+        {
+          "command": "dabbler.showCostDashboard",
+          "when": "dabblerSessionSets.routesCost"
         }
       ],
       "view/title": [
@@ -284,7 +288,7 @@
         },
         {
           "command": "dabbler.showCostDashboard",
-          "when": "view == dabblerSessionSets",
+          "when": "view == dabblerSessionSets && dabblerSessionSets.routesCost",
           "group": "navigation@2"
         },
         {

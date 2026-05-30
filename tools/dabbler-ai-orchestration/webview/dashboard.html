@@ -54,10 +54,15 @@
     .btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
     .actions { margin-top: 20px; }
     hr { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 20px 0; }
+    .banner { border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-charts-yellow)); background: var(--vscode-inputValidation-warningBackground, rgba(255,200,0,0.08)); border-radius: 4px; padding: 10px 14px; margin: 12px 0 4px; }
+    .banner-title { font-weight: 600; }
+    .banner p { margin: 4px 0 8px; }
   </style>
 </head>
 <body>
   <h1>Cost Dashboard</h1>
+
+  {{BANNER}}
 
   <h2>Project total (all time)</h2>
   <div class="total">{{TOTAL_COST}}</div>
@@ -81,19 +86,22 @@
   </table>
 
   <div class="actions">
-    <button class="btn" onclick="send('exportCsv')">Export CSV</button>
-    <button class="btn" onclick="send('refresh')">Refresh</button>
+    <button class="btn" data-cmd="exportCsv">Export CSV</button>
+    <button class="btn" data-cmd="refresh">Refresh</button>
+    <button class="btn" data-cmd="updateRates">Update cost estimates</button>
   </div>
 
   <hr>
   <p style="font-size:0.8em; color: var(--vscode-descriptionForeground);">
-    Data read from <code>ai_router/metrics.jsonl</code>.
-    Enable metrics in <code>ai_router/config.py</code>: <code>METRICS_ENABLED = True</code>.
+    Data read from <code>{{METRICS_PATH}}</code>.
   </p>
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
-    function send(command) { vscode.postMessage({ command }); }
+    document.addEventListener('click', (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-cmd]') : null;
+      if (el) vscode.postMessage({ command: el.getAttribute('data-cmd') });
+    });
   </script>
 </body>
 </html>
