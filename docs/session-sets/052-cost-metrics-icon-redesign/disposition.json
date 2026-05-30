@@ -1,26 +1,24 @@
 {
   "status": "completed",
-  "summary": "Set 052 Session 2 of 3 (Implementation, verdict D1-D7). Shipped the dead-cost-icon fix. D1 (root cause): new shared tools/dabbler-ai-orchestration/src/utils/routerConfig.ts resolves the metrics filename from router-config.yaml metrics.log_filename (default router-metrics.jsonl); utils/metrics.ts reader (readMetrics + readMetricsFromPath) and the CSV export both route through it (no second hardcoded name) - the dashboard previously read a hardcoded ai_router/metrics.jsonl the router never wrote to. Reconciled MetricsEntry to the on-disk schema (session_number not the never-emitted session_num; optional call_type; reader drops adjudication rows). D3 (tier gate): dabblerSessionSets.routesCost context key set in extension.ts from a resolvable workspace ai_router/router-config.yaml (folder existence alone insufficient); package.json gates the view/title icon AND the command-palette entry; absent on Lightweight. D4 (staleness): computeStaleness reuses metadata.pricing_reviewed + review_frequency_days (default 30; missing/invalid = stale), computed in-extension; non-blocking banner with an Update-cost-estimates action. D5 (three honest states): disabled (names the REAL metrics.enabled knob, never the fictional config.py METRICS_ENABLED) / on-but-empty / on-with-data + a defensive no-router state, via pure dashboard/dashboardHtml.ts builders; CostDashboard is now a selectCostState state machine. D6: update-rates opens router-config.yaml at the metadata/metrics anchor; no Config Editor pricing section (not cheap); CSP-safe button wiring. D2: no metrics default change (already on). DEVIATION (flagged for S3 verifier): D7 Layer-3 icon smoke pivoted to a deterministic gate-wiring guard (costDashboardGate.test.ts) because VS Code view/title actions duplicate-render in the DOM and overflow past the first action, making them non-deterministic to assert in Playwright (no codebase precedent; mirrors migration-cta-v4.spec.ts reasoning) - net no Layer-3 coverage added for the new panel. Tests: 584 unit pass / 2 pre-existing Set-026 fails (untouched files); session-sets-tree Layer-3 5/5 green; tsc clean. Watcher allowlist line bumped 153->172 (line-shift gotcha). $0 routed; cumulative Set 052 $0.048427 of $10 NTE.",
-  "verification_method": "manual",
+  "summary": "Set 052 Session 3 of 3 (final) - Docs, UAT, version bump, cross-provider verification, close-out. This closes the cost-metrics icon redesign; the set's top-level status flips to complete. Docs reconciled: docs/repository-reference.md (CostDashboard.ts row) + the extension README.md now describe the new behavior (router-capability gating absent on Lightweight, on-open staleness prompt, three honest states); confirmed no live human-facing doc referenced the fictional config.py METRICS_ENABLED flag (S2 had already removed it from webview/dashboard.html) and that the read path was already documented as router-metrics.jsonl in adoption-bootstrap.md. UAT checklist (elected at S1): 052-cost-metrics-icon-redesign-uat-checklist.json, 16 items - programmatically-verifiable items (read-path resolution, staleness predicate, honest-copy invariants, state selection, gate wiring) marked complete with the covering test; live-VS-Code items (icon present/absent, painted banner, editor reveal on the update action) left Passes=false/pending for manual operator UAT post-publish - precisely the coverage the S2 D7 Playwright->manifest-guard pivot deferred. Version bump: extension 0.26.1 -> 0.27.0 (package.json + package-lock.json both version nodes, CHANGELOG.md 0.27.0 entry, CLAUDE.md version-walk cascade noting the interim 0.26.1 icon patch is superseded); TS-only, no companion PyPI release (ai_router untouched). Cross-provider verification of the S2 implementation by gemini-2.5-pro (different provider from the Claude orchestrator), fed the actual code (routerConfig.ts, dashboardHtml.ts, metrics.ts, costDashboardGate.test.ts, the extension.ts gate fn + package.json gate wiring) plus neutral framing of the two flagged deviations via run_s3_verification.py: verdict VERIFIED_WITH_NOTES, 0 critical / 0 blocking, BOTH deviations APPROVED (D7 Playwright->manifest-guard pivot judged superior to the brittle E2E smoke; schema reconciliation session_num->session_number + adjudication-row filtering judged a necessary part of a complete fix, not scope creep). The two 'important' verifier entries were unsolicited praise (good test pattern, defensive YAML-parse handling), not defects. One nice-to-have (a YYYY-MM-DD date-format clarification comment in computeStaleness) addressed in-flight - the sole S3 code change to S2's implementation, comment-only and behavior-preserving. change-log.md + s3-close-reason.md + s3-verification.md authored. tsc --noEmit clean; npm run test:unit 584 passing / 2 failing (the 2 are the known pre-existing Set-026 stub-harness failures in untouched files - unchanged from S2's count). Marketplace vsix-v0.27.0 publish HELD for operator-initiated tag-push (confirm VSCE_PAT freshness first - it expired during the 0.24.0 publish). Routed verification cost $0.017121; cumulative Set 052 $0.065548 of $10 NTE (0.66%).",
+  "verification_method": "cross-provider (gemini-2.5-pro) + manual attestation",
   "files_changed": [
     "tools/dabbler-ai-orchestration/src/utils/routerConfig.ts",
-    "tools/dabbler-ai-orchestration/src/utils/metrics.ts",
-    "tools/dabbler-ai-orchestration/src/types.ts",
-    "tools/dabbler-ai-orchestration/src/dashboard/dashboardHtml.ts",
-    "tools/dabbler-ai-orchestration/src/dashboard/CostDashboard.ts",
-    "tools/dabbler-ai-orchestration/src/extension.ts",
-    "tools/dabbler-ai-orchestration/webview/dashboard.html",
     "tools/dabbler-ai-orchestration/package.json",
-    "tools/dabbler-ai-orchestration/src/test/suite/routerConfig.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/dashboardHtml.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/costDashboardGate.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/metrics.test.ts",
-    "tools/dabbler-ai-orchestration/src/test/suite/watcherInventory.test.ts",
-    "docs/session-sets/052-cost-metrics-icon-redesign/session-state.json",
-    "docs/session-sets/052-cost-metrics-icon-redesign/session-events.jsonl",
+    "tools/dabbler-ai-orchestration/package-lock.json",
+    "tools/dabbler-ai-orchestration/CHANGELOG.md",
+    "tools/dabbler-ai-orchestration/README.md",
+    "CLAUDE.md",
+    "docs/repository-reference.md",
+    "docs/session-sets/052-cost-metrics-icon-redesign/052-cost-metrics-icon-redesign-uat-checklist.json",
+    "docs/session-sets/052-cost-metrics-icon-redesign/change-log.md",
+    "docs/session-sets/052-cost-metrics-icon-redesign/s3-verification.md",
+    "docs/session-sets/052-cost-metrics-icon-redesign/run_s3_verification.py",
+    "docs/session-sets/052-cost-metrics-icon-redesign/s3-close-reason.md",
     "docs/session-sets/052-cost-metrics-icon-redesign/activity-log.json",
-    "docs/session-sets/052-cost-metrics-icon-redesign/s2-close-reason.md",
-    "docs/session-sets/052-cost-metrics-icon-redesign/disposition.json"
+    "docs/session-sets/052-cost-metrics-icon-redesign/disposition.json",
+    "docs/session-sets/052-cost-metrics-icon-redesign/session-state.json",
+    "docs/session-sets/052-cost-metrics-icon-redesign/session-events.jsonl"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -29,8 +27,8 @@
     "model": "claude-opus-4-8",
     "effort": "high",
     "reason": {
-      "code": "continue-current-trajectory",
-      "specifics": "S3 (Docs, UAT, close-out) continues the same Claude trajectory: docs reconciliation (remove fictional config.py METRICS_ENABLED references), compiling the elected UAT checklist, version bump + CHANGELOG + CLAUDE.md walk, and cross-provider verification of the S2 implementation. The audit + implementation context already lives in this orchestrator's working memory; no blocker or cost reason to switch providers. S3 MUST run cross-provider IV&V covering the S2 code (deferred from S2 per spec) and ratify the D7 Layer-3 -> gate-wiring-guard deviation."
+      "code": "set-complete",
+      "specifics": "Set 052 (3 of 3) is complete - the cost-metrics icon redesign shipped end-to-end (read-path root-cause fix + router-capability tier gate + in-extension staleness banner + three honest dashboard states), version-bumped to extension 0.27.0 (Marketplace-only; publish held for operator tag-push), UAT checklist compiled, and the S2 implementation cross-provider verified (VERIFIED_WITH_NOTES, both deviations approved). No next session in this set. No follow-on orchestrator action required beyond the operator pushing the vsix-v0.27.0 tag after confirming VSCE_PAT freshness."
     }
   }
 }
