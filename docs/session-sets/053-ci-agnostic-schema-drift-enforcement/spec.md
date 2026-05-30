@@ -70,39 +70,67 @@ logic.
 
 ### Cross-provider input already on record (S1 must weigh, not assume)
 
-A pre-stub GPT-5.4 consult (2026-05-29) ranked: (1) CI required-for-merge
-check as the non-bypassable backstop; (2) git pre-commit/pre-push hook for
-early local feedback; (3) `AGENTS.md` / `copilot-instructions.md` as
-**advisory only** (rated `insufficient_alone` — instruction files create
-false confidence and are not enforceable); (4) optional pre-push hook for
-tooling/bot commits that skip commit hooks; (5) **strengthen the writer
-path so every command that creates/updates `session-state.json` stamps
-`schemaVersion` from a code constant, never from a prompt/template** — the
-only layer that is host-agnostic *and* AI-agnostic *and* trigger-free.
-This record is an audit input, not a locked verdict — S1 re-runs the
-consensus.
+Two providers were consulted at stub time (2026-05-29) and **they
+disagree on the centerpiece** — S1 must resolve this, not assume it.
+
+**GPT-5.4** ranked: (1) CI required-for-merge check as the non-bypassable
+backstop; (2) git pre-commit/pre-push hook for early local feedback;
+(3) `AGENTS.md` / `copilot-instructions.md` **advisory only** (rated
+`insufficient_alone` — instruction files create false confidence and are
+not enforceable); (4) optional pre-push hook for tooling/bot commits that
+skip commit hooks; (5) **writer-path hardening** (stamp `schemaVersion`
+from a code constant) as the deepest fix — host-agnostic, AI-agnostic,
+trigger-free.
+
+**Gemini-2.5-pro (devil's advocate)** rated the plan `needs_rework` and
+**directly challenged making writer-path hardening the centerpiece**:
+"it provides a false sense of security — the problem explicitly includes
+AI and humans HAND-EDITING files, which completely bypasses the hardened
+code paths. The true centerpiece must be the CI gate, the only layer that
+can catch a violation regardless of source. Writer-path work is essential
+housekeeping, not the strategic core." Its strongest objection: the
+**"new/changed files" detection in CI is brittle** (git history, rebase,
+squash merges, merge commits) and the plan hand-waves it — the single
+most likely failure point.
+
+**Synthesis for S1 (provisional, not locked):** the two views reconcile
+as *coverage* vs *depth*. The **CI gate is the only non-bypassable layer
+that catches hand-edits** (Copilot/human editing JSON in the editor never
+touches code paths), so it is the true backstop. **Writer-path hardening
+closes the code-path vector** (the orchestrator's own writes) but cannot
+see a hand-edit. Hooks give early local catch. The honest framing: **CI
+is the centerpiece for coverage; writer-hardening is necessary but
+insufficient alone.** This stub's "centerpiece" label on writer-hardening
+(below) is therefore demoted to a candidate — S1 locks the real priority.
 
 ### What this set delivers (subject to S1 lock)
 
-1. **Writer-path hardening (centerpiece).** Every code path that
-   writes `session-state.json` stamps the canonical `schemaVersion`
-   from the `SESSION_STATE_SCHEMA_VERSION` constant — never from a
-   prompt or template. Prevents the bad write at the source regardless
-   of host/CI/AI. (Audit confirms which writers already do this and
-   closes any gaps; this is presentation of an existing constant, not
-   new schema logic.)
-2. **Host-agnostic git hooks.** A repo-committed pre-commit (and
+1. **CI-agnostic gate (coverage backstop — the true centerpiece per the
+   tension above), thin per-host wrappers.** The only layer that catches
+   a violation *regardless of source*, including human/Copilot
+   hand-edits. A canonical "run `check_migrations`, fail on non-zero"
+   recipe with ready snippets for **Azure Pipelines**
+   (`azure-pipelines.yml` step) **and** GitHub Actions, plus a generic
+   recipe for any other system. Documented "required-for-merge" mapping:
+   Azure DevOps **branch policy → build validation** ≡ GitHub **required
+   status check** — noting (per Gemini) that enabling it is a **manual
+   out-of-band UI step**, not just YAML. Gemini's strongest objection —
+   **new/changed-file detection is brittle** under rebase/squash/merge —
+   is a load-bearing S1 question (Q7), not a settled detail.
+2. **Writer-path hardening (necessary, not sufficient).** Every code
+   path that writes `session-state.json` stamps the canonical
+   `schemaVersion` from the `SESSION_STATE_SCHEMA_VERSION` constant —
+   never from a prompt or template. Closes the *code-path* vector (the
+   orchestrator's own writes) but cannot see a hand-edit, which is why
+   it is not the sole guard. (Audit confirms which writers already do
+   this and closes gaps; presentation of an existing constant, not new
+   schema logic.)
+3. **Host-agnostic git hooks.** A repo-committed pre-commit (and
    optional pre-push) hook that runs the scan and blocks a stale write
    before it lands. Git hooks are host-independent — identical on Azure
    Repos, GitHub, GitLab. Plus a portable installer (a setup script
    and/or an extension command) since hooks aren't auto-enabled on
    clone.
-3. **CI-agnostic gate, thin per-host wrappers.** A canonical "run
-   `check_migrations`, fail on non-zero" recipe with ready snippets for
-   **Azure Pipelines** (`azure-pipelines.yml` step) **and** GitHub
-   Actions, plus a generic recipe for any other system. Documented
-   mapping of "required-for-merge": Azure DevOps **branch policy →
-   build validation** ≡ GitHub **required status check**.
 4. **AGENTS.md / copilot-instructions advisory layer.** A reworded note
    — "never hand-edit `schemaVersion`; run the check/fix command" —
    added to the narration-template regeneration
@@ -156,11 +184,52 @@ consensus.
    protected-branch policies (Azure build validation / GitHub required
    checks), or only provide the failing command and leave policy to each
    repo's admins?
-7. **Repo-wide vs. changed-files scan.** Should CI fail on ANY
-   sub-current set in the repo, or only files touched by the PR? (Set
-   050's "old schema is acceptable" non-goal complicates a repo-wide
-   fail — reconcile: enforce on NEW/CHANGED writes, not pre-existing
-   intentionally-old sets.)
+7. **Repo-wide vs. changed-files scan — and its brittleness (Gemini's
+   strongest objection).** Should CI fail on ANY sub-current set in the
+   repo, or only files touched by the PR? (Set 050's "old schema is
+   acceptable" non-goal complicates a repo-wide fail — reconcile: enforce
+   on NEW/CHANGED writes, not pre-existing intentionally-old sets.) But
+   "changed files" detection is **notoriously brittle** — sensitive to
+   git history, rebase, squash merges, and merge commits where git
+   presents a file state that existed on no branch. How is the diff base
+   discovered reliably on Azure (`System.PullRequest.TargetBranch`) vs
+   GitHub? Is the brittleness cost high enough to reconsider Q11?
+
+The following were added from the stub-time devil's-advocate pass
+(Gemini-2.5-pro, 2026-05-29):
+
+8. **Centerpiece: CI vs writer-hardening.** Resolve the provider
+   disagreement (see Motivation). Is writer-path hardening "false
+   security" because hand-edits bypass it, making CI the only real
+   guard — or do the layers compose such that each is load-bearing?
+9. **A `--fix` / fixer for DX.** A dev who hits a CI failure should not
+   hand-edit JSON. Should `check_migrations` (or a sibling) gain a
+   `--fix` that runs the existing migrator chain (`.bak`-backed) on the
+   offending files? Reconcile against the Set 050 non-goal "no silent
+   auto-migration" — an *operator-invoked* `--fix` is not silent, but the
+   boundary needs a clear line.
+10. **Reader-shim resilience & test matrix.** When a bad write slips
+    through, does `normalize_to_v4_shape` fail gracefully, throw a clear
+    error, or silently corrupt? Full test matrix across every supported
+    old version + malformed/mismatched input. Should `check_migrations`
+    validate that JSON **content conforms** to the declared
+    `schemaVersion`, not just compare the version number?
+11. **Challenge the "old schema acceptable" non-goal itself.** What is
+    the true cost of a one-time forced migration sweep vs. the ongoing
+    complexity/fragility of a "changed-files-only" detector? (If a sweep
+    is cheap, much of Q7's brittleness evaporates.) How does the check
+    differentiate a pre-existing *valid* v3 file from a *newly
+    mis-authored* v3 file — by `git diff` alone, or another signal?
+12. **Escape hatch for intentional older schema.** Is there a legitimate
+    case for committing an older-schema file (test fixtures,
+    backward-compat)? If so the gate needs an opt-out marker; if not,
+    document that none exists.
+13. **Azure DevOps wrapper specifics.** Beyond the YAML step: explicit
+    Python-setup + pip-install on the build agent; PR error reporting via
+    `##vso[task.logissue type=error;]` (surface on the PR overview, not
+    just an exit code); target-branch discovery for the diff; and the
+    fact that build-validation enablement is a manual Branch-Policy UI
+    step the rollout doc must spell out.
 
 ---
 
