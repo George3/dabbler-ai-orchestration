@@ -91,20 +91,31 @@ def _make_set(base: Path, slug: str, *, spec: str = SPEC_WITH_TOTAL) -> Path:
 
 class TestSynthesizeNotStarted:
     def test_writes_canonical_shape(self, session_set_dir: Path) -> None:
+        # Set 051: v4 on-disk shape. The legacy top-level fields
+        # (currentSession / totalSessions / lifecycleState / startedAt /
+        # completedAt / verificationVerdict / orchestrator) are NOT
+        # written to disk — the reader derives them from ``sessions[]``.
+        # The spec's ``totalSessions: 4`` materializes as four
+        # not-started session records.
         path = synthesize_not_started_state(str(session_set_dir))
         assert path == str(session_set_dir / SESSION_STATE_FILENAME)
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         assert data == {
             "schemaVersion": SCHEMA_VERSION,
             "sessionSetName": "0xx-test-set",
-            "currentSession": None,
-            "totalSessions": 4,  # parsed from the spec
             "status": NOT_STARTED_STATUS,
-            "lifecycleState": None,
-            "startedAt": None,
-            "completedAt": None,
-            "verificationVerdict": None,
-            "orchestrator": None,
+            "sessions": [
+                {
+                    "number": n,
+                    "title": f"Session {n}",
+                    "status": NOT_STARTED_STATUS,
+                    "startedAt": None,
+                    "completedAt": None,
+                    "orchestrator": None,
+                    "verificationVerdict": None,
+                }
+                for n in (1, 2, 3, 4)
+            ],
         }
 
     def test_idempotent_does_not_overwrite(
@@ -127,29 +138,35 @@ class TestSynthesizeNotStarted:
         # Untouched contents
         assert json.loads(path.read_text(encoding="utf-8")) == prior
 
-    def test_total_sessions_null_when_spec_missing_block(
+    def test_no_sessions_ledger_when_spec_missing_block(
         self, base_dir: Path
     ) -> None:
+        # Set 051: the v4 equivalent of "totalSessions is null" is "no
+        # ``sessions`` ledger written" — a spec without a configuration
+        # block declares no session count, so no per-session entries are
+        # synthesized.
         d = _make_set(base_dir, "no-block-set", spec=SPEC_WITHOUT_BLOCK)
         synthesize_not_started_state(str(d))
         data = json.loads(
             (d / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
         )
-        assert data["totalSessions"] is None
+        assert not data.get("sessions")
         assert data["status"] == NOT_STARTED_STATUS
 
-    def test_total_sessions_null_when_spec_missing(
+    def test_no_sessions_ledger_when_spec_missing(
         self, tmp_path: Path
     ) -> None:
         # No spec.md in this folder. The synthesizer is documented to
-        # tolerate that — totalSessions falls back to None.
+        # tolerate that — with no declared session count, no
+        # ``sessions`` ledger is written (v4 equivalent of the old
+        # ``totalSessions is None`` fallback).
         d = tmp_path / "no-spec"
         d.mkdir()
         synthesize_not_started_state(str(d))
         data = json.loads(
             (d / SESSION_STATE_FILENAME).read_text(encoding="utf-8")
         )
-        assert data["totalSessions"] is None
+        assert not data.get("sessions")
 
 
 # ---------------------------------------------------------------------------
@@ -232,9 +249,12 @@ class TestBackfillBranches:
         assert state is not None
         assert state["status"] == COMPLETE_STATUS
         assert state["lifecycleState"] == SessionLifecycleState.CLOSED.value
-        # mtime-derived; just confirm a non-null ISO-ish string landed.
-        assert isinstance(state["completedAt"], str)
-        assert state["completedAt"]
+        # Set 051: under v4 the reader derives ``completedAt`` from the
+        # ``sessions[]`` ledger, not the file mtime. A change-log-only
+        # backfill produces no per-session completedAt, so the derived
+        # top-level value is None. The complete/closed classification
+        # (above) is the load-bearing assertion for this branch.
+        assert state["completedAt"] is None
 
     def test_existing_state_file_is_preserved_with_change_log(
         self, base_dir: Path
@@ -434,6 +454,7 @@ class TestBackfillCLI:
         # test environment.
         script = (
             Path(__file__).resolve().parent.parent
+            / "scripts"
             / "backfill_session_state.py"
         )
         return subprocess.run(

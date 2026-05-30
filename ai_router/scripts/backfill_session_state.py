@@ -39,12 +39,15 @@ from pathlib import Path
 from typing import Optional
 
 if __name__ == "__main__" and __package__ in (None, ""):
-    # Production CLI path: invoked as
-    # ``python ai_router/backfill_session_state.py``. Mirrors the
-    # sys.path tweak in ``dump_session_state_schema.py`` so sibling
-    # modules import by filename. The ``python -m`` form goes through
-    # the package import path and does not hit this branch.
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    # Source-checkout CLI path: invoked as
+    # ``python ai_router/scripts/backfill_session_state.py``. The sibling
+    # modules (``session_state``) live one level up in ``ai_router/``
+    # (this file sits under ``ai_router/scripts/``), so add the *parent's
+    # parent* to sys.path — adding this file's own directory would not
+    # find them. Mirrors the bootstrap in
+    # ``dump_session_state_schema.py``. (Set 051: corrected from the
+    # pre-relocation ``parent`` that assumed a top-level location.)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from session_state import (  # type: ignore[import-not-found]

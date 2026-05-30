@@ -1,6 +1,29 @@
 # Narration v1.1 Templates
 
-> **Status:** Shipped in Set 045 / Session 4 (2026-05-24).
+> ## ⚠️ The joiner consumer was removed (Set 049 revert + Set 051)
+>
+> The marker-**emission** half of this feature is still live: the
+> `Dabbler: Regenerate Narration Templates` command and
+> `python -m ai_router.narration` both still produce the markers
+> documented below, and [`ai_router/narration.py`](../ai_router/narration.py)
+> remains the source of truth for marker anatomy + the `detect_marker`
+> diagnostics.
+>
+> What is **gone** is the *consumer* that correlated those markers:
+> the `ai_router/joiner/` package and the `dabbler-launch` wrapper were
+> **deleted in Set 051** (their only live caller, the Session Set
+> Explorer harvest surface, was reverted in Set 049). So a marker an
+> assistant emits today has **no in-repo joiner to scrape it** and no
+> Explorer coverage badge to light. Treat every reference below to
+> `ai_router/joiner/`, "the joiner", `dabbler-launch`, and the
+> "Session Set Explorer coverage badge" as **historical** — describing
+> the now-retired log-harvest pipeline, not a live integration.
+>
+> The templates remain useful if you later rebuild a marker consumer;
+> until then they are emission-only.
+
+> **Status:** Shipped in Set 045 / Session 4 (2026-05-24); harvest
+> consumer retired Set 049/051 (see banner above).
 > **Locked by:** Set 044 proposal v1.1 (consensus-audited) +
 > Set 045 / Session 1 phrasing-trigger ablation analysis.
 > **Source of truth:** [`ai_router/narration.py`](../ai_router/narration.py).

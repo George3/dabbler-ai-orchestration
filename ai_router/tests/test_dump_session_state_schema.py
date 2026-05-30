@@ -163,14 +163,26 @@ class TestFormatExampleJson:
 
     def test_round_trips_through_read_session_state(self, tmp_path):
         # Write the rendered example to a session-set directory and
-        # confirm the live read function returns an equivalent dict.
-        # This is the strongest portability guarantee: anyone copying
-        # the example into a new session set has a file the rest of the
-        # toolchain accepts.
-        rendered = format_example(build_example_state())
+        # confirm the live read function accepts it and the canonical
+        # v4 content survives. This is the portability guarantee: anyone
+        # copying the example into a new session set has a file the rest
+        # of the toolchain accepts.
+        #
+        # Set 051: under v4 the reader returns the *derived* shape — it
+        # synthesizes the legacy top-level fields (currentSession /
+        # totalSessions / startedAt / …) from the ``sessions[]`` ledger
+        # and does not surface ``nextOrchestrator`` — so the reloaded
+        # dict is intentionally NOT byte-equal to the canonical on-disk
+        # example. Assert the canonical content round-trips instead.
+        example = build_example_state()
+        rendered = format_example(example)
         (tmp_path / "session-state.json").write_text(rendered, encoding="utf-8")
         reloaded = read_session_state(str(tmp_path))
-        assert reloaded == build_example_state()
+        assert reloaded is not None
+        assert reloaded["schemaVersion"] == example["schemaVersion"]
+        assert reloaded["sessionSetName"] == example["sessionSetName"]
+        assert reloaded["status"] == example["status"]
+        assert reloaded["sessions"] == example["sessions"]
 
 
 # --------------------------------------------------------------------
@@ -413,7 +425,9 @@ class TestCli:
         # pre-commit will. Confirms the __main__ entry point and the
         # sys.path bootstrap both work, and that the committed
         # reference matches the live schema right now.
-        script = _repo_root() / "ai_router" / "dump_session_state_schema.py"
+        script = (
+            _repo_root() / "ai_router" / "scripts" / "dump_session_state_schema.py"
+        )
         result = subprocess.run(
             [sys.executable, str(script), "--check"],
             cwd=str(_repo_root()),

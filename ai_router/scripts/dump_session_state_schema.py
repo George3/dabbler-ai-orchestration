@@ -43,12 +43,14 @@ from pathlib import Path
 from typing import Optional
 
 if __name__ == "__main__" and __package__ in (None, ""):
-    # Production CLI path: invoked as
-    # ``python ai_router/dump_session_state_schema.py``. The parent
-    # directory ``ai_router/`` holds the sibling modules; adding it to
-    # sys.path lets the module import them by filename, matching the
-    # pattern used by close_session.py / reconciler.py.
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    # Source-checkout CLI path: invoked as
+    # ``python ai_router/scripts/dump_session_state_schema.py``. The
+    # sibling modules (``session_state`` etc.) live one level up in
+    # ``ai_router/`` (this file sits under ``ai_router/scripts/``), so
+    # add the *parent's parent* to sys.path — adding this file's own
+    # directory would not find them. (Set 051: corrected from the
+    # pre-relocation ``parent`` that assumed a top-level location.)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from session_state import (  # type: ignore[import-not-found]
@@ -71,20 +73,27 @@ REFERENCE_PATH = "docs/session-state-schema-example.json"
 # Per-key annotations for the JSONC (--include-comments) form. Keys not
 # in this map emit without a comment. Edit alongside the schema rather
 # than after the fact so the documentation tracks the code.
+# Set 047 made v4 the on-disk shape: only these five top-level keys are
+# written. The legacy fields (currentSession / totalSessions /
+# completedSessions / lifecycleState / startedAt / completedAt /
+# orchestrator / verificationVerdict) are derived by the reader from the
+# per-session ``sessions[]`` ledger and never appear on disk, so they
+# carry no on-disk comment. (Set 051 trimmed the stale legacy entries
+# that lingered here after the v4 migration.)
 _FIELD_COMMENTS = {
-    "schemaVersion": "v2 since Set 001 Session 3; v1 files are migrated lazily on read.",
+    "schemaVersion": "v4 since Set 047; older files are normalized lazily on read.",
     "sessionSetName": "basename of the session-set directory; not the full path.",
-    "currentSession": "1-based index; flips at register_session_start.",
-    "totalSessions": "may be null on legacy sets that never declared a total.",
-    "status": "v1-compatible binary signal: 'in-progress' | 'complete'. Kept for VS Code Session Set Explorer.",
-    "lifecycleState": "v2 granular state: work_in_progress | work_verified | closeout_pending | closeout_blocked | closed.",
-    "startedAt": "ISO 8601 with offset; written at register_session_start.",
-    "completedAt": "ISO 8601 with offset; null until mark_session_complete flips the snapshot.",
-    "verificationVerdict": "VERIFIED | ISSUES_FOUND | null. Set at mark_session_complete when known.",
-    "orchestrator": "engine + provider + model + effort for the *current* session's driver.",
+    "status": "set-level binary signal: 'in-progress' | 'complete'. Kept for the VS Code Session Set Explorer.",
+    "sessions": (
+        "canonical per-session ledger. Each entry carries its own "
+        "number / title / status / startedAt / completedAt / "
+        "orchestrator / verificationVerdict; per-session status is one "
+        "of not-started | in-progress | complete | cancelled. The reader "
+        "derives every legacy top-level field from this array."
+    ),
     "nextOrchestrator": (
         "Recommendation for the next session. Required (non-null) when "
-        "currentSession < totalSessions; null on the final session. "
+        "the current session is not the last; null on the final session. "
         "reason.code is one of: continue-current-trajectory | "
         "switch-due-to-blocker | switch-due-to-cost | other. "
         "reason.specifics must be at least 30 characters."

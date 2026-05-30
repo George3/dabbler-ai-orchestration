@@ -1,5 +1,27 @@
 # Cross-repo CLAUDE.md notice — log-harvest observability
 
+> ## ⚠️ SUPERSEDED — HISTORICAL RECORD ONLY (do NOT paste, do NOT run the commands below)
+>
+> The dual-primary log-harvest surface this notice describes was
+> **reverted in Set 049** (the Session Set Explorer harvest badges /
+> conflict pills and the `HarvestService` were removed when the harvest
+> UI was rolled back, P4) and its supporting Python subsystem was
+> **removed in Set 051**:
+>
+> - `python -m ai_router.dabbler_launch` / the `dabbler-launch` wrapper — **deleted** (no live caller remained after the Set 049 revert).
+> - `python -m ai_router.joiner` (the `ai_router/joiner/` package) — **deleted** for the same reason.
+>
+> Do **not** paste the snippet below into any consumer `CLAUDE.md`, and
+> do **not** run the `dabbler_launch` / `joiner` commands — they no
+> longer exist. The one piece that survives is the writer-discipline
+> check (the old D3 "writer-bypass" detector), salvaged into the live
+> `ai_router/writer_discipline.py` module. Schema-drift advisories now
+> ride the router lifecycle (`start_session` / `close_session`), not a
+> harvest pass.
+>
+> This file is retained only as a record of what Set 045 shipped and
+> Set 049/051 retired. The body below is unedited 2026-05-25 content.
+
 **Authored:** 2026-05-25 (Set 045 Session 6)
 **Audience:** consumer-repo CLAUDE.md authors (dabbler-platform,
 dabbler-access-harvester, dabbler-homehealthcare-accessdb).

@@ -51,12 +51,19 @@ Homepage = "https://github.com/darndestdabbler/dabbler-ai-orchestration"
 Source = "https://github.com/darndestdabbler/dabbler-ai-orchestration"
 Issues = "https://github.com/darndestdabbler/dabbler-ai-orchestration/issues"
 
+# Console scripts. Every target here is import-checked by
+# ai_router/tests/test_entry_points.py so a broken path can never ship.
+# (Set 051 retired the long-broken ``backfill_session_state`` entry point:
+# it pointed at a top-level ``ai_router.backfill_session_state`` module that
+# has lived under the unpackaged ``ai_router/scripts/`` dir since Set 021,
+# so the installed console script never resolved. The one-shot v1->v2
+# backfill utility remains runnable from a source checkout via
+# ``python ai_router/scripts/backfill_session_state.py``.)
 [project.scripts]
 start_session = "ai_router.start_session:main"
 close_session = "ai_router.close_session:main"
 report = "ai_router.report:main"
 reconciler = "ai_router.reconciler:main"
-backfill_session_state = "ai_router.backfill_session_state:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

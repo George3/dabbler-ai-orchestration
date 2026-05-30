@@ -30,6 +30,18 @@ AI_ROUTER_DIR = Path(__file__).resolve().parent.parent
 if str(AI_ROUTER_DIR) not in sys.path:
     sys.path.insert(0, str(AI_ROUTER_DIR))
 
+# Set 051: the ``scripts/`` utilities (``dump_session_state_schema`` /
+# ``backfill_session_state``) are shipped as standalone, file-runnable
+# tools (not packaged in the wheel — they have no ``__init__.py`` and
+# ``namespaces = false`` excludes them). Their relocated tests
+# (``test_dump_session_state_schema`` / ``test_session_state_backfill``)
+# import them by bare filename, matching the package's test convention,
+# so the scripts dir must be on ``sys.path``. No name collides with a
+# top-level ``ai_router`` module.
+SCRIPTS_DIR = AI_ROUTER_DIR / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
 # Set 048 modules with module-level cache state must share a single
 # module-object identity between the bare-name (test convention) and
 # package-qualified (production) import paths. Without this aliasing,
