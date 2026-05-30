@@ -1,0 +1,24 @@
+{
+  "status": "completed",
+  "summary": "Set 051 Session 1 of 4 - audit & removal plan. Scanned ai_router/ for dead code + packaging defects and produced an audit-locked, line-item removal plan with zero-live-caller citations. Findings: the joiner/ subpackage (7 files) + dabbler_launch.py form an orphaned island (15 files / ~3,734 LOC incl. 7 dead tests; sole live consumer was the extension HarvestService deleted in Set 049); the backfill_session_state console-script entry point is broken (points at a top-level module that lives under scripts/); two test_*.py under ai_router/scripts/ ship in the wheel; the four migrators are distinct + all live but their names do not encode the v2->v4 = 3-step sequence. Also added a 4th session: the Set 050 Claude SessionStart hook is now superseded by Set 053's lifecycle-embedded drift advisory and will be retired in the new S3. Ran a 2-provider adversarial cross-provider consensus (gemini-pro + gpt-5-4, $0.0272) that confirmed delete/keep-split/wheel-test/delete-not-archive and produced two corrections: V2 SALVAGE the D3 writer-bypass detector into a new live ai_router/writer_discipline.py + test before deleting the island (both reviewers' top objection; Set 049 deliberately retained it; operator-confirmed salvage), and V7 drop the proposed migrate --from/--to front door as over-engineering in favor of docstrings + MIGRATIONS.md + optional migrate_to_latest(). Verdict locked at docs/proposals/2026-05-29-ai-router-hygiene/verdict.md.",
+  "verification_method": "manual",
+  "files_changed": [
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/spec.md",
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/session-state.json",
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/s1-close-reason.md",
+    "docs/session-sets/051-ai-router-hygiene-and-dead-code-audit/disposition.json",
+    "docs/proposals/2026-05-29-ai-router-hygiene/proposal.md",
+    "docs/proposals/2026-05-29-ai-router-hygiene/verdict.md",
+    "docs/proposals/2026-05-29-ai-router-hygiene/consensus-output.md",
+    "docs/proposals/2026-05-29-ai-router-hygiene/run_consensus.py"
+  ],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-opus-4-8",
+    "effort": "high"
+  },
+  "next_session_number": 2,
+  "reason": "normal-completion",
+  "next_session_focus": "Execute the ai_router removals + packaging fixes per verdict.md V1-V9: salvage D3 into ai_router/writer_discipline.py + test (V2), then delete the joiner island + dabbler_launch.py + 7 dead tests (V1), repoint the backfill entry point + add an entry-point import test (V3), move the 2 stray scripts/ tests to tests/ (V4), keep the 4 migrators (V5), add the wheel-contents regression test (V6), migrator docstrings + MIGRATIONS.md + optional migrate_to_latest() (V7), reconcile live docs that name the removed CLIs (V8), dependency audit (V9). Tag the removal commit pre-joiner-removal. Run the full suite; confirm green minus removed tests."
+}
