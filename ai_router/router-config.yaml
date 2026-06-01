@@ -17,7 +17,7 @@
 #                         this, config.py prints a warning at load
 #                         time (does not block execution).
 metadata:
-  pricing_reviewed: "2026-04-20"
+  pricing_reviewed: "2026-06-01"
   review_frequency_days: 30
 
 # --- Provider Configuration ---
@@ -84,8 +84,8 @@ models:
     tier: 1
     is_enabled: true
     is_enabled_as_verifier: true
-    input_cost_per_1m: 0.15
-    output_cost_per_1m: 0.60
+    input_cost_per_1m: 0.30
+    output_cost_per_1m: 2.50
     max_context_tokens: 1048576
     max_output_tokens: 65536
     system_prompt_file: prompt-templates/system-prompts.md
@@ -137,12 +137,12 @@ models:
 
   opus:
     provider: anthropic
-    model_id: claude-opus-4-6
+    model_id: claude-opus-4-8
     tier: 3
     is_enabled: true
     is_enabled_as_verifier: true
-    input_cost_per_1m: 15.00
-    output_cost_per_1m: 75.00
+    input_cost_per_1m: 5.00
+    output_cost_per_1m: 25.00
     max_context_tokens: 200000
     max_output_tokens: 32000
     system_prompt_file: prompt-templates/system-prompts.md
@@ -156,10 +156,10 @@ models:
       thinking:
         enabled: true
         type: adaptive
-    # NOTE: To upgrade to Opus 4.7, change model_id to claude-opus-4-7.
-    # Opus 4.7 supports task_budget (beta) — a token budget that spans
-    # the full agentic loop. Adds ~1-1.35x tokens due to new tokenizer.
-    # When upgrading, bump max_output_tokens to at least 64000.
+    # NOTE: model_id is claude-opus-4-8 (latest Opus). Opus 4.8 supports
+    # task_budget (beta) — a token budget that spans the full agentic
+    # loop. If you raise the per-call ceiling, bump max_output_tokens
+    # toward 64000; left at 32000 here for cost control on tier-3 calls.
 
   # --- OpenAI GPT-5.x family -----------------------------------------------
   # Added as verification models initially. Used by the cross-provider map
