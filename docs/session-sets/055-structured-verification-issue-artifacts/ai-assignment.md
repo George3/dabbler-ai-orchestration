@@ -45,6 +45,24 @@ none
 | 3 | Add tests for a helper if code ships, or a fixture/example proving the documented envelope if the session stays docs-only. | Direct |
 | 4 | Run end-of-session cross-provider verification on the implementation bundle. | Routed: session-verification |
 
+### Actuals
+
+- **Orchestrator used:** Claude / Opus 4.8 (Anthropic) — the operator
+  ran the implementation under Claude rather than the
+  Copilot/GPT-5.4 that `start_session` recorded via its SessionStart
+  hook; the Session 2 orchestrator block in `session-state.json` was
+  corrected to `claude / anthropic / claude-opus-4-8`.
+- **Routed spend this session:** $0.013213
+  - end-of-session cross-provider verification — `gemini-2.5-pro`
+    (Google): $0.013213 → VERIFIED, zero findings, all three
+    engineering decisions UPHELD.
+- **Deviations from the recommendation:** none material. The
+  recommended model token was `claude-3-5-sonnet-20240620 @ low`; the
+  operator used Opus 4.8. The work matched the predicted shape
+  (locked, low-uncertainty docs/schema/example/test pass). Per the
+  locked Q6, no helper was shipped (no real duplication), so the work
+  stayed Direct with a single routed verification call.
+
 **Next-session orchestrator recommendation:** N/A - Session 2 is the
 final implementation session in this set. Successful Session 2 close-out
 should finish the set.

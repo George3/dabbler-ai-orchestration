@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sessionNumber": 2,
+  "verificationRound": 1,
+  "verificationVerdict": "ISSUES_FOUND",
+  "issues": [
+    {
+      "description": "The Step 6 instructions describe writing sN-verification.md but never mention persisting the structured issue list, so the machine-readable findings are dropped after the round completes.",
+      "category": "completeness",
+      "severity": "Major",
+      "resolution_status": "fixed",
+      "resolution_notes": "Added the sN-issues.json write step to the Step 7 ISSUES_FOUND flow and the artifact table.",
+      "resolved_in_round": 2
+    },
+    {
+      "description": "The example fixture should prove that a minimal envelope without any resolution_* fields is still valid; the second issue below carries only the verifier-emitted fields.",
+      "category": "documentation",
+      "severity": "Minor"
+    }
+  ]
+}

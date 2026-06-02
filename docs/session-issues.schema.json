@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dabbler.ai/schemas/session-issues.schema.json",
+  "title": "SessionIssues",
+  "description": "Root-level structured verifier-findings artifact for one findings-bearing verification round. Written beside sN-verification.md as sN-issues.json (round 1) or sN-issues-round-<M>.json (later findings-bearing retries). This artifact has no runtime reader in the orchestration layer; it is durable, machine-readable persistence of the verifier's structured issue list. The presence of an sN-issues*.json file means that verification round found issues — VERIFIED rounds get no file. See docs/session-issues-schema.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sessionNumber",
+    "verificationRound",
+    "verificationVerdict",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "Envelope schema version. 1 for the v1 contract locked in Set 055.",
+      "type": "integer",
+      "const": 1
+    },
+    "sessionNumber": {
+      "description": "1-based session number within the set that this findings round belongs to.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "verificationRound": {
+      "description": "1-based verification round. Round 1 maps to sN-issues.json; round M>1 maps to sN-issues-round-<M>.json.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "verificationVerdict": {
+      "description": "The verifier verdict for this round. Because a clean round writes no file, a persisted artifact is expected to carry a non-VERIFIED verdict; the field is preserved verbatim so the artifact is self-describing.",
+      "type": "string",
+      "minLength": 1
+    },
+    "issues": {
+      "description": "The verifier's structured issue list for this round. At least one issue is present (the file would not exist otherwise).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Issue" }
+    }
+  },
+  "$defs": {
+    "Issue": {
+      "type": "object",
+      "description": "One verifier finding. The verifier-emitted fields are preserved verbatim; description is the only reliable required field. category and severity are loose optional strings (the parser may emit 'unknown'). The resolution_* fields are optional, append-only, orchestrator-side annotations and are advisory only — they are NOT authoritative workflow state and no runtime gate consults them.",
+      "additionalProperties": true,
+      "required": ["description"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "resolution_status": {
+          "description": "Advisory annotation: what the orchestrator did with this finding (e.g. 'fixed', 'deferred', 'wont-fix', 'false-positive').",
+          "type": "string"
+        },
+        "resolution_notes": {
+          "description": "Advisory free-text annotation explaining the disposition of this finding.",
+          "type": "string"
+        },
+        "resolved_in_round": {
+          "description": "Advisory annotation: the verification round in which this finding was resolved.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

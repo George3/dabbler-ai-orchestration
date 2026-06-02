@@ -6,23 +6,27 @@
     {
       "number": 1,
       "title": "Session 1",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-02T09:33:51.489817-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-02T10:19:38.997337-04:00",
       "orchestrator": {
         "engine": "copilot",
         "provider": "github",
         "model": "gpt-5.4"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     },
     {
       "number": 2,
       "title": "Session 2",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-02T10:20:06.497365-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8"
+      },
       "verificationVerdict": null
     }
   ]

@@ -62,11 +62,14 @@ single orchestrator conversation. Each set lives in its own directory
 under `docs/session-sets/<slug>/` and produces a small, predictable set
 of artifacts (`spec.md`, `session-state.json`, `session-events.jsonl`,
 `activity-log.json`, `ai-assignment.md`, `disposition.json`, per-session
-root files such as `sN-verification.md` and `sN-close-reason.md`, an
-end-of-set `change-log.md`, and — when the set's configuration requires
-it — a `<slug>-uat-checklist.json`). Legacy `session-reviews/` and
-`issue-logs/` directories may still appear when older helpers run, but
-they are not part of the current required layout.
+root files such as `sN-verification.md` and `sN-close-reason.md`,
+`sN-issues.json` when a verification round finds issues (the structured
+findings artifact; see [`docs/session-issues-schema.md`](../session-issues-schema.md)),
+an end-of-set `change-log.md`, and — when the set's configuration
+requires it — a `<slug>-uat-checklist.json`). Legacy `session-reviews/`
+and `issue-logs/` directories may still appear when older helpers run,
+but they are retired and not part of the current required layout —
+structured findings now live in the root-level `sN-issues.json`.
 
 For the runtime mechanics of how a session executes — the 10-step
 procedure, cross-provider verification, the verifier-disagreement

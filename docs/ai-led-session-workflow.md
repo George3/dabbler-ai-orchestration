@@ -210,11 +210,12 @@ session set lives in `docs/session-sets/<name>/` and contains:
 | `activity-log.json` | Machine-readable log of every step across all sessions |
 | `disposition.json` | Structured close-out handoff for the just-finished session. Rewritten at each close-out; required before `close_session` on Full-tier sets. |
 | `sN-verification.md` | Recommended root-level raw verifier output for session `N` (never edited). Additional rounds use `sN-verification-round-2.md`, `sN-verification-round-3.md`, etc. |
+| `sN-issues.json` | Root-level machine-readable structured findings for a **findings-bearing** verification round (Set 055). Round 1 uses `sN-issues.json`; later findings-bearing retries use `sN-issues-round-2.json`, etc. Written only when the verdict is not `VERIFIED` — its presence means that round found issues. No runtime reader; never overwritten. See [`docs/session-issues-schema.md`](session-issues-schema.md). |
 | `sN-close-reason.md` | Recommended root-level close-out / attestation narrative for session `N`. |
 | `external-verification.md` | Manual verification record for Lightweight / `--no-router` flows. |
 | `change-log.md` | Generated after the final session; marks the set as complete |
 | `<name>-uat-checklist.json` | Per-set human-UAT checklist (only when `requiresUAT: true`) |
-| `session-reviews/`, `issue-logs/` | Legacy compatibility directories created by older `SessionLog` helpers or one-off scripts. New orchestrator instructions should not depend on them. |
+| `session-reviews/`, `issue-logs/` | Legacy compatibility directories created by older `SessionLog` helpers or one-off scripts. **Retired** — new orchestrator instructions must not depend on or recreate them. Structured findings now persist as the root-level `sN-issues.json` artifact above. |
 
 Human-UAT sets use one checklist per session set, named after the set, rather
 than re-running an earlier set's checklist. See
@@ -465,7 +466,7 @@ for the consumer-repo CLAUDE.md remediation instruction.
 Cancellation is an operator action that takes a set out of the active
 work pool without deleting it. The cancelled set keeps its full
 history (`spec.md`, `activity-log.json`, existing verification artifacts
-such as `sN-verification*.md` or legacy `session-reviews/`, and any
+such as `sN-verification*.md` and `sN-issues*.json`, and any
 `change-log.md` from a partial close-out) and can be restored at any
 time.
 
@@ -566,8 +567,9 @@ docs/session-sets/<name>/
 
 Only `spec.md` is required up front. Runtime artifacts such as
 `session-state.json`, `session-events.jsonl`, `activity-log.json`,
-`disposition.json`, and the per-session `sN-*.md` files appear as the
-first session runs. Older `SessionLog` helpers may also create
+`disposition.json`, the per-session `sN-*.md` files, and `sN-issues.json`
+(only when a verification round finds issues) appear as the first
+session runs. Older `SessionLog` helpers may also create
 `session-reviews/` and `issue-logs/`, but new instructions should treat
 those directories as legacy compatibility, not required scaffolding.
 
@@ -1422,8 +1424,18 @@ sessions on the next orchestrator startup and re-runs close-out.
 4. **Never edit the saved review file.** If verification is retried,
    save each follow-up pass as a sibling root file such as
    `sN-verification-round-2.md`, not under `session-reviews/`.
-5. Log the verification step.
-6. **Record the verdict in `disposition.json`.** Set
+5. **Persist the structured findings if the round is not `VERIFIED`.**
+   The verifier also returns a structured `issues` list. When the
+   verdict is `ISSUES_FOUND` (the list is non-empty), write that list to
+   the root-level `sN-issues.json` artifact (round 1) or
+   `sN-issues-round-<M>.json` (later findings-bearing retries) using the
+   envelope in [`docs/session-issues-schema.md`](session-issues-schema.md).
+   A `VERIFIED` round writes **no** issue file — the clean result is
+   already preserved in `sN-verification.md`. This artifact has no
+   runtime reader; it is durable persistence for later analysis only.
+   Do not revive `issue-logs/`.
+6. Log the verification step.
+7. **Record the verdict in `disposition.json`.** Set
    `verification_verdict` to the verifier's `"VERIFIED"` or
    `"ISSUES_FOUND"` value before authoring the rest of the
    disposition. `close_session` reads this via `resolve_close_verdict()`
@@ -1523,8 +1535,15 @@ or open-source work, or for repos where API spend is constrained.
 3. Record the findings and what happened to them in the current
   session's root artifacts. At minimum, keep the raw verifier output in
   `sN-verification*.md` and summarize fixed vs deferred items in
-  `sN-close-reason.md` and `disposition.json`. There is no required
-  `issue-logs/` directory in the current workflow.
+  `sN-close-reason.md` and `disposition.json`. Persist the structured
+  issue list to the root-level `sN-issues.json` (or
+  `sN-issues-round-<M>.json`) artifact per
+  [`docs/session-issues-schema.md`](session-issues-schema.md); you may
+  append advisory `resolution_*` annotations to each issue as you fix or
+  defer it, but those annotations are convenience metadata only — the
+  prose in `sN-verification*.md` and `sN-close-reason.md` remains the
+  canonical record. There is no required `issue-logs/` directory in the
+  current workflow.
 4. Re-run verification (max 2 retries). Use `complexity_hint=85` if any
    issue is Major or Critical.
 
