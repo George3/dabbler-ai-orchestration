@@ -1,0 +1,81 @@
+{
+  "sessionSetName": "054-verification-verdict-persistence",
+  "createdDate": "2026-06-02T08:05:48.971795-04:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "audit/re-verify-diagnosis",
+      "dateTime": "2026-06-02T08:05:48.972798-04:00",
+      "description": "Re-verified the 3-layer verificationVerdict-drop diagnosis against current code (close_session.py:1621 omits arg; Disposition has no verdict field; parse_verification_response already emits the canonical token; --no-router records null). Confirmed PyPI-only (TS reads/derives only).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "audit/cross-provider-consensus",
+      "dateTime": "2026-06-02T08:05:48.973799-04:00",
+      "description": "Wrote proposal.md with 10 dispositions; ran cross-provider design consensus.",
+      "status": "completed",
+      "routedApiCalls": [
+        {
+          "task": "design-consensus",
+          "model": "opus",
+          "provider": "anthropic",
+          "cost_usd": 0.1398,
+          "note": "mis-routed same-provider via complexity_hint=70; superseded"
+        },
+        {
+          "task": "design-consensus",
+          "model": "gpt-5-4",
+          "provider": "openai",
+          "cost_usd": 0.0687,
+          "note": "real cross-provider critique; CONSENSUS-DISAGREE"
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "audit/design-lock",
+      "dateTime": "2026-06-02T08:05:48.973799-04:00",
+      "description": "Synthesized verdict.md (3 objections accepted + 1 partial): verdict domain collapsed to VERIFIED/ISSUES_FOUND/null; explicit-wins-under-force precedence; R4 re-close invariant. Locked spec scope block.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "ai-assignment",
+      "dateTime": "2026-06-02T08:05:48.974736-04:00",
+      "description": "Authored ai-assignment.md via routed analysis (S2=Sonnet-tier, S3=Haiku-tier).",
+      "status": "completed",
+      "routedApiCalls": [
+        {
+          "task": "analysis",
+          "model": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.0042
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "end-of-session-verification",
+      "dateTime": "2026-06-02T08:05:48.974736-04:00",
+      "description": "Cross-provider verification of the locked design (gemini-pro) = VERIFIED, 0 issues across all 4 checks.",
+      "status": "completed",
+      "routedApiCalls": [
+        {
+          "task": "session-verification",
+          "model": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.0206
+        }
+      ]
+    }
+  ]
+}

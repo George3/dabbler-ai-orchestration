@@ -163,6 +163,63 @@ outcome. The close machinery never writes it.
 
 ---
 
+## S1 Audit Lock (2026-06-02)
+
+Session 1 re-verified the 3-layer diagnosis against the current tree and
+ran a cross-provider design consensus (reviewer: `gpt-5-4` / OpenAI;
+round-1 `CONSENSUS-DISAGREE`, 4 objections, 3 accepted + 1 partial). The
+full record is in
+`docs/proposals/2026-06-02-verification-verdict-persistence/`
+(`proposal.md`, raw `consensus-review.md`, authoritative `verdict.md`).
+**`verdict.md` is the locked design; this block is its summary.**
+
+**Headline change from the consensus:** the verdict domain on disk is
+**`VERIFIED` / `ISSUES_FOUND` / `null` only** — there is *no* `"manual"` or
+`"skipped"` verdict token. Method/provenance stay in `verification_method`
+and the attestation event; the verdict field means strictly "the pass/fail
+outcome."
+
+**Locked dispositions:**
+
+- **Q1** — sole source is `disposition.verification_verdict`. No `--verdict`
+  flag.
+- **Q2** — `resolve_close_verdict` precedence: **explicit verbatim (wins
+  even under `--force`) → `api`-status-derived
+  (`completed`→`VERIFIED`, `failed`/`requires_review`→`ISSUES_FOUND`) →
+  `null`.** No `--force` special-case (force bypasses gates, not evidence).
+- **Q3** — domain `VERIFIED`/`ISSUES_FOUND`/`null`; canonical *by
+  construction* on the automated path (`parse_verification_response` only
+  emits those two); `validate_disposition` **warns** (never errors, never
+  drops) on a non-canonical explicit value, preserving the documented
+  `:219` prefix-match / enum-non-enforcement reader contract.
+- **Q4** — no blocking gate; soft stderr note on fallback.
+- **Q5** — manual / `--no-router` record `null` (+ `verification_method=
+  manual` + attestation), unless an explicit `VERIFIED`/`ISSUES_FOUND` was
+  supplied.
+- **Q6** — events carry the **resolved** verdict, omit-null
+  (`closeout_succeeded.verdict`; `verification_completed` drops the
+  hardcoded `"manual_attestation"`).
+- **Q7** — doc-only (S3); verifier template unchanged; `write_disposition`
+  call sites unaffected (optional field).
+- **Q8** — **no TS change; PyPI-only** (extension only reads/derives the
+  field; no writer originates a verdict).
+- **Q9** — no backfill; historical `null`s accepted.
+- **Q10** — PyPI `dabbler-ai-router` minor bump, additive/backward-
+  compatible; consumer guidance folds into the URL-referenced workflow doc.
+
+**Locked invariant (R4):** the close path overwrites
+`sessions[N].verificationVerdict` **only when a non-null verdict is
+threaded** (the writer's existing `if ... is not None` guard); a
+re-close/repair-reflip with a missing/stale disposition resolves to `null`
+and leaves any stored verdict intact (reinforced by `_is_already_closed`'s
+pre-flip short-circuit). S2 keeps both guards + adds the regression test.
+
+**Out of scope (explicit):** `--verdict` flag · blocking gate · Explorer
+verdict badge · TS edits · historical backfill · `verification_method`
+taxonomy change · changing the writer's enum-non-enforcement contract.
+
+---
+
 ## Sessions
 
 ### Session 1 of 3: Audit & design-lock
