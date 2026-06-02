@@ -122,6 +122,14 @@ is a required duplicate — `vsce package` expects the file alongside
   `vsix-v0.27.0`; confirm `VSCE_PAT` freshness first — it expired during
   the 0.24.0 publish). The interim **v0.26.1** (Set 051 follow-on, icon
   patch) is superseded by this release.
+  Companion PyPI release (post-release): **`dabbler-ai-router 0.15.0`**
+  (Set 054 — verificationVerdict persistence; PyPI-only, no extension
+  change). Wires `disposition.verification_verdict` through
+  `resolve_close_verdict()` → `_flip_state_to_closed` so
+  `session-state.json`'s per-session `verificationVerdict` field is
+  actually populated on router-closed sessions for the first time (was
+  always `null` since Set 014 S1). See `ai_router/CHANGELOG.md` §0.15.0.
+  Publish held for operator-initiated tag-push (`v0.15.0`).
 
 - Previous: **v0.26.0** (Set 051 — ai_router hygiene & dead-code audit;
   the extension half retires the superseded Set 050 Claude-only

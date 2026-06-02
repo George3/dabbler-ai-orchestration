@@ -5,6 +5,79 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-06-02 (Set 054 — verificationVerdict persistence)
+
+Wires the cross-provider verifier's pass/fail outcome through to
+`session-state.json`'s per-session `verificationVerdict` field, which
+has been null on every router-closed session since the field was
+introduced in Set 047. Audit-first (Set 054 S1 cross-provider design
+consensus, `docs/proposals/2026-06-02-verification-verdict-persistence/`):
+three-layer root-cause confirmed (caller drops arg + no field in
+Disposition + no source at all); verdict domain locked before
+implementation.
+
+### Added
+
+- **`Disposition.verification_verdict`** — new optional field on the
+  `Disposition` dataclass (and the on-disk `disposition.json` artifact).
+  On the `api` verification path, the orchestrator sets this to the
+  verifier's `"VERIFIED"` or `"ISSUES_FOUND"` value after Step 6.
+  Omit-null: the key is absent from disk when verdict is not set (older
+  readers that pre-date this field never see an unexpected key).
+- **`CANONICAL_VERDICTS = ("VERIFIED", "ISSUES_FOUND")`** — module-level
+  constant in `disposition.py`; `validate_disposition` warns to stderr
+  on non-canonical explicit values but never drops or errors (preserves
+  the documented enum-non-enforcement reader contract).
+- **`resolve_close_verdict(disposition)`** in `close_session.py` —
+  three-level precedence: (1) explicit `disposition.verification_verdict`
+  verbatim, wins even under `--force`; (2) `api`-status-derived fallback
+  (`completed`→`VERIFIED`, `failed`/`requires_review`→`ISSUES_FOUND`),
+  with a soft stderr note; (3) `None` (manual / skipped / `--no-router` /
+  missing disposition). The fallback preserves backward compatibility for
+  dispositions written before this field existed.
+- **`closeout_succeeded` event now carries `verdict`** (omit-null) —
+  the resolved verdict is threaded into the event payload so forensic
+  walks of `session-events.jsonl` can see the outcome without reading
+  the state file.
+- **`verification_completed` event drops the hardcoded
+  `"manual_attestation"` payload** — previously the event always carried
+  the string `"manual_attestation"` regardless of what the verifier
+  returned; now it carries the resolved verdict (or is omitted when null).
+
+### Changed
+
+- **`close_session.run()`** now calls
+  `_flip_state_to_closed(..., verification_verdict=verdict)` on the
+  success path, persisting the resolved verdict to the per-session
+  `sessions[N].verificationVerdict` field in `session-state.json`.
+  Previously the argument was always omitted, leaving the field null.
+- **`disposition_to_dict` / `disposition_from_dict`** updated to
+  include the new field with omit-null serialization.
+- **`disposition.schema.json`** updated with the new optional
+  `verification_verdict` field.
+
+### Docs
+
+- `docs/session-state-schema.md` — `verificationVerdict` description
+  updated to note the source (`disposition.verification_verdict` via
+  `resolve_close_verdict()`); the false `--no-router` claim of recording
+  `"manual"` corrected to `null`.
+- `docs/disposition-schema.md` — new `verification_verdict` field row
+  added with usage guidance.
+- `docs/ai-led-session-workflow.md` — Step 6 gains item 6 (record the
+  verdict in `disposition.json`); Step 8 disposition-authoring section
+  updated to list `verification_verdict` as a required field on the api
+  path; Lightweight Step 6 corrected (`null`, not `"manual"`); Rule 16
+  updated to name `start_session` / `close_session` CLIs and drop the
+  stale `register_session_start` / `mark_session_complete` references.
+- `ai_router/docs/close-out.md` — `verificationVerdict` and
+  `orchestrator` rows in the Section 0 field table corrected (verdict
+  now sourced from disposition; orchestrator preserved, not cleared —
+  Set 049 retired the check-in clear); Section 2 orchestrator-check-in
+  paragraph updated to reflect the Set 049 state; Section 3 step 9
+  updated from stale `mark_session_complete` / orchestrator-clear to
+  the actual `_flip_state_to_closed` call.
+
 ## [0.14.0] — 2026-05-30 (Set 051 — ai_router hygiene & dead-code audit)
 
 Pure internal cleanup: removes a stranded subsystem, fixes packaging

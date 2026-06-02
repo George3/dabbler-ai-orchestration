@@ -205,12 +205,16 @@ session set lives in `docs/session-sets/<name>/` and contains:
 |---|---|
 | `spec.md` | The full plan: goals, features, configuration block, and per-session step lists |
 | `session-state.json` | Live status (current session, orchestrator metadata, latest verdict). Written at Step 1; flipped to `complete` at Step 8. See [`docs/session-state-schema.md`](session-state-schema.md) for the canonical field set, status values, and the alias map applied at the read boundary. |
+| `session-events.jsonl` | Append-only lifecycle ledger emitted by `start_session` / `close_session`. |
 | `ai-assignment.md` | Per-session ledger of cheapest-capable AI for each step + next-session recommendation. Authored on Session 1; appended each session. |
 | `activity-log.json` | Machine-readable log of every step across all sessions |
-| `session-reviews/session-NNN.md` | Raw verifier output for each session (never edited) |
-| `session-reviews/issues-NNN.json` | Issue log if verification found problems |
+| `disposition.json` | Structured close-out handoff for the just-finished session. Rewritten at each close-out; required before `close_session` on Full-tier sets. |
+| `sN-verification.md` | Recommended root-level raw verifier output for session `N` (never edited). Additional rounds use `sN-verification-round-2.md`, `sN-verification-round-3.md`, etc. |
+| `sN-close-reason.md` | Recommended root-level close-out / attestation narrative for session `N`. |
+| `external-verification.md` | Manual verification record for Lightweight / `--no-router` flows. |
 | `change-log.md` | Generated after the final session; marks the set as complete |
 | `<name>-uat-checklist.json` | Per-set human-UAT checklist (only when `requiresUAT: true`) |
+| `session-reviews/`, `issue-logs/` | Legacy compatibility directories created by older `SessionLog` helpers or one-off scripts. New orchestrator instructions should not depend on them. |
 
 Human-UAT sets use one checklist per session set, named after the set, rather
 than re-running an earlier set's checklist. See
@@ -460,7 +464,8 @@ for the consumer-repo CLAUDE.md remediation instruction.
 
 Cancellation is an operator action that takes a set out of the active
 work pool without deleting it. The cancelled set keeps its full
-history (`spec.md`, `activity-log.json`, `session-reviews/`, and any
+history (`spec.md`, `activity-log.json`, existing verification artifacts
+such as `sN-verification*.md` or legacy `session-reviews/`, and any
 `change-log.md` from a partial close-out) and can be restored at any
 time.
 
@@ -559,8 +564,12 @@ docs/session-sets/<name>/
   spec.md
 ```
 
-The `activity-log.json` and `session-reviews/` directory are created
-automatically by the SessionLog class on first use.
+Only `spec.md` is required up front. Runtime artifacts such as
+`session-state.json`, `session-events.jsonl`, `activity-log.json`,
+`disposition.json`, and the per-session `sN-*.md` files appear as the
+first session runs. Older `SessionLog` helpers may also create
+`session-reviews/` and `issue-logs/`, but new instructions should treat
+those directories as legacy compatibility, not required scaffolding.
 
 ### 2. Write spec.md
 
@@ -1407,14 +1416,20 @@ sessions on the next orchestrator startup and re-runs close-out.
        session_set=str(SESSION_SET),
        session_number=N,
    )
-   log.save_session_review(
-       session_number=N,
-       review_text=result.content,
-       round_number=1
-   )
+   review_path = SESSION_SET / f"s{N}-verification.md"
+   review_path.write_text(result.content, encoding="utf-8")
    ```
-4. **Never edit the saved review file.**
+4. **Never edit the saved review file.** If verification is retried,
+   save each follow-up pass as a sibling root file such as
+   `sN-verification-round-2.md`, not under `session-reviews/`.
 5. Log the verification step.
+6. **Record the verdict in `disposition.json`.** Set the
+   `verification_verdict` field to the verifier's `"VERIFIED"` or
+   `"ISSUES_FOUND"` value before authoring the rest of the
+   disposition. `close_session` reads this field via
+   `resolve_close_verdict()` and writes it to `session-state.json`'s
+   per-session `verificationVerdict`. Without this step, the state
+   file retains its `null` value.
 
 **Two-attempt verifier fallback.** If the first-choice verifier fails
 at the HTTPS layer (provider outage, timeout, garbled response), the
@@ -1435,8 +1450,9 @@ env var, Step 6 changes shape:
 
 1. The orchestrator does NOT call `route(task_type="session-verification")`.
    `close_session --no-router` skips the routed call entirely and
-   accepts a manual attestation in `verificationVerdict` (default
-   `"manual"`).
+   records `verificationVerdict: null` for the session (the verdict
+   field is strictly for the pass/fail outcome; method provenance
+   stays in `verification_method` and the attestation event).
 2. Instead, the orchestrator triggers one of the copyable-review-prompt
    commands shipped in the Dabbler extension (Set 048 §3.2). Each places
    a path-reference prompt on the clipboard (naming the spec, activity
@@ -1501,7 +1517,11 @@ or open-source work, or for repos where API spend is constrained.
 **ISSUES_FOUND:**
 1. Parse issues from the verifier's response.
 2. Fix each issue. Update status to "fixed" or "deferred".
-3. Save: `log.save_issue_log(session_number=N, issues=issues)`
+3. Record the findings and what happened to them in the current
+  session's root artifacts. At minimum, keep the raw verifier output in
+  `sN-verification*.md` and summarize fixed vs deferred items in
+  `sN-close-reason.md` and `disposition.json`. There is no required
+  `issue-logs/` directory in the current workflow.
 4. Re-run verification (max 2 retries). Use `complexity_hint=85` if any
    issue is Major or Critical.
 
@@ -1616,14 +1636,17 @@ and the close-out machinery consumes. Schema:
 `Disposition` dataclass in
 [`ai_router/disposition.py`](../ai_router/disposition.py)). The gate
 enforces that the file exists; the dataclass validator
-(`validate_disposition`) enforces its shape. **`next_orchestrator`
-and `blockers` are the two most-frequently-missed fields.**
-`next_orchestrator` is required when `status == "completed"` AND
-the closing session is not the final session of the set (a mid-set
+(`validate_disposition`) enforces its shape. **`next_orchestrator`,
+`blockers`, and `verification_verdict` are the most-frequently-missed
+fields.** `next_orchestrator` is required when `status == "completed"`
+AND the closing session is not the final session of the set (a mid-set
 completion without a recommended pickup point is a structural bug);
 `blockers` must be non-empty when
-`next_orchestrator.reason.code == "switch-due-to-blocker"`.
-Skipping either is the most common cause of a first-attempt
+`next_orchestrator.reason.code == "switch-due-to-blocker"`;
+`verification_verdict` must be set to `"VERIFIED"` or `"ISSUES_FOUND"`
+(see Step 6 item 6 above) so `close_session` can persist it to
+`session-state.json`. Skipping `next_orchestrator` or
+`verification_verdict` is the most common cause of a first-attempt
 close-out failure for orchestrators new to the workflow. The
 `--force` flag bypasses the gate but is hard-scoped to
 incident-recovery use only — do not reach for it as a shortcut
@@ -2420,11 +2443,13 @@ This is the authoritative rules list. Instruction files (`CLAUDE.md`,
     qualifies — but do the review. Apply any accepted proposals in a
     separate follow-up commit so the session-complete notification is
     never held up by the human reviewing proposals.
-16. **Register session start before the first activity-log entry.** Call
-    `register_session_start()` at Step 1 so external tooling (VS Code
-    Session Set Explorer, dashboards) sees the set as in-progress
-    immediately. Flip to `complete` via `mark_session_complete()` at
-    Step 8 along with the verification verdict.
+16. **Register session start before the first activity-log entry.** Run
+    `python -m ai_router.start_session` (Full tier) at Step 1 so
+    external tooling (VS Code Session Set Explorer, dashboards) sees
+    the set as in-progress immediately. `close_session` handles the
+    flip to `complete` at Step 8, including reading
+    `verification_verdict` from `disposition.json` and persisting it to
+    `session-state.json`'s per-session `verificationVerdict`.
 17. **Author `ai-assignment.md` and the next-orchestrator /
     next-session-set recommendations via routed analysis — never
     self-opine.** The orchestrator's own opinion of which model could

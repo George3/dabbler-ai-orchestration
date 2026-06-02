@@ -60,10 +60,13 @@ A **session set** is one bounded effort decomposed into a fixed sequence
 of one or more **sessions**, each of which runs to completion in a
 single orchestrator conversation. Each set lives in its own directory
 under `docs/session-sets/<slug>/` and produces a small, predictable set
-of artifacts (`spec.md`, `activity-log.json`, `session-state.json`,
-`ai-assignment.md`, per-session `session-reviews/`, an end-of-set
-`change-log.md`, and — when the set's configuration requires it — a
-`<slug>-uat-checklist.json`).
+of artifacts (`spec.md`, `session-state.json`, `session-events.jsonl`,
+`activity-log.json`, `ai-assignment.md`, `disposition.json`, per-session
+root files such as `sN-verification.md` and `sN-close-reason.md`, an
+end-of-set `change-log.md`, and — when the set's configuration requires
+it — a `<slug>-uat-checklist.json`). Legacy `session-reviews/` and
+`issue-logs/` directories may still appear when older helpers run, but
+they are not part of the current required layout.
 
 For the runtime mechanics of how a session executes — the 10-step
 procedure, cross-provider verification, the verifier-disagreement

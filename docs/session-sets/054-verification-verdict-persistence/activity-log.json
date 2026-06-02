@@ -85,6 +85,15 @@
       "description": "Implemented verificationVerdict persistence: disposition.py Disposition.verification_verdict field (omit-null, CANONICAL_VERDICTS); close_session.py resolve_close_verdict() (explicit-wins->api-derived->null), threaded to _flip_state_to_closed + closeout_succeeded + verification_completed (dropped hardcoded manual_attestation); disposition.schema.json updated; 31 new tests + 1060 full suite green",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-3/docs-reconcile-version-bump",
+      "dateTime": "2026-06-02T08:48:30.572183-04:00",
+      "description": "Reconciled docs: ai-led-session-workflow.md (Step 6 verdict-in-disposition step, Lightweight null fix, Step 8 disposition section, Rule 16 CLI names), session-state-schema.md (lines 219+994), close-out.md (Section 0 table, Section 2, Section 3 step 9), disposition-schema.md (new verification_verdict row). Created change-log.md. Bumped dabbler-ai-router 0.14.0->0.15.0 (pyproject.toml, __init__.py, CHANGELOG.md). CLAUDE.md walk.",
+      "status": "completed",
+      "routedApiCalls": []
     }
   ]
 }

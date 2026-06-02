@@ -216,7 +216,7 @@ Each entry is an object with these fields:
 | `startedAt` | ISO 8601 or null | Set on `start_session`. Null until the session begins. |
 | `completedAt` | ISO 8601 or null | Set on `close_session`. Null until the session closes. |
 | `orchestrator` | object or null | Engine / provider / model / effort for the holder of THIS session, omit-null on disk. Null when this session has not yet started; populated by `start_session`; **preserved across `close_session`** as historical attribution on closed sessions. See **Per-session orchestrator block** below. |
-| `verificationVerdict` | string \| null | Set by `close_session` after gate checks. The two canonical tokens are `"VERIFIED"` and `"ISSUES_FOUND"`; the writer does not enforce an enum and operators have shipped extension tokens like `"ISSUES_FOUND_RESOLVED_IN_FLIGHT"` to capture mid-session disposition (see e.g. this set's S4 record). Readers should treat the field as a string and match on prefix when bucketing into VERIFIED vs ISSUES-FOUND buckets. |
+| `verificationVerdict` | string \| null | Set by `close_session` after gate checks, sourced from `disposition.verification_verdict` via `resolve_close_verdict()`. The two canonical tokens are `"VERIFIED"` and `"ISSUES_FOUND"`; the writer does not enforce an enum and operators have shipped extension tokens like `"ISSUES_FOUND_RESOLVED_IN_FLIGHT"` to capture mid-session disposition (see e.g. this set's S4 record). Readers should treat the field as a string and match on prefix when bucketing into VERIFIED vs ISSUES-FOUND buckets. Remains `null` when the session was closed without a routed verifier (manual / skipped / --no-router) and no explicit verdict was supplied in `disposition.json`. |
 
 The migration from v3 reorganized the lifecycle so that **per-session
 attribution survives the set's full lifetime**: who ran each session
@@ -991,8 +991,11 @@ write the plan-less carve-out shape (no `sessions[]` key, top-level
     `anthropic` / `openai` / `google-generativeai` out of the
     Lightweight code path entirely).
   - `close_session` under `--no-router`: skips the routed
-    verification call; records `verificationVerdict: "manual"` (or a
-    free-text reason supplied via `--reason-file`). The
+    verification call; records `verificationVerdict: null` (the
+    verdict field is strictly for the pass/fail outcome; method
+    provenance stays in `verification_method` and the attestation
+    event). A `--reason-file` text is recorded in the attestation
+    event, not in `verificationVerdict`. The
     `external-verification.md` soft gate (§3.5 of Set 048's spec)
     fires when the file is absent and the session is in-progress.
   - **Hand-maintained Lightweight state files** are still supported

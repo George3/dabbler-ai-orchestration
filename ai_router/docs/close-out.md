@@ -76,8 +76,8 @@ have to recover, never prevent.
 | `status`               | `"in-progress"`                              | `"complete"`                                 |
 | `lifecycleState`       | `"work_in_progress"`                         | `"closed"`                                   |
 | `completedAt`          | unchanged (null)                             | now                                          |
-| `verificationVerdict`  | latest verdict / unchanged                   | latest verdict / unchanged                   |
-| `orchestrator`         | cleared to `null` (Set 033 S6 check-in)      | cleared to `null` (Set 033 S6 check-in)      |
+| `verificationVerdict`  | from `disposition.verification_verdict` via `resolve_close_verdict()` (null if absent/non-api) | same |
+| `orchestrator`         | preserved (Set 049 — historical attribution; no longer cleared at close) | preserved |
 | Events ledger          | `closeout_requested` + `closeout_succeeded`  | `closeout_requested` + `closeout_succeeded`  |
 
 The `closeout_succeeded` event payload (Set 036 Q4 audit-trail
@@ -274,22 +274,17 @@ Flag combination rules (validated up front; failure exits 2):
   honest.
 - `--timeout` must be positive.
 
-Orchestrator check-in (Set 033 Session 6). On every successful
-close, `close_session` clears the `orchestrator` block on
-`session-state.json` to `null` — the session boundary IS the release
-point, so the next session can be claimed by any holder via
-`start_session` without `--force`. The check-in is **idempotent**: a
-close on a set whose block is already `null` (the previous holder
-force-released, or the session was closed via a path that already
-cleared it) lands the same write and reports `succeeded`. This
-applies to Full tier and Lightweight tier alike (Lightweight humans
-write `orchestrator: null` by hand at the same boundary). The
-chatSessionId (Set 036 Q1) lives inside the orchestrator block, so
-it clears together with the rest of the holder identity — no
-separate field-level wipe is needed. See
+Orchestrator attribution (post-Set-049). On every successful close,
+`close_session` **preserves** the `orchestrator` block on the
+per-session `sessions[N]` record as historical attribution — it is no
+longer cleared. The Set 033 check-in / check-out layer was fully
+retired in Set 049 (hard-coordination removal). Any holder can claim
+the next session via `start_session` without `--force`; there is no
+block-level exclusion on top of the within-set sequential enforcement.
+See
 [`docs/session-state-schema.md`](../../docs/session-state-schema.md)
-"Check-out / check-in (Set 033)" for the full schema and the
-holder-identity rule.
+"Orchestrator identity and concurrency (post-Set-049)" for the
+current contract.
 
 ---
 
@@ -350,18 +345,15 @@ returns the corresponding exit code without touching downstream state.
      text from stdin or `--reason-file` and proceed. Method
      `"manual"`.
 9. **Idempotent writes.** Each of these is safe to retry:
-   - `mark_session_complete(session_set, verification_verdict, ...)` —
+   - `_flip_state_to_closed(session_set_dir, verification_verdict=verdict)` —
      flips `session-state.json` from `in-progress` to `complete`,
-     records the verdict + `completedAt` ISO timestamp, **and clears
-     the `orchestrator` block to `null`** (Set 033 Session 6
-     check-in; cross-tier; idempotent on already-null). The Set
-     036 `chatSessionId` field lives inside the block, so it
-     clears together with the rest of the holder identity — no
-     separate field-level wipe needed. The orchestrator-identity
-     snapshot for the `closeout_succeeded` event payload (Section
-     0 close-side table — `chatSessionId + engine + provider +
-     model`, Q4 audit trail) is taken BEFORE this clear so the
-     payload reflects the holder that was released.
+     records `completedAt` ISO timestamp and the resolved verdict
+     (sourced from `disposition.verification_verdict` via
+     `resolve_close_verdict()`; null when absent/non-api). The
+     `orchestrator` block is **preserved** on the per-session
+     record as historical attribution (Set 049 — the check-in
+     clear was retired when the hard-coordination layer was
+     removed; the block is no longer cleared at session close).
    - Append the next-orchestrator recommendation to `ai-assignment.md`
      (every session except the last).
    - Last session only: write `change-log.md` and append the

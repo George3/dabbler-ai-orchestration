@@ -57,9 +57,13 @@ session runs. The set's `spec.md` carries the per-session step lists,
 the configuration block (`requiresUAT` / `requiresE2E`), and the
 prerequisite chain. Each set lives in its own directory under
 `docs/session-sets/<slug>/` and produces a small, predictable set of
-artifacts (`spec.md`, `session-state.json`, `activity-log.json`,
-`ai-assignment.md`, `session-reviews/`, end-of-set `change-log.md`,
-and — when opted in — `<slug>-uat-checklist.json`).
+artifacts (`spec.md`, `session-state.json`, `session-events.jsonl`,
+`activity-log.json`, `ai-assignment.md`, `disposition.json`, per-session
+root files such as `sN-verification.md` and `sN-close-reason.md`, an
+end-of-set `change-log.md`, and — when opted in — `<slug>-uat-checklist.json`).
+Legacy `session-reviews/` and `issue-logs/` directories may still appear
+when older helpers or one-off scripts run, but they are not part of the
+current required layout.
 
 The Session Set Explorer renders the active inventory across all
 session sets in the workspace. State is derived from file presence,
@@ -443,7 +447,7 @@ covered elsewhere in this doc.
 | [ai_router/verification.py](../ai_router/verification.py) | Rule-based cross-provider verifier selection: different provider, enabled as verifier, matches generator's tier (or one tier higher), cheapest output price wins. Also implements the two-attempt verifier fallback when the first-choice provider fails at the HTTPS layer. |
 | [ai_router/metrics.py](../ai_router/metrics.py) | Append-only `router-metrics.jsonl` writer. One JSON line per routed call / verifier call / tiebreaker / adjudication, spanning every session set in the repo for cross-project trend analysis. |
 | [ai_router/report.py](../ai_router/report.py) | Manager-oriented markdown report generator (`python -m ai_router.report`). Aggregates the metrics log into headline spend, per-task-type unreliability rates, top outliers, and auto-generated action items. |
-| [ai_router/session_log.py](../ai_router/session_log.py) | `SessionLog` class — `log_step()`, `save_session_review()`, `save_issue_log()`, `get_next_session_number()`. Manages `activity-log.json` and the `session-reviews/` directory inside each session set. |
+| [ai_router/session_log.py](../ai_router/session_log.py) | Legacy compatibility helper for older scripts and cost-report fixtures. `SessionLog` still offers `log_step()`, `save_session_review()`, `save_issue_log()`, and `get_next_session_number()`, and it may create `activity-log.json`, `session-reviews/`, and `issue-logs/` on first use. The current orchestrator workflow does not require those directories. |
 | [ai_router/session_state.py](../ai_router/session_state.py) | Reads and writes `session-state.json` (the earliest in-progress signal external tools see). Backs `register_session_start()` / `mark_session_complete()`. |
 | [ai_router/close_session.py](../ai_router/close_session.py) | The close-out CLI (`python -m ai_router.close_session`). Sole synchronization barrier between session work and close-out — runs deterministic gate checks, emits `closeout_*` events to `session-events.jsonl`, flips the snapshot to `complete/closed` on success. See [ai_router/docs/close-out.md](../ai_router/docs/close-out.md) for flag matrix and failure modes. |
 | [ai_router/notifications.py](../ai_router/notifications.py) | Pushover push-notification helper for end-of-session alerts. Falls back to Windows User/Machine environment if Pushover keys aren't already in the process environment. |
