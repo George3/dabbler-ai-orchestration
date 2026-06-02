@@ -34,10 +34,15 @@
     {
       "number": 3,
       "title": "Session 3",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-02T08:35:19.014554-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "effort": "medium"
+      },
       "verificationVerdict": null
     }
   ]
