@@ -94,6 +94,33 @@ so another engine starts from stale or contradictory guidance.
 
 ---
 
+## S1 Audit Lock (2026-06-02)
+
+Authoritative record: [`s1-audit-record.md`](s1-audit-record.md).
+
+- **Situational finding:** the substantive migration was applied out of
+  band in commit `e5a3476 "misc fixes to guidance."` before the audit
+  ran; `session-state.json` still showed both sessions `not-started`.
+  Session 1 became audit-and-ratify rather than design-from-scratch.
+- **All four open design questions** resolved to their *recommended*
+  option (which `e5a3476` implemented): canonical section lives in
+  `docs/repository-reference.md`; concise recent walk + changelog
+  pointers; root engine files carry only stable bootstrap facts + a
+  pointer; release-process + review-criteria + project-guidance +
+  workflow docs retargeted.
+- **Contract LOCKED:** shared operational facts live in engine-agnostic
+  docs or package metadata; `docs/repository-reference.md` →
+  `Documentation authority and release status` is the canonical home;
+  root engine files carry no independent version history.
+- **Migration verified complete & faithful;** no live straggler treats
+  an engine file as canonical (grep clean except this spec + one
+  historical closed-set artifact).
+- **Residual S2 scope:** validation + two cosmetic nits (align the
+  `ai_router` / `ai_router copy` consumer-table header across the three
+  engine files; markdown render check). Non-blocking.
+
+---
+
 ## Sessions
 
 ### Session 1 of 2: Audit & design-lock
