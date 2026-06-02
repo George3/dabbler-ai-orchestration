@@ -1,0 +1,82 @@
+{
+  "sessionSetName": "055-structured-verification-issue-artifacts",
+  "createdDate": "2026-06-02T09:33:51.489817-04:00",
+  "totalSessions": 2,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-1/register-start",
+      "dateTime": "2026-06-02T09:33:51.489817-04:00",
+      "description": "Registered Session 1 start via ai_router.start_session with orchestrator metadata (copilot / github / gpt-5.4).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-1/audit-proposal",
+      "dateTime": "2026-06-02T10:05:00-04:00",
+      "description": "Re-verified the structured-issue data path against current code and authored proposal.md under docs/proposals/2026-06-02-structured-verification-issue-artifacts/ with the recommended Session 1 dispositions.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-1/design-consensus",
+      "dateTime": "2026-06-02T10:20:00-04:00",
+      "description": "Ran routed cross-provider design consensus on the Session 1 questions and saved the raw reviewer output to consensus-review.md. Verdict: CONSENSUS-AGREE with guardrails, no design reversals.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "task": "design-consensus",
+          "model": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.0080525
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-1/design-lock",
+      "dateTime": "2026-06-02T10:35:00-04:00",
+      "description": "Wrote verdict.md as the authoritative Session 1 lock and updated spec.md with the S1 Audit Lock summary covering filenames, envelope shape, advisory resolution fields, clean-round behavior, helper scope, runtime scope, and release scope.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-1/ai-assignment",
+      "dateTime": "2026-06-02T11:05:00-04:00",
+      "description": "Authored ai-assignment.md via routed analysis for the Session 2 handoff. Recommendation: Claude / claude-3-5-sonnet-20240620 at low effort for the docs/schema/example implementation pass.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "task": "analysis",
+          "model": "gemini-pro",
+          "provider": "google",
+          "cost_usd": 0.00824375
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-1/end-of-session-verification",
+      "dateTime": "2026-06-02T11:20:00-04:00",
+      "description": "Ran formal end-of-session verification on the Session 1 bundle (spec.md, proposal.md, consensus-review.md, verdict.md). Verifier: gpt-5-4. Verdict: VERIFIED with no findings. Raw output saved to s1-verification.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "task": "session-verification",
+          "model": "gpt-5-4",
+          "provider": "openai",
+          "cost_usd": 0.06736
+        }
+      ]
+    }
+  ]
+}
