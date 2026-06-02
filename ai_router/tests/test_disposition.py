@@ -24,6 +24,7 @@ import pytest
 
 import disposition
 from disposition import (
+    CANONICAL_VERDICTS,
     DISPOSITION_FILENAME,
     DISPOSITION_STATUSES,
     Disposition,
@@ -513,3 +514,116 @@ class TestPublicSurface:
 
     def test_switch_due_to_blocker_constant(self):
         assert SWITCH_DUE_TO_BLOCKER == "switch-due-to-blocker"
+
+    def test_canonical_verdicts_constant(self):
+        assert set(CANONICAL_VERDICTS) == {"VERIFIED", "ISSUES_FOUND"}
+
+
+# ---------------------------------------------------------------------------
+# Set 054 Session 2 — verification_verdict field
+# ---------------------------------------------------------------------------
+
+class TestVerificationVerdictField:
+    """Round-trip and serialization tests for the new ``verification_verdict``
+    field added in Set 054 Session 2."""
+
+    def test_defaults_to_none(self):
+        d = _valid_disposition_completed_api()
+        assert d.verification_verdict is None
+
+    def test_omit_null_when_none(self):
+        d = _valid_disposition_completed_api()
+        as_dict = disposition_to_dict(d)
+        assert "verification_verdict" not in as_dict
+
+    def test_included_when_set(self):
+        d = _valid_disposition_completed_api(verification_verdict="VERIFIED")
+        as_dict = disposition_to_dict(d)
+        assert as_dict["verification_verdict"] == "VERIFIED"
+
+    def test_round_trip_with_verdict(self):
+        d = _valid_disposition_completed_api(verification_verdict="ISSUES_FOUND")
+        restored = disposition_from_dict(disposition_to_dict(d))
+        assert restored.verification_verdict == "ISSUES_FOUND"
+
+    def test_from_dict_missing_key_returns_none(self):
+        raw = disposition_to_dict(_valid_disposition_completed_api())
+        assert "verification_verdict" not in raw
+        restored = disposition_from_dict(raw)
+        assert restored.verification_verdict is None
+
+    def test_from_dict_explicit_null_not_written(self, session_set_dir):
+        d = _valid_disposition_completed_api()
+        write_disposition(session_set_dir, d)
+        raw_text = Path(session_set_dir, DISPOSITION_FILENAME).read_text(encoding="utf-8")
+        assert "verification_verdict" not in raw_text
+
+    def test_write_read_round_trip_with_verdict(self, session_set_dir):
+        d = _valid_disposition_completed_api(verification_verdict="VERIFIED")
+        write_disposition(session_set_dir, d)
+        loaded = read_disposition(session_set_dir)
+        assert loaded is not None
+        assert loaded.verification_verdict == "VERIFIED"
+
+    def test_schema_accepts_verdict_string(self, validator):
+        payload = disposition_to_dict(
+            _valid_disposition_completed_api(verification_verdict="VERIFIED")
+        )
+        validator.validate(payload)
+
+    def test_schema_accepts_extension_token(self, validator):
+        payload = disposition_to_dict(
+            _valid_disposition_completed_api(
+                verification_verdict="ISSUES_FOUND_RESOLVED_IN_FLIGHT"
+            )
+        )
+        validator.validate(payload)
+
+    def test_schema_rejects_empty_string_verdict(self, validator):
+        payload = disposition_to_dict(_valid_disposition_completed_api())
+        payload["verification_verdict"] = ""
+        with pytest.raises(jsonschema.ValidationError):
+            validator.validate(payload)
+
+
+class TestValidateDispositionVerdict:
+    """validate_disposition rules for ``verification_verdict`` (Set 054 S2)."""
+
+    def test_passes_with_verified(self):
+        d = _valid_disposition_completed_api(verification_verdict="VERIFIED")
+        passed, errors = validate_disposition(d)
+        assert passed, errors
+
+    def test_passes_with_issues_found(self):
+        d = _valid_disposition_completed_api(verification_verdict="ISSUES_FOUND")
+        passed, errors = validate_disposition(d)
+        assert passed, errors
+
+    def test_passes_when_verdict_absent(self):
+        d = _valid_disposition_completed_api()
+        passed, errors = validate_disposition(d)
+        assert passed, errors
+
+    def test_warns_on_noncanonical_token(self, capsys):
+        d = _valid_disposition_completed_api(
+            verification_verdict="ISSUES_FOUND_RESOLVED_IN_FLIGHT"
+        )
+        passed, errors = validate_disposition(d)
+        assert passed, errors
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "ISSUES_FOUND_RESOLVED_IN_FLIGHT" in captured.err
+
+    def test_errors_on_empty_string(self):
+        d = disposition_to_dict(_valid_disposition_completed_api())
+        d["verification_verdict"] = ""
+        passed, errors = validate_disposition(d)
+        assert not passed
+        assert any("verification_verdict" in e for e in errors)
+
+    def test_errors_on_non_string(self):
+        d = disposition_to_dict(_valid_disposition_completed_api())
+        d["verification_verdict"] = 42
+        passed, errors = validate_disposition(d)
+        assert not passed
+        assert any("verification_verdict" in e for e in errors)

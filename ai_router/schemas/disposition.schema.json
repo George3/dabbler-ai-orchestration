@@ -42,6 +42,10 @@
     "blockers": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "verification_verdict": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "allOf": [

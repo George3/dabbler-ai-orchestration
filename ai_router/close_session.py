@@ -648,6 +648,44 @@ def _read_disposition_or_none(session_set_dir: str) -> Optional[Disposition]:
     return read_disposition(session_set_dir)
 
 
+def resolve_close_verdict(disposition: Optional[Disposition]) -> Optional[str]:
+    """Derive the close-session verdict from the disposition.
+
+    Precedence (Q2 locked design):
+
+    1. ``disposition.verification_verdict`` verbatim — wins even under
+       ``--force`` (force bypasses gates, not evidence).
+    2. ``api``-status-derived fallback — only when
+       ``verification_method == "api"``:
+       ``completed`` → ``"VERIFIED"``; ``failed`` / ``requires_review``
+       → ``"ISSUES_FOUND"``.  A soft stderr note is printed so the
+       operator can see which fallback fired.
+    3. ``None`` — no verdict recorded (manual / skipped / --no-router /
+       missing disposition).
+    """
+    if disposition is None:
+        return None
+    explicit = disposition.verification_verdict
+    if explicit is not None and isinstance(explicit, str) and explicit != "":
+        return explicit
+    if disposition.verification_method == "api":
+        if disposition.status == "completed":
+            print(
+                "NOTE: disposition has no explicit verification_verdict; "
+                "deriving VERIFIED from api status=completed",
+                file=sys.stderr,
+            )
+            return "VERIFIED"
+        if disposition.status in ("failed", "requires_review"):
+            print(
+                "NOTE: disposition has no explicit verification_verdict; "
+                f"deriving ISSUES_FOUND from api status={disposition.status!r}",
+                file=sys.stderr,
+            )
+            return "ISSUES_FOUND"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Gate-check skeleton (Session 2 fills in real checks)
 # ---------------------------------------------------------------------------
@@ -1327,6 +1365,12 @@ def run(
         )
         return outcome
 
+    # Resolve the verification verdict from the disposition now —
+    # before any events are emitted — so every downstream emitter
+    # (closeout_succeeded, verification_completed) and the snapshot
+    # flip all use the same resolved value.
+    verdict: Optional[str] = resolve_close_verdict(disposition)
+
     # Note: ``--force`` is hard-scoped (Set 9 Session 3, D-2) — the
     # env-var gate and ``--reason-file`` requirement are validated by
     # ``_validate_args`` above. By the time we reach here the operator
@@ -1478,14 +1522,18 @@ def run(
         # the verification decision rather than jumping straight from
         # ``closeout_requested`` to ``closeout_succeeded``.
         if method == "manual" and manual_attestation is not None:
+            vc_fields: dict = {
+                "method": "manual",
+                "attestation": manual_attestation,
+            }
+            if verdict is not None:
+                vc_fields["verdict"] = verdict
             _emit_event(
                 session_set_dir,
                 "verification_completed",
                 outcome.session_number,
                 outcome,
-                method="manual",
-                attestation=manual_attestation,
-                verdict="manual_attestation",
+                **vc_fields,
             )
 
         # Gate checks. ``--force`` skips the gate run entirely; we still
@@ -1587,14 +1635,19 @@ def run(
         # file lacked an orchestrator block entirely; the payload
         # then degrades gracefully to a method-only shape. Set 049
         # dropped ``chatSessionId`` from this payload along with the
-        # rest of the coordination layer.
+        # rest of the coordination layer. ``verdict`` uses omit-null
+        # (Q6 locked design): absent when the session had no routed
+        # verifier, present with the VERIFIED/ISSUES_FOUND token when
+        # it did.
+        cs_fields: dict = {"method": method, **orchestrator_identity}
+        if verdict is not None:
+            cs_fields["verdict"] = verdict
         _emit_event(
             session_set_dir,
             "closeout_succeeded",
             outcome.session_number,
             outcome,
-            method=method,
-            **orchestrator_identity,
+            **cs_fields,
         )
 
         # Flip session-state.json to complete/closed via the gate-bypass
@@ -1619,7 +1672,9 @@ def run(
         except ImportError:
             from .session_state import _flip_state_to_closed  # type: ignore[no-redef]
         flipped_path = _flip_state_to_closed(
-            session_set_dir, forced=bool(args.force),
+            session_set_dir,
+            verification_verdict=verdict,
+            forced=bool(args.force),
         )
         if flipped_path is not None:
             outcome.messages.append(

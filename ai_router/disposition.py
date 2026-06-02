@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -58,6 +59,7 @@ DISPOSITION_FILENAME = "disposition.json"
 
 DISPOSITION_STATUSES = ("completed", "failed", "requires_review")
 VERIFICATION_METHODS = ("api", "manual", "skipped")
+CANONICAL_VERDICTS = ("VERIFIED", "ISSUES_FOUND")
 
 SWITCH_DUE_TO_BLOCKER = "switch-due-to-blocker"
 
@@ -90,6 +92,13 @@ class Disposition:
     - ``blockers``: list of blocker descriptions. Required to be
       non-empty when ``next_orchestrator.reason.code ==
       "switch-due-to-blocker"``.
+    - ``verification_verdict``: the verifier's pass/fail outcome for
+      this session.  One of :data:`CANONICAL_VERDICTS` on the auto
+      path; ``None`` (omitted) when the session was closed without a
+      routed verifier (manual / skipped / --no-router).  Non-canonical
+      extension tokens are accepted but trigger a stderr warning via
+      :func:`validate_disposition`.  Written to ``session-state.json``
+      by ``close_session`` when non-null.
     """
 
     status: str
@@ -99,6 +108,7 @@ class Disposition:
     verification_message_ids: List[str] = field(default_factory=list)
     next_orchestrator: Optional[NextOrchestrator] = None
     blockers: List[str] = field(default_factory=list)
+    verification_verdict: Optional[str] = None
 
 
 def _disposition_path(session_set_dir: str) -> str:
@@ -164,9 +174,11 @@ def disposition_to_dict(disposition: Disposition) -> dict:
     verification_method, verification_message_ids, next_orchestrator,
     blockers) so the on-disk file is deterministic. ``next_orchestrator``
     is always present, with ``null`` when unset, so consumers do not
-    need to test for the key.
+    need to test for the key. ``verification_verdict`` uses omit-null:
+    the key is absent when the verdict is not known, so older readers
+    that pre-date this field never see an unexpected key.
     """
-    return {
+    d: dict = {
         "status": disposition.status,
         "summary": disposition.summary,
         "files_changed": list(disposition.files_changed),
@@ -175,6 +187,9 @@ def disposition_to_dict(disposition: Disposition) -> dict:
         "next_orchestrator": _next_orchestrator_to_dict(disposition.next_orchestrator),
         "blockers": list(disposition.blockers),
     }
+    if disposition.verification_verdict is not None:
+        d["verification_verdict"] = disposition.verification_verdict
+    return d
 
 
 def disposition_from_dict(data: dict) -> Disposition:
@@ -193,6 +208,7 @@ def disposition_from_dict(data: dict) -> Disposition:
         verification_message_ids=list(data.get("verification_message_ids") or []),
         next_orchestrator=_next_orchestrator_from_dict(data.get("next_orchestrator")),
         blockers=list(data.get("blockers") or []),
+        verification_verdict=data.get("verification_verdict"),
     )
 
 
@@ -302,6 +318,7 @@ def validate_disposition(
             "verification_message_ids": disposition.verification_message_ids,
             "next_orchestrator": disposition.next_orchestrator,
             "blockers": disposition.blockers,
+            "verification_verdict": disposition.verification_verdict,
         }
     elif isinstance(disposition, dict):
         data = disposition
@@ -386,5 +403,25 @@ def validate_disposition(
                     "next_orchestrator.reason.code == "
                     "'switch-due-to-blocker'"
                 )
+
+    verdict = data.get("verification_verdict")
+    if verdict is not None:
+        if not isinstance(verdict, str) or verdict == "":
+            errors.append(
+                "verification_verdict must be a non-empty string or null "
+                f"(got {verdict!r})"
+            )
+        elif verdict not in CANONICAL_VERDICTS:
+            # Non-canonical tokens (e.g. ISSUES_FOUND_RESOLVED_IN_FLIGHT)
+            # are accepted but flagged so operators notice the drift from
+            # the VERIFIED/ISSUES_FOUND domain. Never added to errors —
+            # the :219 prefix-match / enum-non-enforcement reader contract
+            # is preserved.
+            print(
+                f"WARNING: disposition.verification_verdict {verdict!r} is "
+                f"non-canonical (expected one of {CANONICAL_VERDICTS}); "
+                "accepted but consider using the canonical token",
+                file=sys.stderr,
+            )
 
     return (len(errors) == 0), errors
