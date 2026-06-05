@@ -1,0 +1,145 @@
+{
+  "sessionSetName": "057-lightweight-dedicated-verification-sessions",
+  "createdDate": "2026-06-05T08:04:06-04:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-1/read-guidance",
+      "dateTime": "2026-06-05T08:04:06-04:00",
+      "description": "Read project-guidance.md, lessons-learned.md, session-set-authoring-guide.md, ai-led-session-workflow.md, spec.md",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-1/register-start",
+      "dateTime": "2026-06-05T08:04:06-04:00",
+      "description": "Ran ai_router.start_session; session-state.json -> session 1 in-progress (v4)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-1/reverify-tree",
+      "dateTime": "2026-06-05T08:06:06-04:00",
+      "description": "Re-verified live tree: session-issues-schema.md, disposition-schema.md, session_state.py (_build_sessions_array truncates vs totalSessions), writer_discipline.py (D3 content-blind/Lightweight-inert), start_session.py; captured 7 grounding facts",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-1/dedup-proposal",
+      "dateTime": "2026-06-05T08:09:06-04:00",
+      "description": "De-duplicated docs/proposals/2026-06-05-...md: kept cleaner second draft as proposal of record",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-1/consensus-q1-q7",
+      "dateTime": "2026-06-05T08:16:06-04:00",
+      "description": "Cross-provider consensus on Q1-Q7 with L1-L4 context (orchestrator excluded); raw outputs saved UTF-8-first",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5.4",
+          "taskType": "decision-consensus",
+          "inputTokens": 4618,
+          "outputTokens": 16115,
+          "costUsd": 0.2533
+        },
+        {
+          "model": "gemini-2.5-pro",
+          "taskType": "decision-consensus",
+          "inputTokens": 5007,
+          "outputTokens": 1138,
+          "costUsd": 0.0176
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-1/ai-assignment",
+      "dateTime": "2026-06-05T08:19:06-04:00",
+      "description": "Authored ai-assignment.md per-session recommendation via routed analysis (Rule 17)",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-2.5-pro",
+          "taskType": "analysis",
+          "inputTokens": 4447,
+          "outputTokens": 223,
+          "costUsd": 0.0078
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-1/q6-operator",
+      "dateTime": "2026-06-05T08:20:06-04:00",
+      "description": "Q6 split materially; surfaced to operator via AskUserQuestion -> chose hard-TTY/soft-non-TTY",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-1/verdict-and-lock",
+      "dateTime": "2026-06-05T08:26:06-04:00",
+      "description": "Wrote verdict.md, s1-audit-record.md, S1 Audit Lock block in spec.md; corrected S2 step 4 (D3-extension rejected -> content-aware close-time validator)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-1/verify-round-1",
+      "dateTime": "2026-06-05T08:32:06-04:00",
+      "description": "Cross-provider session verification (gpt-5-4): ISSUES_FOUND, 2 Major doc-consistency findings; persisted s1-issues.json",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5.4",
+          "taskType": "session-verification",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "costUsd": 0.15734
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 10,
+      "stepKey": "session-1/fix-issues",
+      "dateTime": "2026-06-05T08:34:06-04:00",
+      "description": "Fixed both: scrubbed stale D3-extension text in spec.md; reframed Q6 --accept-suggestions bypass as non-locked S3 detail in verdict.md+spec.md",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 11,
+      "stepKey": "session-1/verify-round-2",
+      "dateTime": "2026-06-05T08:36:06-04:00",
+      "description": "Re-verification (gpt-5-4): VERIFIED, both issues resolved, no regressions",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5.4",
+          "taskType": "session-verification",
+          "inputTokens": 8449,
+          "outputTokens": 1185,
+          "costUsd": 0.0389
+        }
+      ]
+    }
+  ]
+}
