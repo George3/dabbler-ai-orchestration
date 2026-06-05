@@ -29,7 +29,7 @@
     "model": "claude-opus-4-8",
     "effort": "medium",
     "reason": {
-      "code": "continue",
+      "code": "continue-current-trajectory",
       "specifics": "S3 stays on opus-4-8 (the active engine). It is a consistency-critical rewrite of docs/ai-led-session-workflow.md + the authoring guide (per-set verification made consistent, bounded rounds, the second-opinion tie-breaker, AND the generic procedure typed sessions follow in lieu of a spec.md step list), plus wiring the operator-choice capture and the Q6 close-out gate strength, plus the held PyPI version bump. The S2 verifier flagged that the derivation's disposition partition and the validator's fail-closed edges are subtle -- keep adversarial cross-provider verification on the S3 changes."
     }
   },
