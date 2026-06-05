@@ -1460,11 +1460,54 @@ log a `Major` issue and proceed to commit). Do not skip commit just
 because verification is provider-broken — the work is preserved in
 git for human review and the next session can re-attempt.
 
-#### Lightweight tier — copyable review prompts replace routed verification
+#### Lightweight tier — verification (per-set; two modes)
 
 When the set's spec.md declares `tier: "lightweight"` (Set 048 §3.6),
 or `--no-router` mode is active via CLI flag / `DABBLER_NO_ROUTER=1`
-env var, Step 6 changes shape:
+env var, there is no metered router call to verify the work. Lightweight
+verification is **per-set, not per-session** (Set 057 L1): it runs
+**once, after the implementation (work) sessions complete**, never after
+each work session. AI-led sets usually finish within a day or an hour, so
+the rework risk of verifying once at the end is low, and per-set keeps the
+state machine and the operator's burden small. Every Lightweight surface
+below — both modes, the bounded-round rules, and the close-out gate —
+follows the per-set rule consistently.
+
+How verification happens is governed by one durable, opt-in choice,
+**`verificationMode`** (Set 057 Q5):
+
+| `verificationMode` | What it means |
+|---|---|
+| `out-of-band-or-none` (**default**) | Mode A below: copyable review prompts pasted into a second assistant, verdict recorded by hand in `external-verification.md`. Preserves the pre-Set-057 flow. |
+| `dedicated-sessions` | Mode B below: a structured, blessed **verification session** on a different engine, an optional **remediation session** when issues are found, a bounded re-verification loop, and a content-aware close-out gate. |
+
+**Capturing the choice (once, at set start).** The durable record is a
+single `activity-log.json` entry (`kind: "verification_mode"`), written
+once at the start of the set — the same Set-048 `suggestion_disposition`
+pattern, under its own `kind` so it never collides with the UAT/E2E
+choice. Every later step reads it back via
+`dedicated_verification.read_verification_mode(...)`. Three ways to set
+it, in precedence order:
+
+- `python -m ai_router.start_session … --verification-mode
+  dedicated-sessions` — an explicit operator choice; always recorded.
+- A `verificationMode:` field in spec.md's Session Set Configuration
+  block — **seeds** the default and is recorded automatically at the
+  first `start_session`, but only when no choice has been recorded yet
+  (it never clobbers a later explicit choice).
+- Nothing — the default `out-of-band-or-none` applies implicitly and
+  nothing is recorded. The feature is strictly opt-in.
+
+`verificationMode` is **not** a new persisted workflow field beyond that
+log entry, and the workflow states below are **derived**, never stored
+(Set 057 Q3; see "Derived workflow states").
+
+---
+
+##### Mode A — `out-of-band-or-none`: copyable review prompts
+
+This is the default and the pre-Set-057 Lightweight flow. Step 6 changes
+shape as follows:
 
 1. The orchestrator does NOT call `route(task_type="session-verification")`.
    `close_session --no-router` skips the routed call entirely and
@@ -1527,6 +1570,186 @@ The Lightweight path preserves cross-provider verification at a cost
 of operator time rather than dollars. It's the right tradeoff for
 projects that already have a second AI subscription, for volunteer
 or open-source work, or for repos where API spend is constrained.
+
+---
+
+##### Mode B — `dedicated-sessions`: typed verification & remediation
+
+When `verificationMode == dedicated-sessions`, verification and any
+remediation are run as **typed sessions** appended to the set's
+`sessions[]` ledger — `type: verification` and `type: remediation`
+(Set 057 Q2). The `type` field defaults to `work` and is absent on every
+existing and Full-tier entry, so this is additive and
+backward-compatible. Typed sessions are created **only** through the
+blessed writers (never freehand), so their structure and placement are
+identical every time, and a content-aware close-out gate confirms the
+path actually ran (Set 057 L3).
+
+**Typed sessions take their step list from this section, not from
+spec.md.** The authored spec session count is fixed; verification and
+remediation sessions are *runtime* additions beyond the plan, so they
+have no `### Session N` heading to read. `start_session --type …` prints
+an announcement banner pointing back here. The generic procedure for any
+typed session is:
+
+1. **Read the latest findings.** For a remediation session, read the most
+   recent `sN-issues.json` (the envelope the verification session seeded).
+   For a verification session, read the spec, the activity log, and the
+   work produced since the last verified point.
+2. **Do the typed work.** Verify (review the work and produce a verdict +
+   structured findings) or remediate (resolve each open finding).
+3. **Record the outcome** in the structured files (verdict on the
+   session record; dispositions on the issues envelope), then close /
+   hand off per the rules below.
+
+**The flow.**
+
+1. **Start the verification session — on a different engine.** After the
+   work sessions are complete, run:
+
+   ```
+   python -m ai_router.start_session --session-set-dir docs/session-sets/<slug> \
+       --type verification --engine <other-engine> --provider <other-provider>
+   ```
+
+   The blessed writer (`register_typed_session_start`) appends a
+   `type: verification` entry, marks it in-progress, and grows the runtime
+   `totalSessions` by one (Q1: structured files only — `spec.md` is never
+   touched). The engine **must differ** from the implementation sessions'
+   engine; the close-out gate enforces this (the whole feature exists to
+   keep verification cross-provider).
+
+2. **Verify.** The verifier reviews the work and returns a verdict.
+   - **VERIFIED** → there is nothing to remediate. Close the set: commit,
+     then run `close_session` (Lightweight: `--no-router`). The Q6 gate
+     (below) confirms a different-engine verification session is what is
+     being closed, and the set finalizes.
+   - **ISSUES_FOUND** → seed the findings envelope and hand off to a
+     remediation session (step 3).
+
+3. **Seed findings, then hand off to remediation.** Write the structured
+   findings with `dedicated_verification.seed_issues_envelope(...)` (round
+   1 → `s<N>-issues.json`; later rounds →
+   `s<N>-issues-round-<M>.json`). On a verifier-created **open** issue the
+   Lightweight flow requires `issueId`, `issueType`
+   (`deterministic-defect | contingent-risk | standards-departure |
+   missing-context`), and `verificationMethod` (`suggestedTestOrCheck` is
+   optional; `description` is already required). Then perform the
+   **hand-off close** through the blessed writer — never by hand-editing
+   `session-state.json`:
+
+   ```
+   python -m ai_router.start_session --session-set-dir docs/session-sets/<slug> \
+       --type remediation --handoff --handoff-verdict ISSUES_FOUND \
+       --engine <work-engine> --provider <work-provider>
+   ```
+
+   `--handoff` (backed by `register_typed_session_handoff`) marks the
+   verification session complete **and** opens the remediation session
+   in-progress in one atomic write. This is required because a non-terminal
+   verification close would otherwise leave `sessions[]` all-complete while
+   the set is still in-progress — which the session-state invariant rejects,
+   and which `close_session` would mis-read as a set-terminal close. Always
+   use the writer (not a freehand edit): it is what keeps every typed
+   session structurally identical and on a sanctioned path (Set 057 L3/Q1),
+   and the same CLI is the engine-agnostic entry point for Copilot / Codex /
+   Gemini flows that cannot import the Python helper.
+
+4. **Remediate — evaluate the verification method first.** For each
+   finding, the remediation session first checks the finding's
+   `verificationMethod` / `suggestedTestOrCheck`: confirm the issue
+   actually reproduces before changing code. Then resolve it and record a
+   `resolution_status` from the locked enum (Set 057 Q2):
+
+   | `resolution_status` | Closes the finding? |
+   |---|---|
+   | `fixed` | yes — code/doc changed; the fix must be **re-verified** |
+   | `not-reproducible` | yes — terminal, no re-verify needed |
+   | `accepted-risk` | yes — terminal |
+   | `accepted-consequence` | yes — terminal |
+   | `needs-more-context` | no — **stops to a human** |
+   | `escalate-human` | no — **stops to a human** |
+   | `advisory-disagreement` | no — a dispute; **stops to a human** (the orchestrator declined a finding; humans adjudicate — see "Disagreement With A Verifier Finding") |
+
+   The enum is validator-enforced for spelling when present, but its
+   semantics stay advisory — no runtime gate reads the value.
+
+5. **Re-verify only after real changes, and keep later rounds narrow.**
+   - If **anything was `fixed`**, hand off back to a new verification
+     session (`start_session --type verification --handoff --engine
+     <other-engine>`, backed by `register_typed_session_handoff`) to
+     re-verify the fixes. Re-verification rounds **stay narrow** — they
+     confirm the specific fixes and look for regressions they introduce,
+     not a fresh full review.
+   - If **no finding was `fixed`** and every finding is terminally
+     dispositioned (`not-reproducible` / `accepted-risk` /
+     `accepted-consequence`), there is nothing to re-verify: close the set
+     as dispositioned (commit + `close_session`).
+   - Never re-verify when nothing changed — a re-verify with no fix is
+     wasted work and muddies the round count.
+
+6. **Bounded rounds (1–2 automatic, 3+ human).** The verify→remediate
+   loop runs **at most two automatic rounds**. If a third verification
+   round would be needed (issues still open after two rounds), or at any
+   point a finding lands on a human-stop disposition
+   (`escalate-human` / `needs-more-context` / `advisory-disagreement`) or
+   a **Critical/Major finding is not fixed**, the workflow stops to a
+   human (`awaiting-human`) rather than spinning further. The bounded loop
+   guarantees the work never silently stops *and* never loops forever.
+
+7. **Tie-breaker — operator-initiated second opinion (Set 057 L4).** From
+   `awaiting-human`, the operator (and only the operator) may invoke the
+   existing Full-tier **`second-opinion`** resolution — route the disputed
+   content to a tiebreaker model from a different provider via the
+   `verification.settings.on_disagreement` / `tiebreaker_model`
+   configuration in `router-config.yaml`. This is the same resolution
+   documented under "Disagreement With A Verifier Finding" option (d); it
+   is **not** a new machine state and is never triggered automatically.
+
+**Derived workflow states (Set 057 Q3).** The set's position in this
+workflow is **derived** from `sessions[]` + per-session
+`verificationVerdict` + the latest `sN-issues.json` + the
+`verificationMode` record — never persisted as a new field (the Set 047
+derive-top-level rule). `dedicated_verification.derive_workflow_state(...)`
+returns one of seven states:
+
+| State | Meaning |
+|---|---|
+| `work-in-progress` | implementation sessions not all complete (or mode is opt-out) |
+| `awaiting-verification` | work complete (or fixes made); a verification session is owed / running |
+| `awaiting-remediation` | a verification round found open issues within the automatic-round budget |
+| `awaiting-human` | human-stop disposition, unfixed Critical/Major, or the round budget is exhausted |
+| `closed-verified` | the **latest session is a verification round** that returned VERIFIED, or one whose findings were all terminally dispositioned at the verification boundary |
+| `closed-dispositioned` | the **latest session is a remediation round** in which no finding was `fixed` and every finding is terminally dispositioned (nothing left to re-verify) |
+| `closed-no-verification` | the set closed under `out-of-band-or-none` (the dedicated machine did not run) |
+
+The two `closed-*` dispositioned outcomes are distinguished by **which
+session type is latest**: `closed-verified` is reached from a *verification*
+session, `closed-dispositioned` from a *remediation* session — they are not
+the same path under two names.
+
+**Close-out gate (Set 057 Q6).** When `verificationMode ==
+dedicated-sessions`, `close_session` runs the content-aware close-time
+validator on the **set-terminal** close (the close that finalizes the
+set). If it cannot confirm a *different-engine* verification session ran,
+the gate:
+
+- **hard-blocks in an interactive TTY** — refuses the close, prints the
+  corrective action (run a verification session on another engine), and
+  exits `gate_failed`; and
+- **soft-warns in non-TTY / headless** (or under `--accept-suggestions`)
+  — prints a warning and proceeds.
+
+This matches the soft posture of the `external-verification.md` gate while
+strengthening the interactive path. It fires **only** on the set-terminal
+close — a non-terminal work-session close is never blocked for "no
+verification yet." The session being closed counts as the satisfying
+verification when it is itself the cross-provider verification session
+(the happy-path single-round terminal close). The `writer-bypass` (D3)
+check in `ai_router/writer_discipline.py` is **unchanged** — it is
+content-blind and inert on Lightweight (no events ledger), so it cannot
+see session `type`; the blessed writers plus this validator are the entire
+enforcement surface (Set 057 S1 Audit Lock → Concrete defect).
 
 ### Step 7: Handle Verification Result
 

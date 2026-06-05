@@ -1101,6 +1101,224 @@ def register_typed_session_start(
     return path, new_number
 
 
+def register_typed_session_handoff(
+    session_set: str,
+    followon_type: str,
+    orchestrator_engine: str,
+    orchestrator_model: Optional[str] = None,
+    orchestrator_effort: Optional[str] = None,
+    orchestrator_provider: Optional[str] = None,
+    *,
+    verification_verdict: Optional[str] = None,
+    title: Optional[str] = None,
+) -> Tuple[str, int, int]:
+    """Close the in-flight typed session and open the next one, atomically.
+
+    Set 057 Session 3 — the **hand-off close** (S2 carried item a). A
+    verification session that finds issues, or a remediation session whose
+    fixes must be re-verified, is *non-terminal*: the set is not done, but
+    the verifying/remediating session IS done. Closing such a session on
+    its own would leave ``sessions[]`` all-complete while the set status is
+    still ``in-progress`` — which violates session-state invariant rule 6
+    (an in-progress set needs either exactly one in-progress session or a
+    between-sessions shape with a not-started session). ``close_session``
+    would instead *finalize* the set (``len(completed) == totalSessions``),
+    which is wrong when remediation / re-verification is still owed.
+
+    This writer performs the transition in a single atomic write so the
+    invalid intermediate state is never persisted:
+
+    1. Marks the **one** in-flight typed (``verification`` / ``remediation``)
+       session ``complete`` — records ``completedAt`` and, when supplied,
+       its ``verificationVerdict``.
+    2. Appends a new ``in-progress`` typed session of ``followon_type``,
+       growing the runtime ``totalSessions`` by one (Q1: structured files
+       only; ``spec.md`` is never touched).
+
+    The result is ``[..work(complete).., closed(complete), followon(in-progress)]``
+    — exactly one in-progress session, so rule 6 holds throughout. It is
+    the blessed companion to :func:`register_typed_session_start`: ``start``
+    opens the *first* typed session (after the work sessions); ``handoff``
+    chains verification -> remediation -> re-verification without ever
+    going through a set-terminal close.
+
+    Contract / refusals (fail loud, before any write):
+
+    * ``followon_type`` must be ``verification`` or ``remediation``.
+    * The set must carry a ``sessions[]`` ledger on disk.
+    * **Exactly one** session must be in flight, and it must be a typed
+      (``verification`` / ``remediation``) session. A work session in
+      flight is the wrong tool — close it with ``close_session`` /
+      ``mark_session_complete`` and start verification with
+      :func:`register_typed_session_start`. No in-flight session means
+      there is nothing to hand off from.
+
+    Returns ``(state_file_path, closed_session_number, new_session_number)``.
+    """
+    if followon_type not in (SESSION_TYPE_VERIFICATION, SESSION_TYPE_REMEDIATION):
+        raise ValueError(
+            f"register_typed_session_handoff: followon_type must be "
+            f"{SESSION_TYPE_VERIFICATION!r} or {SESSION_TYPE_REMEDIATION!r}, "
+            f"got {followon_type!r}."
+        )
+
+    existing = read_raw_session_state(session_set)
+    if (
+        not isinstance(existing, dict)
+        or not isinstance(existing.get("sessions"), list)
+        or not existing.get("sessions")
+    ):
+        raise SessionStateInvariantError(
+            1,
+            "register_typed_session_handoff refused: no sessions[] ledger on "
+            f"disk for {session_set!r}. A hand-off can only chain an "
+            "already-running typed verification/remediation session.",
+        )
+
+    spec_md_path = Path(session_set) / "spec.md"
+    normalized = normalize_to_v4_shape(existing, spec_md_path)
+    prior_sessions = normalized.get("sessions") or []
+
+    in_flight = [
+        s
+        for s in prior_sessions
+        if isinstance(s, dict) and s.get("status") == SESSION_STATUS_IN_PROGRESS
+    ]
+    if len(in_flight) != 1:
+        nums = ", ".join(str(s.get("number")) for s in in_flight) or "(none)"
+        raise SessionStateInvariantError(
+            3,
+            "register_typed_session_handoff refused: exactly one in-flight "
+            f"typed session is required to hand off from; found {len(in_flight)} "
+            f"({nums}). Start the verification session first "
+            "(register_typed_session_start).",
+        )
+    closing = in_flight[0]
+    closing_type = closing.get("type")
+    if closing_type not in (SESSION_TYPE_VERIFICATION, SESSION_TYPE_REMEDIATION):
+        raise SessionStateInvariantError(
+            3,
+            "register_typed_session_handoff refused: the in-flight session "
+            f"{closing.get('number')!r} is a {closing_type or 'work'!r} session, "
+            "not a typed verification/remediation session. Close a work session "
+            "with close_session and open verification with "
+            "register_typed_session_start.",
+        )
+    closing_number = closing.get("number")
+    new_number = len(prior_sessions) + 1
+
+    orchestrator_block: dict = {"engine": orchestrator_engine}
+    if orchestrator_provider is not None:
+        orchestrator_block["provider"] = orchestrator_provider
+    if orchestrator_model is not None:
+        orchestrator_block["model"] = orchestrator_model
+    if orchestrator_effort is not None:
+        orchestrator_block["effort"] = orchestrator_effort
+
+    if title is None:
+        prior_same = sum(
+            1
+            for s in prior_sessions
+            if isinstance(s, dict) and s.get("type") == followon_type
+        )
+        title = f"{followon_type.capitalize()} round {prior_same + 1}"
+
+    now = _now_iso()
+    rebuilt: List[dict] = []
+    for s in prior_sessions:
+        entry: dict = {
+            "number": s.get("number"),
+            "title": s.get("title"),
+            "status": s.get("status"),
+        }
+        s_type = s.get("type")
+        if (
+            isinstance(s_type, str)
+            and s_type in SESSION_TYPES
+            and s_type != SESSION_TYPE_WORK
+        ):
+            entry["type"] = s_type
+        for key in _V4_PER_SESSION_METADATA_KEYS:
+            entry[key] = s.get(key)
+        # Close the in-flight session as part of the rebuild.
+        if s.get("number") == closing_number:
+            entry["status"] = SESSION_STATUS_COMPLETE
+            entry["completedAt"] = now
+            if verification_verdict is not None:
+                entry["verificationVerdict"] = verification_verdict
+        rebuilt.append(entry)
+
+    rebuilt.append(
+        {
+            "number": new_number,
+            "title": title,
+            "status": SESSION_STATUS_IN_PROGRESS,
+            "type": followon_type,
+            "startedAt": now,
+            "completedAt": None,
+            "orchestrator": orchestrator_block,
+            "verificationVerdict": None,
+        }
+    )
+
+    # Fail-loud invariant check BEFORE any write: the closed prefix plus a
+    # single trailing in-progress session keeps rules 3/4/6 intact.
+    _validate_sessions_or_raise(
+        rebuilt,
+        top_status=SESSION_STATUS_IN_PROGRESS,
+        lifecycle_state=SessionLifecycleState.WORK_IN_PROGRESS.value,
+    )
+
+    if os.path.isdir(session_set):
+        try:
+            from session_events import (  # type: ignore[import-not-found]
+                append_event,
+                read_events,
+            )
+        except ImportError:
+            from .session_events import (  # type: ignore[no-redef]
+                append_event,
+                read_events,
+            )
+        prior_events = read_events(session_set)
+        # Record the close of the handed-off session and the start of the
+        # follow-on so the events ledger stays a faithful audit trail
+        # (deduped on re-entry, matching the other boundary writers).
+        if closing_number is not None and not any(
+            ev.event_type == "closeout_succeeded"
+            and ev.session_number == closing_number
+            for ev in prior_events
+        ):
+            append_event(
+                session_set,
+                "closeout_succeeded",
+                closing_number,
+                handoff=True,
+                followon=followon_type,
+            )
+        if not any(
+            ev.event_type == "work_started" and ev.session_number == new_number
+            for ev in prior_events
+        ):
+            append_event(session_set, "work_started", new_number)
+
+    state: dict = {
+        "schemaVersion": SCHEMA_VERSION,
+        "sessionSetName": os.path.basename(session_set.rstrip("/\\")),
+        "status": SESSION_STATUS_IN_PROGRESS,
+        "sessions": rebuilt,
+    }
+    for passthrough_key in ("forceClosed", "preCancelStatus"):
+        if passthrough_key in existing:
+            state[passthrough_key] = existing[passthrough_key]
+
+    path = _state_path(session_set)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+        f.write("\n")
+    return path, closing_number, new_number
+
+
 def _propagate_total_sessions(session_set: str, total: int) -> None:
     """Update activity-log.json's totalSessions if it is missing or zero."""
     log_path = os.path.join(session_set, "activity-log.json")

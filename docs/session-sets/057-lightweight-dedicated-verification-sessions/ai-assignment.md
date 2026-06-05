@@ -116,10 +116,26 @@ drift across engine-agnostic surfaces.
 Low–Moderate (documentation + one cross-provider session verification).
 
 ### Actuals (filled after the session)
-- Orchestrator used: <tbd>
-- Total routed cost: <tbd>
-- Deviations from recommendation: <tbd>
-- Notes for next-session calibration: <tbd>
+- Orchestrator used: claude-code claude-opus-4-8 @ effort=medium (as
+  recommended).
+- Total routed cost: $0.3378 (cross-provider session verification: R1
+  $0.2326 gpt-5-4 ISSUES_FOUND, R2 $0.1052 gpt-5-4 VERIFIED). No
+  ai-assignment route this session — final session, no next-session
+  recommendation to author.
+- Deviations from recommendation: none.
+- Notes for next-session calibration: the cross-provider verifier (gpt-5-4)
+  caught **two Major + one Minor** in round 1, all real and fixed in
+  flight: (1) `verificationMode` was mutable mid-set — a later
+  `--verification-mode out-of-band-or-none` could silently disable the Q6
+  gate; made the capture immutable after the first record. (2) the workflow
+  doc authorized freehand typed-session edits, contradicting the
+  blessed-writer-only lock; removed it and added a sanctioned
+  `start_session --type … --handoff` CLI (the engine-agnostic hand-off
+  entry point). (3) the derived-states table gave overlapping definitions
+  for `closed-verified` / `closed-dispositioned`; clarified by latest
+  session type. Round 2 VERIFIED. Lesson: when a feature adds an opt-in
+  durable choice that gates safety behavior, make the record immutable —
+  "written once" must be enforced, not just documented.
 
 **Next-session orchestrator recommendation (Session N+1):**
 N/A — final session of the set.

@@ -34,10 +34,15 @@
     {
       "number": 3,
       "title": "Workflow, operator-choice, close-out, ship",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-05T10:23:53.337520-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "medium"
+      },
       "verificationVerdict": null
     }
   ]

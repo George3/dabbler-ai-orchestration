@@ -106,6 +106,72 @@ class TestVerificationMode:
         assert "suggestion_disposition" not in kinds
 
 
+class TestVerificationModeCapture:
+    """Set 057 Q5 capture wiring (CLI choice > spec.md seed > nothing)."""
+
+    def _spec(self, d: Path, mode: str | None) -> None:
+        body = "# Spec\n\n## Session Set Configuration\n\n```yaml\ntier: lightweight\n"
+        if mode is not None:
+            body += f"verificationMode: {mode}\n"
+        body += "```\n"
+        (d / "spec.md").write_text(body, encoding="utf-8")
+
+    def test_cli_choice_records_on_first_start(self, tmp_path):
+        d = _set_dir(tmp_path)
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=D)
+        assert out == D
+        assert dv.read_verification_mode(d) == D
+
+    def test_immutable_after_first_record(self, tmp_path):
+        # Q5: written once at set start. A later --verification-mode must NOT
+        # flip the mode mid-set (which would silently disable the gate).
+        d = _set_dir(tmp_path)
+        dv.resolve_and_record_verification_mode(d, cli_choice=D)
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=OOB)
+        assert out is None
+        assert dv.read_verification_mode(d) == D
+
+    def test_seed_records_when_no_prior_record(self, tmp_path):
+        d = _set_dir(tmp_path)
+        self._spec(d, "dedicated-sessions")
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=None)
+        assert out == D
+        assert dv.read_verification_mode(d) == D
+
+    def test_seed_does_not_clobber_existing_choice(self, tmp_path):
+        d = _set_dir(tmp_path)
+        self._spec(d, "dedicated-sessions")
+        dv.record_verification_mode(d, OOB)  # operator already chose
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=None)
+        assert out is None
+        assert dv.read_verification_mode(d) == OOB
+
+    def test_nothing_recorded_when_no_source(self, tmp_path):
+        d = _set_dir(tmp_path)
+        self._spec(d, None)
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=None)
+        assert out is None
+        assert not dv.has_verification_mode_record(d)
+
+    def test_creates_activity_log_when_missing(self, tmp_path):
+        d = tmp_path / "no-log-capture"
+        d.mkdir()
+        out = dv.resolve_and_record_verification_mode(d, cli_choice=D)
+        assert out == D
+        assert (d / "activity-log.json").exists()
+        assert dv.read_verification_mode(d) == D
+
+    def test_cli_bad_choice_raises(self, tmp_path):
+        d = _set_dir(tmp_path)
+        with pytest.raises(ValueError):
+            dv.resolve_and_record_verification_mode(d, cli_choice="bogus")
+
+    def test_spec_reader_ignores_unknown_value(self, tmp_path):
+        d = _set_dir(tmp_path)
+        self._spec(d, "weird-mode")
+        assert dv.read_spec_verification_mode(d) is None
+
+
 # --------------------------------------------------------------------------
 # seed + read sN-issues envelope
 # --------------------------------------------------------------------------

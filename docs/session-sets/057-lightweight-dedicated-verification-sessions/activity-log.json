@@ -237,6 +237,112 @@
           "costUsd": 0.0522
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-3/context-read",
+      "dateTime": "2026-06-05T10:24:20.070289-04:00",
+      "description": "S3 start: read spec S1/S2 locks, workflow doc Lightweight section, close-out ref, dedicated_verification.py, close_session.py, start_session.py, register_typed_session_start, rule-6 invariant. Locked S3 design: hand-off writer (atomic close-typed + open-next-typed), Q6 hard-TTY/soft-non-TTY gate, --verification-mode capture.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-3/code-handoff-writer",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "CODE: register_typed_session_handoff (atomic close-typed + open-next-typed; rule-6-safe) in session_state.py + tests (test_typed_session_writer.py)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-3/code-verification-mode-capture",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "CODE: --verification-mode capture (start_session) + resolve_and_record/read_spec/has_record helpers (dedicated_verification.py), made IMMUTABLE after first record per R1 finding; tests",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-3/code-q6-gate",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "CODE: Q6 close_session gate strength (hard-TTY/soft-non-TTY, terminal-only, --accept-suggestions); validate_dedicated_verification gained closing_session_number; _close_is_terminal helper; tests (test_dedicated_verification_close_gate.py)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-3/doc-workflow",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "DOC: rewrote Lightweight verification section of ai-led-session-workflow.md as per-set (L1) with Mode A/B, generic typed-session procedure, bounded rounds, seven states, Q6 gate, second-opinion tie-breaker; added --handoff CLI usage",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-3/doc-authoring-guide",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "DOC: session-set-authoring-guide.md verificationMode field semantics + capture mechanism + session type values",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-3/e2e-fixture",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "TEST: end-to-end fixture test_dedicated_verification_e2e.py (work->verification finds issues->remediation->re-verify->terminal close)",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-3/version-bump",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "RELEASE: dabbler-ai-router 0.15.0->0.16.0 (pyproject.toml, __init__.py, CHANGELOG.md, repository-reference.md walk); PyPI publish HELD for v0.16.0",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 9,
+      "stepKey": "session-3/verify-round-1",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "Cross-provider session verification (gpt-5-4) R1: ISSUES_FOUND, 2 Major (verificationMode mutability; doc freehand-edit) + 1 Minor (closed-verified/dispositioned table overlap); $0.2326",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "costUsd": 0.2326
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 10,
+      "stepKey": "session-3/verify-round-2",
+      "dateTime": "2026-06-05T11:05:36.030374-04:00",
+      "description": "Cross-provider re-verification (gpt-5-4) R2: VERIFIED, all 3 R1 findings resolved; $0.1052",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "costUsd": 0.1052
+        }
+      ]
     }
   ]
 }

@@ -204,6 +204,158 @@ class TestRegisterTypedSessionStart:
         assert len(started) == 1
 
 
+def _in_progress(number, title, *, type):
+    return {
+        "number": number,
+        "title": title,
+        "status": SESSION_STATUS_IN_PROGRESS,
+        "type": type,
+        "startedAt": f"t{number}a",
+        "completedAt": None,
+        "orchestrator": {"engine": "gpt-5-4", "provider": "openai"},
+        "verificationVerdict": None,
+    }
+
+
+class TestRegisterTypedSessionHandoff:
+    def test_verification_to_remediation_atomic(self, tmp_path):
+        # work(complete) + verification(in-flight) -> hand off to remediation.
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _in_progress(2, "Verification round 1", type="verification"),
+            ],
+        )
+        path, closed, new = ss.register_typed_session_handoff(
+            str(d),
+            "remediation",
+            "claude-code",
+            orchestrator_provider="anthropic",
+            verification_verdict="ISSUES_FOUND",
+        )
+        assert (closed, new) == (2, 3)
+        out = json.loads(Path(path).read_text(encoding="utf-8"))
+        # Verification session closed with its verdict; remediation opened.
+        assert out["sessions"][1]["status"] == SESSION_STATUS_COMPLETE
+        assert out["sessions"][1]["verificationVerdict"] == "ISSUES_FOUND"
+        assert out["sessions"][1]["completedAt"] is not None
+        assert out["sessions"][2]["type"] == "remediation"
+        assert out["sessions"][2]["status"] == SESSION_STATUS_IN_PROGRESS
+        assert out["sessions"][2]["title"] == "Remediation round 1"
+        # Exactly one in-progress session => rule 6 holds, set still in-progress.
+        assert out["status"] == "in-progress"
+        norm = normalize_to_v4_shape(out, d / "spec.md")
+        assert norm["totalSessions"] == 3
+        assert norm["currentSession"] == 3
+
+    def test_remediation_to_reverification_round_label(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _complete(2, "Verification round 1", type="verification"),
+                _in_progress(3, "Remediation round 1", type="remediation"),
+            ],
+        )
+        path, closed, new = ss.register_typed_session_handoff(
+            str(d), "verification", "gpt-5-4", orchestrator_provider="openai"
+        )
+        assert (closed, new) == (3, 4)
+        out = json.loads(Path(path).read_text(encoding="utf-8"))
+        assert out["sessions"][3]["type"] == "verification"
+        # Second verification round labelled by prior same-typed count.
+        assert out["sessions"][3]["title"] == "Verification round 2"
+
+    def test_emits_handoff_close_and_start_events(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _in_progress(2, "Verification round 1", type="verification"),
+            ],
+        )
+        ss.register_typed_session_handoff(
+            str(d), "remediation", "claude-code", verification_verdict="ISSUES_FOUND"
+        )
+        lines = [
+            json.loads(ln)
+            for ln in (d / "session-events.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if ln.strip()
+        ]
+        closed_evt = [
+            e
+            for e in lines
+            if e.get("event_type") == "closeout_succeeded"
+            and e.get("session_number") == 2
+        ]
+        started_evt = [
+            e
+            for e in lines
+            if e.get("event_type") == "work_started" and e.get("session_number") == 3
+        ]
+        assert len(closed_evt) == 1 and closed_evt[0].get("handoff") is True
+        assert len(started_evt) == 1
+
+    def test_refuses_bad_followon_type(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _in_progress(2, "V", type="verification"),
+            ],
+        )
+        with pytest.raises(ValueError):
+            ss.register_typed_session_handoff(str(d), "work", "x")
+
+    def test_refuses_when_no_session_in_flight(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _complete(2, "Verification round 1", type="verification"),
+            ],
+        )
+        with pytest.raises(SessionStateInvariantError) as exc:
+            ss.register_typed_session_handoff(str(d), "remediation", "x")
+        assert exc.value.rule == 3
+
+    def test_refuses_when_in_flight_is_work_session(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                {
+                    "number": 1,
+                    "title": "Build",
+                    "status": SESSION_STATUS_IN_PROGRESS,
+                    "startedAt": "t",
+                    "completedAt": None,
+                    "orchestrator": {"engine": "x"},
+                    "verificationVerdict": None,
+                }
+            ],
+        )
+        with pytest.raises(SessionStateInvariantError) as exc:
+            ss.register_typed_session_handoff(str(d), "verification", "x")
+        assert exc.value.rule == 3
+
+    def test_refuses_planless_set(self, tmp_path):
+        d = tmp_path / "057-planless-ho"
+        d.mkdir()
+        (d / "session-state.json").write_text(
+            json.dumps(
+                {"schemaVersion": 4, "sessionSetName": d.name, "status": "in-progress"},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(SessionStateInvariantError) as exc:
+            ss.register_typed_session_handoff(str(d), "remediation", "x")
+        assert exc.value.rule == 1
+
+
 class TestStartSessionCliTypedBranch:
     def test_cli_type_verification_appends_and_banners(self, tmp_path, capsys):
         d = _write_set(
@@ -289,6 +441,59 @@ class TestStartSessionCliTypedBranch:
                 "x",
                 "--type",
                 "remediation",
+            ]
+        )
+        assert rc == start_session.EXIT_BOUNDARY
+
+    def test_cli_handoff_closes_inflight_and_opens_followon(self, tmp_path):
+        # The sanctioned --handoff CLI: close the in-flight verification
+        # session and open a remediation session in one write.
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _in_progress(2, "Verification round 1", type="verification"),
+            ],
+        )
+        rc = start_session.main(
+            [
+                "--session-set-dir",
+                str(d),
+                "--engine",
+                "claude-code",
+                "--provider",
+                "anthropic",
+                "--type",
+                "remediation",
+                "--handoff",
+                "--handoff-verdict",
+                "ISSUES_FOUND",
+            ]
+        )
+        assert rc == start_session.EXIT_OK
+        out = json.loads((d / "session-state.json").read_text(encoding="utf-8"))
+        assert out["sessions"][1]["status"] == SESSION_STATUS_COMPLETE
+        assert out["sessions"][1]["verificationVerdict"] == "ISSUES_FOUND"
+        assert out["sessions"][2]["type"] == "remediation"
+        assert out["sessions"][2]["status"] == SESSION_STATUS_IN_PROGRESS
+
+    def test_cli_handoff_with_no_inflight_returns_boundary(self, tmp_path):
+        d = _write_set(
+            tmp_path,
+            sessions=[
+                _complete(1, "Build"),
+                _complete(2, "Verification round 1", type="verification"),
+            ],
+        )
+        rc = start_session.main(
+            [
+                "--session-set-dir",
+                str(d),
+                "--engine",
+                "x",
+                "--type",
+                "remediation",
+                "--handoff",
             ]
         )
         assert rc == start_session.EXIT_BOUNDARY

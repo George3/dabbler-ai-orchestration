@@ -167,6 +167,125 @@ def read_verification_mode(session_set_dir: str | Path) -> str:
     return chosen
 
 
+def read_spec_verification_mode(session_set_dir: str | Path) -> Optional[str]:
+    """Return the optional ``verificationMode`` seed from spec.md config.
+
+    Set 057 Q5: a Session Set Configuration ``verificationMode`` field may
+    **seed** the operator prompt's default, but it is NOT the durable
+    record. Returns the value when it is a recognized mode, else ``None``
+    (missing spec, no config block, no field, or an unknown value). Never
+    raises — a malformed spec degrades to "no seed".
+    """
+    spec_path = Path(session_set_dir) / "spec.md"
+    if not spec_path.is_file():
+        return None
+    try:
+        text = spec_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        from session_state import (  # type: ignore[import-not-found]
+            _extract_session_set_configuration_block,
+        )
+    except ImportError:  # pragma: no cover - import shim
+        from .session_state import (  # type: ignore[no-redef]
+            _extract_session_set_configuration_block,
+        )
+    block = _extract_session_set_configuration_block(text) or {}
+    value = block.get("verificationMode")
+    if isinstance(value, str) and value in VERIFICATION_MODES:
+        return value
+    return None
+
+
+def has_verification_mode_record(session_set_dir: str | Path) -> bool:
+    """Return True iff a durable ``verification_mode`` entry already exists.
+
+    Used by the start-of-set capture wiring to make recording idempotent:
+    the seed-from-spec path records only when the operator has not already
+    chosen a mode (a later explicit ``--verification-mode`` always records
+    a fresh entry and wins because :func:`read_verification_mode` returns
+    the most recent valid choice).
+    """
+    log_path = Path(session_set_dir) / "activity-log.json"
+    if not log_path.exists():
+        return False
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            log = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return any(
+        entry.get("kind") == VERIFICATION_MODE_ENTRY_KIND
+        and entry.get("choice") in VERIFICATION_MODES
+        for entry in log.get("entries", [])
+    )
+
+
+def resolve_and_record_verification_mode(
+    session_set_dir: str | Path,
+    *,
+    cli_choice: Optional[str] = None,
+    session_number: int = 1,
+) -> Optional[str]:
+    """Capture the operator's ``verificationMode`` choice once at set start.
+
+    Set 057 Q5 wiring (the start_session caller). The choice is recorded
+    **once at set start and is immutable thereafter** — Q5 locked the
+    durable record as "written once at set start," and
+    :func:`read_verification_mode` returns the most-recent entry, so
+    allowing a later write would let a mid-set
+    ``--verification-mode out-of-band-or-none`` silently disable the
+    dedicated-session close gate and derived-state machine after the set
+    had already opted in. Once any valid record exists this is a no-op
+    (returns ``None``).
+
+    On the first call (no record yet) the resolution precedence is:
+
+    1. ``cli_choice`` (an explicit ``--verification-mode`` flag).
+    2. The spec.md config ``verificationMode`` seed.
+
+    Records nothing (returns ``None``) when neither source yields a value —
+    the feature stays strictly opt-in and the default
+    ``out-of-band-or-none`` continues to apply implicitly. Creates a
+    minimal ``activity-log.json`` if one does not exist yet (the durable
+    record lives there). Best-effort and self-contained: a bad
+    ``cli_choice`` always raises ``ValueError`` (even when a record already
+    exists, so the validation surface is stable), but a missing activity
+    log is created rather than raising.
+    """
+    if cli_choice is not None and cli_choice not in VERIFICATION_MODES:
+        raise ValueError(
+            f"unknown verificationMode {cli_choice!r}; expected one of "
+            f"{VERIFICATION_MODES}"
+        )
+    # Immutable after the first record (Q5: written once at set start).
+    if has_verification_mode_record(session_set_dir):
+        return None
+    chosen: Optional[str] = cli_choice
+    if chosen is None:
+        chosen = read_spec_verification_mode(session_set_dir)
+    if chosen is None:
+        return None
+
+    log_path = Path(session_set_dir) / "activity-log.json"
+    if not log_path.exists():
+        set_name = Path(session_set_dir).name
+        minimal = {
+            "sessionSetName": set_name,
+            "createdDate": _now_iso_utc(),
+            "totalSessions": 0,
+            "entries": [],
+        }
+        with log_path.open("w", encoding="utf-8") as f:
+            json.dump(minimal, f, indent=2)
+            f.write("\n")
+    record_verification_mode(
+        session_set_dir, chosen, session_number=session_number
+    )
+    return chosen
+
+
 def record_verification_mode(
     session_set_dir: str | Path,
     mode: str,
@@ -393,6 +512,8 @@ def _engine_provider(entry: dict) -> tuple:
 
 def validate_dedicated_verification(
     session_set_dir: str | Path,
+    *,
+    closing_session_number: Optional[int] = None,
 ) -> DedicatedVerificationResult:
     """Confirm a different-engine verification session ran (Set 057 Q6).
 
@@ -404,6 +525,17 @@ def validate_dedicated_verification(
     feature exists to enforce. On Lightweight (no events ledger) this
     writer-plus-validator pair is the entire enforcement surface; D3 is
     left unchanged (content-blind, inert there).
+
+    ``closing_session_number`` (Set 057 S3 close-gate wiring): the number
+    of the session ``close_session`` is finalizing right now. The terminal
+    close of a happy-path single-round flow closes the verification session
+    *itself* — at gate time that session is still ``in-progress`` (the
+    snapshot flip runs after the gate). Passing its number here lets the
+    validator treat it as the just-completed verification it is, so the
+    gate does not reject the very session that satisfies it. When ``None``
+    (the S2 advisory call site and all unit fixtures), only sessions whose
+    status is already ``complete`` count — an independently in-progress
+    verification session still fails.
 
     Returns a :class:`DedicatedVerificationResult`. The Set-057 Session-3
     close-out gate (Q6: hard TTY / soft non-TTY) consumes ``ok`` /
@@ -456,7 +588,13 @@ def validate_dedicated_verification(
         for s in sessions
         if isinstance(s, dict)
         and _session_type(s) == SESSION_TYPE_VERIFICATION
-        and s.get("status") == SESSION_STATUS_COMPLETE
+        and (
+            s.get("status") == SESSION_STATUS_COMPLETE
+            or (
+                closing_session_number is not None
+                and s.get("number") == closing_session_number
+            )
+        )
     ]
     if not verification_sessions:
         return DedicatedVerificationResult(
@@ -708,6 +846,9 @@ __all__ = [
     "DedicatedVerificationResult",
     "read_verification_mode",
     "record_verification_mode",
+    "read_spec_verification_mode",
+    "has_verification_mode_record",
+    "resolve_and_record_verification_mode",
     "seed_issues_envelope",
     "read_latest_issues_envelope",
     "validate_dedicated_verification",

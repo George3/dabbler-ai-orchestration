@@ -648,6 +648,38 @@ def _read_disposition_or_none(session_set_dir: str) -> Optional[Disposition]:
     return read_disposition(session_set_dir)
 
 
+def _close_is_terminal(session_set_dir: str, session_number: Optional[int]) -> bool:
+    """Return True iff closing *session_number* finalizes the whole set.
+
+    Set 057 Q6: the dedicated-verification close-out gate only fires on the
+    **set-terminal** close (the close that brings ``completedSessions`` up
+    to the runtime ``totalSessions``) — a non-terminal work-session close
+    must not be blocked merely because the verification session has not run
+    yet. Mirrors ``_flip_state_to_closed``'s own final-session detection
+    (``len(completed-after-append) == totalSessions``).
+
+    Best-effort and fail-open in the *non*-terminal direction: any read
+    error returns ``False`` so the gate cannot wedge a close on a garbled
+    or unusual state file.
+    """
+    if session_number is None:
+        return False
+    state = read_session_state(session_set_dir)
+    if not state:
+        return False
+    spec_md_path = os.path.join(session_set_dir, "spec.md")
+    try:
+        view = read_progress(state, spec_md_path)
+    except (SessionStateInvariantError, TypeError, ValueError):
+        return False
+    total = getattr(view, "total_sessions", None)
+    if not isinstance(total, int) or total <= 0:
+        return False
+    completed = set(getattr(view, "completed_sessions", None) or [])
+    completed.add(session_number)
+    return len(completed) >= total
+
+
 def resolve_close_verdict(disposition: Optional[Disposition]) -> Optional[str]:
     """Derive the close-session verdict from the disposition.
 
@@ -1627,14 +1659,21 @@ def run(
                         "(Set 048 §3.5)"
                     )
 
-        # Set 057 Q6 (validator landed in S2; gate STRENGTH wired in S3).
-        # When verificationMode=dedicated-sessions, run the content-aware
-        # close-time validator and surface its verdict as an ADVISORY
-        # message only — close-out semantics are unchanged in S2 (this
-        # mirrors how suggestion_disposition deferred its runtime gate to
-        # Set 048 S3). Session 3 upgrades this to the hard-TTY/soft-non-TTY
-        # gate. Fail-open: any error here never blocks close-out. Gated on
-        # verificationMode so Full-tier / non-opted-in sets are untouched.
+        # Set 057 Q6 close-out gate (validator landed S2; gate STRENGTH
+        # wired here in S3). When verificationMode=dedicated-sessions, the
+        # content-aware close-time validator confirms a *different-engine*
+        # verification session ran before the SET-TERMINAL close. Operator
+        # decision (engines split): HARD-block in an interactive TTY (refuse
+        # the close, print corrective), SOFT-warn in non-TTY / headless or
+        # under --accept-suggestions (mirrors the established soft posture of
+        # the external-verification.md gate while strengthening the
+        # interactive path). The gate fires ONLY on the set-terminal close —
+        # a non-terminal work-session close is never blocked for "no
+        # verification yet". Fail-open in the non-block direction: any
+        # internal error here never wedges close-out. D3 is left unchanged
+        # (content-blind, inert on Lightweight); this validator + the
+        # blessed writers are the enforcement surface (see spec S1 Audit
+        # Lock -> Concrete defect).
         try:
             from dedicated_verification import (  # type: ignore[import-not-found]
                 VERIFICATION_MODE_DEDICATED,
@@ -1647,18 +1686,48 @@ def run(
                 read_verification_mode,
                 validate_dedicated_verification,
             )
+        dv_gate_failed = False
+        dv_detail = ""
         try:
-            if read_verification_mode(session_set_dir) == VERIFICATION_MODE_DEDICATED:
-                dv = validate_dedicated_verification(session_set_dir)
+            if (
+                read_verification_mode(session_set_dir) == VERIFICATION_MODE_DEDICATED
+                and _close_is_terminal(session_set_dir, outcome.session_number)
+            ):
+                dv = validate_dedicated_verification(
+                    session_set_dir,
+                    closing_session_number=outcome.session_number,
+                )
                 if dv.applicable and not dv.ok:
-                    outcome.messages.append(
-                        "ADVISORY (Set 057, dedicated-sessions): "
-                        f"{dv.reason} {dv.corrective} "
-                        "(Session 3 turns this into a hard-TTY / soft-non-TTY "
-                        "close-out gate; close-out is NOT blocked in S2.)"
-                    )
+                    dv_detail = f"{dv.reason} {dv.corrective}".strip()
+                    non_interactive = bool(
+                        getattr(args, "accept_suggestions", False)
+                    ) or not sys.stdin.isatty()
+                    if non_interactive:
+                        soft = (
+                            "WARNING (Set 057 dedicated-sessions soft gate, "
+                            f"non-TTY/--accept-suggestions): {dv_detail}"
+                        )
+                        print(soft, file=sys.stderr)
+                        outcome.messages.append(soft)
+                    else:
+                        dv_gate_failed = True
         except Exception:
-            pass
+            dv_gate_failed = False
+        if dv_gate_failed:
+            outcome.result = "gate_failed"
+            outcome.messages.append(
+                "gate dedicated_verification failed (Set 057 Q6, "
+                f"hard-TTY): {dv_detail} Pass --accept-suggestions to "
+                "bypass non-interactively (incident/headless only)."
+            )
+            _emit_event(
+                session_set_dir,
+                "closeout_failed",
+                outcome.session_number,
+                outcome,
+                failed_checks=["dedicated_verification_gate"],
+            )
+            return outcome
 
         outcome.result = "succeeded"
         # Include the orchestrator-identity snapshot in the

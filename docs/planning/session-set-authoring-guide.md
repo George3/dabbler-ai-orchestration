@@ -215,6 +215,7 @@ requiresUAT: false       # true | false | "suggested" — human UAT review requi
 requiresE2E: false       # true | false | "suggested" — E2E test coverage required before notifying
 uatStyle: ad-hoc         # dsl | ad-hoc (only meaningful when requiresUAT: true; default ad-hoc)
 uatScope: per-session    # per-session | per-set | none (only meaningful when requiresUAT: true)
+verificationMode: out-of-band-or-none  # Lightweight only (Set 057); dedicated-sessions | out-of-band-or-none (default). Seeds the once-at-set-start choice.
 prerequisites:           # optional; sets that must complete before this one is workable
   - slug: 047-state-file-schema-v4-audit
     condition: complete
@@ -231,10 +232,42 @@ prerequisites:           # optional; sets that must complete before this one is 
   `--no-router` mode: no metered API calls, no auto-verification.
   The orchestrator follows the same write discipline as Full (same
   state-file shape, same Session Set Explorer UX, same model /
-  effort / session identification), but verification is handled via
-  copyable review prompts (Set 048 §3.2) the operator pastes into a
-  second AI assistant. See `docs/ai-led-session-workflow.md` Step 6
-  → "Lightweight tier — copyable review prompts" for the flow.
+  effort / session identification), but verification is handled
+  per-set (not per-session) via one of two `verificationMode` flows
+  (see below). See `docs/ai-led-session-workflow.md` Step 6
+  → "Lightweight tier — verification (per-set; two modes)" for the flow.
+
+- **`verificationMode`** (Set 057; **Lightweight only**) — how the set's
+  per-set verification runs. `out-of-band-or-none` (**default**) keeps the
+  copyable-review-prompt flow: the operator pastes a prompt into a second
+  assistant and records the verdict by hand in `external-verification.md`.
+  `dedicated-sessions` opts in to structured **typed sessions** — a blessed
+  verification session on a different engine, an optional remediation
+  session when issues are found, a bounded re-verification loop (rounds 1–2
+  automatic, 3+ human), and a content-aware close-out gate that confirms a
+  different-engine verification ran (hard-blocks in an interactive TTY,
+  soft-warns headless). The field here only **seeds** the choice; the
+  durable record is an `activity-log.json` entry (`kind:
+  "verification_mode"`) written **once at set start** — either from this
+  seed (recorded automatically at the first `start_session` when no choice
+  exists yet) or from an explicit `start_session --verification-mode …`.
+  Omitting both leaves the default `out-of-band-or-none` applying
+  implicitly (strictly opt-in). The field is inert on Full tier (which
+  keeps automatic, rule-based cross-provider verification).
+
+  **Session `type` (Set 057).** The `dedicated-sessions` flow appends
+  runtime sessions to `session-state.json`'s `sessions[]` carrying a
+  `type` field: `work` (default; absent on every existing and Full-tier
+  entry), `verification`, or `remediation`. `type` is a **session-state**
+  field, not a spec config field — spec authors never write it; the blessed
+  writers (`start_session --type …` to open a typed session, and
+  `start_session --type … --handoff` to chain one) do — never a freehand
+  edit. See
+  [`docs/session-state-schema.md`](../session-state-schema.md) for the
+  per-session shape. Verification/remediation sessions are **not** authored
+  in spec.md and take their step list from the workflow doc, so the
+  authored session count in the spec stays fixed even as the runtime count
+  grows.
 
 - **`requiresUAT: true`** — the set must produce a
   `<slug>-uat-checklist.json` and human-UAT review is a precondition

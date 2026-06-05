@@ -5,6 +5,77 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-06-05 (Set 057 — Lightweight dedicated verification sessions)
+
+Replaces the Lightweight tier's semi-manual copy/paste review-prompt step
+with an optional, bounded **dedicated verification/remediation-session**
+workflow (`verificationMode: dedicated-sessions`): a blessed verification
+session runs on a different engine, a hand-off close chains an optional
+remediation session and a bounded re-verification loop, and a
+content-aware close-out gate confirms the cross-provider path actually
+ran. Reuses the existing `sN-issues.json` / `disposition.json` /
+`session-state.json` artifacts rather than inventing a parallel
+vocabulary. Audit-locked in Set 057 S1 (cross-provider consensus);
+schema + writer landed in S2; this release wires the operator-choice
+capture, the Q6 close-out gate strength, and the verification->remediation
+hand-off. Additive and backward-compatible: Full tier is untouched
+(`verificationMode` is inert there) and the new session `type` defaults
+to `work` / is absent on every existing entry.
+
+### Added
+
+- **`register_typed_session_handoff(...)`** in `session_state.py` — the
+  **hand-off close** writer. Atomically marks the in-flight typed
+  (`verification` / `remediation`) session complete and opens the
+  follow-on typed session in-progress, so a non-terminal verification
+  close never leaves `sessions[]` all-complete-while-in-progress (which
+  the rule-6 invariant rejects) and `close_session` never mis-reads it as
+  a set-terminal close. Grows the runtime `totalSessions` by one; emits
+  `closeout_succeeded` (with `handoff: true`) + `work_started` events.
+- **`start_session --verification-mode {dedicated-sessions,out-of-band-or-none}`**
+  — records the operator's per-set choice once at set start (the durable
+  record is an `activity-log.json` `kind: "verification_mode"` entry).
+  CLI flag wins; otherwise a spec.md Session Set Configuration
+  `verificationMode:` field seeds it (recorded only when no choice exists
+  yet). Omitting both leaves the default `out-of-band-or-none` implicit
+  (strictly opt-in).
+- **`dedicated_verification.resolve_and_record_verification_mode(...)`,
+  `read_spec_verification_mode(...)`, `has_verification_mode_record(...)`**
+  — the capture helpers behind that flag (CLI choice > spec.md seed >
+  nothing; creates a minimal `activity-log.json` when one is absent).
+- **Set 057 Q6 close-out gate in `close_session`** — when
+  `verificationMode == dedicated-sessions`, the content-aware close-time
+  validator runs on the **set-terminal** close. If it cannot confirm a
+  *different-engine* verification session ran, the gate **hard-blocks in
+  an interactive TTY** (exits `gate_failed`, prints the corrective, emits
+  `closeout_failed` with `dedicated_verification_gate`) and **soft-warns
+  in non-TTY / headless** (or under `--accept-suggestions`). Fires only on
+  the set-terminal close; non-terminal work-session closes are never
+  blocked. Fail-open in the non-block direction.
+
+### Changed
+
+- **`validate_dedicated_verification(...)`** gained an optional
+  `closing_session_number` keyword. The terminal close of a single-round
+  happy path closes the verification session itself, which is still
+  in-progress at gate time; passing its number lets the validator count
+  it as the just-completed verification it is. Default `None` preserves
+  the S2 "completed sessions only" semantics for every other caller.
+
+### Docs
+
+- `docs/ai-led-session-workflow.md` Step 6 — Lightweight verification
+  rewritten as **per-set** (Set 057 L1) with two modes
+  (`out-of-band-or-none` copyable prompts; `dedicated-sessions` typed
+  sessions), the generic typed-session procedure, bounded rounds (1-2
+  automatic, 3+ human), re-verify-only-after-real-changes, narrow later
+  rounds, remediation-evaluates-the-verification-method-first,
+  Critical/Major-non-fix -> `awaiting-human`, the seven derived states,
+  the close-out gate, and the operator-initiated `second-opinion`
+  tie-breaker (L4).
+- `docs/planning/session-set-authoring-guide.md` — `verificationMode`
+  field semantics + capture mechanism, and the session `type` values.
+
 ## [0.15.0] — 2026-06-02 (Set 054 — verificationVerdict persistence)
 
 Wires the cross-provider verifier's pass/fail outcome through to

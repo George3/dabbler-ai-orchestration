@@ -98,6 +98,7 @@ try:
         compute_effective_completed_sessions,
         read_session_state,
         register_session_start,
+        register_typed_session_handoff,
         register_typed_session_start,
     )
     from close_lock import (  # type: ignore[import-not-found]
@@ -120,6 +121,7 @@ except ImportError:
         compute_effective_completed_sessions,
         read_session_state,
         register_session_start,
+        register_typed_session_handoff,
         register_typed_session_start,
     )
     from .close_lock import (  # type: ignore[no-redef]
@@ -259,6 +261,31 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--handoff",
+        action="store_true",
+        help=(
+            "Set 057: hand-off close. With --type verification|remediation, "
+            "atomically CLOSE the in-flight typed session and OPEN this one "
+            "(the sanctioned writer for the verification->remediation and "
+            "remediation->re-verification transitions). Required because a "
+            "standalone non-terminal typed close would leave sessions[] "
+            "all-complete-while-in-progress (rejected by invariant rule 6). "
+            "Use this instead of hand-editing session-state.json so typed "
+            "sessions always come from a blessed writer (L3/Q1). Refused "
+            "unless exactly one typed session is in flight."
+        ),
+    )
+    p.add_argument(
+        "--handoff-verdict",
+        dest="handoff_verdict",
+        default=None,
+        help=(
+            "Optional verdict recorded on the session being closed by "
+            "--handoff (e.g. ISSUES_FOUND for the verification round that "
+            "hands off to remediation). Ignored without --handoff."
+        ),
+    )
+    p.add_argument(
         "--total-sessions",
         type=int,
         default=None,
@@ -272,6 +299,25 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "``0/?`` in the Session Set Explorer per Set 046 "
             "deliverable (a). Pass this flag to lock the count "
             "explicitly without editing spec.md."
+        ),
+    )
+    p.add_argument(
+        "--verification-mode",
+        dest="verification_mode",
+        default=None,
+        choices=["dedicated-sessions", "out-of-band-or-none"],
+        help=(
+            "Set 057 (Q5): record the operator's Lightweight verification "
+            "choice once at set start. ``dedicated-sessions`` opts in to the "
+            "typed verification/remediation workflow (and the close-out gate "
+            "that confirms a different-engine verification ran); "
+            "``out-of-band-or-none`` preserves the current copy/paste flow. "
+            "When omitted, the writer seeds the choice from spec.md's "
+            "Session Set Configuration ``verificationMode`` field if present "
+            "(recorded only when no choice exists yet); otherwise nothing is "
+            "recorded and the default out-of-band-or-none applies implicitly. "
+            "The durable record is an activity-log.json entry every later "
+            "step reads."
         ),
     )
     # Set 048 Session 2: --no-router mode flag. Highest precedence
@@ -294,6 +340,38 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     return p
+
+
+def _capture_verification_mode(
+    session_set_dir: str,
+    session_number: int,
+    cli_choice: Optional[str],
+) -> None:
+    """Set 057 (Q5): record the operator's verificationMode once at set start.
+
+    Best-effort: delegates to
+    :func:`dedicated_verification.resolve_and_record_verification_mode`
+    (CLI choice wins; otherwise the spec.md seed is recorded only when no
+    durable record exists yet). A bad explicit ``--verification-mode`` is
+    already rejected by argparse ``choices``; any other failure here must
+    never block the session-start write, so it is swallowed.
+    """
+    try:
+        try:
+            from dedicated_verification import (  # type: ignore[import-not-found]
+                resolve_and_record_verification_mode,
+            )
+        except ImportError:
+            from .dedicated_verification import (  # type: ignore[no-redef]
+                resolve_and_record_verification_mode,
+            )
+        resolve_and_record_verification_mode(
+            session_set_dir,
+            cli_choice=cli_choice,
+            session_number=session_number,
+        )
+    except Exception:
+        pass
 
 
 def _log_session_start(
@@ -466,6 +544,8 @@ def _run_under_lock(args: argparse.Namespace) -> int:
     # "Start the next session" prompt is self-describing.
     session_type = getattr(args, "session_type", "work") or "work"
     if session_type in ("verification", "remediation"):
+        if getattr(args, "handoff", False):
+            return _run_typed_handoff(args, session_set_dir, session_type)
         return _run_typed_session(args, session_set_dir, session_type)
 
     state = read_session_state(session_set_dir) or {}
@@ -599,6 +679,13 @@ def _run_under_lock(args: argparse.Namespace) -> int:
         orchestrator_provider=args.provider,
     )
 
+    # Set 057 (Q5): capture the operator's verificationMode choice once at
+    # set start (CLI flag wins; spec.md seed recorded only when no record
+    # exists yet). Best-effort — never blocks the boundary write.
+    _capture_verification_mode(
+        session_set_dir, requested, getattr(args, "verification_mode", None)
+    )
+
     # Set 049 (T5): best-effort observability log so a post-hoc
     # forensic walk can identify the most recent claimant without
     # the snapshot.
@@ -679,6 +766,13 @@ def _run_typed_session(
         file=sys.stderr,
     )
 
+    # Set 057 (Q5): capture is immutable after the first record, so this is
+    # a no-op once the set has opted in/out at its start. Kept for the edge
+    # case where a set's very first start is itself a typed session.
+    _capture_verification_mode(
+        session_set_dir, new_number, getattr(args, "verification_mode", None)
+    )
+
     _log_session_start(
         session_set_dir=session_set_dir,
         session_number=new_number,
@@ -688,6 +782,69 @@ def _run_typed_session(
 
     # Set 053 schema-drift advisory, identical to the work-session path:
     # non-blocking, fail-open, stderr only, never changes exit status.
+    try:
+        drift_line = summarize_drift(
+            os.path.dirname(os.path.abspath(session_set_dir))
+        )
+        if drift_line:
+            print(drift_line, file=sys.stderr)
+    except Exception:
+        pass
+
+    return EXIT_OK
+
+
+def _run_typed_handoff(
+    args: argparse.Namespace,
+    session_set_dir: str,
+    followon_type: str,
+) -> int:
+    """Set 057: hand-off close (the sanctioned writer for the
+    verification->remediation and remediation->re-verification transitions).
+
+    Delegates to :func:`session_state.register_typed_session_handoff`, which
+    atomically closes the in-flight typed session and opens the follow-on
+    session in-progress. This is the CLI path that keeps non-Python flows
+    (Copilot/Codex/Gemini) on a blessed writer instead of hand-editing
+    session-state.json (L3/Q1). Returns ``EXIT_OK`` on success or
+    ``EXIT_BOUNDARY`` when the writer's fail-loud contract refuses (no
+    plan, no/!=1 in-flight typed session).
+    """
+    try:
+        _path, closed_number, new_number = register_typed_session_handoff(
+            session_set=session_set_dir,
+            followon_type=followon_type,
+            orchestrator_engine=args.engine,
+            orchestrator_model=args.model,
+            orchestrator_effort=args.effort,
+            orchestrator_provider=args.provider,
+            verification_verdict=getattr(args, "handoff_verdict", None),
+            title=getattr(args, "session_title", None),
+        )
+    except ValueError as exc:
+        print(f"start_session: {exc}", file=sys.stderr)
+        return EXIT_BOUNDARY
+
+    print(
+        f"[dabbler] Hand-off: closed session {closed_number}; session "
+        f"{new_number} is a {followon_type.upper()} session "
+        f"(type={followon_type}).",
+        file=sys.stderr,
+    )
+    print(
+        "[dabbler] Typed sessions take their step list from "
+        "docs/ai-led-session-workflow.md -> Lightweight dedicated "
+        "verification (NOT a spec.md heading).",
+        file=sys.stderr,
+    )
+
+    _log_session_start(
+        session_set_dir=session_set_dir,
+        session_number=new_number,
+        engine=args.engine,
+        provider=args.provider,
+    )
+
     try:
         drift_line = summarize_drift(
             os.path.dirname(os.path.abspath(session_set_dir))
