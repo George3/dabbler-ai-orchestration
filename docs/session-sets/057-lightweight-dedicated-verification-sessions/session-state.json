@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "057-lightweight-dedicated-verification-sessions",
+  "status": "in-progress",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Audit & design-lock",
+      "status": "in-progress",
+      "startedAt": "2026-06-05T08:04:06.491474-04:00",
+      "completedAt": null,
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "medium"
+      },
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "Schema + forced writer",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Workflow, operator-choice, close-out, ship",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}
