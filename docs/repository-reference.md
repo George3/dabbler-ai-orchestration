@@ -63,14 +63,15 @@ can learn it.
 
 | Surface | Current version | State | Canonical details |
 |---|---|---|---|
-| `dabbler-ai-router` | `0.16.0` | Set 057 bumped; PyPI publish held for operator tag-push `v0.16.0`. | `pyproject.toml`, `ai_router/CHANGELOG.md` |
-| `dabbler-ai-orchestration` VS Code extension | `0.27.0` | Set 052 shipped; Marketplace publish held for operator tag-push `vsix-v0.27.0`. | `tools/dabbler-ai-orchestration/package.json`, `tools/dabbler-ai-orchestration/CHANGELOG.md` |
+| `dabbler-ai-router` | `0.16.0` | Set 057 bumped; PyPI publish held for operator tag-push `v0.16.0`. Set 058 did not change the packaged surface. | `pyproject.toml`, `ai_router/CHANGELOG.md` |
+| `dabbler-ai-orchestration` VS Code extension | `0.28.0` | Set 058 bumped; Marketplace publish held for operator tag-push `vsix-v0.28.0`. | `tools/dabbler-ai-orchestration/package.json`, `tools/dabbler-ai-orchestration/CHANGELOG.md` |
 
 ### Recent version walk
 
+- **Extension `0.28.0`** — Set 058, tier-model clarity & consumer-repo bootstrap (shared template writer; uniform tier-aware scaffolding; canonical `spec.md`/engine-file/`start-here.md` templates; CI drift guards). Marketplace-only; `ai_router` packaged surface unchanged. Publish held for `vsix-v0.28.0`.
 - **`dabbler-ai-router 0.16.0`** — Set 057, Lightweight dedicated verification/remediation sessions (`verificationMode`, hand-off close, Q6 close-out gate). PyPI-only; extension untouched. Publish held for `v0.16.0`.
 - **`dabbler-ai-router 0.15.0`** — Set 054, verificationVerdict persistence. PyPI-only. Publish held for `v0.15.0`.
-- **Extension `0.27.0`** — Set 052, cost-metrics icon redesign. Marketplace-only. Publish held for `vsix-v0.27.0`.
+- **Extension `0.27.0`** — Set 052, cost-metrics icon redesign. Marketplace-only. Publish held for `vsix-v0.27.0` (superseded by `vsix-v0.28.0`).
 - **`dabbler-ai-router 0.14.0` + extension `0.26.0`** — Set 051 plus Set 053, ai_router hygiene / hook retirement / lifecycle schema-drift coverage.
 - **`dabbler-ai-router 0.12.0` + extension `0.25.0`** — Set 050, schema-drift guard and numeric session-set addressing.
 - **Extension `0.24.1`** — patch release wiring `Copy Slug` into the row action registry.

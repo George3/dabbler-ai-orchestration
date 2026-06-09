@@ -135,8 +135,10 @@ engine files, no `.venv`, generated specs missing the `tier:` field, and no
 clear next step. The root cause was a **stale, pre-Set-048 tier model** that
 four setup surfaces still encoded:
 
+<!-- drift-guard:allow-begin (this blockquote quotes the banned framing in order to ban it) -->
 > ❌ "Lightweight = no Python, no venv, no close-out machinery, no
 > cross-provider verification — just a docs/Explorer-only workflow."
+<!-- drift-guard:allow-end -->
 
 That framing is **wrong** and contradicts the implemented `--no-router` mode.
 The pure-docs Lightweight tier was an illusion that the Set 048 runtime had
@@ -147,13 +149,19 @@ doc.
 
 **Banned framing — never write any of these about Lightweight:**
 
+<!-- drift-guard:allow-begin (this list IS the banned-phrase catalogue the CI guard enforces) -->
 - "no Python" / "no `.venv`" / "no venv"
 - "no `ai_router` / no PyPI dependency"
 - "no close-out" / "no `start_session` / `close_session`"
 - "docs-only" / "Explorer-only" as the *definition* of the tier
+<!-- drift-guard:allow-end -->
 
 **Correct framing — always:** *router-off, not Python-off; `tier:` is the
 single switch; both tiers share the Python lifecycle.*
+
+> A CI drift guard (`ai_router/scripts/drift_guard.py`, Set 058 S3) scans all
+> live guidance docs for the banned phrasing above and fails the build if it
+> reappears outside an explicit `<!-- drift-guard:allow-begin/end -->` region.
 
 ---
 

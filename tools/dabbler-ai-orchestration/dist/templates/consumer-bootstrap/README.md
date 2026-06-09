@@ -93,6 +93,8 @@ contract, so the templates cannot silently drift from a fixed count.
 - **Never emit `schemaVersion: 2`, a bare (un-prefixed) slug, or a spec
   missing `tier` / `verificationMode`.** Those are the exact `sessionGenPrompt`
   drift instances this set removes.
+<!-- drift-guard:allow-begin (documents the banned-phrase catalogue; see drift_guard.py) -->
 - **Keep the banned Lightweight framing out** (`no Python` / `no venv` /
   `docs-only`). The CI drift guard (Session 3) fails the build if it
   reappears in any doc, these templates included.
+<!-- drift-guard:allow-end -->

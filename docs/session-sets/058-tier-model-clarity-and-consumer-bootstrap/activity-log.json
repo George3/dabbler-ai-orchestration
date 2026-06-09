@@ -65,9 +65,27 @@
       "description": "Cross-provider verification (session-verification -> gpt-5-4, cross-provider from Claude). R1 ISSUES_FOUND: 1 Critical (FALSE POSITIVE, empirically dismissed -- spec config block has no schemaVersion field; schemaVersion 4 lives in companion session-state.json.template) + 3 Major + 1 Minor fixed in-flight. R2 confirmed fixes + surfaced 1 Major (repo-scoped tier wording in agents/gemini tails) + 1 Minor (raw vs blob URL) -- both fixed. R3 VERIFIED, no residual stale framing.",
       "status": "complete",
       "routedApiCalls": [
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 1, "verdict": "ISSUES_FOUND", "costUsd": 0.2553},
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 2, "verdict": "ISSUES_FOUND", "costUsd": 0.1146},
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 3, "verdict": "VERIFIED", "costUsd": 0.1206}
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 1,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.2553
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 2,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.1146
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 3,
+          "verdict": "VERIFIED",
+          "costUsd": 0.1206
+        }
       ]
     },
     {
@@ -123,10 +141,128 @@
       "description": "Cross-provider verification (session-verification -> gpt-5-4, cross-provider from Claude). R1 ISSUES_FOUND (0 Crit, 2 Major, 1 Minor): prompt embedded raw templates w/ colliding fences -> render exemplars; packaged-runtime path untested + wrong dist fallback -> fixed + new test; loose assertions -> tightened. R2 ISSUES_FOUND (1 Major, 2 Minor): CRLF marker fragility -> normalize on load + defensively + CRLF test; copyTemplateBundle warned not failed -> throws + real-dist smoke test; per-block isolation -> asserted. R3 ISSUES_FOUND (1 Major, 3 Minor): the Major (VSIX may exclude dist/templates) was EMPIRICALLY DISPROVEN via `vsce ls` (all 8 bundle files packaged) + explicit !dist/templates/** added; 3 Minors fixed (watch re-copy plugin, totalSessions>=1 guard, negative bare-slug prompt assertions). Converged at retry budget -> VERIFIED_WITH_NOTES.",
       "status": "complete",
       "routedApiCalls": [
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 1, "verdict": "ISSUES_FOUND", "costUsd": 0.3056},
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 2, "verdict": "ISSUES_FOUND", "costUsd": 0.2427},
-        {"taskType": "session-verification", "model": "gpt-5-4", "round": 3, "verdict": "ISSUES_FOUND", "costUsd": 0.2301}
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 1,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.3056
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 2,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.2427
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 3,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.2301
+        }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/coldstart-acceptance-green",
+      "dateTime": "2026-06-09T12:05:00-04:00",
+      "description": "Cold-start acceptance test (both tiers): boots a throwaway repo from the committed golden render and walks engine file -> start-here.md -> active spec.md -> tier resolved -> real start_session.main() entry (mode derived from tier:) -> close via shared gate. ai_router/tests/test_cold_start_acceptance.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/drift-ci-added",
+      "dateTime": "2026-06-09T12:10:00-04:00",
+      "description": "CI drift guards: ai_router/scripts/drift_guard.py (stale-framing w/ file-allowlisted allow-markers, one-active-set <=1, dist-bundle-in-sync) + 19 tests; golden render snapshot coldStartSnapshot.test.ts; wired into test.yml as drift-guards + template-snapshot jobs.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/uat-checklist-authored",
+      "dateTime": "2026-06-09T12:15:00-04:00",
+      "description": "Operator UAT checklist (14 items, ad-hoc/per-set) for the end-to-end Get Started -> scaffold -> start-the-next-session flow on both tiers; mechanically-backed items pass, live-interaction items pending operator.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/version-bumped",
+      "dateTime": "2026-06-09T12:20:00-04:00",
+      "description": "Extension 0.27.0 -> 0.28.0 (package.json + package-lock + CHANGELOG held notes); repository-reference.md release-status + version-walk updated. No PyPI bump (ai_router packaged surface unchanged; 0.16.0 from Set 057 remains held).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/build-and-test",
+      "dateTime": "2026-06-09T12:25:00-04:00",
+      "description": "Full suites: Python 1184 passed/1 skipped, 0 failures; TS unit 638 passing (2 pre-existing Set-026 stub failures in untouched files); vsce ls confirms all 8 dist/templates/consumer-bootstrap files ship; drift_guard exits 0.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/verified",
+      "dateTime": "2026-06-09T12:40:00-04:00",
+      "description": "Cross-provider verification (session-verification -> gpt-5-4, cross-provider from Claude), 3 rounds. R1 ISSUES_FOUND (4 findings); 3 fixed in-flight (CI-enforce D8 snapshot; drive real start_session entry + fix comment; allowlist the allow-marker escape hatch), 1 deferred (full repository-reference.md staleness, pre-existing/out-of-scope; verifier agreed). R2 two follow-ups applied; R3 all Issue:None = VERIFIED.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 1,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.278525
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 2,
+          "verdict": "ISSUES_FOUND",
+          "costUsd": 0.14127
+        },
+        {
+          "taskType": "session-verification",
+          "model": "gpt-5-4",
+          "round": 3,
+          "verdict": "VERIFIED",
+          "costUsd": 0.01907
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "session-003/next-set-recommendation",
+      "dateTime": "2026-06-09T12:45:00-04:00",
+      "description": "Routed next-session-set recommendation (analysis -> gemini-pro): a 059-release-and-stabilize set to ship the held releases (extension 0.28.0, router 0.16.0/0.15.0) and validate end-to-end UX. next-set-recommendation.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "taskType": "analysis",
+          "model": "gemini-pro",
+          "costUsd": 0.00251875
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 8,
+      "stepKey": "session-003/change-log-written",
+      "dateTime": "2026-06-09T12:50:00-04:00",
+      "description": "Authored change-log.md (set COMPLETE, 3/3); disposition.json verification_verdict=VERIFIED, next_orchestrator=null (final session).",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

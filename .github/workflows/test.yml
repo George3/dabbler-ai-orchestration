@@ -7,6 +7,58 @@ on:
     branches: [master]
 
 jobs:
+  drift-guards:
+    name: Tier-model drift guards
+    runs-on: ubuntu-latest
+    # Set 058 S3 (D6/D8): a fast, dependency-free gate that fails the build if
+    # the stale "Lightweight = no Python / no venv" framing reappears in any
+    # live doc, if more than one session set is in-progress at once, or if the
+    # committed dist/ template bundle drifts from its canonical source. The
+    # guard uses only the Python stdlib, so no install step is needed. The same
+    # checks also run inside the pytest suite (ai_router/tests/test_drift_guard.py);
+    # this job surfaces them as a clearly-named standalone gate.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Run tier-model / consumer-bootstrap drift guards
+        run: python ai_router/scripts/drift_guard.py
+
+  template-snapshot:
+    name: Consumer-bootstrap template snapshot
+    runs-on: ubuntu-latest
+    # Set 058 S3 (D8): enforce the cold-start golden snapshot in CI. The full TS
+    # unit suite is not run in CI (two pre-existing Set-026 specs fail under the
+    # vscode-stub), so the snapshot guard would otherwise be local-only. This
+    # job runs ONLY the writer-render and golden-snapshot specs directly via
+    # mocha + ts-node — both pass cleanly and have no VS Code dependency — so a
+    # template edit that changes rendered output without a regenerated golden
+    # fails CI here.
+    defaults:
+      run:
+        working-directory: tools/dabbler-ai-orchestration
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install extension dependencies
+        run: npm ci
+
+      - name: Run consumer-bootstrap render + cold-start golden snapshot specs
+        run: >-
+          npx mocha --require ts-node/register
+          --require ./src/test/vscode-stub.js --ui tdd --timeout 120000
+          'src/test/suite/consumerBootstrap.test.ts'
+          'src/test/suite/coldStartSnapshot.test.ts'
+
   python-tests:
     name: Python tests
     runs-on: ${{ matrix.os }}

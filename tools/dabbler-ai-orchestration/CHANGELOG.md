@@ -5,6 +5,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-06-09 (Set 058 — Tier-model clarity & consumer-repo bootstrap)
+
+Makes every repo-creation path emit correct, uniform, tier-aware scaffolding
+and reconciles the consumer-bootstrap surfaces to the code-verified tier model
+(**Lightweight is router-off, not Python-off; `tier:` is the single switch**).
+
+### Added
+
+- A shared template writer (`src/utils/consumerBootstrap.ts`) that renders the
+  canonical `spec.md` (schemaVersion 4, `NNN-` slug, required `tier` +
+  `verificationMode`), the three engine files (`CLAUDE.md` / `AGENTS.md` /
+  `GEMINI.md` — one shared body + a per-engine tail), and the generated
+  `docs/dabbler/start-here.md` cold-start operative doc from one durable
+  template bundle. The Get Started wizard, `dabbler.setupNewProject`
+  (`gitScaffold`), and `dabbler.generateSessionSetPrompt` (`sessionGenPrompt`)
+  all route through it, so they cannot drift apart.
+- The template bundle is copied into `dist/templates/consumer-bootstrap/` at
+  build time and rendered from there at runtime (the packaged `.vsix` ships
+  the bundle).
+
+### Changed
+
+- **`dabbler.setupNewProject` scaffolds both tiers uniformly**: a `.venv` +
+  `pip install dabbler-ai-router`, the three engine files, `start-here.md`, and
+  a templated `spec.md`. The only divergence is that Full writes
+  `ai_router/router-config.yaml` while Lightweight writes `tier: lightweight`
+  and no router config.
+- **`dabbler.generateSessionSetPrompt`** now produces the canonical spec shape
+  (schemaVersion 4, `NNN-` slug, `tier`, `verificationMode`) — never the legacy
+  `schemaVersion: 2` / bare-slug shape.
+- The Get Started wizard states Python is required on **both** tiers and ends
+  with an explicit "you're ready — tell your orchestrator *start the next
+  session*" closure.
+
+### Notes
+
+- TS / docs only — no companion PyPI release. The packaged `ai_router` surface
+  is unchanged this set; `dabbler-ai-router 0.16.0` (Set 057) remains held.
+<!-- drift-guard:allow-begin (describes what the guard forbids) -->
+- Set 058 S3 adds a Python cold-start acceptance test (both tiers), a golden
+  render snapshot, and CI drift guards (`ai_router/scripts/drift_guard.py`) that
+  forbid the stale "Lightweight = no Python / no venv" framing, enforce one
+  active session set, and keep the committed `dist/` bundle in sync.
+<!-- drift-guard:allow-end -->
+
 ## [0.27.0] — 2026-05-30 (Set 052 — Cost-metrics icon redesign)
 
 Fixes the dead cost-dashboard icon. The root cause was a **read/write
