@@ -1,27 +1,27 @@
 {
   "status": "completed",
-  "summary": "Session 1 of 3: established docs/concepts/tier-model.md as the single source of truth for the Full vs Lightweight tier model (router-off, not Python-off; tier: is the single switch; both tiers share the Python lifecycle), grounded in ai_router/runtime_mode.py. Authored the docs/templates/consumer-bootstrap/ bundle (bundle README contract + spec.md.template + schemaVersion-4 session-state.json.template + start-here.md.template with the verbatim machine-checkable active-set rule + engine-file shared body + claude/agents/gemini tails). Documented tier + verificationMode in docs/spec-md-schema.md and fixed its stale 'runs without ai_router' framing. Reconciled adoption-bootstrap.md and quick-start.md to the D3 uniform scaffold (both tiers scaffold .venv + dabbler-ai-router + three engine files + start-here.md + templated spec; only divergence is Full-only router config). Pointerized the README tier highlight and the Get Started wizard copy (both-tier Python prerequisite, accurate Lightweight framing, SSoT pointer). No extension code changed and no release, per the spec. Cross-provider verification (gpt-5-4) reached VERIFIED after a 3-round fix loop; 1 Critical was an empirically-confirmed false positive (spec config blocks carry no schemaVersion field).",
+  "summary": "Session 2 of 3: shipped the extension code that makes every repo-creation path emit uniform, tier-aware scaffolding from the Session-1 template bundle. (1) New shared template writer src/utils/consumerBootstrap.ts renders the six consumer artifacts (CLAUDE/AGENTS/GEMINI.md = shared body + per-engine tail, docs/dabbler/start-here.md, and the active set's spec.md + schemaVersion-4 session-state.json) with token substitution, N-session expansion (one ### Session K of N block + session-00K/ keys; one not-started sessions[] object per session), CRLF normalization, and a totalSessions>=1 guard. esbuild copies the canonical docs/templates/consumer-bootstrap bundle into dist/templates (verified packaged via vsce ls; explicit !dist/templates/** in .vscodeignore). (2) gitScaffold (dabbler.setupNewProject) prompts tier + set details, renders the artifacts (skip-existing), and runs a tier-aware install: both tiers get .venv + pip install dabbler-ai-router, only Full keeps router-config.yaml (Lightweight removes the seeded copy = the sole D3 divergence). (3) sessionGenPrompt now shows fully writer-rendered, ~~~~-fenced exemplars (schemaVersion 4, NNN- slug, tier, verificationMode) instead of raw {{TOKEN}} templates; never the retired schemaVersion-2/bare-slug shape. (4) Get Started wizard gained the explicit 'start the next session' cold-start closure (D7). 636 TS tests pass (2 pre-existing Set-026 stub failures unrelated). No release this session (Marketplace bump is Session 3).",
   "verification_method": "api",
-  "verification_verdict": "VERIFIED",
+  "verification_verdict": "VERIFIED_WITH_NOTES",
+  "verification_notes": "gpt-5-4 cross-provider, 3 rounds, all findings resolved in-flight. R1 (2 Major, 1 Minor) and R2 (1 Major incl. the CRLF expansion bug, 2 Minor) fully fixed with regression tests. R3 returned ISSUES_FOUND (1 Major, 3 Minor) at the retry budget: the lone Major ('the VSIX may exclude dist/templates, breaking scaffold at runtime') was EMPIRICALLY DISPROVEN by running `vsce ls`, which lists all 8 bundle files as packaged; an explicit !dist/templates/** line was added to .vscodeignore for durability. The 3 R3 Minors were fixed (esbuild re-copies the bundle on every rebuild so --watch can't go stale; renderSpec/renderSessionState throw on a non-positive totalSessions; sessionGenPrompt tests now negatively assert no bare-slug examples). Converged here rather than spend a 4th paid round, per the workflow's max-2-retries guidance; raw verdicts preserved in s2-verification.md / -round-2.md / -round-3.md.",
   "files_changed": [
-    "docs/concepts/tier-model.md",
-    "docs/templates/consumer-bootstrap/README.md",
-    "docs/templates/consumer-bootstrap/spec.md.template",
-    "docs/templates/consumer-bootstrap/session-state.json.template",
-    "docs/templates/consumer-bootstrap/start-here.md.template",
-    "docs/templates/consumer-bootstrap/engine-file.shared-body.md",
-    "docs/templates/consumer-bootstrap/engine-file.claude-tail.md",
-    "docs/templates/consumer-bootstrap/engine-file.agents-tail.md",
-    "docs/templates/consumer-bootstrap/engine-file.gemini-tail.md",
-    "docs/spec-md-schema.md",
-    "docs/adoption-bootstrap.md",
-    "docs/quick-start.md",
-    "README.md",
+    "tools/dabbler-ai-orchestration/src/utils/consumerBootstrap.ts",
+    "tools/dabbler-ai-orchestration/src/commands/gitScaffold.ts",
+    "tools/dabbler-ai-orchestration/src/commands/installAiRouterCommands.ts",
+    "tools/dabbler-ai-orchestration/src/wizard/sessionGenPrompt.ts",
     "tools/dabbler-ai-orchestration/webview/wizard.html",
+    "tools/dabbler-ai-orchestration/esbuild.js",
+    "tools/dabbler-ai-orchestration/.vscodeignore",
+    "tools/dabbler-ai-orchestration/src/test/suite/consumerBootstrap.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/gitScaffoldCore.test.ts",
+    "tools/dabbler-ai-orchestration/src/test/suite/sessionGenPrompt.test.ts",
+    "tools/dabbler-ai-orchestration/dist/extension.js",
+    "tools/dabbler-ai-orchestration/dist/extension.js.map",
+    "tools/dabbler-ai-orchestration/dist/templates/consumer-bootstrap/",
     "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/activity-log.json",
-    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s1-verification.md",
-    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s1-verification-round-2.md",
-    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s1-verification-round-3.md"
+    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s2-verification.md",
+    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s2-verification-round-2.md",
+    "docs/session-sets/058-tier-model-clarity-and-consumer-bootstrap/s2-verification-round-3.md"
   ],
   "verification_message_ids": [],
   "next_orchestrator": {
@@ -31,7 +31,7 @@
     "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Session 2 implements the TS shared template writer + fixes gitScaffold/sessionGenPrompt/wizard to render the Session-1 template bundle; same orchestrator keeps full architectural context of the SSoT, the placeholder-token contract, and the TOTAL_SESSIONS repetition rule just authored."
+      "specifics": "Session 3 (final) authors the cold-start acceptance fixtures for both tiers, the CI drift guards (stale-framing guard + template snapshot that the rendered output matches docs/templates/consumer-bootstrap + one-active-set check), the operator UAT checklist, and the held Marketplace bump. Same orchestrator carries the writer/render contract, the dist/templates packaging proof, and the open follow-ups (the R3-suggested post-build VSIX smoke test is naturally S3's snapshot/CI scope)."
     }
   },
   "blockers": []

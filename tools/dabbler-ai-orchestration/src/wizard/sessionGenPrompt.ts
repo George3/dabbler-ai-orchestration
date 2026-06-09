@@ -1,75 +1,118 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  BootstrapContext,
+  TemplateBundle,
+  loadTemplateBundle,
+  renderSessionState,
+  renderSpec,
+  resolveBundledTemplateDir,
+} from "../utils/consumerBootstrap";
 
 const PLAN_PATH = path.join("docs", "planning", "project-plan.md");
 
-const PROMPT_SYSTEM = `You are a session-set architect for an AI-led software development workflow.
+/**
+ * Concrete sample context used to render the prompt's worked exemplars.
+ * A FULL set with three sessions exercises the session-expansion path
+ * (so the AI is shown three numbered blocks / objects, not the bundle's
+ * two-block illustrative sample) and a fixed slug/date keeps the prompt
+ * deterministic for the test suite.
+ */
+const SAMPLE_CONTEXT: BootstrapContext = {
+  repoName: "example-app",
+  setTitle: "Example feature",
+  purpose: "A worked example — replace with the real set's purpose.",
+  slug: "001-example-feature",
+  created: "2026-01-01",
+  tier: "full",
+  verificationMode: "out-of-band-or-none",
+  totalSessions: 3,
+};
+
+/**
+ * Build the session-set generation prompt from the canonical template
+ * bundle (Set 058 S2). The prompt shows the AI fully WRITER-RENDERED
+ * exemplars (via {@link renderSpec} / {@link renderSessionState}), not the
+ * raw \`.template\` files — so it demonstrates the resolved, session-
+ * expanded contract (schemaVersion 4, an ``NNN-`` prefixed slug, the
+ * required ``tier`` + ``verificationMode`` fields, exactly N session
+ * blocks / objects) rather than unresolved ``{{TOKEN}}`` placeholders and
+ * the bundle's illustrative two-block sample. The shared writer is the
+ * single source of truth, so the prompt cannot drift from what the wizard
+ * / scaffolder emit.
+ *
+ * Exemplars are fenced with ``~~~~`` so the spec's own inner ``` ```yaml ```
+ * fence does not collide with the outer fence.
+ *
+ * Pure so the test suite can assert the prompt carries the canonical,
+ * expanded shape (and never the retired schemaVersion-2 / bare-slug form).
+ */
+export function buildSessionGenPrompt(
+  planText: string,
+  bundle: TemplateBundle,
+): string {
+  const exampleSpec = renderSpec(bundle, SAMPLE_CONTEXT);
+  const exampleState = renderSessionState(bundle, SAMPLE_CONTEXT);
+
+  return `You are a session-set architect for an AI-led software development workflow (the Dabbler session-set workflow).
 
 Given a project plan, decompose it into a sequence of session sets. Each session set is a
 focused, independently deployable unit of work that one AI coding session can complete.
 
-For each session set, produce a spec.md file with this exact structure:
+For EACH session set, scaffold a folder \`docs/session-sets/<NNN-slug>/\` containing a
+\`spec.md\` AND a \`session-state.json\`, matching the worked examples below EXACTLY in shape.
 
-\`\`\`markdown
-# <slug> — <short title>
+## Hard requirements (do not deviate)
 
-## Goal
-<1–2 sentence goal>
+- **Slug:** \`NNN-kebab-title\` — a three-digit, zero-padded, monotonically increasing
+  prefix then a kebab-case title (e.g. \`001-user-authentication\`, \`002-product-catalog\`).
+  Never emit a bare (un-prefixed) slug.
+- **\`spec.md\` Session Set Configuration block** MUST declare \`tier\` (\`full\` |
+  \`lightweight\`) and \`verificationMode\` (\`out-of-band-or-none\` default, or
+  \`dedicated-sessions\`; inert on Full). The tier model is defined once, in the SSoT —
+  do NOT restate it in the spec:
+  <https://github.com/darndestdabbler/dabbler-ai-orchestration/blob/master/docs/concepts/tier-model.md>.
+- **One \`### Session K of N\` block per planned session** (progress keys keyed
+  \`session-00K/\`), and **one object in the \`session-state.json\` \`sessions\` array per
+  planned session** (\`"number": K\`, \`"title": "Session K"\`, all other fields at their
+  not-started defaults).
+- **\`session-state.json\`** MUST use \`"schemaVersion": 4\` and \`"status": "not-started"\`.
+  Never emit the retired schemaVersion-2 state shape.
 
-## Deliverables
-- <deliverable 1>
-- <deliverable 2>
+## Worked example — \`spec.md\` for a 3-session Full set (\`001-example-feature\`)
 
-## Session Set Configuration
-\`\`\`yaml
-totalSessions: <estimate 1–6>
-requiresUAT: <true|false>
-requiresE2E: <true|false>
-# Optional — set only when requiresUAT: true:
-# uatStyle: <ad-hoc|dsl>     # ad-hoc (default, non-web) | dsl (web/Playwright via dabbler-uat-dsl)
-# uatScope: <per-session|per-set>
-# effort: <low|normal|high>  # default normal
-\`\`\`
+Match this shape; substitute your own title/purpose/slug/tier and emit exactly one session
+block per planned session:
 
-## Context
-<any background the AI needs — key files, existing patterns, constraints>
-\`\`\`
+~~~~markdown
+${exampleSpec}
+~~~~
 
-Guidelines:
-- Name each session set with a kebab-case slug (e.g., user-auth, product-catalog)
-- Order sets so earlier ones unblock later ones
-- Keep scope tight: prefer 2–4 sessions per set
-- Set requiresUAT: true only for user-visible features that need manual verification
-- Set requiresE2E: true only if automated browser tests are relevant
-- When requiresUAT: true, set uatStyle: dsl for web/browser UI (compiles to Playwright via dabbler-uat-dsl) or uatStyle: ad-hoc for non-web surfaces (CLI, native, Access, COM apps). Default is ad-hoc.
-- Set effort: low for simple changes, high for complex multi-file refactors
+## Worked example — its \`session-state.json\` (schemaVersion 4, three not-started sessions)
 
-When you scaffold each session-set folder (\`docs/session-sets/<slug>/\`)
-alongside its \`spec.md\`, also create a \`session-state.json\` file with
-\`status: "not-started"\`. The full not-started shape is:
+~~~~json
+${exampleState}
+~~~~
 
-\`\`\`json
-{
-  "schemaVersion": 2,
-  "sessionSetName": "<slug>",
-  "currentSession": null,
-  "totalSessions": <integer from spec, or null>,
-  "status": "not-started",
-  "lifecycleState": null,
-  "startedAt": null,
-  "completedAt": null,
-  "verificationVerdict": null,
-  "orchestrator": null
+## Authoring guidance
+
+- Order sets so earlier ones unblock later ones.
+- Keep scope tight: prefer 2–4 sessions per set.
+- Set \`requiresUAT: true\` only for user-visible features that need manual verification;
+  when true, set \`uatStyle: dsl\` for web/browser UI (Playwright via dabbler-uat-dsl) or
+  \`uatStyle: ad-hoc\` for non-web surfaces (CLI, native, Access, COM apps). Default ad-hoc.
+- Set \`requiresE2E: true\` only if automated browser tests are relevant.
+- Both tiers run the same Python lifecycle (\`start_session\` / \`close_session\`), state
+  handling, and close-out. Lightweight is router-off, not Python-off — pick \`tier:
+  lightweight\` when the project opts out of metered API calls.
+
+---
+
+Project plan:
+
+${planText}`;
 }
-\`\`\`
-
-Every session-set folder is expected to carry a \`session-state.json\`
-from creation onward. Readers consult \`status\` directly rather than
-inferring state from file presence. If you forget, the workflow's
-lazy-synthesis fallback will create one on first read, but creating
-it up front keeps the folder self-describing.
-`;
 
 export function registerSessionGenPromptCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -90,14 +133,24 @@ export function registerSessionGenPromptCommand(context: vscode.ExtensionContext
         return;
       }
 
+      let bundle: TemplateBundle;
+      try {
+        bundle = loadTemplateBundle(resolveBundledTemplateDir(context.extensionPath));
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Could not load the consumer-bootstrap template bundle: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+      }
+
       const planText = fs.readFileSync(planPath, "utf8");
-      const prompt = `${PROMPT_SYSTEM}\n\n---\n\nProject plan:\n\n${planText}`;
+      const prompt = buildSessionGenPrompt(planText, bundle);
 
       await vscode.env.clipboard.writeText(prompt);
       vscode.window.showInformationMessage(
         "Session-set generation prompt copied to clipboard. " +
         "Paste it into your AI assistant. When you receive the specs, save each one to " +
-        "docs/session-sets/<slug>/spec.md.\n\n" +
+        "docs/session-sets/<NNN-slug>/spec.md (alongside its session-state.json).\n\n" +
         "Cost reminder: each session set typically costs $0.10–$2.00 depending on model and effort. " +
         "Review the generated specs before running all sessions.",
         { modal: false }

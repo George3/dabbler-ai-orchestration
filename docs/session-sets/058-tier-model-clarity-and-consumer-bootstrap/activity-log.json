@@ -69,6 +69,64 @@
         {"taskType": "session-verification", "model": "gpt-5-4", "round": 2, "verdict": "ISSUES_FOUND", "costUsd": 0.1146},
         {"taskType": "session-verification", "model": "gpt-5-4", "round": 3, "verdict": "VERIFIED", "costUsd": 0.1206}
       ]
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/template-writer-landed",
+      "dateTime": "2026-06-09T10:25:00-04:00",
+      "description": "Added the shared template writer src/utils/consumerBootstrap.ts: loadTemplateBundle (CRLF-normalized), substituteTokens, expandSpecSessions (one ### Session K of N block per session with session-00K/ keys), expandSessionState (schemaVersion 4, one not-started object per session), renderEngineFile (shared body + per-engine tail), renderConsumerBootstrap (six artifacts; throws on leftover tokens or non-positive totalSessions), plus slug helpers. esbuild copies the canonical docs/templates/consumer-bootstrap bundle into dist/templates so the packaged extension renders at runtime.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/scaffolder-fixed",
+      "dateTime": "2026-06-09T10:30:00-04:00",
+      "description": "Rewrote gitScaffold.ts (dabbler.setupNewProject): tier QuickPick + set title/purpose/totalSessions prompts; pure scaffoldConsumerRepo core renders the six artifacts (skip-existing, never clobber) then runs tier-aware install (reuses installAiRouter for venv + pip install dabbler-ai-router on BOTH tiers; Lightweight removes the seeded ai_router/router-config.yaml = the only D3 divergence). Exported makeSpawner/makeFileOps for reuse.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/generator-fixed",
+      "dateTime": "2026-06-09T10:35:00-04:00",
+      "description": "Rewrote sessionGenPrompt.buildSessionGenPrompt to route through the shared writer: it now shows fully WRITER-RENDERED, session-expanded exemplars (renderSpec/renderSessionState on a fixed 3-session 001-example-feature context) instead of raw {{TOKEN}} templates, fenced with ~~~~ to avoid colliding with the spec's inner yaml fence. NNN- slug, schemaVersion 4, tier, verificationMode required; the retired schemaVersion-2/bare-slug shape never appears.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/wizard-wired",
+      "dateTime": "2026-06-09T10:40:00-04:00",
+      "description": "Added the Get Started wizard 'You're ready - start the next session' closure (D7): tell your orchestrator the literal phrase; docs/dabbler/start-here.md drives the rest on both tiers. Both-tier Python prerequisite and the tier toggle were already correct from S1.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/tests-green",
+      "dateTime": "2026-06-09T10:55:00-04:00",
+      "description": "Added TS tests: consumerBootstrap.test.ts (token/slug helpers, exact session-expansion with per-block isolation, CRLF-bundle render, schemaVersion 4, packaged-runtime path + real-dist smoke, totalSessions guard), gitScaffoldCore.test.ts (six writes, skip-existing, Full keeps / Lightweight removes router config, install-failure non-fatal), sessionGenPrompt.test.ts (rendered expanded exemplars, ~~~~ fences, no token leakage, NNN- everywhere). 636 passing; 2 pre-existing Set-026 stub failures (vscode-stub lacks ViewColumn; Set 026 S7 notification label) unrelated to this diff.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/verified",
+      "dateTime": "2026-06-09T11:30:00-04:00",
+      "description": "Cross-provider verification (session-verification -> gpt-5-4, cross-provider from Claude). R1 ISSUES_FOUND (0 Crit, 2 Major, 1 Minor): prompt embedded raw templates w/ colliding fences -> render exemplars; packaged-runtime path untested + wrong dist fallback -> fixed + new test; loose assertions -> tightened. R2 ISSUES_FOUND (1 Major, 2 Minor): CRLF marker fragility -> normalize on load + defensively + CRLF test; copyTemplateBundle warned not failed -> throws + real-dist smoke test; per-block isolation -> asserted. R3 ISSUES_FOUND (1 Major, 3 Minor): the Major (VSIX may exclude dist/templates) was EMPIRICALLY DISPROVEN via `vsce ls` (all 8 bundle files packaged) + explicit !dist/templates/** added; 3 Minors fixed (watch re-copy plugin, totalSessions>=1 guard, negative bare-slug prompt assertions). Converged at retry budget -> VERIFIED_WITH_NOTES.",
+      "status": "complete",
+      "routedApiCalls": [
+        {"taskType": "session-verification", "model": "gpt-5-4", "round": 1, "verdict": "ISSUES_FOUND", "costUsd": 0.3056},
+        {"taskType": "session-verification", "model": "gpt-5-4", "round": 2, "verdict": "ISSUES_FOUND", "costUsd": 0.2427},
+        {"taskType": "session-verification", "model": "gpt-5-4", "round": 3, "verdict": "ISSUES_FOUND", "costUsd": 0.2301}
+      ]
     }
   ]
 }

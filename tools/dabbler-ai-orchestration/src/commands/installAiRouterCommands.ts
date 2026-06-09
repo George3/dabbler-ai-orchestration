@@ -104,7 +104,7 @@ function resolveAiRouterRepoUrl(): string | undefined {
   return raw === "" ? undefined : raw;
 }
 
-function makeSpawner(): ProcessSpawner {
+export function makeSpawner(): ProcessSpawner {
   return (cmd, args, opts) =>
     new Promise((resolve) => {
       const child = cp.spawn(cmd, args, {
@@ -150,7 +150,7 @@ function makeSpawner(): ProcessSpawner {
     });
 }
 
-function makeFileOps(): FileOps {
+export function makeFileOps(): FileOps {
   return {
     exists: (p) => fs.existsSync(p),
     readFile: (p) => fs.readFileSync(p, "utf8"),

@@ -13,5 +13,10 @@ tsconfig.json
 *.bak
 **/*.ts
 !dist/**
+# The consumer-bootstrap template bundle MUST ship in the VSIX — the shared
+# template writer (gitScaffold / sessionGenPrompt) loads it at runtime from
+# dist/templates/. Covered by `!dist/**` above; kept explicit so a future
+# .vscodeignore edit cannot silently drop it. Verified with `vsce ls`.
+!dist/templates/**
 media/screenshot-mockup.html
 media/render-mockup.mjs

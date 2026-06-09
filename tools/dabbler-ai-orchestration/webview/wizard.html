@@ -192,6 +192,18 @@
     <button class="btn btn-secondary" data-command="troubleshoot">Troubleshoot</button>
   </div>
 
+  <h2>You're ready — start the next session</h2>
+  <p style="margin-top:0;">Once a project is set up, you don't run a special command to begin work. Open the
+    project folder and tell your AI orchestrator (any engine — Claude Code, Codex, Gemini Code Assist,
+    Copilot) the literal phrase:</p>
+  <p style="margin: 8px 0;"><code>start the next session</code></p>
+  <p style="margin-top:0;">That's the whole cold start. The orchestrator reads
+    <code>docs/dabbler/start-here.md</code> (scaffolded for you), resolves the active session set, reads its
+    <code>tier</code>, registers the session, does the work, and closes through the shared gate. The procedure is
+    identical on both tiers — the <strong>only</strong> branch is whether the router makes metered calls. No
+    guessing, no "what do I do next?": <a href="https://github.com/darndestdabbler/dabbler-ai-orchestration/blob/master/docs/templates/consumer-bootstrap/start-here.md.template">start-here.md</a>
+    is the single home for the lifecycle.</p>
+
   <hr>
   <p style="font-size:0.85em; color: var(--vscode-descriptionForeground);">
     <a href="https://darndestdabbler.org">darndestdabbler.org</a> &nbsp;·&nbsp;
