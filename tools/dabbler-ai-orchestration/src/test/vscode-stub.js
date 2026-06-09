@@ -109,6 +109,13 @@ const vscodeStub = {
     showQuickPick: async () => undefined,
     createTreeView: () => ({ dispose: () => {} }),
     registerTreeDataProvider: () => ({ dispose: () => {} }),
+    // Set 059: the extension registers its Session Sets surface as a webview
+    // VIEW (registerWebviewViewProvider), not a TreeDataProvider. The
+    // activation regression test (activationNoFolder.test.ts) drives the real
+    // activate() to prove commands + the view provider register even with no
+    // workspace folder open; without this symbol activate() would throw before
+    // reaching the command registrations.
+    registerWebviewViewProvider: () => ({ dispose: () => {} }),
   },
   commands: {
     registerCommand: () => ({ dispose: () => {} }),

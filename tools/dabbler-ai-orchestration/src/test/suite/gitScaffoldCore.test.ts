@@ -7,7 +7,7 @@
 
 import * as assert from "assert";
 import * as path from "path";
-import { scaffoldConsumerRepo } from "../../commands/gitScaffold";
+import { asTier, scaffoldConsumerRepo } from "../../commands/gitScaffold";
 import { FileOps } from "../../utils/aiRouterInstall";
 import {
   BootstrapContext,
@@ -29,6 +29,23 @@ function canonicalBundleDir(): string {
   throw new Error("Could not locate the consumer-bootstrap bundle for tests.");
 }
 const bundle: TemplateBundle = loadTemplateBundle(canonicalBundleDir());
+
+// Set 059: the Get Started wizard forwards the operator's chosen tier into
+// `dabbler.setupNewProject` so it does not re-prompt (the double-prompt /
+// dead-end the operator hit on 0.28.0). `asTier` is the narrowing boundary
+// that decides whether the forwarded value is trusted (skip the prompt) or
+// ignored (fall back to prompting). The end-to-end wizard wiring is UAT-gated.
+suite("gitScaffold — asTier (wizard tier passthrough boundary)", () => {
+  test("accepts the two valid tiers", () => {
+    assert.strictEqual(asTier("full"), "full");
+    assert.strictEqual(asTier("lightweight"), "lightweight");
+  });
+  test("rejects everything else so the command falls back to prompting", () => {
+    for (const bad of [undefined, null, "", "Full", "FULL", "lite", "f", 1, {}, "router"]) {
+      assert.strictEqual(asTier(bad), undefined, `asTier(${JSON.stringify(bad)})`);
+    }
+  });
+});
 
 /** Minimal in-memory FileOps over a normalized-path map. */
 function memFileOps(seed: Record<string, string> = {}): {

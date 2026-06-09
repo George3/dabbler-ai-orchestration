@@ -23586,6 +23586,9 @@ async function pickDirectory() {
   });
   return picked?.[0]?.fsPath;
 }
+function asTier(value) {
+  return value === "full" || value === "lightweight" ? value : void 0;
+}
 async function promptTier() {
   const picked = await vscode12.window.showQuickPick(
     [
@@ -23616,7 +23619,8 @@ function isoDate() {
 }
 function registerGitScaffoldCommand(context) {
   context.subscriptions.push(
-    vscode12.commands.registerCommand("dabbler.setupNewProject", async () => {
+    vscode12.commands.registerCommand("dabbler.setupNewProject", async (arg) => {
+      const preselectedTier = asTier(arg?.tier);
       const projectDir = await pickDirectory();
       if (!projectDir)
         return;
@@ -23633,7 +23637,7 @@ function registerGitScaffoldCommand(context) {
         await git.init();
         vscode12.window.showInformationMessage("Git repository initialized.");
       }
-      const tier = await promptTier();
+      const tier = preselectedTier ?? await promptTier();
       if (!tier)
         return;
       const setTitle = (await vscode12.window.showInputBox({
@@ -24239,7 +24243,7 @@ var WizardPanel = class _WizardPanel {
     this._panel.webview.onDidReceiveMessage((msg) => {
       switch (msg.command) {
         case "setupProject":
-          vscode18.commands.executeCommand("dabbler.setupNewProject");
+          vscode18.commands.executeCommand("dabbler.setupNewProject", { tier: msg.tier });
           break;
         case "importPlan":
           vscode18.commands.executeCommand("dabbler.importPlan");
@@ -27537,8 +27541,6 @@ function evaluateSupportContextKeys(allSets) {
   );
 }
 function activate(context) {
-  if (!vscode28.workspace.workspaceFolders?.length)
-    return;
   const scanState = new ScanState();
   context.subscriptions.push({ dispose: () => scanState.dispose() });
   scanState.setLoading();
@@ -27685,7 +27687,7 @@ function activate(context) {
     scanState.setReady();
   });
   const hasSeenOnboarding = context.workspaceState.get("hasSeenOnboarding", false);
-  if (!hasSeenOnboarding) {
+  if (!hasSeenOnboarding && (vscode28.workspace.workspaceFolders?.length ?? 0) > 0) {
     const roots = discoverRoots();
     const hasSessionSets = roots.some((r2) => {
       try {

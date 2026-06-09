@@ -212,9 +212,15 @@
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
+    function selectedTier() {
+      var c = document.querySelector('input[name="tier"]:checked');
+      return c ? c.value : 'full';
+    }
     document.querySelectorAll('button[data-command]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        vscode.postMessage({ command: btn.getAttribute('data-command') });
+        // Set 059: carry the currently-selected tier so "Set up a new project"
+        // does not re-prompt for it. Harmless on other commands (ignored).
+        vscode.postMessage({ command: btn.getAttribute('data-command'), tier: selectedTier() });
       });
     });
     var pricing = document.getElementById('pricingLink');

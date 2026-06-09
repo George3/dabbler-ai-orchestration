@@ -1,10 +1,16 @@
 {
   "ProjectName": "Dabbler AI Orchestration",
   "ReleaseLabel": "Set 058 — Tier-model clarity & consumer-repo bootstrap (extension 0.28.0)",
-  "DocumentDate": "2026-06-09",
+  "DocumentDate": "6/9/2026, 3:17:24 PM",
   "Notes": "Ad-hoc, per-set UAT for the end-to-end consumer bootstrap flow: Get Started wizard / Set up new project -> uniform scaffolding (.venv + dabbler-ai-router + three engine files + docs/dabbler/start-here.md + a templated spec.md; router config Full-only) -> tell the orchestrator 'start the next session' -> it self-orients and runs in the correct tier mode (routed for Full, --no-router for Lightweight) -> closes via the shared gate. The deliverable this set verifies is human-attestable: 'a fresh operator and a cold AI orchestrator can stand up and run a Full- or Lightweight-tier repo with zero what-do-I-do-next gaps.' Items whose substance is mechanically covered are marked Passes=true with the deterministic check named in Feedback (the shared writer, the cold-start acceptance test, the drift guards, the snapshot test). Items that require a live VS Code wizard interaction, real shell scaffolding, or actually driving a second orchestrator engine are flagged 'Manual operator UAT' and left Passes=false / Result=pending for the operator to walk through on both tiers post-publish. requiresUAT was declared true in spec.md (uatScope: per-set, uatStyle: ad-hoc).",
   "Configuration": {
-    "reviewWidths": ["6%", "14%", "36%", "8%", "36%"]
+    "reviewWidths": [
+      "6%",
+      "14%",
+      "36%",
+      "8%",
+      "36%"
+    ]
   },
   "Review": [
     {
@@ -14,7 +20,7 @@
       "HumanAction": "In an empty folder, run 'Dabbler: Set up new project' (dabbler.setupNewProject) and pick the Full tier. Inspect the resulting tree.",
       "Expectation": "A .venv exists with dabbler-ai-router installed; CLAUDE.md, AGENTS.md, GEMINI.md, docs/dabbler/start-here.md, a docs/session-sets/<NNN-slug>/spec.md and session-state.json all present; ai_router/router-config.yaml IS written (Full only).",
       "Passes": false,
-      "Feedback": "Manual operator UAT — live scaffold on disk. The artifact set and content are mechanically covered: the shared writer emits exactly the six tier-agnostic artifacts (consumerBootstrap.test.ts 'produces the six artifacts at canonical relative paths'), and the router-config-is-caller's-job divergence is pinned ('renderConsumerBootstrap does NOT emit a router-config'). The cold-start acceptance test boots the Full golden render and confirms it registers + closes through the lifecycle.",
+      "Feedback": "This doesn't work.  At least two issues: (1) if you open up Visual Studio Code without being in a folder, the extension hangs, (2) if you select Full tier (the default) and then select \"Set up a new project\", you get prompted again at the top of the VS Code interface to select a tier and if you choose Full, nothing happens.",
       "Result": "pending"
     },
     {
@@ -24,7 +30,7 @@
       "HumanAction": "In a second empty folder, run 'Dabbler: Set up new project' and pick the Lightweight tier. Inspect the tree and diff it against the Full one.",
       "Expectation": "Same .venv + dabbler-ai-router + three engine files + start-here.md + templated spec + session-state.json as Full. The ONLY differences: no ai_router/router-config.yaml (and no budget.yaml) is written, and the spec's config block carries tier: lightweight. Python is NOT skipped; the .venv and package install are present (Lightweight is router-off, not Python-off).",
       "Passes": false,
-      "Feedback": "Manual operator UAT — live scaffold on disk. Mechanically: the writer renders both tiers from one bundle and the only rendered divergence is the tier/verificationMode token ('no rendered artifact contains an unsubstituted token (both tiers)'); the router-config omission is the caller's single Full-only branch. Cold-start acceptance boots the Lightweight golden and resolves --no-router.",
+      "Feedback": "",
       "Result": "pending"
     },
     {
@@ -34,7 +40,7 @@
       "HumanAction": "Open the Get Started wizard (the webview). Read the prerequisites / tier selection copy for both Full and Lightweight.",
       "Expectation": "The wizard tells the operator they need Python + a .venv + dabbler-ai-router on BOTH tiers. It does NOT claim Lightweight skips Python / the venv / the router package. The tier model is linked to the SSoT rather than restated.",
       "Passes": false,
-      "Feedback": "Manual operator UAT — live wizard rendering. The drift guard mechanically forbids the stale 'Lightweight = no Python / no venv / docs-only' framing in wizard.html and every live doc (test_drift_guard.py 'scans html' + real-repo-green). Confirm the painted copy reads correctly.",
+      "Feedback": "",
       "Result": "pending"
     },
     {
@@ -146,6 +152,146 @@
       "Passes": false,
       "Feedback": "Manual operator UAT — live activation. The TS unit suite (incl. the new snapshot test) and the Python suite (incl. cold-start acceptance + drift guards) pass; tsc is clean. Confirm activation in a real VS Code host.",
       "Result": "pending"
+    },
+    {
+      "FunctionalArea": "Scaffold uniformity (D3)",
+      "Subarea": "Full tier — Set up new project",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Scaffold uniformity (D3)",
+      "Subarea": "Lightweight tier — Set up new project",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Get Started wizard (D7)",
+      "Subarea": "Both-tier prerequisites",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Get Started wizard (D7)",
+      "Subarea": "Closure step",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Cold-start chain (D5)",
+      "Subarea": "Engine file -> start-here",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Cold-start chain (D5)",
+      "Subarea": "Tier -> router mode (Full)",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Cold-start chain (D5)",
+      "Subarea": "Tier -> router mode (Lightweight)",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Cold-start chain (D5/D6)",
+      "Subarea": "start-here resolves THE active set",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Spec template (D4)",
+      "Subarea": "Required fields + schema version",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Generator path (D4)",
+      "Subarea": "Generate Session-Set Prompt",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Drift prevention (D8)",
+      "Subarea": "Stale-framing CI guard",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Drift prevention (D8)",
+      "Subarea": "Template snapshot",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "SSoT pointers (D1/D2)",
+      "Subarea": "No restated tier model",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
+    },
+    {
+      "FunctionalArea": "Regression",
+      "Subarea": "Extension activation + existing flows",
+      "ItemLabel": "Other",
+      "IsOtherItem": true,
+      "HumanAction": "",
+      "Expectation": "",
+      "Passes": false,
+      "Feedback": ""
     }
   ]
 }

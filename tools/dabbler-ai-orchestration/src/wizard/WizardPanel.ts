@@ -37,10 +37,15 @@ export class WizardPanel {
     this._extensionUri = extensionUri;
     this._panel.webview.html = this._getHtml();
     this._panel.onDidDispose(() => { WizardPanel.currentPanel = undefined; });
-    this._panel.webview.onDidReceiveMessage((msg: { command: string }) => {
+    this._panel.webview.onDidReceiveMessage((msg: { command: string; tier?: string }) => {
       switch (msg.command) {
         case "setupProject":
-          vscode.commands.executeCommand("dabbler.setupNewProject");
+          // Set 059: carry the tier the operator picked in the wizard into the
+          // scaffold command so it does NOT re-prompt for tier (the double
+          // prompt + dead-end the operator hit on 0.28.0). setupNewProject
+          // validates the arg and falls back to its own prompt if it is absent
+          // or unrecognized.
+          vscode.commands.executeCommand("dabbler.setupNewProject", { tier: msg.tier });
           break;
         case "importPlan":
           vscode.commands.executeCommand("dabbler.importPlan");

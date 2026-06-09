@@ -73,7 +73,17 @@ function evaluateSupportContextKeys(allSets: SessionSet[]): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  if (!vscode.workspace.workspaceFolders?.length) return;
+  // Set 059: activation must NOT bail when no folder is open. The previous
+  // `if (!workspaceFolders?.length) return;` guard left the webview view
+  // provider AND every command unregistered in exactly the case "Set up a new
+  // project" / "Get Started" exist for — a fresh window with no folder — so the
+  // Session Sets view hung (no provider) and `dabbler.setupNewProject` /
+  // `dabbler.getStarted` were never registered (operator UAT, 0.28.0). Everything
+  // below is folder-defensive: `discoverRoots()` / `readAllSessionSets()` return
+  // `[]` with no folders, the context-key / watcher blocks are wrapped in
+  // try/catch, and `onDidChangeWorkspaceFolders(refreshAll)` re-runs the
+  // folder-dependent runtime the moment a folder is added. The view renders its
+  // `viewsWelcome` CTA as the empty state instead of hanging.
 
   // Set 030 Session 5: scanState lifecycle. Flip to "loading" BEFORE
   // we register the tree provider so the very first `getChildren()`
@@ -316,9 +326,15 @@ export function activate(context: vscode.ExtensionContext): void {
     scanState.setReady();
   });
 
-  // Show onboarding on first activation in a workspace with no session sets
+  // Show onboarding on first activation in a workspace with no session sets.
+  // Set 059: gate on having a folder open. `workspaceState` does not persist
+  // reliably in an empty (no-folder) window, so without this guard the wizard
+  // would auto-pop on EVERY fresh no-folder launch — intrusive when the user
+  // opened a blank window for something unrelated. With no folder the user
+  // still reaches Get Started via the view's welcome CTA or the Command
+  // Palette; auto-onboarding is reserved for an opened workspace.
   const hasSeenOnboarding = context.workspaceState.get<boolean>("hasSeenOnboarding", false);
-  if (!hasSeenOnboarding) {
+  if (!hasSeenOnboarding && (vscode.workspace.workspaceFolders?.length ?? 0) > 0) {
     const roots = discoverRoots();
     const hasSessionSets = roots.some((r) => {
       try {

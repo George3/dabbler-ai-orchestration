@@ -121,6 +121,11 @@ async function pickDirectory(): Promise<string | undefined> {
   return picked?.[0]?.fsPath;
 }
 
+/** Narrow an untrusted value (e.g. a wizard command arg) to a Tier. */
+export function asTier(value: unknown): Tier | undefined {
+  return value === "full" || value === "lightweight" ? value : undefined;
+}
+
 async function promptTier(): Promise<Tier | undefined> {
   const picked = await vscode.window.showQuickPick(
     [
@@ -156,7 +161,12 @@ function isoDate(): string {
 
 export function registerGitScaffoldCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand("dabbler.setupNewProject", async () => {
+    vscode.commands.registerCommand("dabbler.setupNewProject", async (arg?: { tier?: string }) => {
+      // Set 059: the Get Started wizard forwards the tier the operator already
+      // picked. When present and valid we skip the redundant tier prompt below;
+      // when absent (Command Palette invocation) we prompt as before.
+      const preselectedTier = asTier(arg?.tier);
+
       // Step 1: pick folder
       const projectDir = await pickDirectory();
       if (!projectDir) return;
@@ -175,8 +185,9 @@ export function registerGitScaffoldCommand(context: vscode.ExtensionContext): vo
         vscode.window.showInformationMessage("Git repository initialized.");
       }
 
-      // Step 3: choose tier (the single declarative switch).
-      const tier = await promptTier();
+      // Step 3: choose tier (the single declarative switch). Honor the
+      // wizard's preselection when provided; otherwise prompt.
+      const tier = preselectedTier ?? (await promptTier());
       if (!tier) return;
 
       // Step 4: gather the first session set's details. Tier is per-set, so

@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-06-09 (Set 059 — Extension activation & scaffold fix)
+
+Fixes two operator-found defects in 0.28.0's new consumer-bootstrap flow,
+both in the VS Code activation/wiring layer the Set 058 tests (run against a
+`vscode-stub`) did not exercise. Users who open VS Code **with** a folder were
+unaffected; the breakage was confined to the fresh-window / no-folder path.
+
+### Fixed
+
+- **No-folder activation.** `activate()` returned early when no workspace folder
+  was open, leaving the Session Sets webview view provider AND every command
+  unregistered — so the view hung and `dabbler.setupNewProject` /
+  `dabbler.getStarted` silently did nothing, in exactly the fresh-window case
+  those commands exist for. Activation now registers the view provider and all
+  commands unconditionally; the folder-dependent runtime (watchers, context
+  keys, the poll) stays gated and re-initializes on folder-add, and the view
+  renders its welcome CTA instead of hanging.
+- **Wizard tier dead-end.** The Get Started wizard's "Set up a new project"
+  button now carries the tier you selected into `dabbler.setupNewProject`, so it
+  no longer re-prompts for tier (the double prompt) and no longer dead-ends.
+
+### Tests
+
+- Added a no-folder activation regression test (drives the real `activate()`
+  with no folder and asserts the view provider + bootstrap commands register)
+  and a tier-narrowing unit test — the coverage that would have caught these.
+
 ## [0.28.0] — 2026-06-09 (Set 058 — Tier-model clarity & consumer-repo bootstrap)
 
 Makes every repo-creation path emit correct, uniform, tier-aware scaffolding
