@@ -101,7 +101,17 @@ release.
 
 ---
 
-### Session 2 of 2: Operator UAT on the local build, then bump + held release
+### Session 2 of 2: Close-out (release folded into Set 060)
+
+> **Re-scoped 2026-06-10.** Operator UAT of the S1 fix surfaced that the whole
+> Getting Started / scaffolder UX is being redesigned (operator mockup
+> `docs/planning/getting-started-instructions.svg`) — including removing the
+> "title of the first session set" prompt this set kept. The S1 activation +
+> wizard-tier fix is merged and verified on master; rather than cut a
+> throwaway standalone **0.28.1** for a scaffolder flow about to be replaced,
+> the release **folds forward into Set 060 (0.29.0)**. S2 therefore closes the
+> set and hands the redesign to Set 060. Original S2 goal (operator UAT → bump
+> 0.28.1 → held release) preserved below for the record.
 
 **Goal:** Gate the release on a passing live UAT, then bump 0.28.1 and hold the
 Marketplace republish.

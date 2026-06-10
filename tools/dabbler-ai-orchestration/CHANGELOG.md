@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.28.1] — 2026-06-09 (Set 059 — Extension activation & scaffold fix)
 
+> **Not released standalone.** This version number was never tag-pushed; the
+> fix below is merged on `master` and ships inside **0.29.0** (Set 060 — Getting
+> Started redesign), because operator UAT redirected the scaffolder UX into that
+> redesign. Kept here as the record of what landed.
+
 Fixes two operator-found defects in 0.28.0's new consumer-bootstrap flow,
 both in the VS Code activation/wiring layer the Set 058 tests (run against a
 `vscode-stub`) did not exercise. Users who open VS Code **with** a folder were
