@@ -1,0 +1,43 @@
+{
+  "sessionSetName": "060-getting-started-redesign",
+  "createdDate": "2026-06-10T17:05:42.646473-04:00",
+  "totalSessions": 4,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/detection-model",
+      "dateTime": "2026-06-10T17:05:42.646473-04:00",
+      "description": "Pure completion-detection module (src/utils/gettingStartedDetection.ts): detectCompletion/selectExplorerMode/computeGettingStarted per D3, fs injected, VS Code-free; nodeDetectionFs adapter.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/dual-mode-view",
+      "dateTime": "2026-06-10T17:05:42.646473-04:00",
+      "description": "Dual-mode wiring in CustomSessionSetsView (buildGettingStarted -> SnapshotPayload.gettingStarted) + protocol ExplorerMode/GettingStartedPayload; mode flips on existing docs/session-sets/** watcher (no new watcher; baseline kept at 1).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/form-shell-live-state",
+      "dateTime": "2026-06-10T17:05:42.646473-04:00",
+      "description": "Webview client.js dual-mode surfaces: no-folder CTA + 3-step Getting Started form shell (Full/Lightweight radio + parallel checkbox) greyed/checked per live D3 state; buttons inert (data-gs-action, not data-command). tree.css form styles.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/verified",
+      "dateTime": "2026-06-10T17:05:42.646473-04:00",
+      "description": "Cross-provider verification routed to gpt-5-4 (session-verification); see s1-verification.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}

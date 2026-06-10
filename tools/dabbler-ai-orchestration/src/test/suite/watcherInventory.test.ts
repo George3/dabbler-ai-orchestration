@@ -53,6 +53,13 @@ const WATCHER_ALLOWLIST: WatcherEntry[] = [
     purpose:
       "Tree-view refresh on canonical session-set state files. Watched files are themselves the writers' source of truth (no inference from indirect signals) — D1 permits.",
   },
+  {
+    file: "extension.ts",
+    line: 218,
+    target: "Getting Started D3 inputs: {CLAUDE.md, AGENTS.md, GEMINI.md, docs/planning/project-plan.md, .venv/**/site-packages/ai_router/**, docs/session-sets/*}",
+    purpose:
+      "Set 060 Getting Started form live-progress refresh: the form's D3 step-1/2/3 completion keys on these scaffold artifacts (engine files + venv router package + project plan + numbered set dirs), which the spec.md-scoped session-sets watcher does not fully cover. The watched paths ARE the source of truth for the form steps (no indirect orchestrator-state inference) — D1 permits.",
+  },
 ];
 
 const WATCHER_PRIMITIVES = [
@@ -169,17 +176,19 @@ suite("Q7 watcher-inventory convention", () => {
     }
   });
 
-  test("allowlist has expected post-Set-049 baseline (1 entry)", () => {
-    // Sanity check: the post-Set-049 baseline (extension.ts tree
-    // refresh only — CheckoutPollService and its 2 watchers were
-    // retired alongside the orchestrator coordination layer rip) is
-    // 1 watcher. A test that suddenly sees 0 means the tree refresh
-    // watcher was deleted; >1 means a new one was added without an
-    // updated D1 review.
+  test("allowlist has expected post-Set-060 baseline (2 entries)", () => {
+    // Sanity check: the post-Set-049 baseline was 1 watcher (extension.ts
+    // tree refresh only — CheckoutPollService and its 2 watchers were
+    // retired alongside the orchestrator coordination layer rip). Set 060
+    // Session 1 added a second watcher for the Getting Started form's
+    // live-progress inputs (root engine files + project-plan.md), bringing
+    // the baseline to 2. A test that suddenly sees fewer means a watcher
+    // was deleted; more means a new one was added without an updated D1
+    // review.
     assert.strictEqual(
       WATCHER_ALLOWLIST.length,
-      1,
-      "Set-049 baseline watcher count is 1; bump this constant if a " +
+      2,
+      "Set-060 baseline watcher count is 2; bump this constant if a " +
         "watcher was added/removed legitimately and the change was " +
         "reviewed for D1 compliance.",
     );

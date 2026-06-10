@@ -66,13 +66,43 @@ export interface BucketPayload {
   rows: RowPayload[];
 }
 
+// Set 060 Session 1: the three dual-mode surfaces the Session Set
+// Explorer can render (spec D1/D5). "no-folder" → an "open or create a
+// folder" CTA; "getting-started" → the interactive setup form; "list"
+// → today's bucketed session-set list. This union is the host/webview
+// contract, so it lives in the protocol; `selectExplorerMode` in
+// `utils/gettingStartedDetection.ts` is its sole producer.
+export type ExplorerMode = "no-folder" | "getting-started" | "list";
+
+// Set 060 Session 1: drives the dual-mode Getting Started surface. The
+// host computes `mode` from (folder open?, any sets?) and the three D3
+// completion flags from the workspace root. The webview renders the
+// surface for `mode`; the three booleans grey/check the form's steps
+// (live state lives ONLY in the form, per D2). The flags are only
+// meaningful in "getting-started" mode (in "list" mode the list shows
+// instead; in "no-folder" mode there is no root to inspect).
+export interface GettingStartedPayload {
+  mode: ExplorerMode;
+  structureBuilt: boolean;      // D3 step 1
+  planPresent: boolean;         // D3 step 2
+  sessionSetsPresent: boolean;  // D3 step 3
+}
+
 export interface SnapshotPayload {
   buckets: BucketPayload[];
   // Empty when no sets at all; webview falls back to viewsWelcome HTML.
   hasAnySets: boolean;
   // Welcome HTML (rendered host-side from package.json `viewsWelcome`
-  // contents — preserves declarative source per Q3 = a).
+  // contents — preserves declarative source per Q3 = a). Retained as a
+  // fallback for older webview pairings; the Set 060 dual-mode surface
+  // (below) supersedes it as the no-sets empty state.
   welcomeHtml: string;
+  // Set 060 Session 1: the dual-mode Getting Started state. Optional so
+  // the type contract matches the runtime contract — a pre-Set-060 host
+  // omits the field entirely, and the webview falls back to the
+  // `hasAnySets`/`welcomeHtml` behavior when it is absent (`undefined`)
+  // OR `null` (S1 verifier Issue 3). The current host always populates it.
+  gettingStarted?: GettingStartedPayload | null;
 }
 
 // ----- Host → Webview -----

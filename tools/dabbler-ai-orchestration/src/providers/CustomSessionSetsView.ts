@@ -65,12 +65,18 @@ import {
 } from "./suppressionState";
 import {
   BucketPayload,
+  GettingStartedPayload,
   HostToWebview,
   RowPayload,
   ScanState as ProtocolScanState,
   SnapshotPayload,
   WebviewToHost,
 } from "../types/sessionSetsWebviewProtocol";
+// Set 060 Session 1: dual-mode Getting Started detection (spec D1/D3/D5).
+import {
+  computeGettingStarted,
+  nodeDetectionFs,
+} from "../utils/gettingStartedDetection";
 
 const SUPPRESSION_KEY = "dabbler.sessionSets.suppressedExpand";
 const RENDER_DEBOUNCE_MS = 50;
@@ -414,6 +420,7 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       buckets: this.buildBuckets(all),
       hasAnySets: all.length > 0,
       welcomeHtml: this.welcomeHtml,
+      gettingStarted: this.buildGettingStarted(all),
     };
 
     const msg: HostToWebview = {
@@ -453,6 +460,41 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
 
   private toProtocolScanState(): ProtocolScanState {
     return this.scanState.phase === "loading" ? "loading" : "ready";
+  }
+
+  // Set 060 Session 1 (spec D1/D3/D5): compute the dual-mode Getting
+  // Started payload. The mode is derived from (is a folder open?, does
+  // any root carry a session set?). Completion detection only runs in
+  // the one mode where the form renders — "getting-started" (a folder
+  // is open but it has no session sets) — so the no-folder and list
+  // surfaces pay nothing for the fs probe. The detection root is the
+  // first workspace folder (D5: "build into the open workspace
+  // folder"); the across-roots `hasAnySets` signal (which includes
+  // worktrees) still drives the list-mode flip.
+  //
+  // S1 verifier Issue 1 (dispositioned — intentional design): the
+  // getting-started -> list flip is keyed on `hasAnySets` (a MATERIALIZED
+  // set, which `readAllSessionSets` only counts once `spec.md` is
+  // present), NOT on the looser D3-step-3 "a NNN- directory exists"
+  // probe. This is deliberate and consistent on three fronts: (1) D1
+  // defines "a session set" as the existing Explorer notion — a row the
+  // list can actually render, which requires spec.md; (2) the file
+  // watcher fires on `docs/session-sets/**/{spec.md,...}`, so the refresh
+  // that drives the flip happens exactly when a renderable set lands, not
+  // on a bare directory; (3) flipping to "list" on a bare NNN- directory
+  // would render an EMPTY list (no spec.md => no row), worse UX than
+  // keeping the form. The form's step-3 indicator still uses the D3
+  // dir-probe per the operator-locked spec; in the happy path (the
+  // decomposition writes the dir WITH spec.md) both signals flip
+  // together. Do not "consolidate" these onto the bare-dir probe.
+  private buildGettingStarted(all: SessionSet[]): GettingStartedPayload {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    return computeGettingStarted(
+      folders.length > 0,
+      folders[0]?.uri.fsPath,
+      all.length > 0,
+      nodeDetectionFs,
+    );
   }
 
   private buildBuckets(all: SessionSet[]): BucketPayload[] {

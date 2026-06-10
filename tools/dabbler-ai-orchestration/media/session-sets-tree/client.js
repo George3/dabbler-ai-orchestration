@@ -94,11 +94,24 @@
       root.innerHTML = "";
       return;
     }
-    if (!lastSnapshot.hasAnySets) {
-      // viewsWelcome equivalent — render the welcome HTML provided
-      // by the host (it parses package.json viewsWelcome contents).
-      // welcomeHtml is host-escaped via the renderWelcomeMarkdown
-      // pipeline, safe to insert.
+    // Set 060 Session 1 (spec D1/D5): dual-mode surface. The host ships
+    // a `gettingStarted` block with a `mode`. "no-folder" and
+    // "getting-started" replace the old viewsWelcome empty state; "list"
+    // falls through to the bucket tree below. The buttons rendered here
+    // are INERT this session (no listeners wired) — Session 2 wires the
+    // three actions onto the `data-gs-action` hooks.
+    var gs = lastSnapshot.gettingStarted;
+    if (gs && gs.mode !== "list") {
+      root.innerHTML =
+        gs.mode === "no-folder"
+          ? renderNoFolder()
+          : renderGettingStarted(gs);
+      return;
+    }
+    if (!gs && !lastSnapshot.hasAnySets) {
+      // Backward-compat fallback for a pre-Set-060 host that did not
+      // ship `gettingStarted`: render the welcome HTML (host-escaped via
+      // renderWelcomeMarkdown, safe to insert).
       root.innerHTML = '<div class="welcome">' + lastSnapshot.welcomeHtml + '</div>';
       return;
     }
@@ -116,6 +129,94 @@
 
     wireInteraction();
     initRovingFocus();
+  }
+
+  // ----- Set 060 dual-mode Getting Started surfaces -----
+
+  // No workspace folder open (D5). A single CTA to open / create a
+  // project folder. Inert this session; Session 2 wires the
+  // `open-folder` action (showOpenDialog -> vscode.openFolder).
+  function renderNoFolder() {
+    return (
+      '<div class="getting-started">' +
+        '<div class="gs-header">' +
+          '<div class="gs-title">Getting Started</div>' +
+          '<div class="gs-subtitle">Open or create a project folder to begin.</div>' +
+        '</div>' +
+        '<div class="gs-step">' +
+          '<div class="gs-step-body">' +
+            '<button class="gs-button" type="button" data-gs-action="open-folder">' +
+              'Open or create a project folder…' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // Folder open, no session sets yet (D1). The three-step setup form.
+  // Each step greys out + shows a green check when its D3 completion
+  // flag is set (gs.structureBuilt / gs.planPresent /
+  // gs.sessionSetsPresent). Live state lives ONLY here (D2). Buttons
+  // are inert this session.
+  function gsStep(num, title, complete, bodyHtml) {
+    var cls = complete ? "gs-step gs-step-complete" : "gs-step";
+    var check = complete ? "✓" : "";
+    return (
+      '<div class="' + cls + '">' +
+        '<div class="gs-step-head">' +
+          '<span class="gs-check" aria-hidden="true">' + check + '</span>' +
+          '<span class="gs-step-title">' + escHtml(num + ". " + title) + '</span>' +
+        '</div>' +
+        '<div class="gs-step-body">' + bodyHtml + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderGettingStarted(gs) {
+    var step1 = gsStep(
+      1,
+      "Build project structure",
+      gs.structureBuilt,
+      '<div class="gs-radio-group" role="radiogroup" aria-label="Project tier">' +
+        '<label class="gs-radio"><input type="radio" name="gs-tier" value="full" checked> Full</label>' +
+        '<label class="gs-radio"><input type="radio" name="gs-tier" value="lightweight"> Lightweight</label>' +
+      '</div>' +
+      '<button class="gs-button" type="button" data-gs-action="build-structure">' +
+        'Build project structure' +
+      '</button>',
+    );
+    var step2 = gsStep(
+      2,
+      "Create or import a project plan",
+      gs.planPresent,
+      '<button class="gs-button" type="button" data-gs-action="import-plan">' +
+        'Import project-plan.md…' +
+      '</button>' +
+      '<button class="gs-button gs-button-secondary" type="button" data-gs-action="copy-plan-prompt">' +
+        'Copy prompt for planning' +
+      '</button>',
+    );
+    var step3 = gsStep(
+      3,
+      "Build session sets",
+      gs.sessionSetsPresent,
+      '<button class="gs-button" type="button" data-gs-action="build-session-sets">' +
+        'Copy prompt to build session sets' +
+      '</button>' +
+      '<label class="gs-checkbox">' +
+        '<input type="checkbox" name="gs-parallel"> Create parallel session sets where possible' +
+      '</label>',
+    );
+    return (
+      '<div class="getting-started">' +
+        '<div class="gs-header">' +
+          '<div class="gs-title">Getting Started</div>' +
+          '<div class="gs-subtitle">Complete each step to set up your project, then start your first session.</div>' +
+        '</div>' +
+        step1 + step2 + step3 +
+      '</div>'
+    );
   }
 
   function renderBucket(bucket) {

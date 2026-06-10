@@ -186,6 +186,41 @@ export function activate(context: vscode.ExtensionContext): void {
       watcher.onDidChange(onEvent);
       watcherSubs.push(watcher);
       context.subscriptions.push(watcher);
+
+      // Set 060 Session 1: Getting Started form live-progress watcher.
+      // The form's per-step completion (D3) keys on scaffold artifacts
+      // that the session-sets watcher above does NOT cover. This watcher
+      // invalidates the view on a change to ANY D3 input so all three
+      // form steps grey/check live (the spec's Session-1 end-state),
+      // including when a step completes OUTSIDE the form — e.g. the D4
+      // "Copy prompt for planning" flow, where the AI writes
+      // docs/planning/project-plan.md, or an external structure-build
+      // that lands the engine files and the venv router package
+      // separately. The covered inputs, mapped to the D3 rules in
+      // gettingStartedDetection.ts:
+      //   - step 1 structureBuilt: CLAUDE.md / AGENTS.md / GEMINI.md
+      //     (engine files) + .venv/**/site-packages/ai_router/** (the
+      //     router-importable filesystem proxy);
+      //   - step 2 planPresent: docs/planning/project-plan.md;
+      //   - step 3 sessionSetsPresent: docs/session-sets/* (a numbered
+      //     directory appearing — catches the bare-dir case the
+      //     spec.md-scoped session-sets watcher above misses).
+      // Watching these specific paths (the actual source of truth for the
+      // steps, not indirect orchestrator-state inference) is D1-permitted.
+      // In-workspace globs ride VS Code's existing recursive workspace
+      // watcher, so this adds event subscriptions, not a new OS watch —
+      // even the .venv glob is cheap (and dead when a user excludes
+      // .venv via files.watcherExclude, where the 30s poll backstops).
+      const gsPattern = new vscode.RelativePattern(
+        root,
+        "{CLAUDE.md,AGENTS.md,GEMINI.md,docs/planning/project-plan.md,.venv/**/site-packages/ai_router/**,docs/session-sets/*}",
+      );
+      const gsWatcher = vscode.workspace.createFileSystemWatcher(gsPattern);
+      gsWatcher.onDidCreate(onEvent);
+      gsWatcher.onDidDelete(onEvent);
+      gsWatcher.onDidChange(onEvent);
+      watcherSubs.push(gsWatcher);
+      context.subscriptions.push(gsWatcher);
     }
   }
 
