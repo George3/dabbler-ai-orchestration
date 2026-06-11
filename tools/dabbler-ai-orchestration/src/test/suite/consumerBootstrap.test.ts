@@ -130,6 +130,7 @@ suite("consumerBootstrap — spec.md render", () => {
       specTemplate: crlf(bundle.specTemplate),
       sessionStateTemplate: crlf(bundle.sessionStateTemplate),
       startHereTemplate: crlf(bundle.startHereTemplate),
+      gettingStartedTemplate: crlf(bundle.gettingStartedTemplate),
       sharedBody: crlf(bundle.sharedBody),
       claudeTail: crlf(bundle.claudeTail),
       agentsTail: crlf(bundle.agentsTail),
@@ -195,13 +196,15 @@ suite("consumerBootstrap — engine files", () => {
 });
 
 suite("consumerBootstrap — full render", () => {
-  test("produces the six artifacts at canonical relative paths", () => {
+  test("produces the seven artifacts at canonical relative paths", () => {
     const { files } = renderConsumerBootstrap(bundle, ctx());
     const keys = Object.keys(files).sort();
     assert.deepStrictEqual(keys, [
       "AGENTS.md",
       "CLAUDE.md",
       "GEMINI.md",
+      // Set 060 S3 (D8): the static Getting Started teaching doc.
+      "docs/dabbler/getting-started.md",
       "docs/dabbler/start-here.md",
       "docs/session-sets/001-user-authentication/session-state.json",
       "docs/session-sets/001-user-authentication/spec.md",
@@ -260,6 +263,7 @@ suite("consumerBootstrap — packaged-runtime bundle path", () => {
       "spec.md.template",
       "session-state.json.template",
       "start-here.md.template",
+      "getting-started.md.template",
       "engine-file.shared-body.md",
       "engine-file.claude-tail.md",
       "engine-file.agents-tail.md",
@@ -273,7 +277,7 @@ suite("consumerBootstrap — packaged-runtime bundle path", () => {
     }
     // And it must actually render.
     const { files } = renderConsumerBootstrap(loadTemplateBundle(distDir), ctx());
-    assert.strictEqual(Object.keys(files).length, 6);
+    assert.strictEqual(Object.keys(files).length, 7);
   });
 
   test("loadTemplateBundle reads a bundle laid out at the packaged path", () => {

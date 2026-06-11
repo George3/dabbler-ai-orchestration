@@ -1,12 +1,10 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import simpleGit from "simple-git";
 import {
   installAiRouter,
   FileOps,
   InstallSource,
-  ProcessSpawner,
   ROUTER_CONFIG_REL,
 } from "../utils/aiRouterInstall";
 import { makeSpawner, makeFileOps } from "./installAiRouterCommands";
@@ -15,13 +13,11 @@ import {
   BootstrapContext,
   TemplateBundle,
   Tier,
-  buildSlug,
   loadTemplateBundle,
   renderConsumerBootstrap,
   renderStructureBootstrap,
   resolveBundledTemplateDir,
   structureOnlyContext,
-  DEFAULT_VERIFICATION_MODE,
 } from "../utils/consumerBootstrap";
 
 // ---------- pure scaffolding core (tested without VS Code) ----------
@@ -171,168 +167,38 @@ function isoDate(): string {
 }
 
 export function registerGitScaffoldCommand(context: vscode.ExtensionContext): void {
+  // Set 060 S3 (spec S3 step 4): the Command-Palette entry converges on
+  // the SAME no-prompt structure-only scaffold the Getting Started form
+  // drives (D5). The legacy multi-prompt flow — title / purpose /
+  // session-count input boxes (seeding a starter set), the git-init
+  // confirmation modal, and the worktree opt-in modal — is retired:
+  // session sets come from the form's decomposition prompt (D4), the
+  // parallel checkbox + worktree note cover the worktree concept (D7),
+  // and operator UAT rejected the prompt-chain dead-ends on 0.28.0.
+  // The only prompt left is the tier QuickPick (the palette has no
+  // radio); a wizard-style `{ tier }` arg still skips it.
   context.subscriptions.push(
     vscode.commands.registerCommand("dabbler.setupNewProject", async (arg?: { tier?: string }) => {
-      // Set 059: the Get Started wizard forwards the tier the operator already
-      // picked. When present and valid we skip the redundant tier prompt below;
-      // when absent (Command Palette invocation) we prompt as before.
-      const preselectedTier = asTier(arg?.tier);
-
-      // Step 1: pick folder
-      const projectDir = await pickDirectory();
+      // Folder: the open workspace folder, else a picker (same rule as
+      // the form's buildStructure handler).
+      const openRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const projectDir = openRoot ?? (await pickDirectory());
       if (!projectDir) return;
 
-      // Step 2: git init (skip if already a repo)
-      const git = simpleGit(projectDir);
-      const isRepo = await git.checkIsRepo().catch(() => false);
-      if (!isRepo) {
-        const confirm = await vscode.window.showWarningMessage(
-          `Initialize a new git repository in ${path.basename(projectDir)}?`,
-          { modal: true },
-          "Initialize"
-        );
-        if (confirm !== "Initialize") return;
-        await git.init();
-        vscode.window.showInformationMessage("Git repository initialized.");
-      }
-
-      // Step 3: choose tier (the single declarative switch). Honor the
-      // wizard's preselection when provided; otherwise prompt.
-      const tier = preselectedTier ?? (await promptTier());
+      // Tier: the single declarative switch. Honor a preselection
+      // (programmatic callers); otherwise prompt.
+      const tier = asTier(arg?.tier) ?? (await promptTier());
       if (!tier) return;
 
-      // Step 4: gather the first session set's details. Tier is per-set, so
-      // the scaffold seeds one starter set whose spec.md carries `tier:`.
-      const setTitle = (
-        await vscode.window.showInputBox({
-          prompt: "Title for the first session set",
-          placeHolder: "e.g. User authentication",
-          ignoreFocusOut: true,
-          validateInput: (v) =>
-            v.trim().length === 0 ? "A title is required." : undefined,
-        })
-      )?.trim();
-      if (!setTitle) return;
+      await buildProjectStructureNoPrompt(context, projectDir, tier);
 
-      const purpose =
-        (
-          await vscode.window.showInputBox({
-            prompt: "One-sentence purpose of this session set",
-            placeHolder: "e.g. Add email + password sign-in.",
-            ignoreFocusOut: true,
-          })
-        )?.trim() || "<one-sentence purpose>";
-
-      const totalRaw = await vscode.window.showInputBox({
-        prompt: "How many sessions in this set?",
-        value: "3",
-        ignoreFocusOut: true,
-        validateInput: (v) =>
-          /^[1-9]\d*$/.test(v.trim()) ? undefined : "Enter a positive integer.",
-      });
-      if (totalRaw === undefined) return;
-      const totalSessions = parseInt(totalRaw.trim(), 10);
-
-      const ctx: BootstrapContext = {
-        repoName: path.basename(projectDir),
-        setTitle,
-        purpose,
-        slug: buildSlug(1, setTitle),
-        created: isoDate(),
-        tier,
-        verificationMode: DEFAULT_VERIFICATION_MODE,
-        totalSessions,
-      };
-
-      // Step 5: load the bundled template set and scaffold artifacts +
-      // tier-aware install, all under one progress notification.
-      let bundle: TemplateBundle;
-      try {
-        bundle = loadTemplateBundle(resolveBundledTemplateDir(context.extensionPath));
-      } catch (err) {
-        vscode.window.showErrorMessage(
-          `Could not load the consumer-bootstrap template bundle: ${err instanceof Error ? err.message : String(err)}`,
+      // When we scaffolded a picked (not-open) folder, open it so the
+      // Session Set Explorer's Getting Started form tracks the new root.
+      if (!openRoot) {
+        await vscode.commands.executeCommand(
+          "vscode.openFolder",
+          vscode.Uri.file(projectDir),
         );
-        return;
-      }
-
-      const pythonPath = resolveExplicitPythonPath(projectDir);
-      const result = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "Scaffolding project…",
-          cancellable: false,
-        },
-        async (progress) =>
-          scaffoldConsumerRepo({
-            projectDir,
-            ctx,
-            bundle,
-            fileOps: makeFileOps(),
-            reportProgress: (m) => progress.report({ message: m }),
-            installRouter: () =>
-              installAiRouter({
-                workspaceRoot: projectDir,
-                pythonPath,
-                spawner: makeSpawner(),
-                fileOps: makeFileOps(),
-                prompts: makeScaffoldInstallPrompts(),
-                reportProgress: (m) => progress.report({ message: m }),
-              }),
-          }),
-      );
-
-      const summary =
-        `Scaffolded ${result.written.length} file(s)` +
-        (result.skipped.length ? `, skipped ${result.skipped.length} existing` : "") +
-        `. ${result.installOk ? "ai-router installed." : `Router install needs attention: ${result.installMessage}`}`;
-      if (result.installOk) {
-        vscode.window.showInformationMessage(summary);
-      } else {
-        vscode.window.showWarningMessage(
-          `${summary} You can finish the install later with "Dabbler: Install ai-router".`,
-        );
-      }
-
-      // Step 6: worktree opt-in (unchanged).
-      const worktreeAnswer = await vscode.window.showInformationMessage(
-        "Set up git worktrees for parallel session sets? (Recommended for large projects)",
-        { modal: true },
-        "Yes — set up worktrees",
-        "No — keep it simple"
-      );
-
-      if (worktreeAnswer === "Yes — set up worktrees") {
-        try {
-          // Need at least one commit before adding worktrees
-          const status = await git.status();
-          if (status.files.length > 0 || !(await git.log().catch(() => null))) {
-            await git.commit("init", { "--allow-empty": null });
-          }
-          const worktreesDir = path.join(projectDir, "worktrees");
-          if (!fs.existsSync(worktreesDir)) fs.mkdirSync(worktreesDir, { recursive: true });
-          await git.raw(["worktree", "add", path.join(worktreesDir, "main"), "HEAD"]);
-          vscode.window.showInformationMessage(
-            "Worktrees set up. Work from worktrees/main/ for parallel sessions."
-          );
-        } catch (err) {
-          vscode.window.showWarningMessage(
-            `Worktree setup skipped: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-      }
-
-      // Step 7: open folder. The cold-start chain lives in
-      // docs/dabbler/start-here.md — once the folder is open the operator
-      // (or their orchestrator) just runs "start the next session".
-      const openFolder = await vscode.window.showInformationMessage(
-        `Project scaffolded (${tier} tier). Open the folder, then tell your AI orchestrator "start the next session" — docs/dabbler/start-here.md drives the rest.`,
-        "Open Folder"
-      );
-      if (openFolder === "Open Folder") {
-        vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(projectDir));
-      } else {
-        vscode.commands.executeCommand("dabbler.getStarted");
       }
     })
   );

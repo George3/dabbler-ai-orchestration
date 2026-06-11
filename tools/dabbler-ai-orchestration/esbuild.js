@@ -20,6 +20,7 @@ function copyTemplateBundle() {
     "spec.md.template",
     "session-state.json.template",
     "start-here.md.template",
+    "getting-started.md.template",
     "engine-file.shared-body.md",
     "engine-file.claude-tail.md",
     "engine-file.agents-tail.md",

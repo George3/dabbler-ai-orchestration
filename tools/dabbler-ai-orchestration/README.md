@@ -66,12 +66,14 @@ and the standard activity-bar tree takes over.
 
 If you'd rather drive the setup from VS Code's UI directly, run
 **`Dabbler: Get Started`** from the command palette
-(`Ctrl+Shift+P` / `Cmd+Shift+P`). The wizard opens with a
-**Choose adoption tier** radio group above the prerequisites
-section; the Full and Lightweight paths surface different
-prerequisites and helper buttons. The **Configure AI Router**
-button (Full only) opens the visual config editor once your project
-is set up.
+(`Ctrl+Shift+P` / `Cmd+Shift+P`). It focuses the Session Set
+Explorer — which renders a three-step **Getting Started form**
+(build structure with a Full/Lightweight radio, create or import a
+project plan, build session sets) whenever the workspace has no
+session sets yet — and opens the step-by-step instructions in the
+editor. On the Full tier the form warns under the Build button when
+no provider API key is set. (The Set 021 Get Started wizard panel
+was retired in extension 0.29.0 in favor of this form.)
 
 ---
 

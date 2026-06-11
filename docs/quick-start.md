@@ -61,7 +61,7 @@ The editor opens a panel with six sections:
 | Notifications | Pushover toggle; API-key / user-key env-var names; test-notification button |
 | Local overrides summary | Read-only view of `local-overrides.yaml` (gitignored, per-machine settings) |
 
-Changes to provider API keys and Pushover credentials belong in `local-overrides.yaml` (per-machine, gitignored). The editor's shared/local toggle on each field controls which file is written. The wizard (`Dabbler: Get Started`) is the recommended first-time setup path; the config editor is the recommended surface for ongoing tuning.
+Changes to provider API keys and Pushover credentials belong in `local-overrides.yaml` (per-machine, gitignored). The editor's shared/local toggle on each field controls which file is written. The Getting Started form in the Session Set Explorer (`Dabbler: Get Started`) is the recommended first-time setup path; the config editor is the recommended surface for ongoing tuning.
 
 ---
 

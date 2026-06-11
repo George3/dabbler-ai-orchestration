@@ -15,6 +15,7 @@
 | [`spec.md.template`](spec.md.template) | `docs/session-sets/<NNN-slug>/spec.md` | yes |
 | [`session-state.json.template`](session-state.json.template) | `docs/session-sets/<NNN-slug>/session-state.json` (schemaVersion 4, `status: not-started`) | yes |
 | [`start-here.md.template`](start-here.md.template) | `docs/dabbler/start-here.md` | yes |
+| [`getting-started.md.template`](getting-started.md.template) | `docs/dabbler/getting-started.md` — the static Getting Started teaching doc (Set 060 D8). **Token-free by design** so the bundled copy can be opened in the editor before any scaffold has run. | yes |
 | [`engine-file.shared-body.md`](engine-file.shared-body.md) | the shared body of all three engine files | yes |
 | [`engine-file.claude-tail.md`](engine-file.claude-tail.md) | the `CLAUDE.md` bootstrap tail | yes |
 | [`engine-file.agents-tail.md`](engine-file.agents-tail.md) | the `AGENTS.md` bootstrap tail | yes |

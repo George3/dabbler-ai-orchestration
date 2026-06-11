@@ -137,6 +137,39 @@ export function detectCompletion(root: string, fsi: DetectionFs): CompletionStat
   };
 }
 
+// ---------- D6 — provider-key validation (Set 060 Session 3) ----------
+
+// The provider keys the Full tier can route through. Any ONE of them
+// present satisfies D6 (the router needs at least one provider).
+const PROVIDER_KEY_VARS = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "GEMINI_API_KEY",
+] as const;
+
+/**
+ * D6 predicate: true iff at least one provider API key is set to a
+ * non-blank value in `env`.
+ *
+ * The host passes `process.env`, which covers BOTH Windows System and
+ * User environment variables: the VS Code extension host inherits the
+ * merged System+User environment captured when VS Code launched. That
+ * launch-time capture is also why the D6 warning tells the operator to
+ * **reload the window** after setting a key — a variable set after
+ * launch (System or User) is invisible to `process.env` until the
+ * window reloads. A whitespace-only value counts as absent: it cannot
+ * authenticate, so treating it as present would suppress the warning
+ * exactly when the operator needs it.
+ */
+export function providerKeyPresent(
+  env: Record<string, string | undefined>,
+): boolean {
+  return PROVIDER_KEY_VARS.some((k) => {
+    const v = env[k];
+    return typeof v === "string" && v.trim().length > 0;
+  });
+}
+
 /**
  * D1/D5 dual-mode switch. The Session Set Explorer renders:
  *   - "no-folder"        when no workspace folder is open;
@@ -163,19 +196,25 @@ export function selectExplorerMode(hasFolder: boolean, hasAnySets: boolean): Exp
  * includes worktrees) that flips the mode to "list". In any mode other
  * than "getting-started" the three completion flags are reported false
  * (they are only meaningful for the form surface) and no probe runs.
+ *
+ * `env` feeds the D6 provider-key check (Set 060 Session 3); the host
+ * passes `process.env`. Unlike the fs probe it is mode-independent —
+ * an env lookup is free and the value only renders on the form surface
+ * anyway.
  */
 export function computeGettingStarted(
   hasFolder: boolean,
   root: string | undefined,
   hasAnySets: boolean,
   fsi: DetectionFs,
+  env: Record<string, string | undefined> = {},
 ): GettingStartedPayload {
   const mode = selectExplorerMode(hasFolder, hasAnySets);
   const completion =
     mode === "getting-started" && root
       ? detectCompletion(root, fsi)
       : { structureBuilt: false, planPresent: false, sessionSetsPresent: false };
-  return { mode, ...completion };
+  return { mode, ...completion, providerKeyPresent: providerKeyPresent(env) };
 }
 
 /**

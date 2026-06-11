@@ -9,8 +9,10 @@
 // ``docs/templates/consumer-bootstrap/`` (the Set 058 S1 deliverable).
 //
 // Three creation paths consume this writer so they cannot drift apart
-// (D4/D8): the Get Started wizard, ``dabbler.setupNewProject``
-// (``gitScaffold``), and ``dabbler.generateSessionSetPrompt``
+// (D4/D8): the Getting Started form's "Build project structure" (Set
+// 060 — the Set 021 wizard it replaced is retired), ``dabbler.
+// setupNewProject`` (``gitScaffold``, converged on the same no-prompt
+// scaffold), and ``dabbler.generateSessionSetPrompt``
 // (``sessionGenPrompt``). The writer is pure — it takes the raw template
 // strings plus a context object and returns ``{ relPath: content }`` — so
 // the test suite can render against the canonical bundle with no VS Code,
@@ -57,6 +59,14 @@ export interface TemplateBundle {
   specTemplate: string;
   sessionStateTemplate: string;
   startHereTemplate: string;
+  /**
+   * Set 060 S3 (spec D8): the static Getting Started teaching doc.
+   * Deliberately token-free so the BUNDLED copy can be opened in the
+   * editor before any scaffold has run (the no-folder / pre-build
+   * states) — the same bytes are also written to the consumer repo at
+   * {@link GETTING_STARTED_REL_PATH} by both scaffold paths.
+   */
+  gettingStartedTemplate: string;
   sharedBody: string;
   claudeTail: string;
   agentsTail: string;
@@ -68,11 +78,20 @@ const BUNDLE_FILES = {
   specTemplate: "spec.md.template",
   sessionStateTemplate: "session-state.json.template",
   startHereTemplate: "start-here.md.template",
+  gettingStartedTemplate: "getting-started.md.template",
   sharedBody: "engine-file.shared-body.md",
   claudeTail: "engine-file.claude-tail.md",
   agentsTail: "engine-file.agents-tail.md",
   geminiTail: "engine-file.gemini-tail.md",
 } as const;
+
+/**
+ * Filename of the Getting Started template inside the bundle dir —
+ * exported so the editor-open path (gettingStartedDoc.ts) can resolve
+ * the bundled copy without re-deriving the name.
+ */
+export const GETTING_STARTED_TEMPLATE_FILENAME =
+  BUNDLE_FILES.gettingStartedTemplate;
 
 /**
  * Resolve the directory the template bundle was copied into inside the
@@ -99,6 +118,7 @@ export function loadTemplateBundle(bundleDir: string): TemplateBundle {
     specTemplate: read(BUNDLE_FILES.specTemplate),
     sessionStateTemplate: read(BUNDLE_FILES.sessionStateTemplate),
     startHereTemplate: read(BUNDLE_FILES.startHereTemplate),
+    gettingStartedTemplate: read(BUNDLE_FILES.gettingStartedTemplate),
     sharedBody: read(BUNDLE_FILES.sharedBody),
     claudeTail: read(BUNDLE_FILES.claudeTail),
     agentsTail: read(BUNDLE_FILES.agentsTail),
@@ -310,6 +330,18 @@ export function sessionStateRelPath(ctx: BootstrapContext): string {
 export const START_HERE_REL_PATH = path.posix.join("docs", "dabbler", "start-here.md");
 
 /**
+ * Relative output path of the static Getting Started instructions doc
+ * (Set 060 S3, spec D8). Written by both scaffold paths; also openable
+ * straight from the bundle (the template is token-free) before any
+ * scaffold has run.
+ */
+export const GETTING_STARTED_REL_PATH = path.posix.join(
+  "docs",
+  "dabbler",
+  "getting-started.md",
+);
+
+/**
  * Render every consumer-bootstrap artifact for ``ctx`` from ``bundle``.
  * Returns a path -> content map (paths relative to the consumer repo root,
  * forward-slashed). Throws if any template leaves a ``{{TOKEN}}``
@@ -324,6 +356,7 @@ export function renderConsumerBootstrap(
     "AGENTS.md": renderEngineFile(bundle.sharedBody, bundle.agentsTail, ctx),
     "GEMINI.md": renderEngineFile(bundle.sharedBody, bundle.geminiTail, ctx),
     [START_HERE_REL_PATH]: renderStartHere(bundle, ctx),
+    [GETTING_STARTED_REL_PATH]: bundle.gettingStartedTemplate,
     [specRelPath(ctx)]: renderSpec(bundle, ctx),
     [sessionStateRelPath(ctx)]: renderSessionState(bundle, ctx),
   };
@@ -363,6 +396,10 @@ export function renderStructureBootstrap(
     "AGENTS.md": renderEngineFile(bundle.sharedBody, bundle.agentsTail, ctx),
     "GEMINI.md": renderEngineFile(bundle.sharedBody, bundle.geminiTail, ctx),
     [START_HERE_REL_PATH]: renderStartHere(bundle, ctx),
+    // D8 (Set 060 S3): the static Getting Started teaching doc ships
+    // with the structure scaffold too, so the editor-open path can
+    // prefer the workspace copy once the structure is built.
+    [GETTING_STARTED_REL_PATH]: bundle.gettingStartedTemplate,
   };
 
   const leftovers = new Set<string>();

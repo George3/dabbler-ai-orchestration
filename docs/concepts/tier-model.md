@@ -1,7 +1,7 @@
 # The Dabbler tier model — Full vs. Lightweight
 
 > **This is the single source of truth (SSoT) for the adoption tier model.**
-> README, `docs/adoption-bootstrap.md`, the Get Started wizard, the
+> README, `docs/adoption-bootstrap.md`, the Getting Started form, the
 > consumer-repo engine files (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), and
 > `docs/spec-md-schema.md` all **point here** rather than restating the model.
 > If you are about to explain "what Lightweight means" anywhere else, link to
@@ -52,7 +52,7 @@ Everything in this list is identical whether the project is `full` or
 | **Session Set Explorer** | Same activity-bar view, same bucket transitions, same per-session orchestrator block. |
 | **Folder layout** | Same `docs/session-sets/<slug>/` artifact set. |
 
-If you find a setup step, doc, or wizard branch that asks a Lightweight
+If you find a setup step, doc, or setup-form branch that asks a Lightweight
 project to *skip* one of these, that is the drift — fix it against this
 table.
 
@@ -143,7 +143,7 @@ four setup surfaces still encoded:
 That framing is **wrong** and contradicts the implemented `--no-router` mode.
 The pure-docs Lightweight tier was an illusion that the Set 048 runtime had
 already replaced. This SSoT is the corrected model; the four surfaces
-(`adoption-bootstrap.md`, the wizard, `sessionGenPrompt`, `gitScaffold`) now
+(`adoption-bootstrap.md`, the Getting Started form, `sessionGenPrompt`, `gitScaffold`) now
 point here, and a CI guard forbids the stale phrasing from reappearing in any
 doc.
 

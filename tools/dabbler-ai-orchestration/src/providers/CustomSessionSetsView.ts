@@ -83,6 +83,8 @@ import {
   makeGettingStartedHandlers,
   routeGettingStartedAction,
 } from "../commands/gettingStartedActions";
+// Set 060 Session 3 (D8): the static instructions doc opener.
+import { openGettingStartedDoc } from "../commands/gettingStartedDoc";
 
 const SUPPRESSION_KEY = "dabbler.sessionSets.suppressedExpand";
 const RENDER_DEBOUNCE_MS = 50;
@@ -177,15 +179,25 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
   private welcomeHtml: string;
   // Set 060 Session 2: bound once at construction; injectable for tests.
   private readonly gettingStartedHandlers: GettingStartedHandlers;
+  // Set 060 Session 3 (D8): the static instructions doc auto-opens
+  // ONCE per extension session, the first time a snapshot ships a
+  // non-"list" Getting Started surface. One-shot so watcher ticks and
+  // post-action refreshes don't re-steal editor focus; the
+  // dabbler.getStarted command re-opens it explicitly any time.
+  private instructionsOpened = false;
+  private readonly openInstructions: () => void | Promise<void>;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly scanState: ScanState,
     gettingStartedHandlers?: GettingStartedHandlers,
+    openInstructions?: () => void | Promise<void>,
   ) {
     this.welcomeHtml = this.loadWelcomeHtmlFromPackageJson();
     this.gettingStartedHandlers =
       gettingStartedHandlers ?? makeGettingStartedHandlers(context);
+    this.openInstructions =
+      openInstructions ?? (() => openGettingStartedDoc(context));
     this.context.subscriptions.push(
       this.scanState.onDidChange(() => this.postScanState()),
     );
@@ -449,6 +461,16 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       gettingStarted: this.buildGettingStarted(all),
     };
 
+    // D8 (Set 060 S3): the first time the Explorer shows a Getting
+    // Started surface (no-folder CTA or the form), open the static
+    // instructions doc beside it — once per extension session.
+    if (payload.gettingStarted?.mode !== "list" && !this.instructionsOpened) {
+      this.instructionsOpened = true;
+      void Promise.resolve(this.openInstructions()).catch((err) =>
+        console.warn("[CustomSessionSetsView] instructions open failed", err),
+      );
+    }
+
     const msg: HostToWebview = {
       type: "rowsSnapshot",
       version: this.version,
@@ -520,6 +542,10 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
       folders[0]?.uri.fsPath,
       all.length > 0,
       nodeDetectionFs,
+      // D6 (Set 060 S3): process.env is the extension host's merged
+      // Windows System + User environment, captured at launch — hence
+      // the warning's "reload the window" instruction.
+      process.env,
     );
   }
 
@@ -643,6 +669,13 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
     const jsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, "media", "session-sets-tree", "client.js"),
     );
+    // Set 060 S3: the Getting Started HTML builders live in their own
+    // UMD-lite module (unit-testable from mocha). Loaded BEFORE
+    // client.js so the `DabblerGettingStartedHtml` global exists when
+    // client.js captures it.
+    const gsHtmlUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, "media", "session-sets-tree", "gettingStartedHtml.js"),
+    );
     const nonce = String(Math.floor(Math.random() * 1e16));
     // Set 034 + Set 036 S6: the per-row accordion that injected inline
     // SVG via innerHTML is gone. Only the tree shell (rows + bucket
@@ -663,6 +696,7 @@ export class CustomSessionSetsView implements vscode.WebviewViewProvider, vscode
 </head>
 <body>
   <main id="root" role="presentation"></main>
+  <script nonce="${nonce}" src="${gsHtmlUri}"></script>
   <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;

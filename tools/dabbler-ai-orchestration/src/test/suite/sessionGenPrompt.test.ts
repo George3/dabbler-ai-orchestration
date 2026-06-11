@@ -87,28 +87,44 @@ suite("buildSessionGenPrompt (Set 058 S2)", () => {
   });
 });
 
-suite("Get Started wizard — cold-start closure (Set 058 S2)", () => {
-  function wizardHtml(): string {
-    const candidates = [
-      path.resolve(__dirname, "../../../webview/wizard.html"),
-      path.resolve(__dirname, "webview/wizard.html"),
-    ];
-    for (const c of candidates) if (fs.existsSync(c)) return fs.readFileSync(c, "utf8");
-    throw new Error("Could not locate wizard.html for tests.");
-  }
-  const html = wizardHtml();
+// Set 060 S3: the Set 021/058 Get Started wizard (webview/wizard.html)
+// is retired — the Session Set Explorer's Getting Started form (D1) +
+// the static instructions doc (D8) are the onboarding surface. The
+// cold-start-closure copy the wizard suite used to pin now lives in the
+// bundled getting-started.md.template; pin it there instead.
+suite("Getting Started instructions doc (Set 060 S3, D8)", () => {
+  const doc = bundle.gettingStartedTemplate;
 
-  test("has an explicit 'start the next session' closure", () => {
-    assert.ok(/start the next session/i.test(html));
-    assert.ok(html.includes("docs/dabbler/start-here.md"));
+  test("is token-free (openable straight from the bundle, pre-scaffold)", () => {
+    assert.deepStrictEqual(doc.match(/{{[A-Z_]+}}/g), null);
   });
 
-  test("states Python is required for both tiers", () => {
-    assert.ok(/both tiers/i.test(html));
+  test("carries the operator's five step headings (the SVG copy)", () => {
+    for (const heading of [
+      "## 1. Scaffold Project Structure",
+      "## 2. Create/Import Project Plan",
+      "## 3. Decompose Plan Into Session Sets",
+      "## 4. Start the First Session",
+      "## 5. Trust But Verify",
+    ]) {
+      assert.ok(doc.includes(heading), `missing heading: ${heading}`);
+    }
   });
 
-  test("keeps the tier toggle wiring", () => {
-    assert.ok(html.includes('name="tier"'));
-    assert.ok(html.includes("applyTierVisibility"));
+  test("has the start-first-session closure (Copy Prompt > Start Next Session)", () => {
+    assert.ok(/Start Next\s+Session/i.test(doc));
+    assert.ok(doc.includes("`001-`"));
+  });
+
+  test("teaches the project-plan contract and both tiers", () => {
+    assert.ok(doc.includes("project-plan.md"));
+    assert.ok(doc.includes("docs/planning"));
+    assert.ok(/Full tier/.test(doc));
+    assert.ok(/Lightweight tier/.test(doc));
+  });
+
+  test("explains the parallel worktree model (D7 companion copy)", () => {
+    assert.ok(doc.includes("git worktrees"));
+    assert.ok(doc.includes("merged back to the main branch"));
   });
 });

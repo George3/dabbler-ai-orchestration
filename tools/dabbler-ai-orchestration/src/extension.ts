@@ -14,7 +14,15 @@ import { registerCopyAdoptionBootstrapPromptCommand } from "./commands/copyAdopt
 import { registerTroubleshootCommand } from "./commands/troubleshoot";
 import { registerCancelLifecycleCommands } from "./commands/cancelLifecycleCommands";
 import { registerInstallAiRouterCommands } from "./commands/installAiRouterCommands";
-import { registerWizardCommands } from "./wizard/WizardPanel";
+// Set 060 S3: the Set 021 WizardPanel (webview/wizard.html) is retired.
+// `dabbler.getStarted` now focuses the Session Set Explorer (whose
+// Getting Started form is the interactive surface, D1) and opens the
+// static instructions doc (D8). The plan-import and session-gen-prompt
+// commands the wizard module used to register survive as standalone
+// registrations.
+import { registerGetStartedCommand } from "./commands/gettingStartedDoc";
+import { registerPlanImportCommand } from "./wizard/planImport";
+import { registerSessionGenPromptCommand } from "./wizard/sessionGenPrompt";
 import { registerCostDashboardCommand } from "./dashboard/CostDashboard";
 import { registerConfigEditorCommand } from "./configEditor/ConfigEditorPanel";
 import { registerFlagDecisionForReview } from "./commands/flagDecisionForReview";
@@ -286,7 +294,11 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCopyAdoptionBootstrapPromptCommand(context),
   );
   safeRegister("registerTroubleshootCommand", () => registerTroubleshootCommand(context));
-  safeRegister("registerWizardCommands", () => registerWizardCommands(context));
+  safeRegister("registerGetStartedCommand", () => registerGetStartedCommand(context));
+  safeRegister("registerPlanImportCommand", () => registerPlanImportCommand(context));
+  safeRegister("registerSessionGenPromptCommand", () =>
+    registerSessionGenPromptCommand(context),
+  );
   safeRegister("registerCostDashboardCommand", () => registerCostDashboardCommand(context));
   safeRegister("registerCancelLifecycleCommands", () =>
     registerCancelLifecycleCommands(context, { refreshView: refreshAll }),

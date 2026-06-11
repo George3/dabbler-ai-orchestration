@@ -10,6 +10,7 @@ import {
   DetectionFs,
   computeGettingStarted,
   detectCompletion,
+  providerKeyPresent,
   selectExplorerMode,
 } from "../../utils/gettingStartedDetection";
 
@@ -198,6 +199,7 @@ suite("gettingStartedDetection — computeGettingStarted (Set 060 S1 host compos
       structureBuilt: false,
       planPresent: false,
       sessionSetsPresent: false,
+      providerKeyPresent: false,
     });
   });
 
@@ -210,6 +212,7 @@ suite("gettingStartedDetection — computeGettingStarted (Set 060 S1 host compos
       structureBuilt: false,
       planPresent: false,
       sessionSetsPresent: false,
+      providerKeyPresent: false,
     });
   });
 
@@ -220,6 +223,7 @@ suite("gettingStartedDetection — computeGettingStarted (Set 060 S1 host compos
       structureBuilt: true,
       planPresent: true,
       sessionSetsPresent: true,
+      providerKeyPresent: false,
     });
   });
 
@@ -230,6 +234,7 @@ suite("gettingStartedDetection — computeGettingStarted (Set 060 S1 host compos
       structureBuilt: false,
       planPresent: false,
       sessionSetsPresent: false,
+      providerKeyPresent: false,
     });
   });
 
@@ -240,6 +245,61 @@ suite("gettingStartedDetection — computeGettingStarted (Set 060 S1 host compos
       structureBuilt: false,
       planPresent: false,
       sessionSetsPresent: false,
+      providerKeyPresent: false,
     });
+  });
+});
+
+suite("gettingStartedDetection — providerKeyPresent (Set 060 S3, D6)", () => {
+  test("empty env → false", () => {
+    assert.strictEqual(providerKeyPresent({}), false);
+  });
+
+  test("any ONE provider key satisfies the predicate", () => {
+    assert.strictEqual(providerKeyPresent({ ANTHROPIC_API_KEY: "sk-a" }), true);
+    assert.strictEqual(providerKeyPresent({ OPENAI_API_KEY: "sk-o" }), true);
+    assert.strictEqual(providerKeyPresent({ GEMINI_API_KEY: "g-key" }), true);
+  });
+
+  test("empty / whitespace-only values count as absent (cannot authenticate)", () => {
+    assert.strictEqual(providerKeyPresent({ ANTHROPIC_API_KEY: "" }), false);
+    assert.strictEqual(providerKeyPresent({ OPENAI_API_KEY: "   " }), false);
+    assert.strictEqual(
+      providerKeyPresent({ GEMINI_API_KEY: undefined as unknown as string }),
+      false,
+    );
+  });
+
+  test("non-provider variables are ignored", () => {
+    assert.strictEqual(
+      providerKeyPresent({ PATH: "/usr/bin", PUSHOVER_API_KEY: "p" }),
+      false,
+    );
+  });
+
+  test("a real key alongside blanks still satisfies", () => {
+    assert.strictEqual(
+      providerKeyPresent({ ANTHROPIC_API_KEY: " ", OPENAI_API_KEY: "sk-o" }),
+      true,
+    );
+  });
+
+  test("computeGettingStarted carries the env signal into the payload (all modes)", () => {
+    const withKey = { GEMINI_API_KEY: "g" };
+    assert.strictEqual(
+      computeGettingStarted(true, ROOT, false, new FakeFs(), withKey).providerKeyPresent,
+      true,
+    );
+    // Mode-independent: the env lookup is free and only renders on the
+    // form surface anyway.
+    assert.strictEqual(
+      computeGettingStarted(true, ROOT, true, new FakeFs(), withKey).providerKeyPresent,
+      true,
+    );
+    // Omitted env param defaults to {} → false.
+    assert.strictEqual(
+      computeGettingStarted(true, ROOT, false, new FakeFs()).providerKeyPresent,
+      false,
+    );
   });
 });

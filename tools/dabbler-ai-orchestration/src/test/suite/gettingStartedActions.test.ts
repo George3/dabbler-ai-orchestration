@@ -177,7 +177,7 @@ const PROJECT = "/repo";
 const cfgPath = path.join(PROJECT, "ai_router", "router-config.yaml").replace(/\\/g, "/");
 
 suite("scaffoldConsumerRepo — structureOnly (Set 060 S2, spec D5)", () => {
-  test("writes exactly the four structure artifacts and NO starter session set", async () => {
+  test("writes exactly the five structure artifacts and NO starter session set", async () => {
     const { ops, store } = memFileOps();
     const result = await scaffoldConsumerRepo({
       projectDir: PROJECT,
@@ -187,11 +187,14 @@ suite("scaffoldConsumerRepo — structureOnly (Set 060 S2, spec D5)", () => {
       structureOnly: true,
       installRouter: async () => ({ ok: true, message: "installed" }),
     });
-    assert.strictEqual(result.written.length, 4);
+    // Five since Set 060 S3: the D8 getting-started.md teaching doc
+    // ships with the structure scaffold.
+    assert.strictEqual(result.written.length, 5);
     assert.ok(store.has("/repo/CLAUDE.md"));
     assert.ok(store.has("/repo/AGENTS.md"));
     assert.ok(store.has("/repo/GEMINI.md"));
     assert.ok(store.has("/repo/docs/dabbler/start-here.md"));
+    assert.ok(store.has("/repo/docs/dabbler/getting-started.md"));
     // The whole point of structureOnly: no docs/session-sets path is
     // materialized, so the dual-mode Explorer stays on the form
     // (hasAnySets keys on a renderable set) and no unnamed starter set
@@ -233,19 +236,26 @@ suite("scaffoldConsumerRepo — structureOnly (Set 060 S2, spec D5)", () => {
     });
     assert.deepStrictEqual(result.skipped, ["CLAUDE.md"]);
     assert.strictEqual(store.get("/repo/CLAUDE.md"), "PRE-EXISTING");
-    assert.strictEqual(result.written.length, 3);
+    assert.strictEqual(result.written.length, 4);
   });
 });
 
 suite("renderStructureBootstrap (Set 060 S2)", () => {
-  test("renders the four structure files, fully token-substituted", () => {
+  test("renders the five structure files, fully token-substituted", () => {
     const { files } = renderStructureBootstrap(
       bundle,
       structureOnlyContext("my-app", "full", "2026-06-10"),
     );
     assert.deepStrictEqual(
       Object.keys(files).sort(),
-      ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "docs/dabbler/start-here.md"].sort(),
+      [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        // Set 060 S3 (D8): the static Getting Started teaching doc.
+        "docs/dabbler/getting-started.md",
+        "docs/dabbler/start-here.md",
+      ].sort(),
     );
     for (const [rel, content] of Object.entries(files)) {
       assert.deepStrictEqual(findUnsubstitutedTokens(content), [], rel);
@@ -341,7 +351,7 @@ suite("planImport handlers (Set 060 S2)", () => {
       const ok = await importPlanFromFile(
         makeUi(
           {
-            showOpenDialog: (async () => [{ fsPath: src }]) as PlanImportUi["showOpenDialog"],
+            showOpenDialog: (async () => [{ fsPath: src }]) as unknown as PlanImportUi["showOpenDialog"],
             workspaceRoot: () => undefined,
           },
           log,
@@ -363,7 +373,7 @@ suite("planImport handlers (Set 060 S2)", () => {
       const ok = await importPlanFromFile(
         makeUi(
           {
-            showOpenDialog: (async () => [{ fsPath: src }]) as PlanImportUi["showOpenDialog"],
+            showOpenDialog: (async () => [{ fsPath: src }]) as unknown as PlanImportUi["showOpenDialog"],
             workspaceRoot: () => root,
           },
           log,
@@ -394,7 +404,7 @@ suite("planImport handlers (Set 060 S2)", () => {
       const ok = await importPlanFromFile(
         makeUi(
           {
-            showOpenDialog: (async () => [{ fsPath: src }]) as PlanImportUi["showOpenDialog"],
+            showOpenDialog: (async () => [{ fsPath: src }]) as unknown as PlanImportUi["showOpenDialog"],
             workspaceRoot: () => root,
             // Operator dismisses the modal — no "Overwrite" answer.
             showWarningMessage: (async () => undefined) as PlanImportUi["showWarningMessage"],

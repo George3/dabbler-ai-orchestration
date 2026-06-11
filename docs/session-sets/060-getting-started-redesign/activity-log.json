@@ -89,6 +89,85 @@
           "costUsd": 0.008217
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 0,
+      "stepKey": "session-003/ai-assignment",
+      "dateTime": "2026-06-10T20:55:27.473617-04:00",
+      "description": "Step 3.5: authored ai-assignment.md (S1/S2 actuals backfilled with deviation note; S3 block + S4 recommendation from routed analysis via gemini-pro).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "analysis",
+          "inputTokens": 1015,
+          "outputTokens": 569,
+          "costUsd": 0.00695875
+        }
+      ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/env-validation",
+      "dateTime": "2026-06-10T21:04:00.115353-04:00",
+      "description": "D6 env-var validation: pure providerKeyPresent(env) predicate in gettingStartedDetection.ts (System+User merge + reload-window rationale documented), providerKeyPresent field on GettingStartedPayload, host passes process.env, warning rendered under the Build button (Full tier only) with client-side radio toggling. Form HTML builders extracted from client.js to media/session-sets-tree/gettingStartedHtml.js (UMD-lite, mocha-testable) per the Set 052 pure-builders pattern. 21 detection tests + 11 builder tests pass.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/worktree-info",
+      "dateTime": "2026-06-10T21:04:00.115353-04:00",
+      "description": "D7 parallel-worktree info note: gs-note element under the parallel checkbox (git worktrees, merged back to main when sets complete), visible only while checked, client-side checkbox toggling; checked-vs-unchecked rendering tests ship per S060-S2-V1-001 suggestedTestOrCheck.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/editor-instructions",
+      "dateTime": "2026-06-10T21:07:55.423998-04:00",
+      "description": "D8 static editor instructions: token-free getting-started.md.template added to the consumer-bootstrap bundle (5-step copy lifted ~verbatim from the operator SVG, typos fixed, {insert hyperlink} resolved to the tier-model GitHub URL); written to docs/dabbler/getting-started.md by BOTH scaffold paths; new commands/gettingStartedDoc.ts opens it as a markdown preview (workspace copy preferred, else bundled copy via globalStorage); CustomSessionSetsView auto-opens it once per extension session when a non-list Getting Started surface first shows.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/old-path-retired",
+      "dateTime": "2026-06-10T21:20:17.739266-04:00",
+      "description": "Old Get Started path retired/repointed: WizardPanel.ts + webview/wizard.html DELETED; dabbler.getStarted re-registered in commands/gettingStartedDoc.ts (focuses the Session Set Explorer + opens the D8 instructions); dabbler.setupNewProject converged on the same no-prompt structure-only scaffold (tier QuickPick only - title/purpose/count prompts, git-init modal, worktree modal all retired); planImport + sessionGenPrompt registrations moved to extension.ts; viewsWelcome + package description + 6 doc references (quick-start, tier-model SSoT, repository-reference file map, ext README, workflow doc) updated; wizard.html cold-start-closure tests replaced with getting-started.md.template pins. Decisions flagged for verifier: WizardPanel DELETED (not folded), setupNewProject KEPT as palette entry. Also fixed 3 PRE-EXISTING tsc cast errors in gettingStartedActions.test.ts (S2 latent, broke npm-test compile).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/build-and-test",
+      "dateTime": "2026-06-10T21:21:59.011759-04:00",
+      "description": "Build + full test pass: esbuild compile clean (bundle + dist/templates incl. new getting-started.md.template); tsc --noEmit clean (after fixing 3 pre-existing S2 cast errors); TS unit suite 695 passing / 2 failing (both the documented pre-existing Set-026 stub failures: configEditor ViewColumn + notificationsSection); cold-start goldens regenerated for the new artifact (UPDATE_GOLDEN=1); drift guard OK; Python 1185 passed / 1 skipped (no ai_router changes).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/verified",
+      "dateTime": "2026-06-10T21:26:51.101653-04:00",
+      "description": "Cross-provider verification routed to gpt-5-4 (session-verification, complexity 65/70): round 1 VERIFIED, zero issues. Confirmed D6 host-driven env-key warning, D7 checked-only worktree note (S060-S2-V1-001 resolved with implementation + checked-vs-unchecked tests), D8 bundled/scaffolded/opened instructions doc, and the old-path retirement decisions (WizardPanel deleted, getStarted repointed, setupNewProject converged). Raw output: s3-verification.md. No sN-issues.json (clean round writes none).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 28171,
+          "outputTokens": 12502,
+          "costUsd": 0.2579575
+        }
+      ]
     }
   ]
 }

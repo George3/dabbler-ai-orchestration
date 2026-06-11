@@ -41,6 +41,12 @@
   // after every action and on every watcher tick — doesn't snap the
   // tier radio back to Full or untick the parallel checkbox.
   const gsState = { tier: "full", parallel: false };
+  // Set 060 Session 3: the Getting Started surface HTML builders moved
+  // to gettingStartedHtml.js (a UMD-lite module loaded as a second
+  // <script> before this file) so the rendering — including the D6
+  // provider-key warning and the D7 worktree note — is unit-testable
+  // without a webview. This file keeps the wiring only.
+  const gsHtml = window.DabblerGettingStartedHtml;
 
   // ----- Escape helpers (defense-in-depth) -----
   function escHtml(s) {
@@ -108,8 +114,8 @@
     if (gs && gs.mode !== "list") {
       root.innerHTML =
         gs.mode === "no-folder"
-          ? renderNoFolder()
-          : renderGettingStarted(gs);
+          ? gsHtml.renderNoFolder()
+          : gsHtml.renderGettingStarted(gs, gsState);
       wireGettingStarted();
       return;
     }
@@ -137,111 +143,28 @@
   }
 
   // ----- Set 060 dual-mode Getting Started surfaces -----
-
-  // No workspace folder open (D5). A single CTA to open / create a
-  // project folder (showOpenDialog -> vscode.openFolder host-side).
-  function renderNoFolder() {
-    return (
-      '<div class="getting-started">' +
-        '<div class="gs-header">' +
-          '<div class="gs-title">Getting Started</div>' +
-          '<div class="gs-subtitle">Open or create a project folder to begin.</div>' +
-        '</div>' +
-        '<div class="gs-step">' +
-          '<div class="gs-step-body">' +
-            '<button class="gs-button" type="button" data-gs-action="open-folder">' +
-              'Open or create a project folder…' +
-            '</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>'
-    );
-  }
-
-  // Folder open, no session sets yet (D1). The three-step setup form.
-  // Each step greys out + shows a green check when its D3 completion
-  // flag is set (gs.structureBuilt / gs.planPresent /
-  // gs.sessionSetsPresent). Live state lives ONLY here (D2).
-  function gsStep(num, title, complete, bodyHtml) {
-    var cls = complete ? "gs-step gs-step-complete" : "gs-step";
-    var check = complete ? "✓" : "";
-    return (
-      '<div class="' + cls + '">' +
-        '<div class="gs-step-head">' +
-          '<span class="gs-check" aria-hidden="true">' + check + '</span>' +
-          '<span class="gs-step-title">' + escHtml(num + ". " + title) + '</span>' +
-        '</div>' +
-        '<div class="gs-step-body">' + bodyHtml + '</div>' +
-      '</div>'
-    );
-  }
-
-  function renderGettingStarted(gs) {
-    // Control state (tier radio / parallel checkbox) comes from gsState
-    // so re-renders keep the operator's picks (Set 060 S2).
-    var fullChecked = gsState.tier === "lightweight" ? "" : " checked";
-    var lightChecked = gsState.tier === "lightweight" ? " checked" : "";
-    var parallelChecked = gsState.parallel ? " checked" : "";
-    var step1 = gsStep(
-      1,
-      "Build project structure",
-      gs.structureBuilt,
-      '<div class="gs-radio-group" role="radiogroup" aria-label="Project tier">' +
-        '<label class="gs-radio"><input type="radio" name="gs-tier" value="full"' + fullChecked + '> Full</label>' +
-        '<label class="gs-radio"><input type="radio" name="gs-tier" value="lightweight"' + lightChecked + '> Lightweight</label>' +
-      '</div>' +
-      '<button class="gs-button" type="button" data-gs-action="build-structure">' +
-        'Build project structure' +
-      '</button>',
-    );
-    var step2 = gsStep(
-      2,
-      "Create or import a project plan",
-      gs.planPresent,
-      '<button class="gs-button" type="button" data-gs-action="import-plan">' +
-        'Import project-plan.md…' +
-      '</button>' +
-      '<button class="gs-button gs-button-secondary" type="button" data-gs-action="copy-plan-prompt">' +
-        'Copy prompt for planning' +
-      '</button>',
-    );
-    var step3 = gsStep(
-      3,
-      "Build session sets",
-      gs.sessionSetsPresent,
-      '<button class="gs-button" type="button" data-gs-action="build-session-sets">' +
-        'Copy prompt to build session sets' +
-      '</button>' +
-      '<label class="gs-checkbox">' +
-        '<input type="checkbox" name="gs-parallel"' + parallelChecked + '> Create parallel session sets where possible' +
-      '</label>',
-    );
-    return (
-      '<div class="getting-started">' +
-        '<div class="gs-header">' +
-          '<div class="gs-title">Getting Started</div>' +
-          '<div class="gs-subtitle">Complete each step to set up your project, then start your first session.</div>' +
-        '</div>' +
-        step1 + step2 + step3 +
-      '</div>'
-    );
-  }
+  //
+  // Rendering lives in gettingStartedHtml.js (Session 3 extraction);
+  // this section owns only the event wiring.
 
   // Set 060 Session 2: wire the Getting Started surfaces. Buttons post a
   // typed `gettingStartedAction` message carrying the relevant form
   // state (tier for build-structure, parallel for build-session-sets);
   // the clicked button disables until the host's post-action snapshot
   // re-renders the surface (double-click guard). Radio / checkbox
-  // changes only update gsState — no host round-trip.
+  // changes update gsState and toggle the D6 warning / D7 note in
+  // place — no host round-trip.
   function wireGettingStarted() {
     Array.from(root.querySelectorAll('input[name="gs-tier"]')).forEach(function (input) {
       input.addEventListener("change", function () {
         if (input.checked) gsState.tier = input.value === "lightweight" ? "lightweight" : "full";
+        syncEnvWarning();
       });
     });
     Array.from(root.querySelectorAll('input[name="gs-parallel"]')).forEach(function (input) {
       input.addEventListener("change", function () {
         gsState.parallel = !!input.checked;
+        syncWorktreeNote();
       });
     });
     Array.from(root.querySelectorAll("[data-gs-action]")).forEach(function (btn) {
@@ -256,6 +179,25 @@
         vscode.postMessage(msg);
       });
     });
+  }
+
+  // D6 (Set 060 S3): show the provider-key warning only while the Full
+  // radio is selected and the host reported no key. The element is
+  // always rendered (hidden or not) so this is a pure visibility flip.
+  function syncEnvWarning() {
+    var warning = root.querySelector('[data-gs-warning="env"]');
+    if (!warning) return;
+    var gs = lastSnapshot && lastSnapshot.gettingStarted;
+    var keyPresent = !gs || gs.providerKeyPresent !== false;
+    warning.hidden = !(gsState.tier !== "lightweight" && !keyPresent);
+  }
+
+  // D7 (Set 060 S3): show the worktree note only while the parallel
+  // checkbox is checked.
+  function syncWorktreeNote() {
+    var note = root.querySelector('[data-gs-note="worktree"]');
+    if (!note) return;
+    note.hidden = !gsState.parallel;
   }
 
   function renderBucket(bucket) {

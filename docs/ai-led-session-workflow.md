@@ -368,7 +368,7 @@ legacy file presence (`change-log.md` → `complete`, `activity-log.json`
 → `in-progress`, neither → `not-started`) and writes that shape before
 returning. This keeps the contract "readers always see a status"
 without forcing users to run backfill — but the contract authors and
-the wizard prompt assume the file is created up front.
+the scaffold paths assume the file is created up front.
 
 **Hand-authored session-set folders** must include
 `session-state.json` from creation. The lazy-synth fallback is a
