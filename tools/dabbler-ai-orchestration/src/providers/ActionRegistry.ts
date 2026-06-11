@@ -71,6 +71,11 @@ const needsMigrationToV4 = (s: SessionSet): boolean =>
 const hasUnsatisfiedPrereqs = (s: SessionSet): boolean =>
   inFlightLike(s) && s.unsatisfiedPrereqs.length > 0;
 
+// Set 061 S3 (spec D4): tier is switchable ONLY before any session has
+// started — mid-set switching is deliberately unsupported (Set 057
+// verificationMode immutability; per-session escape hatch: --no-router).
+const isNotStarted = (s: SessionSet): boolean => s.state === "not-started";
+
 // Ordered list. `group` controls QuickPick sort within a category;
 // `category` controls which top-level item or submenu the entry lands
 // under. The numeric bands:
@@ -123,6 +128,9 @@ export const ROW_ACTIONS: RowAction[] = [
   // row (QuickPick when more than one). Reuses the openSpec plumbing
   // in commands/openFile.ts.
   { id: "dabblerSessionSets.openPrerequisiteSpec", label: "Open Prerequisite Spec",    group: 503, category: "flat", when: hasUnsatisfiedPrereqs },
+  // Set 061 S3 (spec D4): rewrite the spec's `tier:` value via a tier
+  // QuickPick; not-started rows only. See commands/switchTier.ts.
+  { id: "dabblerSessionSets.switchTier",        label: "Switch Tier…",                 group: 504, category: "flat", when: isNotStarted },
   { id: "dabblerSessionSets.migrate",           label: "Migrate to v3 schema",         group: 801, category: "flat", when: needsMigrationToV3 },
   { id: "dabblerSessionSets.migrateToV4",       label: "Migrate to v4 schema",         group: 802, category: "flat", when: needsMigrationToV4 },
   { id: "dabblerSessionSets.cancel",            label: "Cancel Session Set",           group: 901, category: "flat",

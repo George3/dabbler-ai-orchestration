@@ -48,14 +48,14 @@ interface WatcherEntry {
 const WATCHER_ALLOWLIST: WatcherEntry[] = [
   {
     file: "extension.ts",
-    line: 190,
+    line: 191,
     target: "docs/session-sets/** (spec.md, session-state.json, session-events.jsonl, activity-log.json, change-log.md, CANCELLED.md, *-uat-checklist.json)",
     purpose:
       "Tree-view refresh on canonical session-set state files. Watched files are themselves the writers' source of truth (no inference from indirect signals) — D1 permits.",
   },
   {
     file: "extension.ts",
-    line: 226,
+    line: 227,
     target: "Getting Started D3 inputs: {CLAUDE.md, AGENTS.md, GEMINI.md, docs/planning/project-plan.md, .venv/**/site-packages/ai_router/**, docs/session-sets/*}",
     purpose:
       "Set 060 Getting Started form live-progress refresh: the form's D3 step-1/2/3 completion keys on these scaffold artifacts (engine files + venv router package + project plan + numbered set dirs), which the spec.md-scoped session-sets watcher does not fully cover. The watched paths ARE the source of truth for the form steps (no indirect orchestrator-state inference) — D1 permits.",

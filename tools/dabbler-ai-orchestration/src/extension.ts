@@ -32,6 +32,7 @@ import { registerRegenerateNarrationTemplatesCommand } from "./commands/regenera
 import { registerExternalVerificationCommand } from "./commands/externalVerification";
 import { registerResolveSetNumberCommand } from "./commands/resolveSetNumber";
 import { registerUpgradeOlderSetsCommand } from "./commands/upgradeOlderSets";
+import { registerSwitchTierCommand } from "./commands/switchTier";
 import { hasSubCurrentSets } from "./providers/SessionSetsModel";
 import { routesCost } from "./utils/routerConfig";
 import { SessionSet } from "./types";
@@ -360,6 +361,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   safeRegister("registerUpgradeOlderSetsCommand", () =>
     registerUpgradeOlderSetsCommand(context, { refreshView: refreshAll }),
+  );
+  // Set 061 S3 (spec D4): tier switch on not-started sets.
+  safeRegister("registerSwitchTierCommand", () =>
+    registerSwitchTierCommand(context),
   );
 
   // Set 030 Session 5: flip scanState to "ready" once activation

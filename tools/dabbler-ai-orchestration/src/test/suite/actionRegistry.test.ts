@@ -67,7 +67,7 @@ function ids(set: SessionSet, supports: ActionSupports): string[] {
 }
 
 suite("ActionRegistry", () => {
-  test("ROW_ACTIONS exposes the 16 menu-surface actions (Set 048 S3 reshape + Set 049 S1 hygiene + Set 049 S4 rip-out + Set 061 S2 prereq spec)", () => {
+  test("ROW_ACTIONS exposes the 17 menu-surface actions (Set 048 S3 reshape + Set 049 S1 hygiene + Set 049 S4 rip-out + Set 061 S2 prereq spec + Set 061 S3 switch tier)", () => {
     // Set 048 S3 reshape:
     //   - L3 removed `dabblerSessionSets.openAiAssignment`.
     //   - L2 narrowed the Open File submenu to exactly 4 entries
@@ -96,6 +96,10 @@ suite("ActionRegistry", () => {
     //   - dabblerSessionSets.openPrerequisiteSpec — flat companion to
     //     the blocked marker, gated to non-terminal rows with at least
     //     one unsatisfied prerequisite.
+    // Set 061 S3 (spec D4):
+    //   - dabblerSessionSets.switchTier — rewrites the spec's `tier:`
+    //     value; gated to not-started rows only (mid-set switching is
+    //     deliberately unsupported).
     const expected = new Set([
       "dabblerSessionSets.openSpec",
       "dabblerSessionSets.openActivityLog",
@@ -109,6 +113,7 @@ suite("ActionRegistry", () => {
       "dabblerSessionSets.copySlug",
       "dabbler.openOrchestratorWriterLog",
       "dabblerSessionSets.openPrerequisiteSpec",
+      "dabblerSessionSets.switchTier",
       "dabblerSessionSets.migrate",
       "dabblerSessionSets.migrateToV4",
       "dabblerSessionSets.cancel",
@@ -116,7 +121,7 @@ suite("ActionRegistry", () => {
     ]);
     const got = new Set(ROW_ACTIONS.map((a) => a.id));
     assert.deepStrictEqual(got, expected);
-    assert.strictEqual(ROW_ACTIONS.length, 16);
+    assert.strictEqual(ROW_ACTIONS.length, 17);
   });
 
   test("openAiAssignment fully removed (L3)", () => {
@@ -381,6 +386,40 @@ suite("ActionRegistry", () => {
         `openPrerequisiteSpec leaked onto terminal state=${st} (same suppression as the marker)`,
       );
     }
+  });
+
+  test("switchTier appears only on not-started rows (Set 061 S3, spec D4)", () => {
+    assert.ok(
+      ids(fakeSet("not-started"), ALL_SUPPORTED).includes("dabblerSessionSets.switchTier"),
+      "switchTier missing for state=not-started",
+    );
+    for (const st of ["in-progress", "complete", "cancelled"] as SessionState[]) {
+      assert.ok(
+        !ids(fakeSet(st), ALL_SUPPORTED).includes("dabblerSessionSets.switchTier"),
+        `switchTier leaked onto state=${st} — mid-set / terminal switching is deliberately unsupported`,
+      );
+    }
+    // The gate is state-only: tier, prereqs, and migration flags must
+    // not affect applicability on a not-started row.
+    const lightweightBlocked = fakeSet("not-started", {
+      config: {
+        requiresUAT: false,
+        requiresE2E: false,
+        uatScope: "none",
+        tier: "lightweight",
+        verificationMode: "dedicated-sessions",
+      },
+      blockedByPrereqs: true,
+      unsatisfiedPrereqs: [
+        { slug: "044-prereq", condition: "complete" as const, targetState: "in-progress" as const },
+      ],
+      needsMigration: true,
+      migrationTargetSchemaVersion: 4,
+    });
+    assert.ok(
+      ids(lightweightBlocked, ALL_SUPPORTED).includes("dabblerSessionSets.switchTier"),
+      "switchTier should surface on any not-started row regardless of tier/prereq/migration state",
+    );
   });
 
   test("categorizedActions on a complete set surfaces set-accomplishments and NOT start-next", () => {

@@ -110,6 +110,11 @@
         "category": "Dabbler"
       },
       {
+        "command": "dabblerSessionSets.switchTier",
+        "title": "Switch Tier…",
+        "category": "Dabbler"
+      },
+      {
         "command": "dabblerSessionSets.openFolder",
         "title": "Reveal Folder",
         "category": "Dabbler"

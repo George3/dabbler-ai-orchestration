@@ -133,7 +133,10 @@ export function asTier(value: unknown): Tier | undefined {
   return value === "full" || value === "lightweight" ? value : undefined;
 }
 
-async function promptTier(): Promise<Tier | undefined> {
+// Set 061 S3 (spec D4): exported so the `Switch Tier…` row action reuses
+// this exact two-option copy; the optional placeholder lets that caller
+// name the set being switched while this file's callers keep the default.
+export async function promptTier(placeHolder?: string): Promise<Tier | undefined> {
   const picked = await vscode.window.showQuickPick(
     [
       {
@@ -152,7 +155,7 @@ async function promptTier(): Promise<Tier | undefined> {
       },
     ],
     {
-      placeHolder: "Choose the tier for this project's first session set",
+      placeHolder: placeHolder ?? "Choose the tier for this project's first session set",
       ignoreFocusOut: true,
     },
   );
