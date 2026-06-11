@@ -34,10 +34,15 @@
     {
       "number": 3,
       "title": "Switch tier\u2026 action on not-started sets",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-11T09:07:27.564362-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-fable-5",
+        "effort": "high"
+      },
       "verificationVerdict": null
     },
     {

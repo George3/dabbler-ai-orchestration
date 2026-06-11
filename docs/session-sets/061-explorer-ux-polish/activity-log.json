@@ -154,6 +154,66 @@
           "costUsd": 0.007505
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/rewrite-helper",
+      "dateTime": "2026-06-11T09:22:31.076975-04:00",
+      "description": "Pure byte-preserving spec.md tier rewrite helper src/utils/tierRewrite.ts: rewriteSpecTier (config-block-scoped, quote/comment/CRLF-preserving, absent-key insertion, commented-line immune) + switchToFullWarnings guardrail predicate (reuses providerKeyPresent).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/action-wiring",
+      "dateTime": "2026-06-11T09:22:31.076975-04:00",
+      "description": "dabblerSessionSets.switchTier command (commands/switchTier.ts): tier QuickPick reusing exported promptTier copy from gitScaffold, rewrite+view refresh; ActionRegistry flat entry group 504 gated isNotStarted; package.json contribution; extension.ts safeRegister; watcherInventory allowlist lines bumped 190->191/226->227 (import shift).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/guardrails",
+      "dateTime": "2026-06-11T09:22:31.076975-04:00",
+      "description": "D4 switch-to-full guardrails wired in switchTier.ts: inform-only warnings after the applied switch when no provider key visible (providerKeyPresent over process.env) and when ai_router/router-config.yaml is absent under set.root (points at Dabbler: Install ai-router).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/tests",
+      "dateTime": "2026-06-11T09:22:31.076975-04:00",
+      "description": "tierRewrite.test.ts (14 rewrite-matrix + 5 guardrail tests) + actionRegistry.test.ts updated to 17 actions with not-started-only switchTier gating test. TS unit suite 750 pass + 2 pre-existing Set-026 fails; Python 1185 pass/1 skip (lone metrics failure reproduced as shell key-absence gotcha, green with keys loaded).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/verified",
+      "dateTime": "2026-06-11T09:32:30.935044-04:00",
+      "description": "Cross-provider verification: R1 gpt-5-4 ISSUES_FOUND 2 Major (S061-S3-V1-001 set.root guardrail base; S061-S3-V1-002 malformed-scalar handling) -> 001 DISPROVEN empirically (set.root = workspace root, fileSystem.ts:420/761), 002 half-fixed (early same-tier return removed; helper is decision authority + repair path test) half-disproven (parser lowercases, fileSystem.ts:253). R2 narrow re-verify gpt-5-4: VERIFIED. Artifacts: s3-verification.md, s3-issues.json, s3-verification-round-2.md. TS 752 pass post-fix.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 9490,
+          "outputTokens": 6538,
+          "costUsd": 0.121795
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 1621,
+          "outputTokens": 845,
+          "costUsd": 0.016727
+        }
+      ]
     }
   ]
 }

@@ -79,10 +79,10 @@ low
 | 5    | Cross-provider verification of session goals. | route(session-verification) |
 
 ### Actuals (filled after the session)
-- Orchestrator used: 
-- Total routed cost: 
-- Deviations from recommendation: 
-- Notes for next-session calibration: 
+- Orchestrator used: anthropic claude-fable-5 @ effort=high (Claude Code)
+- Total routed cost: $0.1385 (session-verification R1 gpt-5-4 $0.1218 + R2 narrow $0.0167)
+- Deviations from recommendation: operator started the session on claude-fable-5 @ high rather than the recommended claude-opus-4-7 @ max (operator's engine choice; same provider).
+- Notes for next-session calibration: diff-based verification prompts stay cheap (~10k input) but R1 again produced a context-gap false positive (set.root provenance) — when the diff omits fileSystem.ts, include a one-line note on SessionSet field provenance.
 
 **Next-session orchestrator recommendation (Session 4):**
 openai gpt-5.4 @ effort=medium
