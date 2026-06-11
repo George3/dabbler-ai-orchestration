@@ -6,16 +6,16 @@
     {
       "number": 1,
       "title": "Lightweight legibility \u2014 N/M+ fraction + tier marker",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-11T07:50:16.986945-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-11T08:18:14.433589-04:00",
       "orchestrator": {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-fable-5",
         "effort": "high"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     },
     {
       "number": 2,
