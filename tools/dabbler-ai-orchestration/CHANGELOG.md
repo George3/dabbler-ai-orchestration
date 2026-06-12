@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-06-12 (Cost Dashboard legibility + README tier framing)
+
 ### Changed
 
 - Marketplace README: the two-tier model now leads the page as an
@@ -28,6 +30,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   read "(no session set)". The CSV export sees the normalized names
   too, so machine-specific absolute paths can no longer leak into
   `ai_router/cost-export.csv`.
+
+### Internal
+
+- The Layer-3 Playwright rendering suite was repaired end-to-end
+  (8 rotted specs across five families + a Linux-only Electron-launch
+  env bug) and the repo's `Test` workflow reached its first-ever green
+  run; a green Test run for the tagged commit is now a hard release
+  prerequisite for this extension's publishes.
 
 ## [0.30.0] — 2026-06-12 (Sets 061 + 062 — Explorer UX polish + Lightweight verification affordance)
 

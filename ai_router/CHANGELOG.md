@@ -5,6 +5,8 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-06-12 (metrics session-set normalization)
+
 ### Changed
 
 - Metrics: `session_set` is normalized to the bare session-set folder
