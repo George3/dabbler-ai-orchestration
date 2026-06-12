@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-06-12 (Set 063 — Getting Started budget step + adoption-bootstrap retirement)
+
+### Added
+
+- **Budget / NTE step in the Getting Started form (Full tier only).**
+  The Build-project-structure step now requires a verification budget:
+  a numeric dollar amount ≥ 0 with inline validation that blocks Build
+  until valid. Entering `$0` reveals a required choice — "Check in
+  another engine" (`manual-via-other-engine`) or "Skip verification"
+  (`skipped`) — with no silent default, matching the workflow doc's
+  operator-picks zero-budget contract. At scaffold time the form
+  writes `ai_router/budget.yaml` in the post-migration contract shape
+  (`threshold_usd`, `scope: per-project`, derived `mode`,
+  `verification_method`, explicit `verification_nte_usd`, `set_at`,
+  `set_by: getting-started-form`, `warn_at_percent: 80`) and never
+  clobbers an existing file. The host boundary fails closed: a Full
+  build-structure request whose budget rider does not narrow is
+  rejected rather than scaffolded budgetless. The Lightweight tier
+  omits the step from the DOM entirely and never writes the file.
+  Canonical contract home: `docs/budget-yaml-schema.md` (new).
+
+### Removed
+
+- **The conversational adoption-bootstrap path.** The
+  `Dabbler: Copy adoption bootstrap prompt` command (palette-only
+  since Set 060 made its welcome button unreachable), the dead
+  `viewsWelcome` contribution, the entire pre-Set-060 welcome-HTML
+  pipe (host loader/renderer, snapshot protocol field, webview
+  fallback branch, `.welcome` CSS), and the now-consumerless
+  `dabblerSessionSets.scanState` context key (the ScanState manager
+  and the webview `scanState` messages stay). `gettingStarted` is now
+  **required** on the snapshot payload, closing the type-level path
+  that could have silently revived the welcome fallback. The remote
+  doc `docs/adoption-bootstrap.md` stays online as a URL-stable
+  deprecation stub, so the prompt copied by ≤ 0.31.0 clients keeps
+  resolving to useful instructions.
+
 ## [0.31.0] — 2026-06-12 (Cost Dashboard legibility + README tier framing)
 
 ### Changed

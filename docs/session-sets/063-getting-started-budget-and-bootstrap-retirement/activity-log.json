@@ -145,6 +145,66 @@
           "costUsd": 0.079025
         }
       ]
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/docs-sweep",
+      "dateTime": "2026-06-12T15:32:05.970483-04:00",
+      "description": "D3 docs sweep per S1 lock: adoption-bootstrap.md rewritten to URL-stable deprecation/redirect stub (absolute URLs; VS Code -> Getting Started form, manual -> quick-start); NEW docs/budget-yaml-schema.md = canonical post-migration budget.yaml contract w/ legacy-compat table (threshold_scope->scope via _SCOPE_MAP, absent verification_method->api, absent scope->per-project marked DERIVED); swept ai-led-session-workflow.md (5 spots incl. compat-rule retarget + line-183 phrase), quick-start.md (5 refs + new Without-VS-Code note), root README (section rewritten around the form + retirement note), extension README (conversational-setup paragraph dropped; budget step added to form step 1), repository-reference.md (commands row, adoption-bootstrap row -> retired stub, new budget-yaml-schema row), tier-model.md (3 refs). Comment touch-ups: budgetYaml.ts + budgetYaml.test.ts relocating-tense -> budget-yaml-schema.md (client.js S2 historical comment left intact).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/uat-checklist",
+      "dateTime": "2026-06-12T15:42:05.594635-04:00",
+      "description": "Suites at S2 baseline on the release candidate (Py 1222/1 skip; TS mocha 908 + 2 tracked Set-026; Playwright LOCAL 18 passed 4.7m; drift guard OK), then authored 063-...-uat-checklist.json (ad-hoc per-set): 9 operator-walk rows (local-build activation, Full budget input/validation/$0 radio/budget.yaml shape, Lightweight omission, palette absence, no-welcome-regression, 1 judgment row) + 5 pre-verified rows (writer matrix, fail-closed host boundary, D2 rip completeness, D3 sweep integrity, suite baseline) each naming its ProgrammaticVerification. UNPLANNED operator-reported item: consumer repo saw verificationVerdict null despite VERIFIED disposition -> root cause CONSUMER INSTALL LAG (installed 0.10.0 predates 0.15.0 resolve_close_verdict; canonical 0.18.0 re-confirmed sound incl. this set S1/S2 persisted verdicts) -> authored docs/cross-repo-router-version-lag-notice.md (remediation + hand-backfill guidance); runtime version-lag advisory recorded as follow-up set candidate, NO code change to this release.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/operator-uat-passed",
+      "dateTime": "2026-06-12T16:53:45.897180-04:00",
+      "description": "Operator UAT PASSED on the local candidate build (.vsix 1018.51KB, built pre-bump as 0.31.0-named bits): all 14 rows Passes=true (9 operator walks incl. activation, budget input/validation/$0 radio/budget.yaml shape, Lightweight omission, palette absence, no-welcome-regression, copy-quality judgment; 5 AI pre-verified rows). Walk-2 operator feedback recorded as FOLLOW-UP CANDIDATE: surface a budget-scope selector (total-project vs daily etc.) in the form - budget.yaml scope field already supports it, form hard-writes per-project per D1 lock. Editor-appended blank IsOtherItem placeholder rows (14, no content) removed from the saved record.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/versions-bumped",
+      "dateTime": "2026-06-12T16:53:45.897180-04:00",
+      "description": "Marketplace-only bump 0.31.0 -> 0.32.0: package.json + package-lock.json (both nodes) + CHANGELOG.md 0.32.0 entry (Added: Full-tier budget/NTE step w/ fail-closed host boundary; Removed: conversational adoption-bootstrap path, gettingStarted now required on snapshot). repository-reference.md release-status row + version walk in PRE-PUSH wording (publish pending operator vsix-v0.32.0 tag push through require-green-test; run id recorded post-publish). NO PyPI bump per D4 lock (re-confirmed: no Python runtime reader of budget.yaml; ai_router/ untouched by this set).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/verified",
+      "dateTime": "2026-06-12T16:59:15.372032-04:00",
+      "description": "Cross-provider verification: R1 gpt-5-4 ISSUES_FOUND (Major Correctness: schema-doc example comment carried the retired bootstrap claim that ai_router does spend reporting from budget.yaml -> rewritten to orchestrator-procedural-read wording; Minor Correctness: notice step-4 ref -> step 5; Major Completeness: the three new files were untracked so the R1 diffstat evidence omitted them -> git-added, evidence regenerated) -> all fixed, s3-issues.json persisted w/ resolutions -> R2 gpt-5-4 narrow re-verify VERIFIED (no new issues).",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 14611,
+          "outputTokens": 14202,
+          "costUsd": 0.2495575
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 2015,
+          "outputTokens": 367,
+          "costUsd": 0.0105425
+        }
+      ]
     }
   ]
 }

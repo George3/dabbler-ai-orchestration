@@ -92,15 +92,16 @@ Orchestrator (Claude / Codex / Gemini)
 > is the **budget tier** — a within-Full-adoption concept that
 > governs how verification calls are paid for. The **adoption
 > tier** (Lightweight vs. Full) is a different dimension chosen at
-> Step 4.5 of `docs/adoption-bootstrap.md`. Lightweight-tier
+> project setup (see `docs/concepts/tier-model.md`). Lightweight-tier
 > projects opt out of cross-provider verification and the
 > `ai_router/` machinery entirely as part of choosing that tier —
 > not as a cost-budgeted exception. Everything below applies only
 > to Full-adoption projects.
 
 Every Full-adoption project declares an API-verification **budget
-threshold** during the adoption-bootstrap flow (see
-`docs/adoption-bootstrap.md`). The threshold is recorded in
+threshold** at project setup — the Getting Started form's Full-tier
+budget step (or a hand-authored file; see
+`docs/budget-yaml-schema.md`). The threshold is recorded in
 `ai_router/budget.yaml` and governs which verification path the
 project uses. Two tiers, with two sub-options under the zero tier:
 
@@ -110,17 +111,20 @@ project uses. Two tiers, with two sub-options under the zero tier:
 | **non-zero budget** | `> 0` | `api`, bounded by `verification_nte_usd` |
 
 The threshold and the chosen verification method are persisted in
-`ai_router/budget.yaml` (see schema in `docs/adoption-bootstrap.md`).
-The bootstrap flow writes this file once at adoption time; the
-operator can edit it anytime to change tier or method.
+`ai_router/budget.yaml` (see `docs/budget-yaml-schema.md` for the
+canonical schema). The Getting Started form writes this file once at
+scaffold time; the operator can edit it anytime to change tier or
+method.
 
 **Compatibility rule for missing fields.** Older or hand-authored
-`budget.yaml` files may omit fields added after their creation. The
-canonical defaults are: `threshold_scope` → `project-lifetime` if
-absent (cumulative spend); `verification_method` → `api` if absent
-(matches Rule 2's default). Readers (current and future enforcement
-code) must apply these defaults rather than erroring on a missing
-field, so an older file continues to work without manual migration.
+`budget.yaml` files may omit fields added after their creation or use
+the pre-migration vocabulary. The two defaults this doc depends on:
+`verification_method` → `api` if absent (matches Rule 2's default);
+scope → `per-project` if absent (cumulative spend). The full
+legacy-compatibility table lives in `docs/budget-yaml-schema.md`.
+Readers (current and future enforcement code) must apply those rules
+rather than erroring on a missing field, so an older file continues
+to work without manual migration.
 
 ### Interaction with Rule 2
 
@@ -179,8 +183,8 @@ The orchestrator at Step 6 (end-of-session verification) reads
   switches to `manual-via-other-engine` for that session rather
   than failing.
 
-If `ai_router/budget.yaml` is absent (project has not yet run the
-adoption bootstrap), the orchestrator treats the project as if
+If `ai_router/budget.yaml` is absent (project has not yet recorded a
+budget), the orchestrator treats the project as if
 `verification_method: "api"` were set — Rule 2's default behavior.
 
 ### Spend monitoring

@@ -131,30 +131,30 @@ palette.
 
 ---
 
-## For new projects: adoption bootstrap
+## For new projects: the Getting Started form
 
-If you're starting a new project — greenfield, an existing local
-project that hasn't yet adopted the workflow, or a remote repo you
-want to clone in — the recommended starting point is
-**`Dabbler: Copy adoption bootstrap prompt`** from the command palette.
-The command copies a short engine-agnostic prompt to your clipboard
-that you paste into a fresh AI chat (Claude Code, Gemini Code Assist,
-or any GPT-based tool). The AI then fetches the canonical online
-instructions at
-[docs/adoption-bootstrap.md](docs/adoption-bootstrap.md) and runs an
-interactive flow: detect your workspace state, run a budget-threshold
-dialog, propose a session-set decomposition, present a numbered
-checklist of every intended write / config / scaffolding action for
-batch approval before executing. No per-write prompts; you can
-interrupt at any time. The four-tier budget mapping is documented in
+If you're starting a new project — greenfield, or an existing local
+project that hasn't yet adopted the workflow — the recommended
+starting point is **`Dabbler: Get Started`** from the command palette.
+The Session Set Explorer's Getting Started form walks you through tier
+choice (Full vs. Lightweight — see
+[docs/concepts/tier-model.md](docs/concepts/tier-model.md)), the
+Full-tier verification **budget / NTE step** (saved to
+`ai_router/budget.yaml` —
+[schema](docs/budget-yaml-schema.md)), and a one-click project
+scaffold: the `.venv` with the router package, the AI-agent
+instruction files, and the `docs/session-sets/` home. From there the
+form hands you copyable prompts for drafting
+`docs/planning/project-plan.md` and decomposing it into session sets
+with your AI agent. The four-tier budget mapping is documented in
 [docs/ai-led-session-workflow.md → Cost-budgeted verification modes](docs/ai-led-session-workflow.md#cost-budgeted-verification-modes).
 
-This entry point sits *before* the
-[Quick start](#quick-start) above for greenfield work — the bootstrap
-flow installs the router, scaffolds the folders, authors
-`docs/planning/project-plan.md` and your first session-set specs, and
-saves your budget threshold to `ai_router/budget.yaml` as part of its
-action checklist.
+Setting up without VS Code? See the manual-setup note in
+[docs/quick-start.md](docs/quick-start.md). (The former conversational
+"adoption bootstrap" path was retired in extension 0.32.0 once the
+form gained its budget step;
+[docs/adoption-bootstrap.md](docs/adoption-bootstrap.md) remains as a
+redirect stub for older clients.)
 
 ---
 

@@ -36,7 +36,7 @@ import * as fs from "fs";
 
 const FIXED_NOW = new Date(2026, 5, 12, 14, 30, 0); // 2026-06-12T14:30:00 local
 
-// ---------- mode bands (docs/adoption-bootstrap.md mode table) ----------
+// ---------- mode bands (docs/budget-yaml-schema.md mode table) ----------
 
 suite("deriveBudgetMode — the four documented bands", () => {
   test("0 → zero-budget", () => {

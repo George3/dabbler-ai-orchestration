@@ -35,9 +35,8 @@ export interface BudgetChoice {
 
 /**
  * The documented `threshold_usd` → `mode` mapping
- * (docs/adoption-bootstrap.md mode-band table, relocating to
- * docs/budget-yaml-schema.md in S3): 0 → zero-budget; >0 and <20 →
- * limited-budget; 20–99 → middle-tier; 100+ → ample-budget.
+ * (docs/budget-yaml-schema.md mode-band table): 0 → zero-budget;
+ * >0 and <20 → limited-budget; 20–99 → middle-tier; 100+ → ample-budget.
  */
 export function deriveBudgetMode(thresholdUsd: number): string {
   if (thresholdUsd === 0) return "zero-budget";

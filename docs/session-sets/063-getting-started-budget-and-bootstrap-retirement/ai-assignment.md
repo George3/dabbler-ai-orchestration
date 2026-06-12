@@ -81,7 +81,7 @@ moderate
 | 5 | Tag and push the release. | `N/A (operator action)` |
 
 ### Actuals (filled after the session)
-- Orchestrator used: (TBD)
-- Total routed cost: (TBD)
-- Deviations from recommendation: (TBD)
-- Notes for next-session calibration: (TBD)
+- Orchestrator used: Claude Code `anthropic, claude-fable-5` @ effort=`high` (operator's choice)
+- Total routed cost: $0.2601 (session-verification gpt-5-4: R1 $0.2496 + narrow R2 $0.0105)
+- Deviations from recommendation: orchestrator was Claude Code, not the recommended Codex CLI (operator-directed). Steps 1–3 ran orchestrator-direct as recommended; step 4's `review` label ran as the canonical `session-verification` task type, routed to gpt-5-4. UNPLANNED in-session addition (operator-reported): consumer `verificationVerdict: null` incident — root-caused to consumer install lag (router 0.10.0 vs the 0.15.0 persistence feature), resolved with `docs/cross-repo-router-version-lag-notice.md`, no code change. Step 5 (tag push) remains the operator's action, pending.
+- Notes for next-session calibration: stating the suite baseline + release contract up front (the Set 062 calibration) kept R1 narrow, but two of three R1 findings were *content carried over from the doc being replaced* — when a new canonical doc supersedes a retired one, grep the new text for inherited claims of current behavior and re-verify each against code before routing verification. Also: `git diff` omits untracked files; `git add` new deliverables before building diffstat-based verification evidence.

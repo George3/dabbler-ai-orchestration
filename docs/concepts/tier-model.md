@@ -1,8 +1,8 @@
 # The Dabbler tier model — Full vs. Lightweight
 
 > **This is the single source of truth (SSoT) for the adoption tier model.**
-> README, `docs/adoption-bootstrap.md`, the Getting Started form, the
-> consumer-repo engine files (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), and
+> README, the Getting Started form, the consumer-repo engine files
+> (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), and
 > `docs/spec-md-schema.md` all **point here** rather than restating the model.
 > If you are about to explain "what Lightweight means" anywhere else, link to
 > this doc instead of paraphrasing it — paraphrases drift, and the drift this
@@ -146,7 +146,8 @@ four setup surfaces still encoded:
 That framing is **wrong** and contradicts the implemented `--no-router` mode.
 The pure-docs Lightweight tier was an illusion that the Set 048 runtime had
 already replaced. This SSoT is the corrected model; the four surfaces
-(`adoption-bootstrap.md`, the Getting Started form, `sessionGenPrompt`, `gitScaffold`) now
+(`adoption-bootstrap.md` — since retired to a deprecation stub in Set 063 —
+the Getting Started form, `sessionGenPrompt`, `gitScaffold`) now
 point here, and a CI guard forbids the stale phrasing from reappearing in any
 doc.
 
@@ -194,7 +195,8 @@ to change.
   execution mechanics, including the Lightweight per-set verification flow.
 - [`docs/spec-md-schema.md`](../spec-md-schema.md) — where `tier` and
   `verificationMode` are declared in a spec's configuration block.
-- [`docs/adoption-bootstrap.md`](../adoption-bootstrap.md) — the interactive
-  setup flow (points here for the tier model).
+- [`docs/adoption-bootstrap.md`](../adoption-bootstrap.md) — the retired
+  conversational setup flow (Set 063); now a deprecation stub pointing at
+  the extension's Getting Started form.
 - [`docs/templates/consumer-bootstrap/`](../templates/consumer-bootstrap/) —
   the canonical templates every creation path renders.

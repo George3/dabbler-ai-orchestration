@@ -85,7 +85,10 @@ step-by-step instructions in the editor:
    Lightweight, the cost/attention tradeoff described above) and the
    form scaffolds everything: the `.venv` with the router package,
    the AI-agent instruction files, and the `docs/session-sets/`
-   home. On the Full tier the form warns inline when no provider API
+   home. On the Full tier the form also asks for your verification
+   **budget / NTE cap** (saved to `ai_router/budget.yaml`; a `$0`
+   budget asks you to pick manual-via-other-engine or skipped
+   verification explicitly) and warns inline when no provider API
    key is visible.
 2. **Create or import a project plan** — import an existing
    `project-plan.md`, or copy a planning prompt and let your AI
@@ -99,13 +102,6 @@ Then tell your AI agent: **"start the next session."** Once the
 first session set exists, the form gives way to the standard
 Explorer tree. (You can re-focus the form anytime with
 **`Dabbler: Get Started`** from the command palette.)
-
-Prefer a fully conversational setup instead? **`Dabbler: Copy
-adoption bootstrap prompt`** (command palette) copies a prompt that
-has your AI agent fetch the canonical setup instructions and drive
-the same scaffolding chat-side, including the Full-tier
-budget-threshold (NTE) dialog — verification calls typically cost
-$0.05–$0.80 each, and the cap keeps total spend where you set it.
 
 ---
 

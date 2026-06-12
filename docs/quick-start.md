@@ -31,8 +31,10 @@ different-engine verification session, or opted out.
 > **The full model — read this, don't paraphrase it:**
 > [`docs/concepts/tier-model.md`](concepts/tier-model.md).
 
-The [adoption bootstrap](adoption-bootstrap.md) walks you through the setup
-interactively. The quick version (**both tiers**):
+The extension's Getting Started form (**`Dabbler: Get Started`** in VS Code)
+walks you through the setup interactively — tier choice, the Full-tier
+verification budget step, and the project scaffold. The quick version
+(**both tiers**):
 
 ```bash
 python -m venv .venv
@@ -42,11 +44,16 @@ python -m venv .venv
 Full additionally writes `ai_router/router-config.yaml` (and `budget.yaml`);
 Lightweight sets `tier: lightweight` in each spec instead.
 
+> **Without VS Code:** the manual path is the two commands above, then
+> (Full tier) copy `router-config.yaml` out of the installed `ai_router`
+> package into an `ai_router/` folder at your repo root and hand-create
+> `ai_router/budget.yaml` per [`docs/budget-yaml-schema.md`](budget-yaml-schema.md).
+
 ---
 
 ## Configuring your project (Full tier)
 
-After `pip install dabbler-ai-router` and the [adoption bootstrap](adoption-bootstrap.md), your project has `ai_router/router-config.yaml` and `ai_router/budget.yaml`. To tune them visually:
+After `pip install dabbler-ai-router` and the Getting Started form's scaffold (or the manual setup above), your project has `ai_router/router-config.yaml` and `ai_router/budget.yaml`. To tune them visually:
 
 **VS Code command:** `Dabbler: Open Dabbler Config Editor`
 
@@ -171,7 +178,7 @@ Sessions on different sets can run in parallel using worktrees — see
 |---|---|
 | `docs/ai-led-session-workflow.md` | Full session procedure (Steps 0–10), rules, config reference |
 | `docs/planning/session-set-authoring-guide.md` | How to write a spec; flag semantics; anti-patterns |
-| `docs/adoption-bootstrap.md` | Interactive onboarding script for new projects |
+| `docs/budget-yaml-schema.md` | Canonical contract for `ai_router/budget.yaml` (the budget step's output) |
 | `docs/disposition-schema.md` | Schema for `disposition.json` (required at session close) |
 | `ai_router/__init__.py` | `route()` — the public routing entry point |
 | `ai_router/close_session.py` | Close-out gate: runs deterministic checks, flips state |
@@ -187,10 +194,11 @@ Sessions on different sets can run in parallel using worktrees — see
 
 **Full-tier setup checklist** — before you run any session, confirm:
 
-- [ ] **Adoption bootstrap completed** — run the [adoption bootstrap](adoption-bootstrap.md)
-  or manually create `ai_router/router-config.yaml` and `ai_router/budget.yaml`.
-  The bootstrap is the recommended path; it sets budget, outsource mode, and
-  provider keys interactively.
+- [ ] **Project configured** — run the extension's Getting Started form
+  (`Dabbler: Get Started`), whose Full-tier budget step writes
+  `ai_router/budget.yaml`, or manually create `ai_router/router-config.yaml`
+  and `ai_router/budget.yaml` (see [`docs/budget-yaml-schema.md`](budget-yaml-schema.md)).
+  The form is the recommended path.
 - [ ] **Provider API keys set** — `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, and
   `OPENAI_API_KEY` must be in your environment for the cross-provider
   verification step (`route(task_type="session-verification")`) to work.
@@ -251,5 +259,5 @@ and say:
 
 - **Session procedure in full:** [`docs/ai-led-session-workflow.md`](ai-led-session-workflow.md) — Steps 0–10, rules, config flags. Use the quick-nav at the top to jump past the UAT reference material for simple sessions.
 - **Writing a spec:** [`docs/planning/session-set-authoring-guide.md`](planning/session-set-authoring-guide.md).
-- **Setting up a new project:** [`docs/adoption-bootstrap.md`](adoption-bootstrap.md) (or paste the extension's "Copy adoption bootstrap prompt" into any AI chat).
+- **Setting up a new project:** the extension's Getting Started form (`Dabbler: Get Started`); without VS Code, the manual-setup note under [Two adoption tiers](#two-adoption-tiers) above.
 - **UAT checklists, outsource-last, adjudication, advanced flags:** Reference section of the workflow doc — only read what applies to your set's configuration.
