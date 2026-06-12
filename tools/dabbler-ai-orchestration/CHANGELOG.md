@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Marketplace README: the two-tier model now leads the page as an
+  explicit cost/attention tradeoff (Full = more automation, metered
+  spend, several projects in parallel while you do other work;
+  Lightweight = $0 API spend, more hands-on, more constrained
+  multitasking), with a comparison table, per-set tier declaration,
+  and the Switch Tier… path. Previously the tier model first appeared
+  mid-way through the Get-started steps.
+
 ### Fixed
 
 - Cost Dashboard: the per-set table keyed rows on the raw `session_set`

@@ -2,9 +2,32 @@
 
 An AI-led coding-session workflow for VS Code. Manage structured AI
 sessions, automatic cross-provider verification, cost tracking, and
-git-worktree-aware session-set state — all from the activity bar.
+git-worktree-aware session-set state — all from the activity bar, in
+two tiers that let you trade API spend against your own attention.
 
 ![The Session Set Explorer beside a session-set spec: in-progress, not-started (blocked), and complete sets with their session fractions](https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/tools/dabbler-ai-orchestration/media/session-set-explorer-and-spec.png)
+
+---
+
+## Two tiers — pay with dollars or pay with attention
+
+Both tiers run the **same workflow**: the same session lifecycle, the
+same Session Set Explorer, the same state files and close-out gates.
+They differ in how much of the workflow is automated — and therefore
+in what each one costs you:
+
+|  | **Full tier** | **Lightweight tier** |
+|---|---|---|
+| Verification | Automatic at every session end — the router picks a model from a *different provider* and runs the review for you | Copyable review prompts — you paste them into a second AI chat and record the verdict yourself |
+| API spend | Metered, capped by your not-to-exceed budget (a 3-session set typically totals $0.15–$2.50) | **$0** — the router makes no API calls |
+| Your attention | Mostly at session boundaries. Run **several projects at once** while you sit in meetings, answer email, or do other work — the workflow carries itself between check-ins | More hands-on: you drive each verification, so multitasking is more constrained. More than one project at a time still works — each just needs more of you |
+| Best for | Parallel project streams; "start it, check in later" operation | Cost-sensitive work; learning the workflow; environments where API spend isn't an option |
+
+The tier is declared **per session set** (`tier:` in the spec), not
+per repo — mix them freely in one workspace, and switch a not-started
+set's tier from the Explorer (**Switch Tier…**). A common path: start
+Lightweight, then go Full when the attention cost outweighs the API
+cost.
 
 ---
 
@@ -42,14 +65,10 @@ and paste it into a fresh AI chat (Claude Code, Gemini Code Assist,
 or any GPT-based tool). The AI fetches the canonical setup
 instructions and walks you through:
 
-1. **Tier choice** — Full or Lightweight. Full uses the AI router
-   for cost-minded routing and automatic cross-provider
-   verification at session end; Lightweight skips the router
-   (no API spend on verification) and uses copyable review
-   prompts you paste into a path-aware AI chat for manual review.
-   Both tiers share the same session/state-file lifecycle and
-   Session Set Explorer surface — only the verification mechanism
-   differs.
+1. **Tier choice** — Full or Lightweight, the cost/attention
+   tradeoff described above. Full routes verification through the
+   AI router automatically; Lightweight uses copyable review
+   prompts you paste into a path-aware AI chat, at zero API spend.
 2. **A budget dialog** — Full tier only — set a not-to-exceed (NTE)
    dollar cap for verification spend. Verification calls typically
    cost $0.05–$0.80 each; entering $0 switches to manual cross-
