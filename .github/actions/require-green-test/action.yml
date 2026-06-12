@@ -1,0 +1,64 @@
+name: Require green Test run
+description: >-
+  Release gate: refuses to proceed until the Test workflow
+  (.github/workflows/test.yml) has a SUCCESSFUL run for the given
+  commit. Waits while the newest run for the commit is queued or in
+  progress (the common case: the operator pushes master and tags
+  immediately, while Test is still running); fails on a completed
+  non-success conclusion or when no run appears before the deadline.
+  Operator-decided release prerequisite, 2026-06-12 — adopted the same
+  day the Test workflow reached its first-ever green run (27420899764)
+  after the Layer-3 repair; releases previously gated only on the
+  local suites + operator UAT, which let a permanently-red CI mask
+  regressions.
+inputs:
+  sha:
+    description: Commit SHA that must have a green Test run.
+    required: true
+  timeout-minutes:
+    description: >-
+      How long to keep waiting for an in-flight (or not-yet-visible)
+      Test run before failing. A full Test run takes ~12 minutes.
+    required: false
+    default: "25"
+runs:
+  using: composite
+  steps:
+    - name: Wait for a successful Test run
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SHA: ${{ inputs.sha }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+      run: |
+        set -euo pipefail
+        deadline=$(( SECONDS + 60 * TIMEOUT_MINUTES ))
+        echo "Release gate: requiring a successful 'Test' workflow run for commit ${SHA}."
+        while :; do
+          resp="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/test.yml/runs?head_sha=${SHA}&per_page=5")"
+          total="$(jq -r '.total_count' <<<"$resp")"
+          if [ "$total" -eq 0 ]; then
+            echo "No Test run found for ${SHA} yet. (Test runs on pushes to master - is the tagged commit on master?)"
+          else
+            # Newest run first. A re-run of a failed Test flips the same
+            # run object back to in_progress, so a fix-in-flight is
+            # naturally waited on rather than read as the old failure.
+            status="$(jq -r '.workflow_runs[0].status' <<<"$resp")"
+            conclusion="$(jq -r '.workflow_runs[0].conclusion' <<<"$resp")"
+            url="$(jq -r '.workflow_runs[0].html_url' <<<"$resp")"
+            echo "Latest Test run for ${SHA}: status=${status} conclusion=${conclusion:-n/a} (${url})"
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "Gate satisfied: Test is green for ${SHA}."
+                exit 0
+              fi
+              echo "::error::Test concluded '${conclusion}' for ${SHA} - refusing to publish. Fix (or re-run) Test to green for this commit, then RE-RUN THIS WORKFLOW RUN - no tag re-push needed."
+              exit 1
+            fi
+          fi
+          if [ "$SECONDS" -ge "$deadline" ]; then
+            echo "::error::Timed out after ${TIMEOUT_MINUTES} minutes waiting for a successful Test run for ${SHA}."
+            exit 1
+          fi
+          sleep 30
+        done

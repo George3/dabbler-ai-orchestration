@@ -135,6 +135,31 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
+  # Release prerequisite (operator-decided 2026-06-12): the tagged
+  # commit must have a SUCCESSFUL `Test` workflow run before anything
+  # publishes (TestPyPI included — it exercises the same upload path).
+  # The gate waits while Test is still running for the commit, and
+  # fails loud on a red or absent run — re-run THIS workflow after
+  # Test is green; no tag re-push needed.
+  # ---------------------------------------------------------------------------
+  require-green-test:
+    name: Require green Test for the tagged commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout tag (for the local composite action)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Require a successful Test run for ${{ github.sha }}
+        uses: ./.github/actions/require-green-test
+        with:
+          sha: ${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
   # TestPyPI publish — release-candidate tags only (`v[0-9]+.[0-9]+.[0-9]+-rcN`).
   # Lets the release workflow exercise the full upload path against
   # TestPyPI before the equivalent run against PyPI proper. TestPyPI
@@ -143,7 +168,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-testpypi:
     name: Publish to TestPyPI (release candidates only)
-    needs: [classify, build]
+    needs: [classify, build, require-green-test]
     if: ${{ needs.classify.outputs.is_rc == 'true' }}
     runs-on: ubuntu-latest
     environment:
@@ -173,7 +198,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI (final releases only)
-    needs: [classify, build]
+    needs: [classify, build, require-green-test]
     if: ${{ needs.classify.outputs.is_final == 'true' }}
     runs-on: ubuntu-latest
     environment:

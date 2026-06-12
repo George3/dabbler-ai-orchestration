@@ -130,5 +130,9 @@ synthesis in Set 061's `verification-affordance-synthesis.md`.
   the never-before-executed Linux env bug (`XAUTHORITY` absent from
   the Electron-launch allowlist). First-ever green `Test` run:
   27420899764, 2026-06-12, all 8 jobs. Lesson recorded in
-  `docs/planning/lessons-learned.md` (Repo-Specific). Still open as a
-  policy question: making a green `Test` run a release prerequisite.
+  `docs/planning/lessons-learned.md` (Repo-Specific). The follow-on
+  policy question was decided by the operator the same day: a green
+  `Test` run for the tagged commit is now a hard release prerequisite
+  — both publish workflows gate every publish job on the shared
+  `require-green-test` composite action (waits on in-flight runs,
+  refuses on red/absent; documented in CONTRIBUTING → Publishing).

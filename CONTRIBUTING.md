@@ -132,23 +132,33 @@ no flag to point elsewhere. Keep both in sync.
 
 ## Publishing
 
-Both registries publish from the `master` branch. The PyPI publish
-needs a working `~/.pypirc` or `TWINE_*` env credentials. The
-Marketplace publish needs the PAT stored at
-`$env:AZURE_VSCODE_MARKETPLACE_TOKEN`.
+Both publishes are **GitHub-Actions tag-driven — never run `twine
+upload` or `vsce publish` locally**:
 
-```bash
-# PyPI
-python -m build
-twine upload dist/dabbler-ai-router-<version>*
+- **PyPI** (`dabbler-ai-router`): push tag `v<X.Y.Z>` →
+  [`release.yml`](.github/workflows/release.yml) (OIDC trusted
+  publishing, no local credentials). `v<X.Y.Z>-rcN` publishes to
+  TestPyPI only.
+- **VS Code Marketplace + Open VSX** (extension): push tag
+  `vsix-v<X.Y.Z>` →
+  [`publish-vscode.yml`](.github/workflows/publish-vscode.yml)
+  (`VSCE_PAT` / `OVSX_PAT` repo-environment secrets).
+  `vsix-v<X.Y.Z>-rcN` builds an inspectable VSIX without publishing.
 
-# VS Code Marketplace
-cd tools/dabbler-ai-orchestration
-npx vsce publish --pat $env:AZURE_VSCODE_MARKETPLACE_TOKEN
-```
+Tag pushes are operator-authorized on every session set's release
+session — never push release tags on automation. Both workflows
+verify the tag's version against `pyproject.toml` / `package.json`
+before building.
 
-Both publishes are operator-gated on every session set's release
-session — never publish on automation.
+**Release prerequisite (since 2026-06-12): the tagged commit must
+have a green [`Test`](.github/workflows/test.yml) run.** Every
+publish job `needs:` the shared
+[`require-green-test`](.github/actions/require-green-test/action.yml)
+gate, which waits while Test is still running for the commit (push
+master, tag immediately — the normal flow), and fails loud on a red
+or absent run. If the gate fails: get Test green for that commit
+(fix forward or re-run a flaked job), then **re-run the publish
+workflow run** — no tag re-push needed.
 
 ## CI
 

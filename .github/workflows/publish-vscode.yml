@@ -183,6 +183,31 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
+  # Release prerequisite (operator-decided 2026-06-12): the tagged
+  # commit must have a SUCCESSFUL `Test` workflow run before anything
+  # publishes. The gate waits while Test is still running for the
+  # commit (push-then-tag-immediately is the normal flow), and fails
+  # loud on a red or absent run — re-run THIS workflow after Test is
+  # green; no tag re-push needed. RC tags are unaffected (build-only).
+  # ---------------------------------------------------------------------------
+  require-green-test:
+    name: Require green Test for the tagged commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout tag (for the local composite action)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Require a successful Test run for ${{ github.sha }}
+        uses: ./.github/actions/require-green-test
+        with:
+          sha: ${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
   # VS Code Marketplace publish — final tags only (`vsix-v[0-9]+.[0-9]+.[0-9]+`).
   # The classify job already rejected anything else; this `if:` is a
   # belt-and-suspenders gate. The `marketplace` environment requires a
@@ -192,7 +217,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-marketplace:
     name: Publish to VS Code Marketplace (final releases only)
-    needs: [classify, build]
+    needs: [classify, build, require-green-test]
     if: ${{ needs.classify.outputs.is_final == 'true' }}
     runs-on: ubuntu-latest
     environment:
@@ -240,7 +265,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-openvsx:
     name: Publish to Open VSX Registry (final releases only)
-    needs: [classify, build, publish-marketplace]
+    needs: [classify, build, require-green-test, publish-marketplace]
     if: ${{ needs.classify.outputs.is_final == 'true' }}
     runs-on: ubuntu-latest
     environment:
