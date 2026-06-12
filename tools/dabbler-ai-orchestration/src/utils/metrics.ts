@@ -20,9 +20,34 @@ export function readMetrics(workspaceRoot: string): MetricsEntry[] {
   return readMetricsFromPath(info.metricsPath);
 }
 
+/**
+ * Normalize a logged `session_set` value to the bare session-set
+ * FOLDER NAME (operator report, 2026-06-12).
+ *
+ * Historical log lines carry the field in four shapes — the slug, a
+ * repo-relative `docs/session-sets/<slug>`, an absolute set-dir path
+ * (either drive-letter casing; the extension spawns the CLIs with
+ * absolute paths), and null. Rendering the raw values fragmented one
+ * set's spend across up to three table rows, and the absolute-path
+ * rows displayed as unreadable machine paths — burying every recent
+ * set behind path prefixes (the "dashboard stops at Set 036" effect).
+ * Normalizing at parse time merges the shapes into one slug-keyed row
+ * everywhere downstream, and keeps machine-specific absolute paths
+ * out of the CSV export (which lands in the workspace and can be
+ * committed). The on-disk log is untouched; ai_router ≥0.18 also
+ * normalizes at the write boundary.
+ */
+export function sessionSetDisplayName(raw: unknown): string {
+  if (typeof raw !== "string") return "(no session set)";
+  const parts = raw.split(/[\\/]+/).filter((p) => p.trim().length > 0);
+  const name = parts.length > 0 ? parts[parts.length - 1].trim() : "";
+  return name === "" ? "(no session set)" : name;
+}
+
 /** Parse a metrics JSONL file by absolute path. Skips blank/unparseable
  *  lines and `adjudication` records (no model, zero cost — bookkeeping,
- *  not spend). */
+ *  not spend). `session_set` is normalized to the bare folder name (see
+ *  sessionSetDisplayName). */
 export function readMetricsFromPath(metricsPath: string): MetricsEntry[] {
   if (!fs.existsSync(metricsPath)) return [];
   try {
@@ -32,7 +57,8 @@ export function readMetricsFromPath(metricsPath: string): MetricsEntry[] {
         try { return JSON.parse(line) as MetricsEntry; }
         catch { return null; }
       })
-      .filter((e): e is MetricsEntry => e !== null && e.call_type !== "adjudication" && !!e.model);
+      .filter((e): e is MetricsEntry => e !== null && e.call_type !== "adjudication" && !!e.model)
+      .map((e) => ({ ...e, session_set: sessionSetDisplayName(e.session_set) }));
   } catch {
     return [];
   }

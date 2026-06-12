@@ -187,3 +187,82 @@ def test_load_config_does_not_set_metrics_base_dir_for_bundled_default(
 
     expected_log = metrics_mod._THIS_DIR / "router-metrics.jsonl"
     assert metrics_mod._log_path(config).resolve() == expected_log.resolve()
+
+
+# --- _session_set_name normalization (operator report, 2026-06-12) --------
+#
+# The metrics log historically carried session_set in four shapes —
+# bare slug, repo-relative dir, absolute set-dir path (either Windows
+# drive casing), and None — fragmenting per-set aggregation and leaking
+# machine paths. The writer now normalizes to the bare folder name.
+
+
+def test_session_set_name_keeps_bare_slug() -> None:
+    assert (
+        metrics_mod._session_set_name("062-lightweight-verification-affordance")
+        == "062-lightweight-verification-affordance"
+    )
+
+
+def test_session_set_name_reduces_relative_dir() -> None:
+    assert (
+        metrics_mod._session_set_name("docs/session-sets/007-uniform-session-state-file")
+        == "007-uniform-session-state-file"
+    )
+
+
+def test_session_set_name_reduces_absolute_windows_paths_both_casings() -> None:
+    for drive in ("C:", "c:"):
+        sep = chr(92)  # backslash, kept out of the literal for clarity
+        abs_path = sep.join([
+            drive, "Users", "x", "repos", "y", "docs", "session-sets",
+            "047-state-file-schema-v4-audit",
+        ])
+        assert (
+            metrics_mod._session_set_name(abs_path)
+            == "047-state-file-schema-v4-audit"
+        )
+
+
+def test_session_set_name_ignores_trailing_separators() -> None:
+    assert (
+        metrics_mod._session_set_name("docs/session-sets/008-cancelled-session-set-status/")
+        == "008-cancelled-session-set-status"
+    )
+
+
+def test_session_set_name_none_and_empty_stay_none() -> None:
+    assert metrics_mod._session_set_name(None) is None
+    assert metrics_mod._session_set_name("") is None
+
+
+def test_record_call_writes_normalized_session_set(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import json
+
+    log = tmp_path / "router-metrics.jsonl"
+    monkeypatch.setenv("AI_ROUTER_METRICS_PATH", str(log))
+    metrics_mod.record_call(
+        {"metrics": {"enabled": True}},
+        call_type="route",
+        task_type="analysis",
+        model="gpt-5.4",
+        provider="openai",
+        tier=3,
+        complexity_score=50,
+        generation_params={},
+        input_tokens=1,
+        output_tokens=1,
+        cost_usd=0.01,
+        elapsed_seconds=1.0,
+        escalated=False,
+        stop_reason="end_turn",
+        session_set=chr(92).join(
+            ["C:", "repo", "docs", "session-sets",
+             "049-orchestrator-coordination-removal"]
+        ),
+        session_number=1,
+    )
+    record = json.loads(log.read_text(encoding="utf-8").strip())
+    assert record["session_set"] == "049-orchestrator-coordination-removal"

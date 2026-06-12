@@ -5,6 +5,18 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Metrics: `session_set` is normalized to the bare session-set folder
+  name at the write boundary (`record_call` / `record_adjudication`)
+  and on read in the report's per-set breakdown. Callers historically
+  passed three shapes — the slug, `docs/session-sets/<slug>`, and an
+  absolute set-dir path — which fragmented per-set cost aggregation
+  across multiple keys and leaked machine-specific paths into
+  `router-metrics.jsonl`. Existing log lines are untouched; the
+  extension's Cost Dashboard (≥0.31) normalizes on read as well, so
+  historical mixed-shape lines aggregate correctly everywhere.
+
 ## [0.17.0] — 2026-06-12 (Set 062 — Lightweight verification affordance)
 
 ### Added (Set 062 S3 — sanctioned Mode A -> Mode B transition)

@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Cost Dashboard: the per-set table keyed rows on the raw `session_set`
+  value from the metrics log, which exists in four historical shapes
+  (bare slug, `docs/session-sets/<slug>`, absolute Windows path in
+  either drive casing, null). One set's spend fragmented across up to
+  three rows, and the absolute-path rows rendered as unreadable machine
+  paths — burying every recent set ("the dashboard stops at Set 036").
+  `session_set` is now normalized to the bare session-set folder name
+  at parse time, merging the shapes into one row per set; null entries
+  read "(no session set)". The CSV export sees the normalized names
+  too, so machine-specific absolute paths can no longer leak into
+  `ai_router/cost-export.csv`.
+
 ## [0.30.0] — 2026-06-12 (Sets 061 + 062 — Explorer UX polish + Lightweight verification affordance)
 
 One combined release: Set 061's Explorer changes shipped unreleased

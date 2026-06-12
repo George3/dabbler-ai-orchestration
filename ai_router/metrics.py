@@ -91,6 +91,23 @@ def _metrics_enabled(config: dict) -> bool:
     return bool(metrics_cfg.get("enabled", True))
 
 
+def _session_set_name(session_set):
+    """Normalize a session-set identifier to the bare folder name.
+
+    Callers have historically passed three shapes — the slug itself, a
+    repo-relative ``docs/session-sets/<slug>``, and an absolute set-dir
+    path (the VS Code extension spawns the CLIs with absolute paths, in
+    either drive-letter casing on Windows). The mixed shapes fragmented
+    per-set cost aggregation across multiple keys and leaked
+    machine-specific paths into the log. Normalizing at the write
+    boundary keeps the log slug-keyed; ``None`` stays ``None``.
+    """
+    if not session_set:
+        return None
+    name = str(session_set).replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    return name or None
+
+
 def record_call(
     config: dict,
     *,
@@ -146,7 +163,7 @@ def record_call(
         "timestamp": datetime.datetime.now(
             datetime.timezone.utc
         ).isoformat(),
-        "session_set": session_set,
+        "session_set": _session_set_name(session_set),
         "session_number": session_number,
         "call_type": call_type,
         "task_type": task_type,
@@ -252,7 +269,7 @@ def record_adjudication(
         "timestamp": datetime.datetime.now(
             datetime.timezone.utc
         ).isoformat(),
-        "session_set": session_set,
+        "session_set": _session_set_name(session_set),
         "session_number": session_number,
         "call_type": "adjudication",
         "task_type": task_type,
@@ -414,10 +431,13 @@ def print_metrics_report(config: dict) -> None:
             rate = (100.0 * s["verified"] / s["n"]) if s["n"] else 0
             print(f"  {vm:<18} {s['n']:>6} {rate:>6.1f}%")
 
-    # Session-set breakdown (last 5 distinct session sets)
+    # Session-set breakdown (last 5 distinct session sets).
+    # Normalize on read too: historical lines carry the pre-normalization
+    # mixed shapes (slug / relative / absolute), and the report should
+    # aggregate them as one set rather than three.
     sets: dict[str, dict] = {}
     for r in records:
-        ss = r.get("session_set")
+        ss = _session_set_name(r.get("session_set"))
         if not ss:
             continue
         slot = sets.setdefault(ss, {"calls": 0, "cost": 0.0})

@@ -1,5 +1,14 @@
 import * as assert from "assert";
-import { summarizeMetrics, buildSparkline, exportToCsv } from "../../utils/metrics";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import {
+  summarizeMetrics,
+  buildSparkline,
+  exportToCsv,
+  readMetricsFromPath,
+  sessionSetDisplayName,
+} from "../../utils/metrics";
 import { MetricsEntry } from "../../types";
 
 const SAMPLE: MetricsEntry[] = [
@@ -83,5 +92,101 @@ suite("metrics", () => {
     assert.strictEqual(lines[0], "session_set,session_number,model,effort,input_tokens,output_tokens,cost_usd,timestamp");
     assert.strictEqual(lines.length, 4); // header + 3 rows
     assert.ok(lines[1].startsWith("user-auth,1,"));
+  });
+
+  // ---------------------------------------------------------------------
+  // Session-set name normalization (operator report, 2026-06-12): the
+  // log carries session_set in four historical shapes; the dashboard
+  // must show the bare folder name for every one of them.
+  // ---------------------------------------------------------------------
+  suite("sessionSetDisplayName", () => {
+    test("bare slug passes through unchanged", () => {
+      assert.strictEqual(
+        sessionSetDisplayName("062-lightweight-verification-affordance"),
+        "062-lightweight-verification-affordance",
+      );
+    });
+
+    test("repo-relative POSIX path reduces to the folder name", () => {
+      assert.strictEqual(
+        sessionSetDisplayName("docs/session-sets/001-queue-contract-and-recovery-foundation"),
+        "001-queue-contract-and-recovery-foundation",
+      );
+    });
+
+    test("absolute Windows path reduces to the folder name (both drive casings)", () => {
+      assert.strictEqual(
+        sessionSetDisplayName(
+          "C:\\Users\\someone\\source\\repos\\x\\docs\\session-sets\\047-state-file-schema-v4-audit",
+        ),
+        "047-state-file-schema-v4-audit",
+      );
+      assert.strictEqual(
+        sessionSetDisplayName(
+          "c:\\Users\\someone\\source\\repos\\x\\docs\\session-sets\\047-state-file-schema-v4-audit",
+        ),
+        "047-state-file-schema-v4-audit",
+      );
+    });
+
+    test("trailing separators are ignored", () => {
+      assert.strictEqual(
+        sessionSetDisplayName("docs/session-sets/008-cancelled-session-set-status/"),
+        "008-cancelled-session-set-status",
+      );
+    });
+
+    test("null / undefined / empty read as '(no session set)'", () => {
+      assert.strictEqual(sessionSetDisplayName(null), "(no session set)");
+      assert.strictEqual(sessionSetDisplayName(undefined), "(no session set)");
+      assert.strictEqual(sessionSetDisplayName(""), "(no session set)");
+      assert.strictEqual(sessionSetDisplayName("   "), "(no session set)");
+    });
+
+    test("readMetricsFromPath normalizes so mixed shapes MERGE into one summary row", () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-metrics-test-"));
+      const file = path.join(dir, "router-metrics.jsonl");
+      try {
+        const mk = (session_set: string | null, cost: number) =>
+          JSON.stringify({
+            session_set,
+            session_number: 1,
+            call_type: "route",
+            model: "gpt-5.4",
+            effort: "high",
+            input_tokens: 1,
+            output_tokens: 1,
+            cost_usd: cost,
+            timestamp: "2026-06-12T10:00:00Z",
+          });
+        fs.writeFileSync(
+          file,
+          [
+            mk("049-orchestrator-coordination-removal", 0.1),
+            mk("docs/session-sets/049-orchestrator-coordination-removal", 0.2),
+            mk("C:\\repo\\docs\\session-sets\\049-orchestrator-coordination-removal", 0.3),
+            mk(null, 0.4),
+          ].join("\n") + "\n",
+          "utf8",
+        );
+        const entries = readMetricsFromPath(file);
+        assert.strictEqual(entries.length, 4);
+        const summary = summarizeMetrics(entries);
+        const row = summary.bySessionSet["049-orchestrator-coordination-removal"];
+        assert.ok(row, "merged slug row exists");
+        assert.strictEqual(row.sessions, 3);
+        assert.ok(Math.abs(row.cost - 0.6) < 1e-9);
+        assert.ok(summary.bySessionSet["(no session set)"], "null entries get an honest row");
+        // No path-shaped keys survive.
+        for (const key of Object.keys(summary.bySessionSet)) {
+          assert.ok(!/[\\/]/.test(key), `path-shaped key leaked: ${key}`);
+        }
+        // The CSV export sees normalized names too (no machine paths).
+        const csv = exportToCsv(entries);
+        assert.ok(!csv.includes("C:\\"), "absolute path leaked into CSV");
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
