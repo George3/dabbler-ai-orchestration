@@ -75,6 +75,41 @@ npx tsc --noEmit && npm run test:unit
 npm run test:playwright
 ```
 
+## UAT fixture workspace
+
+Operator UAT of the Session Set Explorer never requires hand-built
+sample projects. The committed fixture matrix at
+[`tools/dabbler-ai-orchestration/test-fixtures/uat-matrix/`](tools/dabbler-ai-orchestration/test-fixtures/uat-matrix/)
+holds two trivial hello-world consumer projects whose session sets
+cover every marker/action state shipped by Sets 061 + 062 — the
+Full-tier control row, blocked-by-prereqs (real pending + unknown
+slug), needs-migration (schema v3 asterisk), and every Lightweight
+state (`lw`, `N/M+`, `v?`, `v+`, note-suppressed, verified-quiet).
+The matrix README carries the full row inventory.
+
+Generate a disposable copy outside the repo and open it:
+
+```bash
+cd tools/dabbler-ai-orchestration
+npm run make-uat-workspace
+# then File > Open Workspace from File... on the printed
+# uat-matrix.code-workspace path
+```
+
+The copy is throwaway — delete the printed folder (or just re-run the
+script) when done. Walking UAT against the generated copy is safe even
+for mutating actions (Switch Tier, Set Up Dedicated Verification,
+Migrate to v4 schema): the committed matrix is untouched.
+
+To refresh the matrix after a schema or predicate change, edit the
+fixtures and run the pinning suite
+(`npm run test:unit -- --grep "uat-matrix"` — part of Layer 2), which
+derives every row through the real `readSessionSets` scan; the repo
+drift guard also live-scans the fixture markdown, so fixture prose
+must avoid the banned tier phrasings. The fixtures are synthetic by
+design (the cold-start fixtures are the precedent) — the
+writer-discipline rules govern real sets, not these.
+
 ## Building the extension
 
 ```bash

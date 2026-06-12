@@ -200,6 +200,66 @@
           "costUsd": 0.0032
         }
       ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-004/fixture-matrix",
+      "dateTime": "2026-06-12T06:13:31.137076-04:00",
+      "description": "D6 fixture matrix authored at tools/dabbler-ai-orchestration/test-fixtures/uat-matrix/: two hello-world consumer projects. hello-world-full = Full mid-progress control (1/3, session 2 in flight, no markers) + blocked-by-prereqs real-pending (002 -> 001 in-progress) + unknown-slug (003 -> 099-cdn-rollout) + needs-migration v3-on-disk (004, asterisk + Migrate-to-v4 action). hello-world-lightweight = the six LW states: Mode A not-started (lw marker, Switch Tier + setupVerification both-directions; deliberately NO activity log so the durable-record gate stays open), Mode A complete w/o note (v?), Mode A complete WITH external-verification.md (suppressed), Mode B mid-work (1/2+ only), Mode B work-complete (2/2+ AND v+ -- the awaiting-verification window: top-level in-progress with all work complete deliberately fails invariant rule 6, so the committed session-events.jsonl closeout events drive the count via the documented events-ledger fallback), Mode B verified (3/3 runtime-grown, typed session verdict VERIFIED on a different engine, no marker). Mode-B sets carry the kind=verification_mode capture record in their activity logs for realism. All sessionSetName fields match dir basenames; spec headings match ledger titles.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-004/generator",
+      "dateTime": "2026-06-12T06:13:31.137076-04:00",
+      "description": "Generator shipped: scripts/make-uat-workspace.js (dependency-free node; exports makeUatWorkspace(targetParent) for tests + CLI main; ASCII-only output per the cp1252 lesson) + npm run make-uat-workspace + committed uat-matrix.code-workspace naming both projects. Copies the matrix to a fresh os.tmpdir()/dabbler-uat-workspace-* folder OUTSIDE the repo and prints the workspace file to open. Empirically confirmed: generator run end-to-end OK; drift_guard.py OK both before and after the CONTRIBUTING.md edit (one-active-set only scans the repo-root docs/session-sets/ so nested fixture sets are invisible to it; stale-framing DOES live-scan fixture markdown -- fixture prose avoids the banned phrasings, no allow-list needed); vsce ls shows 31 packaged entries with no test-fixtures/ or scripts/ leakage after the .vscodeignore additions.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-004/fixture-tests",
+      "dateTime": "2026-06-12T06:13:31.137076-04:00",
+      "description": "Pinning suite src/test/suite/uatMatrixFixtures.test.ts (14 tests): derives every committed row through the REAL readSessionSets scan and asserts name/state/fraction inputs, verificationMarker, plusFraction, externalVerificationNoteExists, completedVerification verdict+number, needsMigration/target/schemaVersionOnDisk, blockedByPrereqs + unsatisfiedPrereqs (real-pending and unknown-slug variants), plus ActionRegistry applicability on fixture rows (switchTier, setupVerification, kickoff prompt, external-note action, migrateToV4). Generator coverage: workspace-file folder list pinned; disposable copy derives identically to the committed source (generated into a sandbox, cleaned up). 14/14 passing.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-004/docs",
+      "dateTime": "2026-06-12T06:13:31.137076-04:00",
+      "description": "CONTRIBUTING.md gained the 'UAT fixture workspace' section (how to generate, row-inventory pointer, disposable-copy safety for mutating actions, refresh procedure via the pinning suite, drift-guard note); test-fixtures/uat-matrix/README.md carries the full row inventory + refresh steps. Suites: Python 1216 passed / 1 skipped; tsc --noEmit clean; TS unit 863 passing (+14 this session) + the 2 pre-existing Set-026 failures (configEditor-foundation, notificationsSection -- unchanged baseline).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-004/verified",
+      "dateTime": "2026-06-12T06:18:53.251080-04:00",
+      "description": "Cross-provider verification (router pick gpt-5-4, both rounds): R1 ISSUES_FOUND - 1 Major S062-S4-V1-001 ('suite green' end state vs the 2 failing TS unit tests) judged a CONTEXT GAP: the 2 failures are the tracked pre-existing Set-026 baseline (configEditor-foundation, notificationsSection), unchanged since Set 052 and present in this set's S1-S3 - all of which closed VERIFIED with the identical caveat (S2/S3 by the same verifier); this session moved the baseline 849 -> 863 passing (+14, zero regressions). Adjudication recorded via record_adjudication (cause=context-gap, resolution=reverify-reshaped). R2 narrow re-verify with the reshaped context (S1-S3 precedent + persisted verdicts + Set-026 provenance): VERIFIED, 0 issues. Artifacts: s4-verification.md, s4-issues.json (disposition annotated), s4-verification-round-2.md. Routed cost R1 $0.1822 + R2 $0.0066 = $0.1888. CALIBRATION NOTE for S5: state the tracked-baseline convention (2 pre-existing Set-026 failures; green = zero regressions) in the R1 prompt up front - it would have saved this round, the exact context-gap lesson S3 recorded for unchanged gate-adjacent code.",
+      "status": "completed",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 14260,
+          "outputTokens": 9771,
+          "costUsd": 0.182215
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 1413,
+          "outputTokens": 204,
+          "costUsd": 0.0065925
+        }
+      ]
     }
   ]
 }

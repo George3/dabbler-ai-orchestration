@@ -83,10 +83,13 @@ moderate
 | 4 | Docs | t2 |
 | 5 | Full suite; cross-provider verification | t3 |
 ### Actuals (filled after the session)
-- Orchestrator used:
-- Total routed cost:
-- Deviations from recommendation:
-- Notes for next-session calibration:
+- Orchestrator used: claude-code claude-fable-5 @ effort=high
+- Total routed cost: $0.1920 (session-verification gpt-5-4: R1 $0.1822 ISSUES_FOUND → R2 narrow re-verify $0.0066 VERIFIED; + $0.0031 gemini-pro analysis for the Session 5 recommendation refresh)
+- Deviations from recommendation: orchestrator was fable-5/high, not the S3-close revised gpt-5-4/high (the operator handed the session to the same claude-code holder as Sessions 1–3; Rule 7 — the human controls orchestrator choice). Implementation again routed $0 — fixture authoring, generator, tests, and docs were orchestrator-direct file work.
+- Notes for next-session calibration: the conformance-priority rationale behind the gpt-5-4 revision held up fine under fable-5 — the pinning suite passed 14/14 on the first run and both drift-guard runs were clean, so the fixture-conformance risk the revision priced in did not materialize. R1's only finding was a context gap (the 'suite green' criterion vs the tracked 2-failure Set-026 baseline); state the baseline convention in the R1 verification prompt up front in Session 5 — the same lesson S3 recorded for unchanged gate-adjacent code, now confirmed for suite-baseline conventions too.
+
+**Next-session orchestrator recommendation (Session 5):**
+claude-code claude-fable-5 @ effort=high — REVISED from the set-start claude-sonnet-4-6/low by routed gemini-pro analysis at S4 close ($0.0031). Rationale (routed): the expanded UAT checklist scope (subsuming Set 061's rows, ~25–30 ProgrammaticVerification-bearing items gating two releases) invalidates the low-effort assessment; the established workhorse model at high effort fits the precision needed, while routed cost stays low (one-shot document generation, not iterative code-and-verify cycles).
 
 ## Session 5: Combined operator UAT on a local build, then 0.30.0 + 0.17.0
 ### Recommended orchestrator
