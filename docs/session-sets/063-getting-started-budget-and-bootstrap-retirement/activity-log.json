@@ -1,0 +1,99 @@
+{
+  "sessionSetName": "063-getting-started-budget-and-bootstrap-retirement",
+  "createdDate": "2026-06-12T12:38:27.945020-04:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 0,
+      "stepKey": "session-001/ai-assignment",
+      "dateTime": "2026-06-12T12:38:27.945669-04:00",
+      "description": "Authored ai-assignment.md via routed analysis (gemini-pro)",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gemini-pro",
+          "taskType": "analysis",
+          "inputTokens": 3965,
+          "outputTokens": 948,
+          "costUsd": 0.0144
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/inventory",
+      "dateTime": "2026-06-12T12:53:09.347774-04:00",
+      "description": "Retirement inventory complete: 11 extension surfaces + 7 live docs + 0 consumer-repo refs, file:line evidence in s1-audit.md sec 1; welcome-fallback unreachability proven (computeGettingStarted total, postSnapshot always ships gettingStarted); resurrection path = protocol optionality, closed by D2",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/budget-contract",
+      "dateTime": "2026-06-12T12:53:09.347774-04:00",
+      "description": "budget.yaml contract audited: chat bootstrap was sole writer (pre-migration shape); migrator rewrites threshold_scope->scope + injects warn_at_percent; config editor BUDGET_SCHEMA requires threshold_usd, open schema; NO Python runtime reader (disposition.py docstrings only); scaffold never writes budget.yaml; locked post-migration writer shape in s1-audit.md sec 2.4",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/design-lock",
+      "dateTime": "2026-06-12T12:53:09.347774-04:00",
+      "description": "D1-D4 locked (s1-audit.md sec 4) after cross-provider consult: Q1/D3 converged retire-with-redirects + new docs/budget-yaml-schema.md; Q2/D1 $0 split resolved to required inline choice per workflow-doc operator-picks contract (gemini dissent recorded); Q3 writer shape confirmed; D4 Marketplace-only 0.32.0",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "architecture",
+          "inputTokens": 1383,
+          "outputTokens": 23020,
+          "costUsd": 0.348757
+        },
+        {
+          "model": "gemini-pro",
+          "taskType": "architecture",
+          "inputTokens": 1520,
+          "outputTokens": 691,
+          "costUsd": 0.00881
+        }
+      ]
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/suites-green",
+      "dateTime": "2026-06-12T13:01:10.892524-04:00",
+      "description": "Suites green, code untouched: Python 1222 passed/1 skipped; TS mocha 870 passing + 2 pre-existing Set-026 failures (configEditor-foundation, notificationsSection); Playwright Layer 3 LOCAL 18 passed (4.8m); drift_guard OK; dist/ compile artifacts restored",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/verified",
+      "dateTime": "2026-06-12T13:04:37.817279-04:00",
+      "description": "Cross-provider verification: R1 gpt-5-4 ISSUES_FOUND (1 Major Completeness: uncited mode/default semantics) -> citations added to s1-audit.md sec 2.4 + D3, s1-issues.json persisted -> R2 gpt-5-4 VERIFIED (narrow re-verify, no regression)",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 6913,
+          "outputTokens": 4922,
+          "costUsd": 0.091113
+        },
+        {
+          "model": "gpt-5-4",
+          "taskType": "session-verification",
+          "inputTokens": 5552,
+          "outputTokens": 1418,
+          "costUsd": 0.03515
+        }
+      ]
+    }
+  ]
+}
