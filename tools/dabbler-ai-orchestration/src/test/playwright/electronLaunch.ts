@@ -654,7 +654,11 @@ export async function openSessionSetsView(
   const outer = page.frameLocator(
     'iframe.webview.ready[src*="dabbler-ai-orchestration"]',
   );
-  const inner = outer.frameLocator('iframe');
+  // Target the content iframe by id: the webview host page keeps an
+  // old and a new inner iframe alive transiently while (re)loading
+  // content, so a bare `iframe` locator can strict-mode-violate on
+  // fast runs (observed on the macOS CI runner).
+  const inner = outer.frameLocator("iframe#active-frame");
   // Wait for the tree to render (client.js has received the first
   // rowsSnapshot or welcomeHtml fallback fired).
   await inner.locator("#root").waitFor({ state: "attached", timeout: 30_000 });
