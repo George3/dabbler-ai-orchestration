@@ -402,26 +402,83 @@ export function makeAdditionalSet(
   ]) as FixtureHandle;
 }
 
+// Derive the legacy v2/v3 top-level triple from a sessions[] ledger.
+// Fresh harness fixtures are all-not-started, but derive honestly so
+// downgrades of driven fixtures stay faithful too.
+function _legacyTripleFromSessions(state: Record<string, unknown>): {
+  currentSession: number | null;
+  totalSessions: number;
+  completedSessions: number[];
+} {
+  const sessions = Array.isArray(state.sessions)
+    ? (state.sessions as Array<Record<string, unknown>>)
+    : [];
+  const completed = sessions
+    .filter((s) => s.status === "complete")
+    .map((s) => s.number as number);
+  const inProgress = sessions.find((s) => s.status === "in-progress");
+  return {
+    currentSession: inProgress ? (inProgress.number as number) : null,
+    totalSessions: sessions.length,
+    completedSessions: completed,
+  };
+}
+
 /**
- * Set 030 Session 5 — rewrite a fixture's ``session-state.json`` from
- * the v3 dual-write shape (what the harness emits today) back to a
- * pure-v2 snapshot the migration UX must detect and offer to migrate.
+ * Set 030 Session 5 (reworked in the CI-repair pass, 2026-06-12) —
+ * rewrite a fixture's ``session-state.json`` from the canonical v4
+ * shape (what the harness emits today, post-Set-049) down to a
+ * GENUINE v2 snapshot: explicit ``schemaVersion: 2`` plus the legacy
+ * top-level triple, no ``sessions[]``. A real v2 file carried its
+ * schemaVersion — the previous version of this helper deleted the
+ * field entirely, which produced a versionless v1-ish file whose
+ * migration tooltip reads "Ran under an older schema" instead of
+ * "Ran under schema v2".
  *
- * Used by Layer 3 smokes for the "(needs migration)" badge + the
- * migrate command. Round-trips through ``readSessionSets`` afterwards
- * still works — the extension's tolerant v3 reader synthesizes a
- * sessions[] from the legacy triple, so the row renders normally
- * apart from the migration badge.
+ * Used by Layer 3 smokes for the migration asterisk + the migrate
+ * command. Round-trips through ``readSessionSets`` afterwards still
+ * work — the extension's tolerant reader synthesizes sessions[] from
+ * the legacy triple, so the row renders normally apart from the
+ * migration marker.
  */
 export function downgradeStateFileToV2(h: FixtureHandle): void {
   const statePath = path.join(h.set_dir, "session-state.json");
   const raw = fs.readFileSync(statePath, "utf8");
   const state = JSON.parse(raw) as Record<string, unknown>;
-  // Strip the v3-only fields. Keep the legacy triple and the rest of
-  // the snapshot exactly as-is so the v2-reader path produces a
-  // matching display.
-  delete state.schemaVersion;
+  const triple = _legacyTripleFromSessions(state);
+  state.schemaVersion = 2;
+  state.currentSession = triple.currentSession;
+  state.totalSessions = triple.totalSessions;
+  state.completedSessions = triple.completedSessions;
   delete state.sessions;
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+}
+
+/**
+ * CI-repair pass, 2026-06-12 — rewrite a fixture's
+ * ``session-state.json`` from the canonical v4 shape down to
+ * canonical v3: ``schemaVersion: 3``, the ``sessions[]`` ledger kept
+ * (v3 dual-write carried it), plus the v3 top-level lifecycle fields.
+ * Exists because the harness writers emit v4 since Set 049 — the
+ * migration-cta-v4 smoke's original premise ("makeSet emits canonical
+ * v3 today", true at Set 047) silently rotted, leaving its fixture
+ * already-current and the asterisk it asserts never rendering.
+ */
+export function downgradeStateFileToV3(h: FixtureHandle): void {
+  const statePath = path.join(h.set_dir, "session-state.json");
+  const raw = fs.readFileSync(statePath, "utf8");
+  const state = JSON.parse(raw) as Record<string, unknown>;
+  const triple = _legacyTripleFromSessions(state);
+  state.schemaVersion = 3;
+  state.currentSession = triple.currentSession;
+  state.totalSessions = triple.totalSessions;
+  state.completedSessions = triple.completedSessions;
+  state.lifecycleState = state.status === "complete" ? "closed"
+    : state.status === "in-progress" ? "work_in_progress" : null;
+  state.startedAt = state.startedAt ?? null;
+  state.completedAt = state.completedAt ?? null;
+  state.orchestrator = state.orchestrator ?? null;
+  state.verificationVerdict = state.verificationVerdict ?? null;
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
@@ -587,8 +644,16 @@ export async function openSessionSetsView(
   // The webview shell lives inside `iframe.webview` (outer sandbox)
   // → `iframe#active-frame` (inner content). The role="tree" element
   // is rendered by client.js into <main id="root"> in the inner
-  // frame.
-  const outer = page.frameLocator('iframe.webview.ready');
+  // frame. Disambiguate by the extensionId baked into the iframe src:
+  // VS Code hosts ALL webview iframes in one shared overlay container
+  // (NOT inside the side-bar part's DOM), and on empty workspaces the
+  // Set 060 Getting Started instructions doc opens as a markdown
+  // preview — a second `iframe.webview.ready` (extensionId
+  // vscode.markdown-language-features) that breaks an unscoped
+  // strict-mode locator.
+  const outer = page.frameLocator(
+    'iframe.webview.ready[src*="dabbler-ai-orchestration"]',
+  );
   const inner = outer.frameLocator('iframe');
   // Wait for the tree to render (client.js has received the first
   // rowsSnapshot or welcomeHtml fallback fired).

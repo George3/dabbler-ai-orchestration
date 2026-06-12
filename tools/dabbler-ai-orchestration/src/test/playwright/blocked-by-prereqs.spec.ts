@@ -27,6 +27,7 @@ import {
   closeVSCode,
   launchVSCode,
   LaunchedVSCode,
+  makeAdditionalSet,
   makeSet,
   makeTmpDir,
   openSessionSetsView,
@@ -128,9 +129,11 @@ test("renders the blocked marker + tooltip when prereq target is not complete", 
     // Prereq set — stays at the harness's default "not-started" /
     // sessions[].status = "not-started"; that's "not complete" from
     // the cross-reference's point of view.
-    makeSet(per.tmpPath, "044-prereq", 1);
-    // Dependant set — declares the prereq above.
-    const depHandle = makeSet(per.tmpPath, "047-dependant", 2);
+    const prereqHandle = makeSet(per.tmpPath, "044-prereq", 1);
+    // Dependant set — declares the prereq above. Second set in the
+    // SAME fixture repo, so it must go through makeAdditionalSet:
+    // makeSet creates `<tmp>/repo` and fails on an existing one.
+    const depHandle = makeAdditionalSet(prereqHandle, "047-dependant", 2);
     appendPrerequisitesToSpec(depHandle.set_dir, ["044-prereq"]);
 
     per.launch = await launchVSCode(depHandle.repo_root);
@@ -174,7 +177,7 @@ test("no blocked marker when prereq target is complete", async () => {
     per.tmpPath = makeTmpDir("dabbler-pw-prereq-unblocked");
     const prereqHandle = makeSet(per.tmpPath, "044-prereq-done", 1);
     setStatusToComplete(prereqHandle.set_dir);
-    const depHandle = makeSet(per.tmpPath, "047-unblocked", 2);
+    const depHandle = makeAdditionalSet(prereqHandle, "047-unblocked", 2);
     appendPrerequisitesToSpec(depHandle.set_dir, ["044-prereq-done"]);
 
     per.launch = await launchVSCode(depHandle.repo_root);
@@ -203,11 +206,11 @@ test("no blocked marker on terminal-state row even when the cross-reference deri
     per.tmpPath = makeTmpDir("dabbler-pw-prereq-terminal");
     // Prereq target stays not-started (so blockedByPrereqs would be
     // true for any depending set under the cross-reference rule).
-    makeSet(per.tmpPath, "044-still-not-started", 1);
+    const prereqHandle = makeSet(per.tmpPath, "044-still-not-started", 1);
     // Dependant is COMPLETE on disk; marker must be suppressed on the
     // terminal row even though the cross-reference would otherwise
     // mark it blocked.
-    const depHandle = makeSet(per.tmpPath, "047-completed-dep", 1);
+    const depHandle = makeAdditionalSet(prereqHandle, "047-completed-dep", 1);
     appendPrerequisitesToSpec(depHandle.set_dir, ["044-still-not-started"]);
     setStatusToComplete(depHandle.set_dir);
 

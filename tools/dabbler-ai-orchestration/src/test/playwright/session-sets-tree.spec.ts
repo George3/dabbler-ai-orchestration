@@ -7,8 +7,8 @@
 //   - WAI-ARIA tree semantics (role + aria-level + aria-expanded)
 //   - row name + description text
 //   - HTML escape: a `<script>` in a set name renders as text
-//   - welcome panel renders when no sets exist (covered also by
-//     loading-state.spec.ts; duplicated here as a structure cross-
+//   - Getting Started form renders when no sets exist (covered also
+//     by loading-state.spec.ts; duplicated here as a structure cross-
 //     check from the new harness)
 //
 // Scenarios that require deep workbench interaction (QuickPick
@@ -130,7 +130,7 @@ test("HTML-escapes a set name containing < and > so it renders as text", async (
   }
 });
 
-test("welcome panel renders when no session sets exist (webview path)", async () => {
+test("Getting Started form renders when no session sets exist (webview path)", async () => {
   const per: PerTest = {};
   try {
     per.tmpPath = makeTmpDir("dabbler-pw-welcome");
@@ -144,12 +144,14 @@ test("welcome panel renders when no session sets exist (webview path)", async ()
     per.launch = await launchVSCode(repoRoot);
     const inner = await openSessionSetsView(per.launch.page);
 
-    // The webview's .welcome div carries the markdown-rendered
-    // viewsWelcome contents from package.json.
-    await expect(inner.locator(".welcome")).toBeVisible({ timeout: 30_000 });
-    await expect(
-      inner.getByText(/No session sets in this workspace yet/),
-    ).toBeVisible();
+    // Set 060 (Getting Started redesign): a folder with no session
+    // sets renders the staged Getting Started form in the Explorer
+    // webview, replacing the old `.welcome` viewsWelcome empty state
+    // this spec asserted pre-060.
+    await expect(inner.locator(".getting-started")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(inner.locator(".gs-title")).toHaveText("Getting Started");
   } finally {
     await teardown(per);
   }

@@ -82,9 +82,10 @@ test("renders schema-drift asterisk + tooltip on a v2 set", async () => {
   try {
     per.tmpPath = makeTmpDir("dabbler-pw-v2");
     const h = makeSet(per.tmpPath, "scenario-v2-pending", 3);
-    // The harness's start_session writer emits v3 dual-write today.
-    // Downgrade the file to a pure-v2 snapshot so the v2-detection
-    // path actually fires.
+    // The harness emits canonical v4 since Set 049. Downgrade the
+    // file to a GENUINE v2 snapshot (explicit schemaVersion: 2 +
+    // legacy triple) so the v2-detection path actually fires and the
+    // tooltip can name the version.
     downgradeStateFileToV2(h);
 
     per.launch = await launchVSCode(h.repo_root);

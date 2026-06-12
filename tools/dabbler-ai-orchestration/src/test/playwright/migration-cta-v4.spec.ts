@@ -1,10 +1,12 @@
 // Layer 3 rendering smoke for the v3 → v4 migration CTA, Set 047
-// Session 3. Each test creates a canonical v3 set via the harness
-// (which emits schemaVersion=3 with a populated sessions[] today),
+// Session 3. Each test creates a set via the harness and downgrades
+// its state file to canonical v3 (the harness writers emit v4 since
+// Set 049 — the original "makeSet emits v3 today" premise rotted and
+// left this fixture already-current, so the marker never rendered),
 // launches a real Electron VS Code, and asserts the tree surfaces
-// the "(needs migration)" badge — the same chip that fired on v2
-// files now also fires on canonical v3 files because v3 → v4 is the
-// next migration target.
+// the migration asterisk — the same marker that fires on v2 files
+// also fires on canonical v3 files because v3 → v4 is the next
+// migration target.
 //
 // The migration command itself is operator-triggered (modal confirm),
 // not auto-fire. End-to-end exercise of the command lives in the TS
@@ -18,6 +20,7 @@ import { expect, test } from "@playwright/test";
 import {
   cleanupTmpDir,
   closeVSCode,
+  downgradeStateFileToV3,
   launchVSCode,
   LaunchedVSCode,
   makeSet,
@@ -76,10 +79,11 @@ test("renders schema-drift asterisk + tooltip on a canonical v3 set (v3 → v4 t
   const per: PerTest = {};
   try {
     per.tmpPath = makeTmpDir("dabbler-pw-v3-needs-v4");
-    // `makeSet` emits canonical v3 today (schemaVersion=3 with
-    // sessions[] populated by the harness). No on-disk surgery needed
-    // — the new detector flips needsMigration to true on this shape.
+    // The harness emits canonical v4 since Set 049; downgrade the
+    // state file to canonical v3 so the v3 → v4 detector actually has
+    // something to flag.
     const h = makeSet(per.tmpPath, "scenario-v3-needs-v4", 3);
+    downgradeStateFileToV3(h);
 
     per.launch = await launchVSCode(h.repo_root);
     const tree = await openSessionSetsView(per.launch.page);

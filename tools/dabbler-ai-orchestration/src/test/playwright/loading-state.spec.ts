@@ -23,6 +23,7 @@ import {
   LaunchedVSCode,
   makeSet,
   makeTmpDir,
+  openSessionSetsView,
 } from "./electronLaunch";
 
 interface PerTest {
@@ -57,7 +58,7 @@ async function teardown(per: PerTest): Promise<void> {
 // Scenario: empty docs/session-sets directory → welcome CTA appears
 // after scan completes (no flash before).
 // ---------------------------------------------------------------------
-test("welcome CTA renders after scan completes on an empty workspace", async () => {
+test("Getting Started form renders after scan completes on an empty workspace", async () => {
   const per: PerTest = {};
   try {
     // Build a workspace shell that has a `docs/session-sets/` dir
@@ -79,35 +80,25 @@ test("welcome CTA renders after scan completes on an empty workspace", async () 
     expect(fs.readdirSync(sessionSetsDir)).toHaveLength(0);
 
     per.launch = await launchVSCode(per.emptyRepoRoot);
-    const page = per.launch.page;
 
-    // Click the Dabbler activity-bar icon to open the side bar. We
-    // deliberately do NOT call `openSessionSetsView()` because that
-    // helper waits for the tree element to be visible — and the
-    // tree IS visually replaced by viewsWelcome when sets[] is
-    // empty + scanState is ready (which is the exact state we are
-    // trying to verify). So we drive the activity icon click here
-    // and then assert on the welcome content's text directly
-    // inside the side-bar viewlet.
-    const activityIcon = page.locator(
-      '.activitybar .action-label[aria-label*="Dabbler AI Orchestration"]',
-    );
-    await activityIcon.waitFor({ state: "visible", timeout: 30_000 });
-    await activityIcon.click();
-
-    // Set 029 Session 4: welcome content now renders inside the
-    // CustomSessionSetsView webview (the host parses viewsWelcome
-    // contents from package.json and passes the HTML to the
-    // webview via the initial rowsSnapshot when hasAnySets=false).
-    // We assert visibility inside the webview iframe instead of on
-    // the outer Monaco viewlet.
-    const outer = page.frameLocator('iframe.webview.ready');
-    const inner = outer.frameLocator('iframe');
+    // Set 060 (Getting Started redesign): an open folder with no
+    // session sets renders the staged Getting Started form inside the
+    // Explorer webview (gettingStarted.mode == "getting-started"),
+    // replacing the old viewsWelcome "Copy adoption bootstrap prompt"
+    // empty state this spec asserted pre-060. The companion
+    // instructions doc auto-opens as a markdown preview — a second
+    // webview iframe — which is why openSessionSetsView scopes its
+    // outer locator to the side bar.
+    const inner = await openSessionSetsView(per.launch.page);
+    await expect(inner.locator(".getting-started")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(inner.locator(".gs-title")).toHaveText("Getting Started");
+    // The steady-state shape this smoke exists for: the scan has
+    // completed and the form's first actionable step is rendered
+    // (no loading sentinel, no flash of an empty tree).
     await expect(
-      inner.getByText(/No session sets in this workspace yet/),
-    ).toBeVisible({ timeout: 30_000 });
-    await expect(
-      inner.getByText(/Copy adoption bootstrap prompt/i),
+      inner.locator('[data-gs-action="build-structure"]'),
     ).toBeVisible();
   } finally {
     await teardown(per);
