@@ -33,68 +33,79 @@ cost.
 
 ## What you get
 
-- **Sessions, not infinite chats.** Bounded slices of work — one
-  session, one orchestrator conversation, one verification, one
-  commit. Sessions live inside ordered **session sets** that you and
-  the AI co-design before any code is written. The activity-bar tree
-  shows what's in flight, what's queued, and what's done.
+- **A standardized, largely automated workflow — not just better
+  chat hygiene.** Most developers already split AI work into
+  sessions; the hard part is everything around them. This extension
+  operationalizes a high-level plan into **session sets** — ordered
+  sequences of AI-led work sessions that you and the AI co-design
+  before any code is written — and then runs every session through
+  the same structured lifecycle: register, work, verify, document,
+  commit, close. You direct the work; the workflow carries it. The
+  feeling is less "hands on the wheel" and more "telling your
+  chauffeur where to go next."
 
-- **Cost-minded routing.** Every reasoning task (code review,
-  analysis, documentation, end-of-session verification) goes through
-  the AI router, which picks the cheapest capable model per task and
-  escalates only when needed. Real projects we tested measured
-  **73% savings vs Opus-only** on a CLI/library project (990 routed
-  calls) and **32% savings** on a UI app with UAT/E2E gates (370
-  calls). Two sample reports ship in the
+- **Ongoing visibility into AI work.** Every session leaves an
+  AI-generated paper trail in predictable places — the spec, an
+  activity log of every step, per-session state with verification
+  verdicts, a change log at close. The Session Set Explorer reads it
+  all back at a glance: what's in flight, what's queued, what's
+  blocked on prerequisites, what's done and verified. You can step
+  away and know exactly what happened while you weren't watching.
+
+- **Cost-minded routing (Full tier).** On the Full tier, reasoning
+  tasks (code review, analysis, documentation, end-of-session
+  verification) go through the AI router, which picks the cheapest
+  capable model per task and escalates only when needed. Real
+  projects we tested measured **73% savings vs Opus-only** on a
+  CLI/library project (990 routed calls) and **32% savings** on a UI
+  app with UAT/E2E gates (370 calls). Two sample reports ship in the
   [GitHub repo](https://github.com/darndestdabbler/dabbler-ai-orchestration/tree/master/docs/sample-reports).
+  The Lightweight tier skips the router entirely — that's the $0
+  column in the table above.
 
-- **Cross-provider verification, every session.** Each session ends
-  with an independent verification by a model from a *different*
-  provider than the one that did the work. The verifier returns
-  structured JSON; disagreements surface for human adjudication
-  rather than being silently merged or dismissed.
+- **Cross-provider verification at every session close.** On the
+  Full tier it's automatic: a model from a *different provider* than
+  the one that did the work reviews the session and returns a
+  structured verdict; disagreements surface for human adjudication
+  rather than being silently merged or dismissed. On the Lightweight
+  tier the same step is a copyable review prompt you paste into a
+  second AI chat and a verdict you record yourself.
 
 ---
 
 ## Get started
 
-After install, the Session Set Explorer shows a **Get Started**
-welcome the first time you open a workspace with no
-`docs/session-sets/` folder. Click **Copy adoption bootstrap prompt**
-and paste it into a fresh AI chat (Claude Code, Gemini Code Assist,
-or any GPT-based tool). The AI fetches the canonical setup
-instructions and walks you through:
-
-1. **Tier choice** — Full or Lightweight, the cost/attention
-   tradeoff described above. Full routes verification through the
-   AI router automatically; Lightweight uses copyable review
-   prompts you paste into a path-aware AI chat, at zero API spend.
-2. **A budget dialog** — Full tier only — set a not-to-exceed (NTE)
-   dollar cap for verification spend. Verification calls typically
-   cost $0.05–$0.80 each; entering $0 switches to manual cross-
-   provider review at no API cost.
-3. **A plan alignment** — the AI proposes a session-set
-   decomposition based on what you describe.
-4. **A numbered action checklist** — *every* intended write, config,
-   and scaffolding step is listed. You batch-approve before anything
-   touches disk. No per-write confirmation prompts. You can
-   interrupt at any time.
-
-Once your first session set exists, the welcome content disappears
-and the standard activity-bar tree takes over.
-
-If you'd rather drive the setup from VS Code's UI directly, run
-**`Dabbler: Get Started`** from the command palette
-(`Ctrl+Shift+P` / `Cmd+Shift+P`). It focuses the Session Set
-Explorer — which renders a three-step **Getting Started form**
-(build structure with a Full/Lightweight radio, create or import a
-project plan, build session sets) whenever the workspace has no
-session sets yet — and opens the step-by-step instructions in the
-editor. On the Full tier the form warns under the Build button when
-no provider API key is set. (The Set 021 Get Started wizard panel
-was retired in extension 0.29.0 in favor of this form.)
+Open a project folder with no session sets yet and the Session Set
+Explorer renders the staged **Getting Started form**, with companion
+step-by-step instructions in the editor:
 
 ![The Getting Started form in the Session Set Explorer: build project structure with a Full/Lightweight tier choice, create or import a project plan, build session sets](https://raw.githubusercontent.com/darndestdabbler/dabbler-ai-orchestration/master/tools/dabbler-ai-orchestration/media/getting-started.png)
+
+1. **Build project structure** — pick your tier (Full or
+   Lightweight, the cost/attention tradeoff described above) and the
+   form scaffolds everything: the `.venv` with the router package,
+   the AI-agent instruction files, and the `docs/session-sets/`
+   home. On the Full tier the form warns inline when no provider API
+   key is visible.
+2. **Create or import a project plan** — import an existing
+   `project-plan.md`, or copy a planning prompt and let your AI
+   agent draft the plan with you.
+3. **Build session sets** — copy the decomposition prompt; your AI
+   agent turns the plan into ordered session sets under
+   `docs/session-sets/`, each with a spec you review before any work
+   starts.
+
+Then tell your AI agent: **"start the next session."** Once the
+first session set exists, the form gives way to the standard
+Explorer tree. (You can re-focus the form anytime with
+**`Dabbler: Get Started`** from the command palette.)
+
+Prefer a fully conversational setup instead? **`Dabbler: Copy
+adoption bootstrap prompt`** (command palette) copies a prompt that
+has your AI agent fetch the canonical setup instructions and drive
+the same scaffolding chat-side, including the Full-tier
+budget-threshold (NTE) dialog — verification calls typically cost
+$0.05–$0.80 each, and the cap keeps total spend where you set it.
 
 ---
 
