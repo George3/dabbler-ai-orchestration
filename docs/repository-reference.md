@@ -73,8 +73,9 @@ can learn it.
   `ai_router/budget.yaml` in the post-migration shape with fail-closed
   host boundary; conversational bootstrap path fully ripped;
   `docs/adoption-bootstrap.md` → URL-stable deprecation stub; new
-  canonical `docs/budget-yaml-schema.md`). Marketplace-only — no PyPI
-  bump (no Python runtime reader of budget.yaml). Local operator UAT
+  canonical `docs/budget-yaml-schema.md`). Marketplace-only — the PyPI
+  surface is unchanged (budget.yaml lacks a runtime reader inside
+  `ai_router`, so nothing packaged changed). Local operator UAT
   passed 2026-06-12; **publish pending the operator's `vsix-v0.32.0`
   tag push through the green-Test gate** (record the run id here
   post-publish).
