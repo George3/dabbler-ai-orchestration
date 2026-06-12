@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (Set 062 S5)
+
+- `npm run make-uat-workspace` now pins `dabblerSessionSets.pythonPath`
+  to this checkout's repo-root `.venv` interpreter in the *generated*
+  `.code-workspace` (never the committed fixture), so the python-backed
+  row actions (the blessed verification-mode writer, the v4 migrator)
+  work in the disposable UAT workspace with zero operator setup.
+
 ## [0.29.0] — 2026-06-11 (Set 060 — Getting Started redesign)
 
 Replaces the prompt-chain onboarding with a dual-mode Getting Started flow in

@@ -494,7 +494,7 @@ def _augment_no_creds_reason(underlying_error: str) -> str:
             # this state so the operator can investigate.
             lines.append(
                 f"  - {var}: SET in this Python process, but ai_router "
-                f"reported it missing — value may be empty/whitespace."
+                f"reported it missing - value may be empty/whitespace."
             )
         elif scopes["user"] or scopes["machine"]:
             scope_label = (
@@ -1281,7 +1281,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not args.json:
         mode = "DRY RUN" if dry_run else "IN-PLACE"
-        print(f"\n  Bulk migrator [{mode}] — scan root: {scan_root}")
+        print(f"\n  Bulk migrator [{mode}] - scan root: {scan_root}")
         print(f"  Strategy: {args.strategy}\n")
 
     for set_dir in candidates:

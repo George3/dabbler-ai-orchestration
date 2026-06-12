@@ -636,7 +636,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.json:
         mode = "DRY RUN" if dry_run else "IN-PLACE"
         print(
-            f"\n  Lightweight -> v4 migrator [{mode}] — scan root: {scan_root}\n"
+            f"\n  Lightweight -> v4 migrator [{mode}] - scan root: {scan_root}\n"
         )
         for r in results:
             _print_result_line(r, verbose=args.verbose)

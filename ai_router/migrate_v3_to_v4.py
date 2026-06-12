@@ -788,7 +788,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not args.json:
         mode = "DRY RUN" if dry_run else "IN-PLACE"
-        print(f"\n  v3 → v4 migrator [{mode}] — scan root: {scan_root}\n")
+        print(f"\n  v3 -> v4 migrator [{mode}] - scan root: {scan_root}\n")
         for r in results:
             _print_result_line(r, verbose=args.verbose)
 
@@ -825,9 +825,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print()
         print(
             f"  Summary: {counts['migrated']} migrated, "
-            f"{counts['swept_orchestrator']} swept (v4→v4 orchestrator strip), "
+            f"{counts['swept_orchestrator']} swept (v4-to-v4 orchestrator strip), "
             f"{counts['skipped_v4']} already v4 (clean), "
-            f"{counts['skipped_not_v3']} not yet v3 (run v2→v3 first), "
+            f"{counts['skipped_not_v3']} not yet v3 (run v2-to-v3 first), "
             f"{counts['skipped_no_state']} no state file, "
             f"{counts['skipped_malformed']} malformed, "
             f"{counts['would_violate']} would-violate, "

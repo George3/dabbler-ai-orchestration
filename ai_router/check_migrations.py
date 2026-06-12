@@ -275,7 +275,7 @@ def fetch_manifest(
         return ManifestResult(
             manifest=None,
             source="none",
-            warning=f"manifest fetch failed ({exc}); no cache — using local schema version only",
+            warning=f"manifest fetch failed ({exc}); no cache - using local schema version only",
         )
 
 

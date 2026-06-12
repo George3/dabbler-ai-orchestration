@@ -101,6 +101,12 @@ script) when done. Walking UAT against the generated copy is safe even
 for mutating actions (Switch Tier, Set Up Dedicated Verification,
 Migrate to v4 schema): the committed matrix is untouched.
 
+When this checkout has a repo-root `.venv`, the generator pins
+`dabblerSessionSets.pythonPath` to it in the *generated*
+`.code-workspace` (never the committed one), so the python-backed row
+actions (the blessed verification-mode writer, the v4 migrator) work
+in the disposable workspace without any setup.
+
 To refresh the matrix after a schema or predicate change, edit the
 fixtures and run the pinning suite
 (`npm run test:unit -- --grep "uat-matrix"` — part of Layer 2), which

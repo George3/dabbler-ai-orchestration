@@ -29,6 +29,7 @@ const generator = require("../../../scripts/make-uat-workspace.js") as {
   MATRIX_DIR: string;
   WORKSPACE_FILE: string;
   makeUatWorkspace: (targetParent?: string) => string;
+  repoVenvInterpreter: () => string | null;
 };
 
 function byName(sets: SessionSet[]): Map<string, SessionSet> {
@@ -224,6 +225,38 @@ suite("uat-matrix generator (Set 062 S4)", () => {
         copied.map(signal).sort((a, b) => a.name.localeCompare(b.name)),
         source.map(signal).sort((a, b) => a.name.localeCompare(b.name)),
       );
+    } finally {
+      fs.rmSync(sandbox, { recursive: true, force: true });
+    }
+  });
+
+  test("the generated copy pins pythonPath to the repo venv when one exists (Set 062 S5)", () => {
+    const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "dabbler-uat-gen-test-"));
+    try {
+      const workspacePath = generator.makeUatWorkspace(sandbox);
+      const generated = JSON.parse(fs.readFileSync(workspacePath, "utf8")) as {
+        settings?: Record<string, unknown>;
+      };
+      const committed = JSON.parse(
+        fs.readFileSync(path.join(MATRIX_ROOT, generator.WORKSPACE_FILE), "utf8"),
+      ) as { settings?: Record<string, unknown> };
+      // The committed fixture must never carry a machine-specific path.
+      assert.strictEqual(
+        committed.settings?.["dabblerSessionSets.pythonPath"],
+        undefined,
+      );
+      const interp = generator.repoVenvInterpreter();
+      if (interp) {
+        assert.strictEqual(
+          generated.settings?.["dabblerSessionSets.pythonPath"],
+          interp,
+        );
+      } else {
+        assert.strictEqual(
+          generated.settings?.["dabblerSessionSets.pythonPath"],
+          undefined,
+        );
+      }
     } finally {
       fs.rmSync(sandbox, { recursive: true, force: true });
     }

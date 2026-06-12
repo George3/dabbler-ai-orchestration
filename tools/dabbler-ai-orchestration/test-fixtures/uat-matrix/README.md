@@ -5,7 +5,10 @@ cover every Session Set Explorer marker/action state shipped by
 Sets 061 + 062. The matrix exists so operator UAT never requires
 hand-built sample projects: run `npm run make-uat-workspace` from the
 extension package to copy this tree into a disposable folder outside
-the repo, then open the printed `.code-workspace` in VS Code.
+the repo, then open the printed `.code-workspace` in VS Code. When the
+checkout has a repo-root `.venv`, the generated (never the committed)
+workspace file pins `dabblerSessionSets.pythonPath` to it so the
+python-backed row actions work without setup.
 
 **Everything in here is synthetic fixture data.** The state files were
 hand-authored to pin specific derived states; they are NOT real session

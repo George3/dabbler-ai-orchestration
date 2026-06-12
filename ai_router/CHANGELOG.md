@@ -43,6 +43,17 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   whose only record is a `verification_mode_change` could re-record a
   stale spec seed after it and silently revert the transition.
 
+### Fixed (Set 062 S5)
+
+- The migrator CLIs (`migrate_v3_to_v4`, `migrate_session_state`,
+  `migrate_lightweight_to_canonical_v4`) and `check_migrations` printed
+  Unicode arrows / em-dashes in console output, crashing with
+  `UnicodeEncodeError` under Windows `cp1252` consoles — the encoding
+  the VS Code extension's spawn pipes inherit, so the Explorer's
+  **Migrate to v4 schema** / **Upgrade older session sets** actions
+  reported failure (exit 1) even though the in-place write had already
+  succeeded. Output is now ASCII-only per the repo CLI convention.
+
 ## [0.16.0] — 2026-06-05 (Set 057 — Lightweight dedicated verification sessions)
 
 Replaces the Lightweight tier's semi-manual copy/paste review-prompt step
