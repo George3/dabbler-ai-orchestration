@@ -63,8 +63,8 @@ can learn it.
 
 | Surface | Current version | State | Canonical details |
 |---|---|---|---|
-| `dabbler-ai-router` | `0.19.0` | **Version bumped 2026-06-14; publish PENDING the operator's `v0.19.0` tag push** through the green-Test gate — Set 064 (guidance lifecycle & pruning: cost reporter, per-lesson metadata + validator, citation-at-close keystone, active/archive split, ceilings/config, backlog-triage helper). Record the publish run id here once the workflow succeeds. Last published: `0.18.0` (tag `v0.18.0`, run 27424323065, 2026-06-12). | `pyproject.toml`, `ai_router/CHANGELOG.md` |
-| `dabbler-ai-orchestration` VS Code extension | `0.33.0` | **Version bumped 2026-06-14; publish PENDING the operator's `vsix-v0.33.0` tag push** through the `require-green-test` gate — Set 064 D7 (consumer-bootstrap guidance-lifecycle starter templates). Carries Set 063 too (its `0.32.0` was bumped but never tag-pushed). Record the publish run id here once the workflow succeeds. Last published: `0.31.0` (tag `vsix-v0.31.0`, run 27424322879, 2026-06-12). | `tools/dabbler-ai-orchestration/package.json`, `tools/dabbler-ai-orchestration/CHANGELOG.md` |
+| `dabbler-ai-router` | `0.19.0` | **Published to PyPI 2026-06-14** (tag `v0.19.0`, release.yml run 27507297669, tagged commit `8cc4b3a`) — Set 064 (guidance lifecycle & pruning: cost reporter, per-lesson metadata + validator, citation-at-close keystone, active/archive split, ceilings/config, backlog-triage helper). Passed the green-Test release gate. | `pyproject.toml`, `ai_router/CHANGELOG.md` |
+| `dabbler-ai-orchestration` VS Code extension | `0.33.0` | **Published to the Marketplace 2026-06-14** (tag `vsix-v0.33.0`, publish-vscode.yml run 27507297687, tagged commit `8cc4b3a`) — Set 064 D7 (consumer-bootstrap guidance-lifecycle starter templates); carries Set 063 too. Passed the green-Test gate. Last published before this: `0.31.0` (tag `vsix-v0.31.0`, run 27424322879, 2026-06-12). | `tools/dabbler-ai-orchestration/package.json`, `tools/dabbler-ai-orchestration/CHANGELOG.md` |
 
 ### Recent version walk
 
@@ -81,10 +81,10 @@ can learn it.
   `docs/guidance-lifecycle.md` and `docs/guidance-backlog-remediation.md`;
   cross-repo notice `docs/cross-repo-guidance-lifecycle-notice.md` points
   the over-budget consumers (harvester, platform) at the recipe. The
-  extension `0.33.0` also carries Set 063 (whose `0.32.0` was bumped but
-  never tag-pushed). **Both publishes pending the operator's `v0.19.0` /
-  `vsix-v0.33.0` tag pushes through the green-Test gate** (record the run
-  ids here post-publish).
+  extension `0.33.0` also carries Set 063. **Both published 2026-06-14
+  through the green-Test gate** (tags `v0.19.0` release.yml run 27507297669
+  and `vsix-v0.33.0` publish-vscode.yml run 27507297687, both on tagged
+  commit `8cc4b3a`).
 - **Extension `0.32.0`** — Set 063, Getting Started budget step +
   adoption-bootstrap retirement (Full-tier budget/NTE step writing
   `ai_router/budget.yaml` in the post-migration shape with fail-closed
