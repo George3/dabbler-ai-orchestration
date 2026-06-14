@@ -1,0 +1,52 @@
+{
+  "sessionSetName": "064-guidance-lifecycle-and-pruning",
+  "createdDate": "2026-06-14T03:59:45.929144-04:00",
+  "totalSessions": 4,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/measure",
+      "dateTime": "2026-06-14T03:59:45.929144-04:00",
+      "description": "Measured guidance-file overhead (bytes/lines/est-tokens) across this repo + 8 consumer repos; collapsed-vs-live entry counts. Found TWO over-budget repos (harvester ~53.5k tokens, platform ~50.8k).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/read-path",
+      "dateTime": "2026-06-14T03:59:45.929144-04:00",
+      "description": "Audited the read path: 10 always-load instruction sites naming lessons-learned.md / project-guidance.md (CLAUDE/AGENTS/GEMINI.md, workflow x4, quick-start x2, project-guidance Workflow Expectations).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/write-path",
+      "dateTime": "2026-06-14T03:59:45.929144-04:00",
+      "description": "Audited the close_session write path: confirmed disposition.json is the cleanest D3 citation seam (runs post-commit/push; established field round-trip pattern); close is Python-CLI-only.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/design-lock",
+      "dateTime": "2026-06-14T03:59:45.929144-04:00",
+      "description": "Locked D1-D8 mechanics via cross-provider consult (gpt-5.4 + gemini-2.5-pro, no DISAGREE). Adopted consult refinements: opt-in header stamping, double-quoted metadata + validator, ID governance, over-ceiling advisory, archive search helper. Locked N=20.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/verified",
+      "dateTime": "2026-06-14T03:59:45.929144-04:00",
+      "description": "Cross-provider verification of the audit record (gpt-5.4): VERDICT VERIFIED, 0 Critical/Major/Minor, 2 nice-to-haves applied. Python suite 1221 passed/1 skipped/0 failed (after clearing a pre-existing drift-guard false positive).",
+      "status": "completed",
+      "routedApiCalls": []
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "status": "completed",
+  "summary": "Session 1 (audit & design-lock, non-final, no shipping code): grounded Set 064 in file-level evidence and locked D1-D8. MEASURE: byte/line/est-token (chars/4) sizing of lessons-learned.md + project-guidance.md across this repo + 8 consumer repos. Found TWO over-budget repos, not one: dabbler-access-harvester (~215 KB / ~53.5k tokens combined, ~34 entries) AND dabbler-platform (~203 KB / ~50.8k tokens, 81 distinct lessons) - the spec named only the harvester. This repo is ~16 KB / ~4.1k tokens (cost lands in consumers). READ-PATH: 10 always-load instruction sites naming the two files (CLAUDE/AGENTS/GEMINI.md L111-114; ai-led-session-workflow.md L35-37/53-54/1042-1044/2701-2703; quick-start.md L152-153/225-226; project-guidance.md L68-69) - all must gain a 'lessons-archive.md is NOT always-load' clause for D4. WRITE-PATH: close_session runs post-commit/push (clean-tree + pushed gates), already leaves session-state.json dirty post-gate; disposition.json is the cleanest D3 citation seam (established field round-trip into closeout_succeeded event); close is Python-CLI-only (extension does not drive it). PROMOTION/BUNDLE: 'never delete; only move' rule at lessons-learned.md L13; consumer-bootstrap bundle has NO lessons/guidance/archive template yet and esbuild required[] + consumerBootstrap.ts loader must change -> forces a Marketplace bump in S4 (refines spec's 'extension not expected'). DESIGN-LOCK: cross-provider mechanics consult (gpt-5.4 + gemini-2.5-pro) returned NO DISAGREE on any deliverable; adopted refinements - D1 opt-in --write-headers + --check; D2 HTML-comment trailer with double-quoted fixed-order fields + a validate_guidance_meta validator + ID governance (L-<set>-<seq>, permanent, merge rules); D3 agent-run cite_lessons inside the commit + close_session validates ids; D5 'referenced by active guidance' = id dependency graph across both files + over-ceiling soft advisory riding the CLI lifecycle (Set 053 pattern) + N=20 default (consult split gpt12/gemini20, locked 20, configurable) + 10k/6k token ceilings; D6 archive-bankruptcy heavily-gated opt-in + routed-triage helper; plus a guidance_search --archive helper. VERIFICATION: gpt-5.4 cross-provider = VERIFIED (0 Critical/Major/Minor, 2 nice-to-haves applied). Suite baseline: Python 1221 passed/1 skipped/0 failed (cleared a PRE-EXISTING uncommitted-lesson drift-guard false positive via a one-bigram reword 'no Python' -> 'no ai_router'); TS untouched by S1 (2 tracked Set-026 fails are the known baseline). Routed spend this session ~$0.012 (consult 2 calls + verify + assignment).",
+  "verification_method": "api",
+  "verification_verdict": "VERIFIED",
+  "files_changed": [
+    "docs/planning/lessons-learned.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/s1-audit.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/s1-verification.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/s1-consult/s1-consult-gpt-5-4.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/s1-consult/s1-consult-gemini-pro.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/s1-consult/s1-consult-synthesis.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/ai-assignment.md",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/activity-log.json",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/disposition.json",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/session-state.json",
+    "docs/session-sets/064-guidance-lifecycle-and-pruning/session-events.jsonl"
+  ],
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-opus-4-8",
+    "effort": "high",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Session 2 implements a multi-file Python build with a new HTML-comment metadata serialization contract (parser/formatter/validator), a cite_lessons helper, and a close_session integration; Opus at high effort is warranted for coherent reasoning across the new modules and the core close-out integration."
+    }
+  },
+  "blockers": []
+}
