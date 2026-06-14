@@ -125,6 +125,60 @@
   itself the goal, normal escalation is correct — only pin when the
   re-verify is wording-only.
 
+## A Replacement Doc Inherits The Retired Doc's Claims At Its Peril
+
+- **Context:** Authoring a doc that supersedes or replaces a retired one
+  (Set 063 S3: `docs/budget-yaml-schema.md` replacing the schema section
+  of the retired `docs/adoption-bootstrap.md`).
+- **Failure or friction:** The new canonical doc carried a sentence
+  pasted from the retired doc ("Used by ai_router for spend reporting…")
+  that contradicted the new doc's own Readers section and the audited
+  reality (no `ai_router` runtime reader exists). The cross-provider verifier
+  flagged it as a Major Correctness issue — internally contradictory,
+  factually wrong.
+- **Lesson:** Prose carried over from a superseded doc is a defect
+  class of its own: it was true (or tolerated) in the old context and
+  reads authoritative in the new one.
+- **Action for future sessions:** When authoring a replacement or
+  successor doc, grep the new text for claims of *current* behavior
+  (reads, writes, enforcement, defaults) and re-verify each against the
+  code before routing verification.
+
+## `git diff`-Based Verification Evidence Omits Untracked Files
+
+- **Context:** Building a cross-provider verification prompt whose
+  evidence bundle includes `git diff` / `git diff --stat` output
+  (Set 063 S3 round 1).
+- **Failure or friction:** Three newly created deliverables were still
+  untracked, so the "whole working tree" diffstat silently omitted
+  them. The verifier correctly returned a Major Completeness finding:
+  the claimed deliverables were unsubstantiated by the evidence.
+- **Lesson:** `git diff` shows only tracked changes; untracked files
+  are invisible to it. An evidence bundle that presents diffstat as
+  "the change set" understates the work whenever new files exist.
+- **Action for future sessions:** `git add` new deliverables before
+  generating diff-based evidence, or include `git status --short`
+  alongside the diff so additions are visible.
+
+## State The Suite Baseline And Release Contract Up Front In Verification Round 1
+
+- **Context:** Cross-provider session verification of sessions with
+  known-tracked test failures, release mechanics, or deliberate
+  pre-publish states (Set 062 S5; Set 063 S2 and S3).
+- **Failure or friction:** Without an up-front conventions block, R1
+  verifiers burn findings on the agreed baseline (tracked pre-existing
+  failures, pre-push release wording, artifacts that are deliberately
+  pending), forcing dispositions and re-verify rounds for non-issues.
+- **Lesson:** Opening the R1 prompt with the suite baseline (exact
+  pass/fail/skip counts and which failures are tracked), the release
+  contract (what is bumped, what is deliberately pending), and the
+  conventions (what is excluded by design) keeps the round focused on
+  real defects. Applied in Set 062 S5 (R1 clean) and Set 063 S2/S3
+  (narrow R1s, every finding real) — two-plus contexts.
+- **Action for future sessions:** Make the conventions block the first
+  section of every session-verification prompt; on a second confirmed
+  context this is a promotion candidate for `project-guidance.md`.
+
 ## Per-Session-Set E2E/UAT Configuration Is Spec-Declared, Not Inferred
 
 - **Promoted.** The operational rule lives authoritatively in
