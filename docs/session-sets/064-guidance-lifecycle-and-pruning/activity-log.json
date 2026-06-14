@@ -110,6 +110,51 @@
       "description": "Cross-provider verification (gemini-2.5-pro, $0.045): VERDICT VERIFIED, 0 Critical/Major/Minor; per-deliverable analysis confirmed D1-D5. R1 clean via the up-front conventions block (lesson L-064-10).",
       "status": "completed",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/recipe",
+      "dateTime": "2026-06-14T05:29:23.744137-04:00",
+      "description": "Authored docs/guidance-backlog-remediation.md: portable engine-agnostic one-time over-budget remediation recipe (measure->routed triage proposal->operator review->merge-dedup->gated archive-bankruptcy->seed last-used-set->re-measure); archive!=delete.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/triage-helper",
+      "dateTime": "2026-06-14T05:29:23.744137-04:00",
+      "description": "Implemented ai_router/guidance_triage.py: routed bulk-triage classifier (keep/archive/promote/merge/drop) with permissive ##/### block extraction, byte-exact size projection vs ceiling, reference-graph guard, truncation-aware batching, UTF-8-persist-before-display + ASCII fold; never edits the target file.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/tests",
+      "dateTime": "2026-06-14T05:29:23.745141-04:00",
+      "description": "Added ai_router/tests/test_guidance_triage.py (30 tests): extraction invariants, JSON parse robustness, projection (incl. non-surviving merge targets), reference survival/token-match, cp1252 fold, batched truncation-split with injected fake route_fn.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/harvester-dogfood",
+      "dateTime": "2026-06-14T05:29:23.745141-04:00",
+      "description": "Read-only dogfood vs harvester lessons-learned.md (69 blocks): 44 keep/20 archive/5 drop, ~38695->~21815 tokens (~44%), STILL 2.18x over ceiling; opus single-batch $0.6313; harvester docs/planning unchanged. Proof in s3-harvester-dogfood.md + raw/report artifacts.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/verified",
+      "dateTime": "2026-06-14T05:29:23.745993-04:00",
+      "description": "Cross-provider gpt-5-4 verification, 3 rounds: R1 ISSUES_FOUND (2 Major+3 Minor) all fixed; R2 4/5 confirmed + merge-target residual; R3 VERIFIED. s3-issues.json records dispositions. Python 1300 passed/1 skipped; TS unchanged (2 tracked Set-026 fails).",
+      "status": "completed",
+      "routedApiCalls": []
     }
   ]
 }

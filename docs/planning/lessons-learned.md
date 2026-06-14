@@ -60,7 +60,7 @@ last-pruned-set: (none)   generated: 2026-06-14
 ## Portable Lessons (all AI-led-workflow repos)
 
 ## Truncation Detection: `stop_reason` Alone Is Not Sufficient
-<!-- lesson: id="L-064-1" status="active" scope="portable" -->
+<!-- lesson: id="L-064-1" last-used-set="064" status="active" scope="portable" -->
 
 - **Context:** Any routed call whose response is consumed programmatically —
   code generation, test generation, structured data emission.
