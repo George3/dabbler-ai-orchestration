@@ -804,7 +804,12 @@ def validate_path_aware_critique_gate(
         # Without this, a stale/copied artifact from another set (wrong
         # ``sessionSetName``) or one labelled with a different level satisfies
         # the gate for the wrong set (GPT-5.4 path-aware critique, S3 dogfood).
-        expected_name = Path(session_set_dir).name
+        # Resolve the path before taking ``.name`` so a non-canonical invocation
+        # (``.``, a trailing slash, or a symlink alias) identifies the set by its
+        # canonical basename -- matching how the Set 067 producer stamps
+        # ``sessionSetName`` (it resolves first), so the two never disagree on a
+        # non-canonical path (Set 067 S4 dogfood, finding 1).
+        expected_name = Path(session_set_dir).resolve().name
         mismatches: List[str] = []
         if result.session_set_name != expected_name:
             mismatches.append(

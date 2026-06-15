@@ -934,6 +934,18 @@ from .pull_verifier import (
     PullVerifierError,
 )
 
+# Set 067 S4: the opt-in automated producer that drives the pull verifier across
+# >= 2 providers and writes the Set 066 path-aware-critique.json artifact the
+# close-out gate validates. Manual flow stays the default; this is strictly
+# opt-in. See pull_critique.py.
+from .pull_critique import (
+    produce_path_aware_critique,
+    build_instruction,
+    ProducerResult,
+    PullCritiqueError,
+    DEFAULT_PROVIDERS,
+)
+
 
 def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
     """Print a status table of every session set under *base_dir*.

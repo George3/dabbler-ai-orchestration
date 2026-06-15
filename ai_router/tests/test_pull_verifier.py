@@ -511,6 +511,45 @@ class TestLoopTermination:
         # The last request must have been issued with force_verdict=True.
         assert binding.force_flags[-1] is True
 
+    def test_budget_aware_force_verdict_before_exhaustion(self, sandbox):
+        # A verbose prober nears the token budget WITHOUT a verdict. The
+        # budget-aware guard must force submit_verdict before the hard ceiling
+        # breaks the loop empty (Set 067 S4 dogfood; L-067-1). Reserve-based:
+        # budget=100; each probe reports 45+45=90 tokens. turn0 has no prior
+        # call (reserve 0) -> not near -> probe (acc 90). turn1: projected =
+        # 90 (spent) + 90 (last call reserve) = 180 >= 100 -> force a verdict on
+        # turn 1 (NOT the final turn -- max_turns is 10).
+        forced = _resp(
+            tool_calls=[
+                _tc(
+                    "submit_verdict",
+                    {"verdict": "ISSUES_FOUND", "summary": "forced at budget"},
+                    "v1",
+                )
+            ]
+        )
+        binding = FakeBinding(
+            default=_resp(
+                tool_calls=[_tc("read_file", {"path": "a.py"})], it=45, ot=45
+            ),
+            force_response=forced,
+        )
+        result = pv.pull_route(
+            sandbox,
+            "review",
+            binding=binding,
+            config=CONFIG,
+            caps=pv.PullCaps(token_budget=100, max_turns=10),
+        )
+        # Forced to a verdict by the budget guard, not an empty token-budget stop.
+        assert result.trace.stop_reason == pv.STOP_VERDICT
+        assert result.ok is True
+        assert result.critique.verdict == "ISSUES_FOUND"
+        # Turn 0 was a normal probe (not forced); turn 1 was budget-forced. We
+        # stopped well before the final turn, so this isolates the budget path.
+        assert result.trace.api_turns == 2
+        assert binding.force_flags == [False, True]
+
 
 class TestCaps:
     def test_token_budget_cap(self, sandbox):

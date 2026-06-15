@@ -21,6 +21,16 @@
 > index undercounts, cross-artifact contract drift). A single provider is
 > insufficient (the 010-vs-C3 split implied opposite single-provider fixes),
 > so the saved artifact **requires >= 2 distinct providers**.
+>
+> **Automated alternative (opt-in, Set 067).** This manual flow is the
+> default and always available. As of Set 067 you can also produce the same
+> artifact automatically with `python -m ai_router.pull_critique
+> <session-set-dir>`, which drives the first-party tool-loop pull verifier
+> (`ai_router.pull_verifier`) once per provider over a read-only repo sandbox
+> and writes `path-aware-critique.json` directly — using *this very prompt*
+> as its critique instruction. Set 067 Experiment A confirmed the automated
+> path catches the same class of real cross-file defects. The producer is
+> strictly opt-in; nothing in the normal session flow invokes it.
 
 ---
 

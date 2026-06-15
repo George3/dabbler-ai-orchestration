@@ -148,7 +148,7 @@ last-pruned-set: (none)   generated: 2026-06-15
 - **Action for future sessions:** Never self-opine on which model is cheaper.
 
 ## Schema-Only Re-Verifies Need `max_tier` Pinned To Block Auto-Escalation
-<!-- lesson: id="L-064-7" last-used-set="065" status="active" scope="portable" -->
+<!-- lesson: id="L-064-7" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Round 2 of cross-provider session verification when the
   Round 1 response was substantively correct but used non-standard
@@ -195,7 +195,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   code before routing verification.
 
 ## `git diff`-Based Verification Evidence Omits Untracked Files
-<!-- lesson: id="L-064-9" added-set="063" last-used-set="066" status="active" scope="portable" -->
+<!-- lesson: id="L-064-9" added-set="063" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Building a cross-provider verification prompt whose
   evidence bundle includes `git diff` / `git diff --stat` output
@@ -292,6 +292,37 @@ last-pruned-set: (none)   generated: 2026-06-15
 ---
 
 ## Repo-Specific Lessons
+
+## GPT-5.4 In The Pull-Verifier Loop Over-Probes And Times Out On Token Budget Before A Verdict
+<!-- lesson: id="L-067-1" added-set="067" last-used-set="067" status="active" scope="repo-specific" -->
+
+- **Context:** Driving `ai_router.pull_verifier.pull_route` (or the
+  `pull_critique` producer) with the OpenAI binding (GPT-5.4) over a sandbox
+  that is anything but tiny — a real `ai_router/` tree, or even a handful of
+  large source files (Set 067 S4 dogfood).
+- **Failure or friction:** GPT-5.4 kept issuing probe calls (28 `read_file` /
+  `grep` in one run) and **never called `submit_verdict`**, exhausting the
+  300k-token executor budget (`stop=token-budget`, ~$0.85) with **no verdict**.
+  The forced-verdict-on-the-final-turn safety net never fired because the
+  **token-budget cap is checked first and breaks the loop before** the
+  `max_turns-1` forced turn is reached. Gemini-Pro and Anthropic-Sonnet both
+  converged in ~5 probes on the identical sandbox. (Experiment A's GPT
+  path-aware arm converged only because those frozen trees were a few tiny
+  files.)
+- **Lesson:** The pull verifier's "force a verdict on the last turn" guard does
+  **not** protect against budget exhaustion — a verbose prober can spend the
+  whole budget probing. So GPT-5.4 is currently unreliable as a pull-verifier /
+  producer provider on non-trivial sandboxes; the `>= 2 distinct providers` the
+  Set 066 artifact needs are best met with Gemini-Pro + Anthropic-Sonnet (both
+  converge) rather than the GPT-5.4 + Gemini default until the adapter gains a
+  budget-aware forced verdict.
+- **Action for future sessions:** (1) For the `pull_critique` producer, **scope
+  the sandbox tightly** (the files under review, not the whole repo) and prefer
+  converging providers; treat a `stop=token-budget` with no verdict as a failed
+  arm, which the producer already skips. (2) **Set 068** should add a
+  **budget-aware forced verdict** to `pull_route` — when the remaining token /
+  cost budget drops below a turn's worth, set `force_verdict=True` on the next
+  call so the model submits before being cut off, instead of stopping empty.
 
 ## A Test Layer Nobody Runs Rots Silently — And Fail-Fast Masks How Far
 <!-- lesson: id="L-064-12" added-set="047" status="active" scope="repo-specific" -->

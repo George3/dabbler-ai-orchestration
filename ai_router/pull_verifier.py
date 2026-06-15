@@ -1270,7 +1270,6 @@ _SYSTEM_PROMPT = (
 # The loop driver.
 # ---------------------------------------------------------------------------
 
-
 def pull_route(
     sandbox_dir: Union[str, Path],
     instruction: str,
@@ -1319,6 +1318,11 @@ def pull_route(
     transcript: List[dict] = [{"role": "user", "text": instruction}]
     trace = PullTrace()
     critique: Optional[PullCritique] = None
+    # Running estimate of ONE more call's spend: the most recent turn's measured
+    # tokens / cost. Used as an adaptive headroom reserve for the budget-aware
+    # forced verdict below.
+    last_call_tokens = 0
+    last_call_cost = 0.0
     t0 = time.time()
 
     for turn in range(caps.max_turns):
@@ -1330,7 +1334,28 @@ def pull_route(
             trace.stop_reason = STOP_COST_CEILING
             break
 
-        force_verdict = turn == caps.max_turns - 1
+        # Budget-aware forced verdict (Set 067 S4 dogfood; L-067-1). The
+        # final-turn force alone does NOT protect against budget exhaustion: a
+        # verbose-probing reasoning model (GPT-5.4 / Sonnet observed at 17-28
+        # probes) can spend the whole token/cost budget probing, and the loop
+        # would then break at the top with NO verdict. So force submit_verdict
+        # once ONE MORE call of the last call's measured size would breach
+        # either ceiling -- an adaptive headroom reserve (the last turn's spend),
+        # which is far tighter than a fixed fraction a single large turn could
+        # blow past (S4 R3 verifier). Caps remain POST-HOC (tool-contract sec 5):
+        # a single in-flight call can still overshoot a ceiling by at most its
+        # own (output-capped) size, exactly as any probe could -- the reserve
+        # bounds, but cannot eliminate, that one-call overshoot. A verdict at a
+        # slight overshoot strictly dominates an empty cut-off.
+        projected_tokens = (
+            trace.input_tokens + trace.output_tokens + last_call_tokens
+        )
+        projected_cost = trace.cost_usd + last_call_cost
+        near_budget = (
+            projected_tokens >= caps.token_budget
+            or projected_cost >= caps.cost_ceiling_usd
+        )
+        force_verdict = (turn == caps.max_turns - 1) or near_budget
         response = binding.request(
             system=_SYSTEM_PROMPT,
             transcript=transcript,
@@ -1344,10 +1369,15 @@ def pull_route(
         trace.api_turns += 1
         trace.input_tokens += response.input_tokens
         trace.output_tokens += response.output_tokens
-        trace.cost_usd += (
+        this_call_cost = (
             response.input_tokens / 1e6 * in_price
             + response.output_tokens / 1e6 * out_price
         )
+        trace.cost_usd += this_call_cost
+        # Remember this call's size as the headroom reserve for the next turn's
+        # budget-aware force decision (adaptive one-call estimate).
+        last_call_tokens = response.input_tokens + response.output_tokens
+        last_call_cost = this_call_cost
 
         # Record the assistant turn in the transcript.
         transcript.append(

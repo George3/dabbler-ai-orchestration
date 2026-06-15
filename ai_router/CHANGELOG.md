@@ -5,6 +5,85 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-06-15 (Set 067 — first-party pull-verifier adapter + path-aware-critique producer)
+
+Ships the first-party, multi-provider **tool-loop "pull" verifier adapter**
+(`pull_route`) with Anthropic + OpenAI + Gemini bindings, and — after Set 067's
+Experiment A **confirmed** the path-aware capability — the **opt-in automated
+producer** that uses it to write the Set 066 `path-aware-critique.json`
+artifact. The manual GitHub-Copilot flow stays the default; routed per-session
+verification is unchanged. The disposable-worktree `run_test` tool, the
+contract-test gate, Experiment B (cadence), and the routed keep/demote/retire
+decision are deferred to Set 068.
+
+### Added (Set 067 S1–S2 — adapter core + three provider bindings)
+
+- **`pull_route()` agentic-executor seam** (`ai_router/pull_verifier.py`): a
+  `route()`-**parallel** tool-use loop in which the verifier drives the loop and
+  the orchestrator is a **deterministic servant** returning raw ground truth via
+  read-only `read_file` / `grep` / `list_dir` tools — never a model-summarized
+  view (a summarizing servant raises `DeterministicServantViolation`). The loop
+  is sandbox-confined (`_safe`, symlink-safe), turn/token/cost capped, and
+  instrumented (a tool-call trace; a zero-probe run is a failed run). The forced
+  `submit_verdict` is shaped to the Set 066 critique-entry. Exposes
+  `pull_route`, `PullResult`, `PullCritique`, `PullCaps`, `PullTrace`,
+  `Finding`, `DeterministicServant`, and the adapter exceptions.
+- **Anthropic / OpenAI / Gemini bindings** behind one provider-agnostic driver
+  (OpenAI uses the Responses API with `previous_response_id` reasoning chaining;
+  Gemini uses positional `function_declarations` with a bounded thinking
+  budget).
+- **`pull_verifier:` executor block** in `router-config.yaml` (per-provider
+  model pins, shared caps, per-provider reasoning knobs) — distinct from the
+  single-shot routing table.
+
+### Changed (Set 067 S4 — adapter robustness from the dogfood)
+
+- **Budget-aware forced verdict in `pull_route`.** The S4 path-aware dogfood
+  found that frontier reasoning models (GPT-5.4 / Sonnet) over-probe and exhaust
+  the token/cost budget **without submitting a verdict** — the final-turn force
+  never fired because the hard ceiling broke the loop first. `pull_route` now
+  forces `submit_verdict` once one more call of the **last call's measured size**
+  would breach either ceiling (an adaptive headroom reserve), so a verbose
+  prober commits a verdict instead of stopping empty. Caps remain post-hoc.
+- **`validate_path_aware_critique_gate` canonicalizes the set path.** The gate's
+  identity check now resolves `session_set_dir` before taking `.name`, matching
+  the Set 067 producer (which resolves before stamping `sessionSetName`), so a
+  non-canonical invocation (`.`, trailing slash, symlink) can no longer make the
+  producer write an artifact the gate would reject. The cross-set / wrong-level
+  rejection is unchanged.
+
+### Added (Set 067 S4 — path-aware-critique producer)
+
+- **`produce_path_aware_critique()` + `python -m ai_router.pull_critique
+  <session-set-dir>`** (`ai_router/pull_critique.py`): the opt-in automated
+  producer. Drives `pull_route` once per provider (default GPT-5.4 + Gemini-Pro)
+  over a read-only repo sandbox, reuses the manual `path-aware-critique.md`
+  template as the critique instruction, and assembles + writes the Set 066
+  `path-aware-critique.json` envelope. **Refuses to write a gate-failing
+  artifact**: requires `>= 2` distinct providers with usable verdicts (a failing
+  provider is skipped, not fatal), stamps `sessionSetName` + the recorded
+  `pathAwareCritique` level for the gate's identity check, and validates the
+  envelope with the same runtime validator the gate uses before writing.
+  Exposed as `produce_path_aware_critique`, `build_instruction`,
+  `ProducerResult`, `PullCritiqueError`, `DEFAULT_PROVIDERS`.
+
+### Docs
+
+- **`ai_router/docs/pull-verifier.md`** — the adapter + producer reference
+  (invariants, the three bindings, config, CLI/programmatic use, Set 068
+  deferrals).
+- The Set 066 manual-flow docs (`docs/path-aware-critique-schema.md` and the
+  `path-aware-critique.md` template) gain an **"automated alternative
+  (opt-in)"** note pointing at the new producer.
+
+### Capability evidence
+
+- Experiment A (S3, cross-provider verified) confirmed path-aware capability:
+  on identical frozen code the adapter caught 5 cross-file defects (incl. 2
+  Criticals) routed single-shot missed, while routed caught nothing path-aware
+  missed; the edge is context-access, not a second provider. See
+  `docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a-results.md`.
+
 ## [0.20.0] — 2026-06-15 (Set 066 — Path-Aware Critique policy)
 
 Ships the **tier-orthogonal** Path-Aware Critique policy: a per-set attribute,

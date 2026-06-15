@@ -100,6 +100,25 @@ produces an artifact (every provider records what it reviewed and its
 verdict) — unlike `sN-issues.json`, whose presence *means* issues were
 found, this artifact's presence means *the critique ran*.
 
+### Two ways to produce it (manual default; automated opt-in)
+
+- **Manual (default).** The operator drives the multi-provider review by
+  hand — GitHub Copilot under GPT-5.4 + Gemini-Pro over the repo — using
+  `ai_router/prompt-templates/path-aware-critique.md`, then assembles the
+  per-provider verdicts into this artifact. This is always available and is
+  the default.
+- **Automated (opt-in, Set 067).** `python -m ai_router.pull_critique
+  <session-set-dir>` drives the first-party tool-loop **pull verifier**
+  (`ai_router.pull_verifier.pull_route`) once per provider over a read-only
+  repository sandbox and **writes this artifact directly**. It reuses the
+  same prompt template as its critique instruction, requires `>= 2` distinct
+  providers (refusing to write a gate-failing single-provider artifact), and
+  stamps `sessionSetName` + the recorded `pathAwareCritique` level so the
+  close-out gate's identity check accepts it. Set 067 Experiment A confirmed
+  this path catches the same class of real cross-file defects the manual
+  flow does. The manual flow remains the fallback; the producer is strictly
+  opt-in (nothing in the normal session flow invokes it).
+
 ---
 
 ## File location and naming
