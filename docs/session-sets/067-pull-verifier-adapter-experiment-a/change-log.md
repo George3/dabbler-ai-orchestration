@@ -85,11 +85,10 @@
 - Docs: new `ai_router/docs/pull-verifier.md`; opt-in "automated alternative"
   notes in `docs/path-aware-critique-schema.md` and the `path-aware-critique.md`
   template.
-- **Release:** `ai_router` 0.20.0 -> **0.21.0** (`pyproject.toml` + CHANGELOG).
-  PyPI publish is **operator-authorized**: the operator pushes tag `v0.21.0`
-  (tag pushes are never made by automation; CONTRIBUTING.md "Publishing") once
-  the `Test` workflow is green on the pushed commit, which triggers
-  `release.yml` (OIDC). No Marketplace bump (no extension change).
+- **Release:** `ai_router` 0.20.0 -> **0.21.0** — **PUBLISHED to PyPI**
+  2026-06-15 (tag `v0.21.0`, `release.yml` run `27562841610`, all jobs success
+  incl. the green-`Test`-on-the-tagged-SHA gate; OIDC trusted publishing). No
+  Marketplace bump (no extension change).
 - **Dogfood (`pathAwareCritique: required`) — the headline of this session.**
   This set produced its own `path-aware-critique.json` via the **new producer**
   (a recursive dogfood: the opt-in automated path generated the very artifact its
