@@ -67,6 +67,69 @@
       "description": "Cross-provider verification (gpt-5.4): R1 ISSUES_FOUND 3 Minor (OpenAI cursor not failure-atomic; OpenAI nudge-offset test gap; Gemini multi-same-name + gemini-3 test gaps) -> fixed -> R2 1 Minor (cursor committed before parse) -> fixed (parse-before-commit + non-dict-item skip) -> R3 VERIFIED. Full ai_router suite GREEN 1492 passed/1 skipped. disposition.json + s2-issues*.json + routed S3 next-orch rec (claude-opus-4-8 high) written.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "register",
+      "dateTime": "2026-06-15T10:41:23.325949-04:00",
+      "description": "Registered S3 start (claude-opus-4-8 high, per routed S3 rec); read project-guidance, lessons-learned, session-set-authoring-guide, spec.md, tool-contract.md, forward-ab-design.md, bake-off-results.md, and the shipped ai_router/pull_verifier.py adapter; confirmed all 3 provider API keys present.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "criteria-pre-registered",
+      "dateTime": "2026-06-15T11:19:21.755004-04:00",
+      "description": "Pre-registered Experiment A criteria (experiment-a-preregistration.md): H1 context-access, H2 provider-multiplicity, H3 routed-unique-capability, H4 falsifier-coverage; arms, metrics, noise band, grading rule + audit, decision rule - all fixed before any data.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "seed-harness-built",
+      "dateTime": "2026-06-15T11:19:21.756006-04:00",
+      "description": "Built seeded-defect mock-repo (build_trees.py): 5 frozen trees (buggy+fixed), 20 defects across all 8 forward-ab-design classes (2 Critical, 2 novel controls), each labelled probeable/novel + in-snippet/cross-file. catalogue.json carries pre-registered catch predicates.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "falsifiers-authored",
+      "dateTime": "2026-06-15T11:19:21.756418-04:00",
+      "description": "Pre-authored deterministic falsifier suite (falsifier_suite.py): 19/20 discriminate cleanly (fail-on-buggy/pass-on-fixed); D16 documented non-discriminating latent control. Coverage 0.95 ~ retrospective ~92%.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "arms-run",
+      "dateTime": "2026-06-15T11:19:21.756418-04:00",
+      "description": "Ran 2x2 arms (run_arms.py): A1/A2 routed GPT/Gemini snippet-only, B1/B2 path-aware adapter GPT/Gemini whole-tree, blind, K=3, matched reasoning across context contrast. 60 runs, ~$1.38 metered, all raw persisted to raw/. Pilot first exposed+fixed a cross-file leakage/grading-validity issue (audit layer added).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "experiment-a-verdict",
+      "dateTime": "2026-06-15T11:25:48.189084-04:00",
+      "description": "Analyzed into experiment-a-results.md. VERDICT (audited, vs pre-registered criteria): H1 context-access CONFIRMED (B1-A1 +0.306, B2-A2 +0.361, both >> noise band, gains 100%% cross-file incl 2 Criticals D5/D9 path-aware-only); H3 routed unique-capability RULED OUT (routed-pair MINUS pa-pair = empty; only cadence defense survives -> 068 Exp B); H2 context-access is the lever not provider-multiplicity (2nd routed validator +0.0, path-aware +0.306 beyond); H4 falsifier coverage 19/20=0.95, the 1 non-probeable (D16 latent) caught by agent reasoning. => path-aware CAPABILITY CONFIRMED -> S4 wires the opt-in producer. 60 runs ~.38.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 7,
+      "stepKey": "s3-verified",
+      "dateTime": "2026-06-15T11:25:48.189613-04:00",
+      "description": "Cross-provider verification of the ANALYSIS (gpt-5.4 high, ~/usr/bin/bash.298): R1 VERIFIED. Verifier confirmed H1/H2/H3/H4 follow from the data under the pre-registered rule and the load-bearing manual audit (routed cross-file hypothetical/artifact rejections) is defensible against the committed raw text - NOT outcome-driven. 3 Minor wording/consistency fixes (B2 misses D16 so not strictly lossless; tie H2 to noise-band rule; do not narrow the prereg audit scope) ALL applied. s3-issues.json + s3-verification.md saved.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

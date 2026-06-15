@@ -1,23 +1,27 @@
 {
   "status": "completed",
-  "summary": "Set 067 Session 2 of 4: OpenAI + Gemini pull-verifier bindings + router-config executor wiring. Added two bindings behind the SAME provider-agnostic pull_route loop driver shipped in S1: OpenAIBinding (uses the Responses API, not chat/completions, because gpt-5.4 returns HTTP 400 for function tools + reasoning_effort on chat/completions -> keeps reasoning items server-side via previous_response_id chaining, store=true, sending only the entries new since the last response each turn; stateful for one run) and GeminiBinding (function_declarations / functionCall <-> functionResponse positional matching with synthesized internal ids; bounded thinkingBudget; thoughtsTokenCount folded into output_tokens for honest cost/budget caps). Extended the ProviderBinding interface with generation_params and applied effort/thinking in AnthropicBinding too. Wired a dedicated pull_verifier executor block into router-config.yaml (per-provider model pins, shared caps with max_output_tokens=24000 for gpt-5.4 reasoning headroom, per-provider generation_params) + resolvers caps_from_config / _resolve_model / _resolve_gen_params (no-block path == exact S1 PullCaps defaults; explicit caps= still wins). 3-PROVIDER HEADLESS CAPABILITY CHECK (small metered live test): all three providers drove the read-only tool loop, issued real probe tool calls (2-3 each), returned schema-valid ISSUES_FOUND verdicts, and all three caught the seeded average()-subtracts-1 defect (~$0.048 total; s2-headless-results.json). Tests: pull_verifier suite 80 -> 86 (OpenAI Responses-API shape + stateful chaining + nudge offset + failure-atomicity; Gemini positional multi-call + thinking-level branch; tool-call parity across all three; executor config resolution + real-config load). NO release (Session 4). Full ai_router pytest suite GREEN. VERIFICATION: gpt-5.4 cross-provider, R1 ISSUES_FOUND (3 Minor: OpenAI cursor-not-failure-atomic, OpenAI nudge-offset test gap, Gemini multi-same-name + gemini-3 test gap) -> fixed -> R2 ISSUES_FOUND (1 Minor: cursor still committed before parse) -> fixed (parse-before-commit + defensive non-dict-item skip) -> R3 VERIFIED, no regression. Verify spend ~$0.481. Session 3 = Experiment A capability study.",
+  "summary": "Set 067 Session 3 of 4: Experiment A - the controlled capability study from Set 065 forward-ab-design.md, run with the shipped ai_router/pull_verifier.py adapter (S1+S2). PRE-REGISTERED criteria (experiment-a-preregistration.md) before any data: H1 context-access, H2 provider-multiplicity, H3 routed unique-capability, H4 falsifier-coverage, with arms/metrics/noise-band/grading-rule/audit/decision-rule fixed. INSTRUMENT: 5 frozen 'numeric-toolkit' trees (buggy+fixed), 20 seeded defects across all 8 forward-ab-design classes (2 Critical, 2 novel controls), each labelled probeable/novel + in-snippet/cross-file (catalogue.json) + a pre-authored deterministic falsifier (falsifier_suite.py; 19/20 discriminate, D16 the documented non-discriminating latent control; coverage 0.95 ~ retrospective ~92%). ARMS: 2x2 context x provider (A1/A2 routed GPT/Gemini snippet-only; B1/B2 path-aware adapter GPT/Gemini whole-tree+probes), blind, single-round, reasoning held constant across the context contrast, K=3, 60 runs ~$1.38, every raw output persisted to disk first (L-064-3). PILOT first exposed a grading-validity flaw (routed scores hypothetical/snippet-leaked cross-file flags as catches) -> restructured Tree 3 so its defects live in the omitted analyzer.py, scrubbed a Tree-2 leakage comment, corrected in-snippet/cross-file labels, and added a pre-registered manual-audit override layer (audit.json). VERDICT (audited, vs criteria): H1 CONFIRMED (B1-A1 +0.306, B2-A2 +0.361 weighted, both >> noise band 0.08/0.11, gains 100% cross-file incl 2 Criticals D5/D9 path-aware-only; in-snippet defects show no context gain = built-in control); H3 routed unique-capability RULED OUT (routed-pair MINUS path-aware-pair = empty; only the cadence defense survives -> Set 068 Experiment B); H2 the edge is CONTEXT-ACCESS not provider-multiplicity (a 2nd routed validator added +0.0; path-awareness added +0.306 beyond); H4 falsifier coverage 19/20=0.95, the 1 non-probeable (D16 latent dead branch) caught only by agent reasoning -> contract-test gate carries the bulk, agents for the novel residual (068). => path-aware CAPABILITY CONFIRMED -> S4 wires the opt-in automated path-aware-critique.json producer. No production code changed; no release this session (PyPI bump is S4). VERIFICATION: gpt-5.4 cross-provider of the ANALYSIS (the inference, not the wet-lab), R1 VERIFIED - confirmed H1/H2/H3/H4 follow from the data under the pre-registered rule and the load-bearing manual audit is defensible (not outcome-driven); 3 Minor wording/consistency fixes (B2 misses D16 so not strictly lossless; tie H2 to the noise-band rule; do not narrow the prereg audit scope) ALL applied. Verify spend ~$0.298.",
   "files_changed": [
-    "ai_router/pull_verifier.py",
-    "ai_router/router-config.yaml",
-    "ai_router/tests/test_pull_verifier.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_headless_check.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-headless-results.json",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-issues.json",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification_r2.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification-round-2.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-issues-round-2.json",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification_r3.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification-round-3.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_next_orch_s3.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/next-orchestrator-rec-s3.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a-preregistration.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a-results.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/build_trees.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/catalogue.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/falsifier_suite.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/run_arms.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/grade.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/audit_dump.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/audit.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/experiment-a-data.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/trees/",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/experiment-a/raw/",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s3_verification.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s3-verification.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s3-issues.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_next_orch_s4.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/next-orchestrator-rec-s4.md",
     "docs/session-sets/067-pull-verifier-adapter-experiment-a/activity-log.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/session-state.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/session-events.jsonl",
     "docs/session-sets/067-pull-verifier-adapter-experiment-a/disposition.json"
   ],
   "verification_method": "api",
@@ -26,18 +30,18 @@
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-8",
-    "effort": "high",
+    "effort": "medium",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Routed rec (gemini-pro): Session 3 is an empirical capability study (pre-register criteria, build a seeded-defect mock-repo + falsifier suite, run the 2x2 arms with K-repeats, analyze into experiment-a-results.md). It needs rigorous experimental-design + statistical-honesty reasoning; the incumbent has full adapter context and the high-effort reasoning the study warrants. Effort bumped to high for the analysis."
+      "specifics": "Routed rec (gemini-pro): Session 4 is production-code + release-engineering work (wire the opt-in path-aware-critique.json producer CLI/seam, docs, finalize tests, ai_router PyPI release via the publish runbook, change-log, route 068, dogfood the set's own pathAwareCritique:required gate, close the set). The incumbent has full Set-066/067 + adapter + artifact-contract context and release-runbook familiarity; effort=medium for procedural release-engineering."
     }
   },
   "blockers": [],
   "verification_verdict": "VERIFIED",
   "lessons_cited": [
-    "L-064-1",
     "L-064-3",
     "L-064-6",
-    "L-064-10"
+    "L-064-10",
+    "L-065-1"
   ]
 }
