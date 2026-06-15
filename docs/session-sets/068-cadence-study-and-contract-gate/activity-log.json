@@ -147,6 +147,60 @@
       "description": "Routed next-orchestrator rec for S3 via route(task_type=analysis): claude-sonnet-4-6/medium (well-defined harness code + sweep + analysis on the S2-pre-registered design; avoids gpt-5.4-as-orchestrator per L-067-1; preserves gpt-5.4+gemini as experiment subjects/verifier). Operator confirms at S3 boundary. Cost $0.0028.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "session-003/register",
+      "dateTime": "2026-06-15T19:05:54.451863-04:00",
+      "description": "Registered S3 start (claude-opus-4-8 high; S2 routed rec was sonnet/medium but the S2 disposition flagged the statistical-honesty analysis as opus-warranted at the S3 boundary, matching S1/S2 - operator started this session on opus).",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "session-003/harness-built",
+      "dateTime": "2026-06-15T19:05:54.453872-04:00",
+      "description": "Built the staged-snapshot harness on the S1 run_test cage: build_snapshots.py (numkit, 5 monotone snapshots), catalogue.json (12 defects across the 4 taxonomy classes; invariants + min counts asserted PASS), run_arms.py (R/Q/E per provider K=3, raw-first, run_test cage for E via temp git repo), grade.py (per-repeat first-catch, cost_model, decision-rule contrasts/bands).",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "session-003/exp-b-arms-run",
+      "dateTime": "2026-06-15T19:05:54.455880-04:00",
+      "description": "Ran the pilot (google R/Q/E + GPT path-aware convergence check) per prereg Sec10 - it caught a real seed defect (coupling-blind docstrings leaked the cross-file contract; fixed code to the FIXED taxonomy before spending), then the full K=3 two-provider sweep (42 cells, no errors, all E arms converged with verdicts). run_test exercised live in arm E. ~$0.70 metered.",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "session-003/exp-b-verdict",
+      "dateTime": "2026-06-15T19:05:54.455880-04:00",
+      "description": "Graded + symmetric mechanism audit (audit.json, no removals - all catches verified real). Wrote experiment-b-results.md: cadence MECHANISM real (R realizes early window 5/5 both providers; R earlier/cheaper than Q AND E on cadence-payoff) BUT controls not clean (no-coupling s=1.0 surface artifact via BD12; always-visible s=3.0 pure earliness) -> A3 fails, B3 fires -> pre-registered verdict CADENCE DEFENSE DOES NOT HOLD via clause B3 (not B1: not no-cadence-value). S4 input: demote/retire-leaning, narrow R-vs-E rework-timing edge the countervailing consideration.",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 5,
+      "stepKey": "session-003/s3-verified",
+      "dateTime": "2026-06-15T19:05:54.455880-04:00",
+      "description": "Cross-provider verification (gpt-5.4 high): R1 ISSUES_FOUND (1 Major arm-E capability overstatement [E gemini misses BD6 Critical, not 1 minor; E_google catches only 1 of 2 coupling-blind] + 3 Minor: grade.py evidence-file wording, mean/median sign-agreement not folded into resolved, run_test live-use not cited) -> all fixed + echoes propagated (L-065-1) -> R2 (all resolved, 1 trivial new docstring nit) -> R3 VERIFIED. ~$0.556 verification.",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 6,
+      "stepKey": "session-003/next-orch",
+      "dateTime": "2026-06-15T19:05:54.455880-04:00",
+      "description": "Routed next-orchestrator rec for S4 via route(task_type=analysis): claude-sonnet-4-6/medium (S4 = route the keep/demote/retire decision through consensus + small well-scoped config/doc implementation; not large coding; avoids gpt-5.4 orchestrator budget risk L-067-1).",
+      "status": "done",
+      "routedApiCalls": []
     }
   ]
 }

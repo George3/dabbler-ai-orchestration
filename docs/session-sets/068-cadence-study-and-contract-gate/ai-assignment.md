@@ -73,3 +73,40 @@ weighting that kept S2 on opus may apply to S3's analysis step).
 
 **Verification spend (gpt-5.4):** R1 $0.350 + R2 $0.146 + R3 $0.107 = ~$0.603.
 Routed next-orch analysis: $0.0028. Session total (routed): ~$0.606.
+
+## Session 3 of 6: Experiment B — the cadence study
+
+**Orchestrator:** Claude Code — claude-opus-4-8, high effort. The S2 routed
+recommendation was claude-sonnet-4-6/medium on cost grounds, with a recorded
+caveat that S3's statistical-honesty analysis step may again warrant opus (as S1
+and S2 stayed on opus). The operator started this session on opus-4-8 high —
+consistent with that caveat and the S1/S2 precedent (rigor over cost; orchestrator
+kept constant for the experimental-analysis sessions).
+
+| Step / task | Engine / model | Why |
+|---|---|---|
+| Register + read guidance / prereg / run_test contract / Exp A harness | orchestrator (Claude) | Bootstrap reading; no routed call warranted. |
+| Build the staged-snapshot harness (build_snapshots.py, catalogue.json, run_arms.py, grade.py) | orchestrator (Claude) | Production-style harness implementation against the S2 pre-registration + the Set 067 Experiment A harness shape; deterministic builder/grader, no API. The orchestrator implements; the routed pass is the verification. |
+| Run the arms (pilot + K=3 two-provider sweep) | **routed: gpt-5.4 + gemini-2.5-pro (SUBJECTS)** | The experiment IS the metered routing — arms R/Q via providers.call_model, arm E via pull_route + the run_test cage. Held provider/reasoning constant across contrasts (mirrors Exp A). |
+| Grade + symmetric mechanism audit + write the cadence verdict | orchestrator (Claude) | Deterministic grading (cost_model + per-repeat contrasts) + the inference against the FIXED decision rule; the orchestrator's own analysis, cross-provider verified at close. |
+| End-of-session verification | **gpt-5.4 (openai)** | Cross-provider for the Claude orchestrator (Rule 2). L-067-1 (GPT over-probes) is about the pull-verifier loop, not single-shot session verification. R1 ISSUES_FOUND (1 Major arm-E capability overstatement + 3 Minor) -> all fixed + echoes propagated (L-065-1) -> R2 (resolved, 1 trivial new nit) -> R3 **VERIFIED**. |
+| Next-orchestrator recommendation | **routed analysis** | L-064-6: never self-opine on the next orchestrator. |
+
+**Routed next-orchestrator recommendation for Session 4:** **claude-sonnet-4-6
+(anthropic) / medium** via the Claude Code orchestrator. Rationale: Session 4
+("Routed keep / demote / retire decision") routes the decision through
+cross-provider consensus + operator confirmation and implements a small,
+well-scoped config/doc change (possibly "no code change — keep") — a decision +
+small implementation, not a large coding session, since the hard analysis (the
+cadence verdict) is already done and verified. Avoids the L-067-1 gpt-5.4-as-
+orchestrator budget risk; reserves the flagship models as consensus participants
+and cross-provider verifier. **Caveat for the S4 operator:** the Experiment B
+verdict is nuanced (cadence mechanism real but confounded; "does not hold" via the
+control clause, with a genuine narrow rework-timing edge for routed) — the same
+statistical-honesty weighting that kept S1–S3 on opus may again warrant opus for
+the decision-weighing step; the operator confirms at the S4 boundary, and the
+decision itself must be routed to multiple providers.
+
+**Verification spend (gpt-5.4):** R1 $0.426 + R2 $0.127 + R3 $0.003 = ~$0.556.
+Experiment sweep + pilot (gpt-5.4 + gemini-2.5-pro subjects): ~$0.85. Routed
+next-orch analysis: $0.0031. Session total (metered): ~$1.41.
