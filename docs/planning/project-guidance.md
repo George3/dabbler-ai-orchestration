@@ -82,6 +82,15 @@ continues to be updated.
   is the source of truth for *spec* authoring (slug naming, sizing, the
   Session Set Configuration block); `docs/ai-led-session-workflow.md`
   remains the source of truth for *execution* mechanics.
+- **Open every session-verification prompt with an up-front conventions
+  block.** Before the work to be reviewed, state the suite baseline (exact
+  pass/fail/skip counts and which failures are tracked), the release
+  contract (what is bumped, what is deliberately pending), and any
+  by-design exclusions (e.g. a research/proposal set ships no production
+  code). This keeps Round 1 focused on real defects instead of burning
+  findings — and re-verify rounds — on the agreed baseline. Promoted from
+  `lessons-learned.md` (L-064-10) on 2026-06-15 after confirming across
+  Sets 062–065.
 - Save verifier output raw and never edit saved verification artifacts after
   they are written. On the current path this means root-level
   `sN-verification*.md`; legacy `session-reviews/` files remain read-only if

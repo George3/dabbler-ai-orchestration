@@ -212,24 +212,15 @@ last-pruned-set: (none)   generated: 2026-06-14
   alongside the diff so additions are visible.
 
 ## State The Suite Baseline And Release Contract Up Front In Verification Round 1
-<!-- lesson: id="L-064-10" added-set="062" last-used-set="065" status="active" scope="portable" -->
+<!-- lesson: id="L-064-10" added-set="062" last-used-set="065" status="promoted" scope="portable" -->
 
-- **Context:** Cross-provider session verification of sessions with
-  known-tracked test failures, release mechanics, or deliberate
-  pre-publish states (Set 062 S5; Set 063 S2 and S3).
-- **Failure or friction:** Without an up-front conventions block, R1
-  verifiers burn findings on the agreed baseline (tracked pre-existing
-  failures, pre-push release wording, artifacts that are deliberately
-  pending), forcing dispositions and re-verify rounds for non-issues.
-- **Lesson:** Opening the R1 prompt with the suite baseline (exact
-  pass/fail/skip counts and which failures are tracked), the release
-  contract (what is bumped, what is deliberately pending), and the
-  conventions (what is excluded by design) keeps the round focused on
-  real defects. Applied in Set 062 S5 (R1 clean) and Set 063 S2/S3
-  (narrow R1s, every finding real) — two-plus contexts.
-- **Action for future sessions:** Make the conventions block the first
-  section of every session-verification prompt; on a second confirmed
-  context this is a promotion candidate for `project-guidance.md`.
+- **Promoted.** This lesson now lives at `project-guidance.md` →
+  Conventions → Workflow Expectations: *"Open every session-verification
+  prompt with an up-front conventions block."* Confirmed across Sets 062
+  (S5 R1 clean), 063 (S2/S3 narrow R1s), 064, and 065 (S3 R1 focused on
+  real consistency defects, not the deliberate proposal-only scope).
+  Collapsed to this pointer on 2026-06-15 after the fourth-plus
+  confirming context.
 
 ## Per-Session-Set E2E/UAT Configuration Is Spec-Declared, Not Inferred
 <!-- lesson: id="L-064-11" status="promoted" scope="portable" -->
@@ -243,6 +234,30 @@ last-pruned-set: (none)   generated: 2026-06-14
   Collapsed to this pointer on 2026-05-01 to avoid three places
   (authoring guide, project-guidance, lessons-learned) holding
   the same rule.
+
+## Propagate A Consistency Fix To Every Echo Before Re-Verifying
+<!-- lesson: id="L-065-1" added-set="065" last-used-set="065" status="active" scope="portable" -->
+
+- **Context:** Cross-provider verification of a heavily cross-referenced
+  synthesis document — a proposal, design doc, or spec whose central
+  claims are restated in an executive-summary table, the body sections,
+  per-row table cells, and a bottom-line (Set 065 S3 proposal).
+- **Failure or friction:** When the verifier flags a framing /
+  consistency issue (e.g., "this rule overclaims" or "this cost is
+  overstated"), fixing the primary statement but leaving the *same claim*
+  un-updated in its other echoes makes the next round return "still
+  inconsistent in section X / table cell Y." Set 065 S3 took **four**
+  verification rounds (R1→R4) — R3 and R4 existed only to chase residual
+  echoes of fixes already accepted in R2, costing ~2 extra rounds /
+  ~$0.15.
+- **Lesson:** A consistency finding is rarely local. Before re-verifying,
+  `grep` the document for every place the changed claim appears
+  (summary, prose, table cells, bottom line) and update them all in one
+  pass — treat the fix as global, not point-local.
+- **Action for future sessions:** After editing to resolve a consistency
+  finding, search the doc for the key phrases of the *old* claim and
+  confirm zero stale echoes remain before spending another verification
+  round.
 
 ---
 
