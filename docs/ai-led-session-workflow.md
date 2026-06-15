@@ -272,6 +272,43 @@ did the work. This catches provider-specific biases and blind spots:
 - If the orchestrator is Codex/Gemini, verification goes to an Anthropic model
 - The verifier's raw output is saved and never edited
 
+### Verification-surface policy (Set 068 — DEMOTE, transition-guarded)
+
+Set 067–068 ran two pre-registered experiments to settle whether the
+every-session per-session routed verification above is the right **default**
+verification surface, now that Sets 065–067 built a repository-reading
+**path-aware critique** and Set 068 S5 adds a deterministic **contract-test /
+CDC gate**. The finding: the *capability* case for routed-as-default is ruled
+out (the lever is repository **context-access**, which path-aware provides and
+snippet-fed routed structurally cannot; a second routed provider buys nothing),
+and the *cadence* defense **does not hold** under the pre-registered rule — but
+the cadence **mechanism is real**: routed catches **migrating cross-file
+coupling defects at introduction**, a narrow residual value the end-of-set pass
+does not match on that class.
+
+On that evidence, cross-provider consensus + operator confirmation chose
+**DEMOTE** (Set 068 S4 — full record in
+[`docs/session-sets/068-cadence-study-and-contract-gate/routed-fate-decision.md`](session-sets/068-cadence-study-and-contract-gate/routed-fate-decision.md)).
+The **target state**:
+
+- **Primary surface:** the end-of-set path-aware critique + the S5 contract-test
+  gate (deterministic floor for the ~95%-probeable bulk; agent reserved for the
+  non-probeable residual).
+- **Retained, gated:** per-session routed verification fires only when a
+  **programmatic blast-radius / coupling predicate** over the session diff is true
+  (multi-file/module changes, public API/schema/contract changes, cross-module
+  refactors/moves/renames, build/CI/config changes, a changed surface with no
+  contract test, or a high-blast-radius/post-failed-loop session). Small,
+  single-file, probe-covered diffs bypass it.
+
+> **Transition guard — NOT yet in effect.** The demotion does **not** cut over
+> until the S5 contract-test gate is **live and stable**. **Until then,
+> per-session routed verification remains MANDATORY on every Full-tier session,
+> exactly as described above and in Step 6.** S5 builds the gate (and the
+> diff-inspection seam the gating predicate needs); S6 wires the predicate and
+> flips this default. RETIRE was rejected as premature and is reopenable later
+> only on telemetry (`routed-fate-decision.md` §5).
+
 ### Significance flagging
 
 End-of-session verification covers the *code* that landed. Significance
@@ -1407,6 +1444,12 @@ Log the result with `log.log_step()`.
 
 **The orchestrator must not verify its own work.** The `route()` function
 dispatches to a different AI provider for independent review.
+
+> **Note (Set 068 DEMOTE, transition-guarded).** This step is **still MANDATORY
+> on every Full-tier session.** The Set 068 S4 decision to *demote* per-session
+> routed verification to a blast-radius-gated check (see *Verification-surface
+> policy* under Key Concepts) does **not** take effect until the S5 contract-test
+> gate is live; until that cutover, run this step exactly as written.
 
 When this step terminates with a `VERIFIED` verdict and
 `disposition.json` reports `status: "completed"`, the orchestration

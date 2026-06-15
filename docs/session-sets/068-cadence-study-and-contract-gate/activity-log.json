@@ -201,6 +201,76 @@
       "description": "Routed next-orchestrator rec for S4 via route(task_type=analysis): claude-sonnet-4-6/medium (S4 = route the keep/demote/retire decision through consensus + small well-scoped config/doc implementation; not large coding; avoids gpt-5.4 orchestrator budget risk L-067-1).",
       "status": "done",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "s4-register",
+      "dateTime": "2026-06-15T19:20:56.327386-04:00",
+      "description": "Registered S4 (Routed keep/demote/retire decision). Read project-guidance, lessons-learned, spec, experiment-a-regrade.md, experiment-b-results.md, decision-time-consensus mechanics, and router-config verification wiring. Orchestrator opus-4-8 high (operator override of routed sonnet-4-6/medium rec, continuing S1-S3 statistical-honesty pattern flagged in S3 disposition).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "routed-decision-consensus",
+      "dateTime": "2026-06-15T19:26:10.264708-04:00",
+      "description": "Routed the keep/demote/retire decision through cross-provider decision-time consensus (bias-cautions preamble + devils-advocate two-pass on a long-lived-contract decision). Consulted the two NON-orchestrator providers gpt-5-4 + gemini-pro, Pass A (neutral 3-option) + Pass B (steelman KEEP). ALL FOUR consults converge on DEMOTE; both Pass B steelmans built the strongest honest KEEP case then found it not decisive. Shared shape: make end-of-set path-aware critique + the S5 contract-test gate the PRIMARY surface; retain per-session routed GATED on coupling/blast-radius (programmatic diff heuristic, not subjective judgment); TRANSITION GUARD = do NOT hard-cut until the S5 gate is live; reopen RETIRE only on later telemetry. Raw outputs in routed-fate-consensus/, journal routed-fate-consensus-journal.jsonl. Consult spend ~$0.167. Next: operator confirms.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "provider": "openai",
+          "model": "gpt-5-4",
+          "pass": "A",
+          "cost_usd": 0.06296
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-5-4",
+          "pass": "B",
+          "cost_usd": 0.080097
+        },
+        {
+          "provider": "google",
+          "model": "gemini-pro",
+          "pass": "A",
+          "cost_usd": 0.008807
+        },
+        {
+          "provider": "google",
+          "model": "gemini-pro",
+          "pass": "B",
+          "cost_usd": 0.015033
+        }
+      ]
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "routed-decision-implemented",
+      "dateTime": "2026-06-15T19:36:24.737546-04:00",
+      "description": "Implemented DEMOTE (operator-confirmed): authored routed-fate-decision.md (consensus + operator rationale, demote target state, transition guard, gating heuristic, reopen-RETIRE telemetry criteria); added Verification-surface policy subsection + Step 6 forward-pointer to docs/ai-led-session-workflow.md; added comment-only anchor to router-config.yaml verification block. NO behavioral flag flipped - per the transition guard, per-session routed stays MANDATORY until the S5 contract gate lands. Suite 1548 passed/1 skipped (unchanged; config change comment-only). Config loads OK.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "s4-verified",
+      "dateTime": "2026-06-15T19:36:24.738549-04:00",
+      "description": "Cross-provider session verification (gpt-5-4, different provider than opus orchestrator): Round 1 CLEAN -> VERIFIED, zero issues. complexity 69, not escalated, ~$0.104. Up-front conventions block (suite baseline + no-behavioral-cutover-by-design + B3-not-B1 evidence framing) per L-064-10 kept R1 focused. Raw verdict in s4-verification.md.",
+      "status": "complete",
+      "routedApiCalls": [
+        {
+          "provider": "openai",
+          "model": "gpt-5-4",
+          "task": "session-verification",
+          "round": 1,
+          "verdict": "VERIFIED",
+          "cost_usd": 0.104083
+        }
+      ]
     }
   ]
 }

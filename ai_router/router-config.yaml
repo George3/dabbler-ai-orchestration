@@ -535,6 +535,16 @@ escalation:
 # Cross-provider verification: a model from a different provider
 # checks the work of the original model to catch provider-specific
 # blind spots and biases.
+#
+# Verification-surface policy (Set 068 S4 — DEMOTE, transition-guarded):
+# Experiments A+B settled that per-session routed verification should be
+# DEMOTED from mandatory-every-session to a blast-radius/coupling-gated check,
+# with the end-of-set path-aware critique + the S5 contract-test gate as the
+# primary surface. The cut-over does NOT take effect until the S5 contract-test
+# gate is live and stable — until then per-session routed verification stays
+# MANDATORY on every Full-tier session and NO flag here is flipped. Full record:
+# docs/session-sets/068-cadence-study-and-contract-gate/routed-fate-decision.md;
+# policy: docs/ai-led-session-workflow.md -> "Verification-surface policy".
 verification:
   enabled: true
 
