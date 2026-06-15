@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "066-path-aware-critique-policy",
+  "status": "not-started",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Policy surface + blast-radius predicate + artifact contract",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "Net-new content-aware close-out wiring",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Docs, prompt template, dogfood, release",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}
