@@ -916,6 +916,24 @@ def _tiebreaker_reroute(
 
 from .cost_report import get_costs, print_cost_report
 
+# Set 067: the first-party tool-loop "pull" verifier adapter. A route()-PARALLEL
+# agentic seam (the verifier drives a read-only tool loop; the orchestrator is a
+# deterministic servant), NOT a branch inside route(). See pull_verifier.py and
+# docs/session-sets/067-pull-verifier-adapter-experiment-a/tool-contract.md.
+from .pull_verifier import (
+    pull_route,
+    PullResult,
+    PullCritique,
+    PullCaps,
+    PullTrace,
+    Finding,
+    DeterministicServant,
+    DeterministicServantViolation,
+    SandboxEscape,
+    VerdictSchemaError,
+    PullVerifierError,
+)
+
 
 def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
     """Print a status table of every session set under *base_dir*.

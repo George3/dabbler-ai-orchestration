@@ -1,0 +1,42 @@
+{
+  "status": "completed",
+  "summary": "Set 067 Session 1 of 4: first-party tool-loop pull-verifier adapter core + Anthropic binding. Shipped ai_router/pull_verifier.py with pull_route() -- a route()-PARALLEL agentic seam (verifier drives a read-only tool loop; the orchestrator is a deterministic servant returning RAW ground truth). Includes: read-only toolset read_file/grep/list_dir, hardened sandbox confinement (_safe + _within_sandbox + os.walk followlinks=False covering every dereference), turn/token/cost caps with post-hoc stop reasons, the Anthropic tool_use binding behind a provider-agnostic loop driver, a forced submit_verdict matching the Set 066 path-aware-critique.json critique-entry shape, tool-call-trace instrumentation (raw/elided flags; zero-probe run flagged ok=False), and the load-bearing deterministic-servant guardrail (_canonical_result + _guard_raw_ground_truth: a summarizing OR fake-error servant is a HARD failure). 54 new unit tests (FakeBinding; no metered calls). Exported the seam from ai_router/__init__.py. Tool contract pinned in tool-contract.md. NO release (S4). Full pytest suite GREEN (1458 prior + 54 new = 1512 pass, 1 pre-existing skip). VERIFICATION: gpt-5.4 cross-provider, R1 ISSUES_FOUND (1 Critical grep sandbox breakout via unconfined rglob + 3 Major: error-exemption hole, char-vs-byte elision, config=None pricing) -> all fixed -> R2 ISSUES_FOUND (1 new Major: dropped regular-file filter in _walk_files; 1 Minor schema/parser misalignment) -> both fixed -> R3 VERIFIED, no new defects. Verify spend ~$0.669 (+$0.176 aborted max_tokens run, L-064-1). OpenAI/Gemini bindings + router-config executor wiring + 3-provider headless check = Session 2.",
+  "files_changed": [
+    "ai_router/pull_verifier.py",
+    "ai_router/__init__.py",
+    "ai_router/tests/test_pull_verifier.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/tool-contract.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/ai-assignment.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification-round-2.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification-round-3.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-issues.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification_r2.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification_r3.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/next-orchestrator-rec.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_next_orch.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/activity-log.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/disposition.json"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-opus-4-8",
+    "effort": "medium",
+    "reason": {
+      "code": "continue-current-trajectory",
+      "specifics": "Routed rec (gemini-pro): S2 extends the S1 binding interface (OpenAI tool_calls + Gemini function_declarations behind the same provider-agnostic loop driver); the incumbent has full context on the loop driver and the Anthropic reference binding."
+    }
+  },
+  "blockers": [],
+  "verification_verdict": "VERIFIED",
+  "lessons_cited": [
+    "L-064-1",
+    "L-064-3",
+    "L-064-6",
+    "L-065-1"
+  ]
+}

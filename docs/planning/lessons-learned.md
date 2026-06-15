@@ -60,7 +60,7 @@ last-pruned-set: (none)   generated: 2026-06-15
 ## Portable Lessons (all AI-led-workflow repos)
 
 ## Truncation Detection: `stop_reason` Alone Is Not Sufficient
-<!-- lesson: id="L-064-1" last-used-set="064" status="active" scope="portable" -->
+<!-- lesson: id="L-064-1" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Any routed call whose response is consumed programmatically —
   code generation, test generation, structured data emission.
@@ -91,7 +91,7 @@ last-pruned-set: (none)   generated: 2026-06-15
 - **Action for future sessions:** Trust the guard for cheap routed work.
 
 ## Persist Routed Output To Disk Before Display Or Logging
-<!-- lesson: id="L-064-3" last-used-set="066" status="active" scope="portable" -->
+<!-- lesson: id="L-064-3" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Any routed call on Windows where the default console code page
   is `cp1252`.
@@ -136,7 +136,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   2026-05-01 to avoid duplicate guidance drifting in two places.
 
 ## Always Route `ai-assignment.md` And Next-Orchestrator / Next-Set Recommendations
-<!-- lesson: id="L-064-6" last-used-set="066" status="active" scope="portable" -->
+<!-- lesson: id="L-064-6" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Authoring `ai-assignment.md` (Step 3.5) or next-orchestrator /
   next-session-set recommendations (Step 8).
@@ -236,7 +236,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   the same rule.
 
 ## Propagate A Consistency Fix To Every Echo Before Re-Verifying
-<!-- lesson: id="L-065-1" added-set="065" last-used-set="065" status="active" scope="portable" -->
+<!-- lesson: id="L-065-1" added-set="065" last-used-set="067" status="active" scope="portable" -->
 
 - **Context:** Cross-provider verification of a heavily cross-referenced
   synthesis document — a proposal, design doc, or spec whose central
