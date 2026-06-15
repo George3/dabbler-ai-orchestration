@@ -7,6 +7,9 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.21.1] — 2026-06-15 (Set 067 follow-up — whole-set adversarial-critique fixes)
 
+> Published to PyPI 2026-06-15 (tag `v0.21.1`, `release.yml` run `27566067021`,
+> all jobs success incl. the green-`Test` gate; OIDC).
+
 A post-release whole-set path-aware critique (GPT-5.4 + Gemini-2.5-Pro via the
 `adversarial-critique-prompt.md` flow) found defects in the 0.21.0 adapter +
 producer that the per-session and per-set reviews missed. All fixed; no API
