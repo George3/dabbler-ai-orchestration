@@ -1754,3 +1754,107 @@ class TestExecutorConfig:
         assert caps.max_output_tokens >= 24000
         for prov in ("anthropic", "openai", "google"):
             assert pv._resolve_model(prov, None, cfg)
+
+
+# ===========================================================================
+# Set 068: run_test tool wiring (offered only when caged; dispatched to the
+# cage, not the read-only servant; recorded as a real probe)
+# ===========================================================================
+
+
+class _ToolCapturingBinding(FakeBinding):
+    """A FakeBinding that records the tool NAMES offered on each turn."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.tools_seen = []
+
+    def request(self, *, force_verdict, **kw):
+        self.tools_seen.append([t["name"] for t in kw["tools"]])
+        return super().request(force_verdict=force_verdict, **kw)
+
+
+_VERDICT_OK = _resp(
+    tool_calls=[
+        _tc("submit_verdict", {"verdict": "VERIFIED", "summary": "ok"}, "v1")
+    ]
+)
+
+
+class TestRunTestWiring:
+    def test_not_offered_without_config(self, sandbox):
+        # Default (Set 067) loop: run_test must NOT appear in the offered tools.
+        b = _ToolCapturingBinding(
+            queue=[_resp(tool_calls=[_tc("read_file", {"path": "a.py"})]),
+                   _VERDICT_OK]
+        )
+        result = pv.pull_route(sandbox, "review", binding=b, config=CONFIG)
+        assert result.ok is True
+        assert all("run_test" not in names for names in b.tools_seen)
+
+    def test_offered_and_dispatched_to_cage(self, sandbox, monkeypatch):
+        # With a RunTestConfig, run_test is offered AND dispatched to the cage
+        # (NOT the read-only servant), recorded as a real probe (raw=True).
+        calls = []
+
+        def fake_dispatch(cfg, args):
+            calls.append((cfg, args))
+            return ("exit_code=0\n--- output ---\nTEST OK", False, False)
+
+        monkeypatch.setattr(pv, "_dispatch_run_test", fake_dispatch)
+        verdict = _resp(
+            tool_calls=[
+                _tc("submit_verdict",
+                    {"verdict": "VERIFIED", "summary": "tests pass"}, "v1")
+            ]
+        )
+        b = _ToolCapturingBinding(
+            queue=[_resp(tool_calls=[_tc("run_test", {}, "rt1")]), verdict]
+        )
+        rt_cfg = pv.RunTestConfig(
+            repo_root=str(sandbox), ref="HEAD", command=("pytest", "-q")
+        )
+        result = pv.pull_route(
+            sandbox, "review", binding=b, config=CONFIG, run_test_config=rt_cfg
+        )
+        assert "run_test" in b.tools_seen[0]
+        assert len(calls) == 1  # the cage was invoked exactly once
+        assert result.ok is True
+        # run_test counts as a real probe, so this is NOT a zero_tool_calls run.
+        assert result.trace.tool_call_count == 1
+        assert result.trace.zero_tool_calls is False
+        rec = result.trace.tool_calls[0]
+        assert rec.name == "run_test"
+        assert rec.raw is True
+        assert rec.error is False
+
+    def test_cage_error_recorded_as_error_probe(self, sandbox, monkeypatch):
+        def fake_dispatch(cfg, args):
+            return ("ERROR: run_test cage: not a git repository", True, False)
+
+        monkeypatch.setattr(pv, "_dispatch_run_test", fake_dispatch)
+        b = FakeBinding(
+            queue=[_resp(tool_calls=[_tc("run_test", {}, "rt1")]), _VERDICT_OK]
+        )
+        rt_cfg = pv.RunTestConfig(
+            repo_root=str(sandbox), ref="HEAD", command=("pytest", "-q")
+        )
+        result = pv.pull_route(
+            sandbox, "review", binding=b, config=CONFIG, run_test_config=rt_cfg
+        )
+        assert result.ok is True
+        rec = result.trace.tool_calls[0]
+        assert rec.name == "run_test"
+        assert rec.error is True  # cage error surfaced as a raw ERROR probe
+
+    def test_dispatch_resolves_named_command(self):
+        # _dispatch_run_test passes the resolved argv to the cage; a bad name
+        # falls back to the default command (RunTestConfig.resolve).
+        cfg = pv.RunTestConfig(
+            repo_root=".", ref="HEAD",
+            command=("default", "cmd"),
+            commands={"unit": ("pytest", "-q")},
+        )
+        assert cfg.resolve(None) == ("default", "cmd")
+        assert cfg.resolve("unit") == ("pytest", "-q")
+        assert cfg.resolve("missing") == ("default", "cmd")

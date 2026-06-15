@@ -471,24 +471,45 @@ def _reject_dangerous_regex(pattern: str) -> None:
         )
 
 
+def _isolated_regex_search(pattern: str, payload: List[Tuple[str, str]]) -> List[str]:
+    """Delegate to the cage's ReDoS-bounded search (dual import for test/bare).
+
+    Lives in run_test_sandbox.py (the cage machinery this set introduces); kept a
+    thin wrapper here so the dual import path (relative in production, bare on the
+    test sys.path) is resolved once.
+    """
+    try:
+        from .run_test_sandbox import isolated_regex_search
+    except ImportError:  # pragma: no cover - test/bare context
+        from run_test_sandbox import isolated_regex_search  # type: ignore
+    return isolated_regex_search(pattern, payload)
+
+
 def _canonical_grep(sandbox: Path, args: dict) -> GroundTruth:
     root = _safe(sandbox, args.get("path", "."))
-    _reject_dangerous_regex(args["pattern"])
-    pattern = re.compile(args["pattern"])
+    pattern = args["pattern"]
+    # Cheap PRE-FILTER ONLY (Set 068): reject over-long / obvious catastrophic
+    # patterns before paying for the isolated evaluation. The real ReDoS defense
+    # now lives in run_test_sandbox.isolated_regex_search (an re2 inline fast path
+    # or a subprocess + hard-timeout kill), so a catastrophic pattern the cheap
+    # heuristic does NOT model is bounded by isolation rather than hanging.
+    _reject_dangerous_regex(pattern)
     sandbox_real = sandbox.resolve()
     files = _walk_files(root, sandbox_real)
-    out: List[str] = []
+    payload: List[Tuple[str, str]] = []
     for f in files:
         rel = f.resolve().relative_to(sandbox_real).as_posix()
         try:
-            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+            text = f.read_text(encoding="utf-8", errors="replace")
         except OSError:
             # Defense in depth: a file that turns unreadable between the walk
             # and the read is skipped, not allowed to abort the whole grep.
             continue
-        for i, ln in enumerate(lines, 1):
-            if pattern.search(ln):
-                out.append(f"{rel}:{i}:{ln}")
+        payload.append((rel, text))
+    # The walk + sandbox confinement stay here; only the regex EVALUATION is
+    # isolated. RegexTimeout / RegexError propagate to _canonical_result, which
+    # surfaces them to the model as a raw ``ERROR: ...`` it can recover from.
+    out = _isolated_regex_search(pattern, payload)
     return _elide("\n".join(out) or "(no matches)")
 
 
@@ -502,6 +523,86 @@ _CANONICAL: Dict[str, Callable[[Path, dict], GroundTruth]] = {
 
 PROBE_TOOL_NAMES = tuple(_CANONICAL.keys())
 SUBMIT_VERDICT_TOOL = "submit_verdict"
+
+# Set 068: the first WRITE-CAPABLE but CAGED tool. It is NOT a member of
+# _CANONICAL (its result is non-re-derivable execution, so the byte-equality
+# guard does not apply - see run-test-contract.md sec 1) and is dispatched to the
+# disposable-worktree cage, not the read-only servant. It is offered ONLY when a
+# RunTestConfig is passed to pull_route(); absent that, the loop is byte-for-byte
+# the Set 067 read-only loop.
+RUN_TEST_TOOL = "run_test"
+
+
+@dataclass(frozen=True)
+class RunTestConfig:
+    """Cage wiring for the ``run_test`` tool (Set 068).
+
+    Carries the git ``repo_root`` + pinned ``ref`` the disposable worktree is
+    created from, the bounded command surface (a default argv, plus an optional
+    name->argv map the tool's ``name`` input may select among), and the caps. The
+    model can only TRIGGER / select these operator-authored commands; it can never
+    author a shell string.
+    """
+
+    repo_root: str
+    ref: str
+    command: Tuple[str, ...] = ()
+    commands: Optional[Dict[str, Tuple[str, ...]]] = None
+    caps: Optional[object] = None  # run_test_sandbox.RunTestCaps; None -> default
+
+    def resolve(self, name: Optional[str]) -> Tuple[str, ...]:
+        """Resolve the argv for an optional command ``name`` (else the default)."""
+        if name and self.commands and name in self.commands:
+            return tuple(self.commands[name])
+        return tuple(self.command or ())
+
+
+def _run_test_tool_schema() -> dict:
+    return {
+        "name": RUN_TEST_TOOL,
+        "description": (
+            "Run the project's configured test command in a DISPOSABLE, "
+            "detached git worktree of the repo at a pinned ref (cwd is the "
+            "throwaway checkout), then discard it. Returns the RAW exit code + "
+            "captured output. Ordinary in-tree writes are discarded with the "
+            "worktree. You cannot pass a command; you may optionally select a "
+            "configured one by name."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "optional: select a configured command by name; "
+                        "omit to run the default test command"
+                    ),
+                }
+            },
+            "required": [],
+        },
+    }
+
+
+def _dispatch_run_test(cfg: RunTestConfig, args: dict) -> Tuple[str, bool, bool]:
+    """Run the cage for one ``run_test`` call; return (raw_text, is_error, elided).
+
+    Dispatched OUTSIDE the deterministic-servant byte-equality guard (execution is
+    non-re-derivable). The cage itself enforces the raw-result + disposable-CWD
+    isolation + crash-safe-teardown discipline (run_test_sandbox.run_test_in_cage;
+    see its docstring for the precise, bounded scope of the isolation).
+    """
+    try:
+        from .run_test_sandbox import run_test_in_cage
+    except ImportError:  # pragma: no cover - test/bare context
+        from run_test_sandbox import run_test_in_cage  # type: ignore
+    name = args.get("name") if isinstance(args, dict) else None
+    cmd = cfg.resolve(name)
+    res = run_test_in_cage(cfg.repo_root, cfg.ref, cmd, caps=cfg.caps)
+    content = res.render()
+    is_error = content.startswith("ERROR: ")
+    elided = "[... elided " in content
+    return content, is_error, elided
 
 
 # ---------------------------------------------------------------------------
@@ -1403,6 +1504,7 @@ def pull_route(
     config: Optional[dict] = None,
     binding: Optional[ProviderBinding] = None,
     servant: Optional[DeterministicServant] = None,
+    run_test_config: Optional[RunTestConfig] = None,
 ) -> PullResult:
     """Drive a capped, instrumented, sandbox-confined read-only tool loop.
 
@@ -1437,7 +1539,13 @@ def pull_route(
     pcfg = _provider_config(provider_name, config)
     in_price, out_price = _pricing_for(model, config)
 
-    tools = _all_tool_schemas()
+    # Set 068: offer run_test ONLY when a cage is configured. Absent that, the
+    # offered tools are byte-for-byte the Set 067 read-only set (probes + verdict)
+    # so the default loop and every Set 067 test are unchanged.
+    tools = _probe_tool_schemas()
+    if run_test_config is not None:
+        tools.append(_run_test_tool_schema())
+    tools.append(_verdict_tool_schema())
     transcript: List[dict] = [{"role": "user", "text": instruction}]
     trace = PullTrace()
     critique: Optional[PullCritique] = None
@@ -1584,6 +1692,30 @@ def pull_route(
         # left extras unanswered -> a 400 on the next turn).
         results = []
         for tc in non_verdict_calls:
+            # Set 068: run_test is dispatched to the disposable-worktree CAGE, not
+            # the read-only servant, and therefore NOT through the byte-equality
+            # guard (execution is non-re-derivable - see run-test-contract.md sec
+            # 1). It is still recorded as a real probe (raw=True), so a verdict
+            # informed by a run_test is correctly NOT a zero_tool_calls run.
+            if tc.name == RUN_TEST_TOOL and run_test_config is not None:
+                content, is_error, elided = _dispatch_run_test(
+                    run_test_config, tc.input
+                )
+                trace.tool_calls.append(
+                    ToolCallRecord(
+                        turn=turn,
+                        name=tc.name,
+                        args=tc.input,
+                        raw=True,
+                        elided=elided,
+                        result_chars=len(content),
+                        error=is_error,
+                    )
+                )
+                results.append(
+                    {"id": tc.id, "name": tc.name, "content": content}
+                )
+                continue
             tool_result = servant.run(tc.name, tc.input, sandbox)
             _guard_raw_ground_truth(tc.name, tc.input, tool_result, sandbox)
             is_error = tool_result.content.startswith("ERROR: ")

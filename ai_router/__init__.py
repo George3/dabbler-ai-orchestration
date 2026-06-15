@@ -946,6 +946,25 @@ from .pull_critique import (
     DEFAULT_PROVIDERS,
 )
 
+# Set 068 S1: the disposable-worktree run_test execution cage (the first
+# write-capable but caged adapter tool) + the relocated grep ReDoS isolation.
+# run_test runs a bounded, operator-configured command in a disposable, detached
+# git worktree with crash-safe teardown and returns the RAW exit code + output;
+# the real tree is never mutated. See run_test_sandbox.py and
+# docs/session-sets/068-cadence-study-and-contract-gate/run-test-contract.md.
+from .pull_verifier import RunTestConfig
+from .run_test_sandbox import (
+    run_test_in_cage,
+    run_subprocess_capped,
+    isolated_regex_search,
+    run_test_caps_from_config,
+    RunTestCaps,
+    RunTestResult,
+    CappedRun,
+    RegexTimeout,
+    RegexError,
+)
+
 
 def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
     """Print a status table of every session set under *base_dir*.

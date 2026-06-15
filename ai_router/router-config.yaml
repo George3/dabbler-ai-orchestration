@@ -674,6 +674,16 @@ pull_verifier:
       reasoning_effort: medium
     google:
       thinking_budget: 8192
+  # Set 068: the run_test execution cage (run_test_sandbox.RunTestCaps). run_test
+  # is OFFERED to the loop only when a RunTestConfig is built and passed to
+  # pull_route(); these are the cage's per-run bounds. The command surface itself
+  # is bounded by the operator-supplied RunTestConfig (a fixed argv / named map),
+  # NOT by this file - the model can never author a shell string. run_test is a
+  # bounded verification cage, not a CI runner (spec non-goal).
+  run_test:
+    caps:
+      wall_seconds: 120        # hard wall-clock; the process tree is killed on overrun
+      output_byte_cap: 60000   # per-stream byte cap; over-cap output elided to a raw head slice
 
 # --- Metrics ---
 # Controls the append-only metrics log read by report.py (Session 4).

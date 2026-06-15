@@ -1,0 +1,47 @@
+{
+  "status": "completed",
+  "summary": "Set 068 Session 1 of 6: the disposable-worktree run_test execution cage + relocated grep ReDoS isolation. New ai_router/run_test_sandbox.py ships (a) run_subprocess_capped - a shared shell=False subprocess primitive with a hard wall-clock timeout that kills the process tree on overrun (Windows taskkill /T, POSIX killpg) and a temp-file-bounded per-stream output cap with raw head-slice elision; (b) run_test_in_cage - creates a disposable DETACHED git worktree from a pinned ref (the intentional raw-git-worktree escape hatch, under the system temp dir, never the canonical container), runs the operator-configured argv with cwd=the throwaway checkout, and tears the worktree down on EVERY exit path (success/failed-command/timeout-kill/exception) via a finally block that removes -> rmtree -> `git worktree prune --expire now` -> verifies no registration leaked; a leak (worktree_removed=False) renders as a leading raw ERROR while still preserving the raw exit+output; and (c) run_test_caps_from_config. New ai_router/regex_worker.py isolates the regex EVALUATION in a subprocess (re2 inline fast path when available, else a killable subprocess bounded by the cage's hard timeout) so a catastrophic pattern that DEFEATS the 0.21.1 nesting-aware heuristic is killed, not hung; pull_verifier._canonical_grep now delegates to isolated_regex_search (the walk + sandbox confinement stay in the parent) with the heuristic demoted to a cheap pre-filter. run_test wired into the Set 067 adapter: RunTestConfig + _run_test_tool_schema + _dispatch_run_test, OFFERED only when a RunTestConfig is passed to pull_route (default loop byte-for-byte the Set 067 read-only set), dispatched to the cage OUTSIDE the byte-equality guard (execution is non-re-derivable) and recorded as a real probe. router-config.yaml gained a pull_verifier.run_test.caps block (consumed by run_test_caps_from_config); exports added to __init__. IMPORTANT scope correction (verifier R1 Critical): the cage is DISPOSABLE-CWD isolation of a TRUSTED command (the project's own test command on its own pinned snapshots - Experiment B), NOT an OS sandbox; it does not confine absolute-path writes / committed symlinks / main-worktree discovery / detached children, and confining untrusted code is an explicit non-goal - the docs/contract/docstrings were re-scoped to state this precisely. 29 new tests (25 cage + 4 wiring); full ai_router suite green (1548 passed / 1 skipped). NO release (Session 6). The live metered build+test-per-snapshot use of run_test is Experiment B (Session 3). VERIFICATION: gpt-5.4 (high) R1 ISSUES_FOUND (Critical write-confinement overclaim + Major teardown prune-order/leak-surfacing + Minor elision partial-line; ALSO fixed a latent Windows \\r multi-match grep bug found while writing the Minor test) -> R2 ISSUES_FOUND (Critical re-scope echoes still in 2 docstrings per L-065-1; Major prune needed --expire now; new Minor leak-render dropped raw output) -> R3 VERIFIED. ~$0.436.",
+  "files_changed": [
+    "ai_router/run_test_sandbox.py",
+    "ai_router/regex_worker.py",
+    "ai_router/pull_verifier.py",
+    "ai_router/router-config.yaml",
+    "ai_router/__init__.py",
+    "ai_router/tests/test_run_test_sandbox.py",
+    "ai_router/tests/test_pull_verifier.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run-test-contract.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/ai-assignment.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification_r2.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification_r3.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification-round-2.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification-round-3.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/change-log.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/disposition.json",
+    "docs/session-sets/068-cadence-study-and-contract-gate/activity-log.json",
+    "docs/session-sets/068-cadence-study-and-contract-gate/session-state.json",
+    "docs/session-sets/068-cadence-study-and-contract-gate/session-events.jsonl"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "effort": "medium",
+    "reason": {
+      "code": "switch-due-to-cost",
+      "specifics": "Routed analysis (route task_type=analysis) recommends switching from claude-opus-4-8 to a sonnet-class reasoning model for Session 2, because S2 (Experiment A symmetric re-grade + Experiment B pre-registration) is analysis + experimental-design reasoning with NO production code, so it does not need opus-class code-generation capability. CAVEAT for the S2 operator: the symmetric re-grade carries a statistical-honesty burden (the 0.21.1 erratum) and Set 067 S3 used opus-4-8 high for the comparable Experiment A capability study; weigh the routed cost-optimization against that precedent at S2 start. Operator confirms at the boundary."
+    }
+  },
+  "blockers": [],
+  "verification_verdict": "VERIFIED",
+  "lessons_cited": [
+    "L-064-3",
+    "L-064-6",
+    "L-064-8",
+    "L-065-1",
+    "L-067-1"
+  ]
+}

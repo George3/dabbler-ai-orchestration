@@ -1,0 +1,90 @@
+{
+  "sessionSetName": "068-cadence-study-and-contract-gate",
+  "createdDate": "2026-06-15T18:19:55.561409+00:00",
+  "totalSessions": 0,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/path-aware-critique",
+      "dateTime": "2026-06-15T18:19:55.561833+00:00",
+      "description": "Operator set pathAwareCritique: required.",
+      "status": "complete",
+      "routedApiCalls": [],
+      "kind": "path_aware_critique",
+      "choice": "required"
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/register",
+      "dateTime": "2026-06-15T14:26:30.688223-04:00",
+      "description": "Registered S1 start; read project-guidance, lessons-learned, session-set-authoring-guide, repo-worktree-layout.md, Set 067 pull_verifier.py + tool-contract.md, worktree.py, L-067-1; baseline suite 1519 passed / 1 skipped; confirmed re2 NOT installed (subprocess+timeout is the live ReDoS path).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/ai-assignment",
+      "dateTime": "2026-06-15T14:26:30.689234-04:00",
+      "description": "Authored ai-assignment.md via route(task_type=analysis); recorded routed next-orch rec for S2 (switch to sonnet-class for the analysis-heavy re-grade, with the statistical-rigor caveat for the operator). Routed cost $0.0056.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/run-test-contract",
+      "dateTime": "2026-06-15T14:55:02.287594-04:00",
+      "description": "Finalized run-test-contract.md: disposable-detached-worktree lifecycle, bounded operator-authored command surface, raw result shape, caps, and the precise (re-scoped) disposable-CWD isolation scope (NOT an OS sandbox).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/cage",
+      "dateTime": "2026-06-15T14:55:02.287594-04:00",
+      "description": "Implemented ai_router/run_test_sandbox.py: run_subprocess_capped (shell=False, hard wall-clock kill of the process tree, temp-file-bounded output cap + raw elision), run_test_in_cage (git worktree add --detach -> run write-confined cwd -> crash-safe finally teardown with prune --expire now + registration leak check), run_test_caps_from_config.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/redos-isolation",
+      "dateTime": "2026-06-15T14:55:02.288596-04:00",
+      "description": "Relocated grep ReDoS defense onto the cage machinery: new ai_router/regex_worker.py (subprocess, re2-inline fast path else killable subprocess) via isolated_regex_search; pull_verifier._canonical_grep now delegates the regex EVALUATION (walk+confinement stay), the 0.21.1 nesting heuristic demoted to a cheap pre-filter.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/wiring",
+      "dateTime": "2026-06-15T14:55:02.288596-04:00",
+      "description": "Wired run_test into pull_verifier: RunTestConfig + _run_test_tool_schema + _dispatch_run_test; offered ONLY when run_test_config passed (default loop byte-for-byte the Set 067 read-only set); dispatched to the cage OUTSIDE the byte-equality guard, recorded as a real probe. Added run_test caps block to router-config.yaml + exports from __init__.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/tests",
+      "dateTime": "2026-06-15T14:55:02.288596-04:00",
+      "description": "Added ai_router/tests/test_run_test_sandbox.py (cage lifecycle, timeout-kill, output cap, write-confinement, teardown-on-exception + leak surfacing, caps-from-config, ReDoS isolation, worker) + 4 run_test wiring tests in test_pull_verifier.py.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 9,
+      "stepKey": "session-001/verification",
+      "dateTime": "2026-06-15T14:55:02.290065-04:00",
+      "description": "Cross-provider verification gpt-5.4 (high): R1 ISSUES_FOUND (1 Critical write-confinement overclaim re-scoped per L-064-8; 1 Major teardown prune-order+leak-surfacing; 1 Minor elision partial-line; ALSO fixed a latent Windows \r multi-match grep bug found writing the Minor test) -> R2 ISSUES_FOUND (Critical re-scope echoes missed per L-065-1; Major prune --expire now; new Minor leak-render dropped raw output) -> R3 VERIFIED. ~$0.436.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}
