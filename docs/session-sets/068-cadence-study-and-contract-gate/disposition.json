@@ -1,27 +1,29 @@
 {
   "status": "completed",
-  "summary": "Set 068 Session 1 of 6: the disposable-worktree run_test execution cage + relocated grep ReDoS isolation. New ai_router/run_test_sandbox.py ships (a) run_subprocess_capped - a shared shell=False subprocess primitive with a hard wall-clock timeout that kills the process tree on overrun (Windows taskkill /T, POSIX killpg) and a temp-file-bounded per-stream output cap with raw head-slice elision; (b) run_test_in_cage - creates a disposable DETACHED git worktree from a pinned ref (the intentional raw-git-worktree escape hatch, under the system temp dir, never the canonical container), runs the operator-configured argv with cwd=the throwaway checkout, and tears the worktree down on EVERY exit path (success/failed-command/timeout-kill/exception) via a finally block that removes -> rmtree -> `git worktree prune --expire now` -> verifies no registration leaked; a leak (worktree_removed=False) renders as a leading raw ERROR while still preserving the raw exit+output; and (c) run_test_caps_from_config. New ai_router/regex_worker.py isolates the regex EVALUATION in a subprocess (re2 inline fast path when available, else a killable subprocess bounded by the cage's hard timeout) so a catastrophic pattern that DEFEATS the 0.21.1 nesting-aware heuristic is killed, not hung; pull_verifier._canonical_grep now delegates to isolated_regex_search (the walk + sandbox confinement stay in the parent) with the heuristic demoted to a cheap pre-filter. run_test wired into the Set 067 adapter: RunTestConfig + _run_test_tool_schema + _dispatch_run_test, OFFERED only when a RunTestConfig is passed to pull_route (default loop byte-for-byte the Set 067 read-only set), dispatched to the cage OUTSIDE the byte-equality guard (execution is non-re-derivable) and recorded as a real probe. router-config.yaml gained a pull_verifier.run_test.caps block (consumed by run_test_caps_from_config); exports added to __init__. IMPORTANT scope correction (verifier R1 Critical): the cage is DISPOSABLE-CWD isolation of a TRUSTED command (the project's own test command on its own pinned snapshots - Experiment B), NOT an OS sandbox; it does not confine absolute-path writes / committed symlinks / main-worktree discovery / detached children, and confining untrusted code is an explicit non-goal - the docs/contract/docstrings were re-scoped to state this precisely. 29 new tests (25 cage + 4 wiring); full ai_router suite green (1548 passed / 1 skipped). NO release (Session 6). The live metered build+test-per-snapshot use of run_test is Experiment B (Session 3). VERIFICATION: gpt-5.4 (high) R1 ISSUES_FOUND (Critical write-confinement overclaim + Major teardown prune-order/leak-surfacing + Minor elision partial-line; ALSO fixed a latent Windows \\r multi-match grep bug found while writing the Minor test) -> R2 ISSUES_FOUND (Critical re-scope echoes still in 2 docstrings per L-065-1; Major prune needed --expire now; new Minor leak-render dropped raw output) -> R3 VERIFIED. ~$0.436.",
+  "summary": "Set 068 Session 2 of 6: Experiment A symmetric re-grade + Experiment B pre-registration (analysis/design only; NO production code, NO release). Ran on claude-opus-4-8 high (operator confirmed at the S2 boundary to stay on opus over the routed sonnet rec, on statistical-honesty grounds). (1) SYMMETRIC RE-GRADE: applied the SAME strict quoted-mechanism audit the Set 067 routed audit used one-directionally to the path-aware (B1/B2) x cross-file catches (experiment-a-regrade/audit-symmetric.json + reproducible regrade.py over committed Set 067 raw; evidence dump pathaware-crossfile-evidence.md). Exactly ONE removal, B1:D12 (token spillover from the D9 finding; B1 never names the isidentifier single-arg mechanism; B2:D12 kept). Result: cross-file strict survival routed 2/8 vs path-aware 13/14 under the IDENTICAL rule. Contrasts: GPT B1-A1 EXCEEDS band under EVERY regime incl the audit-free automated primary (+0.2315) and the sym mechanism-audited replicate-mean (+0.2870); Gemini B2-A2 is INSIDE the band under the pre-registered automated primary (+0.0833<0.111) but RESOLVES to +0.2778 once routed's wrong-mechanism cross-file credit is removed at the replicate level - the Gemini effect was MASKED, not absent. Corrected the 0.21.1 erratum: only D5 is a FULLY audit-independent existence proof (routed never matched it); D9 is audit-CONDITIONAL (routed automated-matched a docstring-subset nitpick). H1 direction CONFIRMED audit-independent; H2 'second routed provider adds nothing' robust/audit-independent, the +0.31 union magnitude downgraded to exploratory. (2) EXPERIMENT B PRE-REGISTRATION: staged-snapshot cadence intervention. Mechanism: a coupling defect is in-snippet@introduction but MIGRATES to cross-file@close, giving per-session routed its one strong-window shot. Arms R(per-session routed=status quo)/E(end-of-set path-aware=replacement)/Q(end-of-set routed=PURE cadence control)/P(optional). Three pre-registered axes (coupling_depth x vis_at_intro x vis_at_close_for_Q) -> cadence-payoff / coupling-blind / always-visible / no-coupling(null). Pre-committed deterministic rework cost_model.py (ships w/ invariant self-tests, PASS) separates empirical catch-timing from fixed rework. Falsifiable decision rule (holds/does-not-hold/unresolved) on PER-REPEAT metrics with a binding >=2/3 realized-early-catch stability gate, a single pinned noise-band rule (band = across-K range of the per-repeat contrast X_k; mean_k authoritative, median sign-check only), and null checks on the no-coupling AND always-visible controls. Q's surface pinned as Q_surface_files everywhere (classification == the executed Q run). Pilot gate before paid sweep (L-067-3); L-067-1 GPT mitigations recorded. VERIFICATION: gpt-5.4 (high) R1 ISSUES_FOUND (1 Minor floor-overclaim + 2 Major: Exp B union-primary not stability-binding + imprecise band; missing vis_at_close_for_Q) -> remediated all (computed sym-audited replicate means; per-repeat binding stability gate; vis_at_close_for_Q axis + always-visible control + min counts) -> R2 (Finding1 RESOLVED; 2/3 PARTIAL: median binding w/o band, Q surface contradictory) -> remediated (unified per-repeat contrast X_k band rule, mean authoritative; Q=Q_surface_files everywhere) -> R3 VERIFIED (1 Minor 'equivalently' wording fixed). Full ai_router suite GREEN 1548 passed / 1 skipped (unchanged; no ai_router/ change). ~$0.603.",
   "files_changed": [
-    "ai_router/run_test_sandbox.py",
-    "ai_router/regex_worker.py",
-    "ai_router/pull_verifier.py",
-    "ai_router/router-config.yaml",
-    "ai_router/__init__.py",
-    "ai_router/tests/test_run_test_sandbox.py",
-    "ai_router/tests/test_pull_verifier.py",
-    "docs/session-sets/068-cadence-study-and-contract-gate/run-test-contract.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade/audit-symmetric.json",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade/regrade.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade/dump_pathaware_crossfile.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade/pathaware-crossfile-evidence.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-a-regrade/experiment-a-regrade-data.json",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-b-preregistration.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-b/cost_model.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/experiment-b/harness-skeleton.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s2_verification.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s2_verification_r2.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s2_verification_r3.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s2-verification.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s2-verification-round-2.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/s2-verification-round-3.md",
+    "docs/session-sets/068-cadence-study-and-contract-gate/run_s2_next_orch.py",
+    "docs/session-sets/068-cadence-study-and-contract-gate/next-orch-rec-s3.md",
     "docs/session-sets/068-cadence-study-and-contract-gate/ai-assignment.md",
-    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification.py",
-    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification_r2.py",
-    "docs/session-sets/068-cadence-study-and-contract-gate/run_s1_verification_r3.py",
-    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification.md",
-    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification-round-2.md",
-    "docs/session-sets/068-cadence-study-and-contract-gate/s1-verification-round-3.md",
-    "docs/session-sets/068-cadence-study-and-contract-gate/change-log.md",
-    "docs/session-sets/068-cadence-study-and-contract-gate/disposition.json",
     "docs/session-sets/068-cadence-study-and-contract-gate/activity-log.json",
     "docs/session-sets/068-cadence-study-and-contract-gate/session-state.json",
-    "docs/session-sets/068-cadence-study-and-contract-gate/session-events.jsonl"
+    "docs/session-sets/068-cadence-study-and-contract-gate/session-events.jsonl",
+    "docs/session-sets/068-cadence-study-and-contract-gate/disposition.json"
   ],
   "verification_method": "api",
   "verification_message_ids": [],
@@ -32,7 +34,7 @@
     "effort": "medium",
     "reason": {
       "code": "switch-due-to-cost",
-      "specifics": "Routed analysis (route task_type=analysis) recommends switching from claude-opus-4-8 to a sonnet-class reasoning model for Session 2, because S2 (Experiment A symmetric re-grade + Experiment B pre-registration) is analysis + experimental-design reasoning with NO production code, so it does not need opus-class code-generation capability. CAVEAT for the S2 operator: the symmetric re-grade carries a statistical-honesty burden (the 0.21.1 erratum) and Set 067 S3 used opus-4-8 high for the comparable Experiment A capability study; weigh the routed cost-optimization against that precedent at S2 start. Operator confirms at the boundary."
+      "specifics": "Routed analysis (route task_type=analysis) recommends claude-sonnet-4-6/medium for Session 3 ('Experiment B - the cadence study'): substantial-but-well-defined harness production code + a metered K=3 two-provider sweep + statistical-honesty analysis, all against the design pre-registered this session - capable work for sonnet-class at lower cost than opus. Explicitly avoids gpt-5.4 as ORCHESTRATOR (L-067-1 budget exhaustion as a loop driver), preserving gpt-5.4 + gemini-2.5-pro as the two experiment SUBJECT providers and the cross-provider verifier. CAVEAT for the S3 operator: the same statistical-honesty weighting that kept S2 on opus may apply to S3's analysis step; the decision is the operator's to confirm at the S3 boundary."
     }
   },
   "blockers": [],
@@ -40,7 +42,7 @@
   "lessons_cited": [
     "L-064-3",
     "L-064-6",
-    "L-064-8",
+    "L-064-10",
     "L-065-1",
     "L-067-1"
   ]

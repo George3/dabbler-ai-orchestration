@@ -1,7 +1,7 @@
 {
   "sessionSetName": "068-cadence-study-and-contract-gate",
   "createdDate": "2026-06-15T18:19:55.561409+00:00",
-  "totalSessions": 0,
+  "totalSessions": 6,
   "entries": [
     {
       "sessionNumber": 1,
@@ -83,6 +83,68 @@
       "stepKey": "session-001/verification",
       "dateTime": "2026-06-15T14:55:02.290065-04:00",
       "description": "Cross-provider verification gpt-5.4 (high): R1 ISSUES_FOUND (1 Critical write-confinement overclaim re-scoped per L-064-8; 1 Major teardown prune-order+leak-surfacing; 1 Minor elision partial-line; ALSO fixed a latent Windows \r multi-match grep bug found writing the Minor test) -> R2 ISSUES_FOUND (Critical re-scope echoes missed per L-065-1; Major prune --expire now; new Minor leak-render dropped raw output) -> R3 VERIFIED. ~$0.436.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/register",
+      "dateTime": "2026-06-15T15:39:58.469436-04:00",
+      "description": "Registered S2 start (claude-opus-4-8 high, operator-confirmed at boundary over the routed sonnet rec, on statistical-rigor grounds). Read project-guidance, lessons-learned, session-set-authoring-guide, ai-led-session-workflow, spec, Set 067 experiment-a-results.md (incl. \u00a78 erratum), audit.json, grade.py, catalogue.json, raw/.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/exp-a-regraded",
+      "dateTime": "2026-06-15T15:39:58.469436-04:00",
+      "description": "Symmetric re-grade of Experiment A. Applied the identical strict quoted-mechanism rule to path-aware (B1/B2) x cross-file cells (audit-symmetric.json): exactly ONE removal, B1:D12 (token spillover from the D9 finding; B1 never names the isidentifier single-arg mechanism). Reproducible regrade.py over committed raw. Findings: GPT B1-A1 EXCEEDS band under all regimes incl audit-free primary (+0.2315); Gemini B2-A2 INSIDE band under the pre-registered primary (+0.0833 < 0.111). Cross-file strict survival routed 2/8 vs path-aware 13/14. Corrected erratum: only D5 is audit-INDEPENDENT existence proof (routed never matched it); D9 is audit-conditional (routed automated-matched a wrong-mechanism docstring nitpick). H1 direction CONFIRMED audit-independent; magnitude GPT-only resolvable; H2 magnitude exploratory. Wrote experiment-a-regrade.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/exp-b-preregistered",
+      "dateTime": "2026-06-15T15:50:52.211434-04:00",
+      "description": "Pre-registered Experiment B (staged-snapshot cadence intervention). Core mechanism: a coupling defect is in-snippet@introduction but migrates to cross-file@close, so per-session routed gets its one strong-window shot before dependents are built. Arms R(per-session routed, status quo)/E(end-of-set path-aware, replacement)/Q(end-of-set routed, PURE cadence control)/P(optional). Defect taxonomy: coupling_depth x vis@intro -> cadence-payoff / coupling-blind / no-coupling(null). Pre-committed deterministic rework cost_model.py (ships w/ invariant self-tests, PASS) separates empirical catch-timing from fixed rework; only empirical input is catch snapshot. Falsifiable decision rule (holds/does-not-hold/unresolved) keyed off R-vs-Q (cadence isolation) + cost saving concentrated in coupling class + no-coupling null. Pilot gate before paid sweep (L-067-3); L-067-1 GPT budget mitigations recorded. Wrote experiment-b-preregistration.md + experiment-b/{cost_model.py,harness-skeleton.md}.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/suite-baseline",
+      "dateTime": "2026-06-15T15:50:52.211434-04:00",
+      "description": "Confirmed no production-code change this session (testpaths=ai_router/tests; docs scripts not collected). Full pytest suite GREEN: 1548 passed, 1 skipped (unchanged from S1 close baseline).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/verification",
+      "dateTime": "2026-06-15T16:10:01.669141-04:00",
+      "description": "Cross-provider verification (gpt-5.4, high). R1 ISSUES_FOUND 1 Minor + 2 Major: (Minor) re-grade conservative-floor overclaim; (Major) Exp B union-over-K primary not stability-binding + imprecise band; (Major) missing vis_at_close_for_Q -> migration not operationalized, Q could still see defect. Remediated all: computed sym-audited replicate means (GPT +0.287, Gemini +0.278 both EXCEED band; Gemini effect was MASKED not absent); made Exp B primary per-repeat with binding >=2/3 realized-early-catch gate + pinned single band rule; added vis_at_close_for_Q axis + pinned Q_surface_files + always-visible control + min counts. R2: Finding1 RESOLVED, Findings2/3 PARTIAL (median made binding w/o band; Q surface contradictory across deliverables). Remediated: unified every decisive quantity as per-repeat contrast X_k w/ band=range, mean_k authoritative + median sign-check only; Q=Q_surface_files EVERYWHERE. R3 VERIFIED (1 Minor wording: equivalently-claim in S8 -> fixed). Spend R1 $0.350 + R2 $0.146 + R3 $0.107 = ~$0.603.",
+      "status": [
+        {
+          "provider": "openai",
+          "model": "gpt-5.4",
+          "task": "session-verification",
+          "rounds": 3,
+          "cost_usd": 0.603302
+        }
+      ],
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/next-orch",
+      "dateTime": "2026-06-15T16:12:09.498921-04:00",
+      "description": "Routed next-orchestrator rec for S3 via route(task_type=analysis): claude-sonnet-4-6/medium (well-defined harness code + sweep + analysis on the S2-pre-registered design; avoids gpt-5.4-as-orchestrator per L-067-1; preserves gpt-5.4+gemini as experiment subjects/verifier). Operator confirms at S3 boundary. Cost $0.0028.",
       "status": "complete",
       "routedApiCalls": []
     }
