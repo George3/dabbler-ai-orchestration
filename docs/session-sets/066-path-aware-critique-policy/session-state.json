@@ -6,16 +6,16 @@
     {
       "number": 1,
       "title": "Policy surface + blast-radius predicate + artifact contract",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-15T06:20:08.677910-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-15T07:03:05.489190-04:00",
       "orchestrator": {
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-8",
         "effort": "high"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     },
     {
       "number": 2,
