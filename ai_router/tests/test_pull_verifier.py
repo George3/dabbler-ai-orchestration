@@ -706,9 +706,18 @@ class TestBindingRegistry:
         b = pv._get_binding("anthropic")
         assert isinstance(b, pv.AnthropicBinding)
 
+    def test_openai_binding_available(self):
+        b = pv._get_binding("openai")
+        assert isinstance(b, pv.OpenAIBinding)
+
+    def test_gemini_binding_available(self):
+        b = pv._get_binding("google")
+        assert isinstance(b, pv.GeminiBinding)
+
     def test_unbound_provider_raises(self):
+        # cohere has no binding; the registry still raises a clear error.
         with pytest.raises(NotImplementedError):
-            pv._get_binding("openai")
+            pv._get_binding("cohere")
 
     def test_unknown_provider_raises(self):
         with pytest.raises(NotImplementedError):
@@ -807,3 +816,711 @@ class TestPullRouteGuards:
         assert result.model == "claude-sonnet-4-6"
         assert result.critique.provider == "anthropic"
         assert result.critique.model == "claude-sonnet-4-6"
+
+
+# ===========================================================================
+# S2: OpenAI binding wire translation (Chat Completions tool_calls)
+# ===========================================================================
+
+
+# A canned multi-turn neutral transcript reused across binding-parity tests.
+PARITY_TRANSCRIPT = [
+    {"role": "user", "text": "review the repo"},
+    {
+        "role": "assistant",
+        "text": "let me read it",
+        "tool_calls": [pv.NeutralToolCall(id="c1", name="read_file", input={"path": "a.py"})],
+    },
+    {
+        "role": "tool",
+        "results": [{"id": "c1", "name": "read_file", "content": "alpha\nbeta"}],
+    },
+]
+
+
+class TestOpenAIWireTranslation:
+    def test_to_input_items_sends_only_new_non_assistant_entries(self):
+        # Assistant turns live server-side (previous_response_id); only the
+        # user message + the tool results become input items.
+        items, upto = pv.OpenAIBinding._to_input_items(PARITY_TRANSCRIPT, 0)
+        assert upto == 3
+        assert items[0] == {"role": "user", "content": "review the repo"}
+        # the assistant turn is skipped; the tool result becomes a
+        # function_call_output keyed by the SAME call_id the model emitted.
+        assert items[1] == {
+            "type": "function_call_output",
+            "call_id": "c1",
+            "output": "alpha\nbeta",
+        }
+        assert len(items) == 2
+
+    def test_to_input_items_resumes_from_offset(self):
+        # On turn 2 the binding has already sent transcript[:2]; only the new
+        # tool entry at index 2 is translated.
+        items, upto = pv.OpenAIBinding._to_input_items(PARITY_TRANSCRIPT, 2)
+        assert upto == 3
+        assert items == [
+            {"type": "function_call_output", "call_id": "c1", "output": "alpha\nbeta"}
+        ]
+
+    def test_to_openai_tool_flattens_function(self):
+        # Responses API flattens function tools (no nested "function" key).
+        tool = pv._verdict_tool_schema()
+        shaped = pv.OpenAIBinding._to_openai_tool(tool)
+        assert shaped["type"] == "function"
+        assert shaped["name"] == "submit_verdict"
+        assert shaped["parameters"]["type"] == "object"
+
+    def test_from_response_extracts_function_call_and_usage(self):
+        data = {
+            "id": "resp_1",
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "thinking out loud"}],
+                },
+                {
+                    "type": "function_call",
+                    "call_id": "call_42",
+                    "name": "grep",
+                    "arguments": '{"pattern": "needle"}',
+                },
+            ],
+            "usage": {"input_tokens": 33, "output_tokens": 44},
+            "status": "completed",
+        }
+        r = pv.OpenAIBinding._from_response(data)
+        assert r.text == "thinking out loud"
+        assert r.tool_calls[0].id == "call_42"
+        assert r.tool_calls[0].name == "grep"
+        assert r.tool_calls[0].input == {"pattern": "needle"}
+        assert r.input_tokens == 33
+        assert r.output_tokens == 44
+        assert r.stop_reason == "end_turn"
+
+    def test_from_response_maps_incomplete_to_max_tokens(self):
+        data = {
+            "output": [],
+            "usage": {},
+            "status": "incomplete",
+            "incomplete_details": {"reason": "max_output_tokens"},
+        }
+        r = pv.OpenAIBinding._from_response(data)
+        assert r.stop_reason == "max_tokens"
+
+    def test_from_response_tolerates_bad_arguments_json(self):
+        data = {
+            "output": [
+                {
+                    "type": "function_call",
+                    "call_id": "c",
+                    "name": "grep",
+                    "arguments": "{not json",
+                }
+            ],
+            "usage": {},
+            "status": "completed",
+        }
+        r = pv.OpenAIBinding._from_response(data)
+        assert r.text == ""
+        assert r.tool_calls[0].input == {}  # malformed args -> empty dict, no crash
+
+    def test_request_uses_responses_api_and_chains_previous_id(self, monkeypatch):
+        calls = []
+
+        class _Resp:
+            def __init__(self, rid):
+                self._rid = rid
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "id": self._rid,
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [{"type": "output_text", "text": "x"}],
+                        }
+                    ],
+                    "usage": {},
+                    "status": "completed",
+                }
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, headers=None, json=None):
+                calls.append({"url": url, "body": json})
+                return _Resp(f"resp_{len(calls)}")
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        cfg = {"api_key_env": "OPENAI_API_KEY", "base_url": "https://x.invalid/v1"}
+        b = pv.OpenAIBinding()
+        # Turn 1.
+        b.request(
+            system="s",
+            transcript=[{"role": "user", "text": "go"}],
+            tools=pv._all_tool_schemas(),
+            force_verdict=False,
+            max_output_tokens=24000,
+            model="gpt-5.4",
+            config=cfg,
+            generation_params={"reasoning_effort": "medium"},
+        )
+        assert calls[0]["url"].endswith("/responses")
+        b0 = calls[0]["body"]
+        assert "previous_response_id" not in b0  # first turn has no prior id
+        assert b0["max_output_tokens"] == 24000
+        assert b0["reasoning"] == {"effort": "medium"}
+        assert b0["store"] is True
+        # Turn 2 (forced) - chains the prior response id, sends only new items.
+        b.request(
+            system="s",
+            transcript=[
+                {"role": "user", "text": "go"},
+                {
+                    "role": "assistant",
+                    "text": "",
+                    "tool_calls": [_tc("read_file", {"path": "a.py"}, "c1")],
+                },
+                {"role": "tool", "results": [{"id": "c1", "name": "read_file", "content": "x"}]},
+            ],
+            tools=pv._all_tool_schemas(),
+            force_verdict=True,
+            max_output_tokens=24000,
+            model="gpt-5.4",
+            config=cfg,
+        )
+        b1 = calls[1]["body"]
+        assert b1["previous_response_id"] == "resp_1"
+        # Only the new tool result is resent; the assistant turn is server-side.
+        assert b1["input"] == [
+            {"type": "function_call_output", "call_id": "c1", "output": "x"}
+        ]
+        assert b1["tool_choice"] == {"type": "function", "name": "submit_verdict"}
+
+    def test_stateful_offset_advances_across_text_only_nudge(self, monkeypatch):
+        # The adversarial path: a text-only assistant turn makes the driver
+        # append a user NUDGE (not a tool result). The stateful cursor must
+        # advance across that extra user turn and never resend the user msg.
+        calls = []
+
+        class _Resp:
+            def __init__(self, rid):
+                self._rid = rid
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "id": self._rid,
+                    "output": [
+                        {"type": "message", "content": [{"type": "output_text", "text": "x"}]}
+                    ],
+                    "usage": {},
+                    "status": "completed",
+                }
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, headers=None, json=None):
+                calls.append(json)
+                return _Resp(f"resp_{len(calls)}")
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        cfg = {"api_key_env": "OPENAI_API_KEY", "base_url": "https://x.invalid/v1"}
+        b = pv.OpenAIBinding()
+        tools = pv._all_tool_schemas()
+        kw = dict(system="s", tools=tools, force_verdict=False, max_output_tokens=100, model="gpt-5.4", config=cfg)
+        # Turn 1: initial user message.
+        t1 = [{"role": "user", "text": "go"}]
+        b.request(transcript=t1, **kw)
+        # Turn 2: assistant returned text only -> driver appended a user nudge.
+        t2 = t1 + [
+            {"role": "assistant", "text": "hmm", "tool_calls": []},
+            {"role": "user", "text": "use the tools then submit_verdict"},
+        ]
+        b.request(transcript=t2, **kw)
+        # Turn 3: now a real tool call + result.
+        t3 = t2 + [
+            {"role": "assistant", "text": "", "tool_calls": [_tc("read_file", {"path": "a.py"}, "c9")]},
+            {"role": "tool", "results": [{"id": "c9", "name": "read_file", "content": "alpha"}]},
+        ]
+        b.request(transcript=t3, **kw)
+
+        # Turn 1 sent the user message, no chaining id.
+        assert calls[0]["input"] == [{"role": "user", "content": "go"}]
+        assert "previous_response_id" not in calls[0]
+        # Turn 2 sent ONLY the nudge (assistant turn is server-side), chained.
+        assert calls[1]["input"] == [
+            {"role": "user", "content": "use the tools then submit_verdict"}
+        ]
+        assert calls[1]["previous_response_id"] == "resp_1"
+        # Turn 3 sent ONLY the new tool result.
+        assert calls[2]["input"] == [
+            {"type": "function_call_output", "call_id": "c9", "output": "alpha"}
+        ]
+        assert calls[2]["previous_response_id"] == "resp_2"
+
+    def test_offset_not_advanced_on_request_failure(self, monkeypatch):
+        # Failure-atomicity: a failed request must NOT advance the cursor, so a
+        # retry resends the same items rather than skipping them.
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, headers=None, json=None):
+                raise RuntimeError("boom")
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        b = pv.OpenAIBinding()
+        before = b._sent_upto
+        with pytest.raises(RuntimeError):
+            b.request(
+                system="s",
+                transcript=[{"role": "user", "text": "go"}],
+                tools=pv._all_tool_schemas(),
+                force_verdict=False,
+                max_output_tokens=100,
+                model="gpt-5.4",
+                config={"api_key_env": "OPENAI_API_KEY"},
+            )
+        assert b._sent_upto == before  # cursor unchanged on failure
+        assert b._response_id is None
+
+    def test_offset_not_advanced_on_parse_failure(self, monkeypatch):
+        # Failure-atomicity part 2: a malformed-but-JSON response that raises
+        # during _from_response() parsing must ALSO leave the cursor untouched
+        # (parse-before-commit ordering), so a retry resends, not skips.
+        class _Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"id": "resp_1", "output": [], "usage": {}, "status": "ok"}
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, headers=None, json=None):
+                return _Resp()
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        b = pv.OpenAIBinding()
+        # Force the parse step to blow up AFTER json() has returned.
+        monkeypatch.setattr(
+            b, "_from_response", lambda data: (_ for _ in ()).throw(ValueError("bad"))
+        )
+        before = b._sent_upto
+        with pytest.raises(ValueError):
+            b.request(
+                system="s",
+                transcript=[{"role": "user", "text": "go"}],
+                tools=pv._all_tool_schemas(),
+                force_verdict=False,
+                max_output_tokens=100,
+                model="gpt-5.4",
+                config={"api_key_env": "OPENAI_API_KEY"},
+            )
+        assert b._sent_upto == before  # cursor NOT advanced past a parse failure
+        assert b._response_id is None
+
+    def test_from_response_skips_non_dict_output_items(self):
+        # A null/garbage output item must not crash the parser.
+        data = {
+            "id": "r",
+            "output": [None, {"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+            "usage": {},
+            "status": "completed",
+        }
+        r = pv.OpenAIBinding._from_response(data)
+        assert r.text == "ok"
+
+
+# ===========================================================================
+# S2: Gemini binding wire translation (function_declarations)
+# ===========================================================================
+
+
+class TestGeminiWireTranslation:
+    def test_to_contents_roundtrips_function_call_and_response(self):
+        contents = pv.GeminiBinding._to_contents(PARITY_TRANSCRIPT)
+        assert contents[0] == {"role": "user", "parts": [{"text": "review the repo"}]}
+        assert contents[1]["role"] == "model"
+        # model turn carries a functionCall part (no id on the wire).
+        fc = [p for p in contents[1]["parts"] if "functionCall" in p][0]
+        assert fc["functionCall"]["name"] == "read_file"
+        assert fc["functionCall"]["args"] == {"path": "a.py"}
+        # tool results go back in a user turn as functionResponse parts.
+        assert contents[2]["role"] == "user"
+        fr = contents[2]["parts"][0]["functionResponse"]
+        assert fr["name"] == "read_file"
+        assert fr["response"] == {"result": "alpha\nbeta"}
+
+    def test_to_decl_flattens_tool(self):
+        tool = pv._verdict_tool_schema()
+        decl = pv.GeminiBinding._to_decl(tool)
+        assert decl["name"] == "submit_verdict"
+        assert decl["parameters"]["type"] == "object"
+
+    def test_from_response_extracts_function_call_and_usage(self):
+        data = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": "let me look"},
+                            {
+                                "functionCall": {
+                                    "name": "list_dir",
+                                    "args": {"path": "."},
+                                }
+                            },
+                        ]
+                    },
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 12,
+                "candidatesTokenCount": 5,
+                "thoughtsTokenCount": 7,
+            },
+        }
+        r = pv.GeminiBinding._from_response(data)
+        assert r.text == "let me look"
+        assert r.tool_calls[0].name == "list_dir"
+        assert r.tool_calls[0].input == {"path": "."}
+        assert r.tool_calls[0].id  # a synthesized non-empty id for result routing
+        assert r.input_tokens == 12
+        # thoughts folded into output so the budget/cost caps see honest spend.
+        assert r.output_tokens == 12  # 5 candidates + 7 thoughts
+        assert r.stop_reason == "end_turn"
+
+    def test_from_response_maps_max_tokens_finish(self):
+        data = {
+            "candidates": [{"content": {"parts": []}, "finishReason": "MAX_TOKENS"}],
+            "usageMetadata": {},
+        }
+        r = pv.GeminiBinding._from_response(data)
+        assert r.stop_reason == "max_tokens"
+
+    def test_multiple_same_name_calls_get_distinct_ids_and_positional_responses(self):
+        # Gemini has no wire id; two read_file calls in one turn must parse to
+        # DISTINCT synthesized ids, and their functionResponse parts must go
+        # back in the same order (positional matching).
+        data = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"functionCall": {"name": "read_file", "args": {"path": "a.py"}}},
+                            {"functionCall": {"name": "read_file", "args": {"path": "b.py"}}},
+                        ]
+                    },
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {},
+        }
+        r = pv.GeminiBinding._from_response(data)
+        assert len(r.tool_calls) == 2
+        assert r.tool_calls[0].id != r.tool_calls[1].id  # distinct
+        assert r.tool_calls[0].input == {"path": "a.py"}
+        assert r.tool_calls[1].input == {"path": "b.py"}
+        # The driver builds tool results in call order; _to_contents must emit
+        # functionResponse parts in that same order.
+        transcript = [
+            {"role": "user", "text": "go"},
+            {
+                "role": "assistant",
+                "text": "",
+                "tool_calls": list(r.tool_calls),
+            },
+            {
+                "role": "tool",
+                "results": [
+                    {"id": r.tool_calls[0].id, "name": "read_file", "content": "AAA"},
+                    {"id": r.tool_calls[1].id, "name": "read_file", "content": "BBB"},
+                ],
+            },
+        ]
+        contents = pv.GeminiBinding._to_contents(transcript)
+        responses = [
+            p["functionResponse"] for p in contents[2]["parts"] if "functionResponse" in p
+        ]
+        assert [fr["response"]["result"] for fr in responses] == ["AAA", "BBB"]
+
+    def test_gemini3_uses_thinking_level_not_budget(self, monkeypatch):
+        captured = {}
+
+        class _Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "candidates": [
+                        {"content": {"parts": [{"text": "x"}]}, "finishReason": "STOP"}
+                    ],
+                    "usageMetadata": {},
+                }
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None):
+                captured["body"] = json
+                return _Resp()
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        pv.GeminiBinding().request(
+            system="s",
+            transcript=[{"role": "user", "text": "go"}],
+            tools=pv._all_tool_schemas(),
+            force_verdict=False,
+            max_output_tokens=24000,
+            model="gemini-3-pro",
+            config={"api_key_env": "GEMINI_API_KEY", "base_url": "https://g.invalid/v1beta"},
+            generation_params={"thinking_level": "high"},
+        )
+        thinking = captured["body"]["generationConfig"]["thinkingConfig"]
+        assert thinking == {"thinkingLevel": "HIGH"}  # uppercased; not thinkingBudget
+        assert "thinkingBudget" not in thinking
+
+    def test_force_verdict_sets_tool_config_and_bounded_thinking(self, monkeypatch):
+        captured = {}
+
+        class _Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "candidates": [
+                        {"content": {"parts": [{"text": "x"}]}, "finishReason": "STOP"}
+                    ],
+                    "usageMetadata": {},
+                }
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None):
+                captured["url"] = url
+                captured["body"] = json
+                return _Resp()
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "Client", _Client)
+        b = pv.GeminiBinding()
+        b.request(
+            system="s",
+            transcript=[{"role": "user", "text": "go"}],
+            tools=pv._all_tool_schemas(),
+            force_verdict=True,
+            max_output_tokens=24000,
+            model="gemini-2.5-pro",
+            config={
+                "api_key_env": "GEMINI_API_KEY",
+                "base_url": "https://g.invalid/v1beta",
+            },
+            generation_params={"thinking_budget": 8192},
+        )
+        assert "generateContent" in captured["url"]
+        body = captured["body"]
+        fcc = body["tool_config"]["function_calling_config"]
+        assert fcc["mode"] == "ANY"
+        assert fcc["allowed_function_names"] == ["submit_verdict"]
+        assert body["generationConfig"]["maxOutputTokens"] == 24000
+        assert body["generationConfig"]["thinkingConfig"]["thinkingBudget"] == 8192
+
+
+# ===========================================================================
+# S2: tool-call parity across the three providers
+# ===========================================================================
+
+
+class TestToolCallParity:
+    def test_all_bindings_expose_the_same_logical_toolset(self):
+        tools = pv._all_tool_schemas()
+        names = {t["name"] for t in tools}
+        anthropic = {pv.AnthropicBinding._to_anthropic_tool(t)["name"] for t in tools}
+        openai = {pv.OpenAIBinding._to_openai_tool(t)["name"] for t in tools}
+        gemini = {pv.GeminiBinding._to_decl(t)["name"] for t in tools}
+        assert names == anthropic == openai == gemini
+        assert names == {"read_file", "grep", "list_dir", "submit_verdict"}
+
+    def test_all_bindings_preserve_tool_parameter_schema(self):
+        verdict = pv._verdict_tool_schema()
+        a = pv.AnthropicBinding._to_anthropic_tool(verdict)["input_schema"]
+        o = pv.OpenAIBinding._to_openai_tool(verdict)["parameters"]
+        g = pv.GeminiBinding._to_decl(verdict)["parameters"]
+        assert a == o == g == verdict["parameters"]
+
+    def test_all_bindings_parse_the_same_neutral_tool_call(self):
+        # Each provider expresses a read_file({path: a.py}) call in its own
+        # native response shape; all three _from_response parsers must yield
+        # the SAME neutral (name, input) the driver dispatches on.
+        anthropic_resp = {
+            "content": [
+                {"type": "tool_use", "id": "x", "name": "read_file", "input": {"path": "a.py"}}
+            ],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "stop_reason": "tool_use",
+        }
+        openai_resp = {
+            "id": "r",
+            "output": [
+                {
+                    "type": "function_call",
+                    "call_id": "x",
+                    "name": "read_file",
+                    "arguments": '{"path": "a.py"}',
+                }
+            ],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "status": "completed",
+        }
+        gemini_resp = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"functionCall": {"name": "read_file", "args": {"path": "a.py"}}}]
+                    },
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {"promptTokenCount": 1, "candidatesTokenCount": 1},
+        }
+        a = pv.AnthropicBinding._from_response(anthropic_resp).tool_calls[0]
+        o = pv.OpenAIBinding._from_response(openai_resp).tool_calls[0]
+        g = pv.GeminiBinding._from_response(gemini_resp).tool_calls[0]
+        assert (a.name, a.input) == ("read_file", {"path": "a.py"})
+        assert (o.name, o.input) == ("read_file", {"path": "a.py"})
+        assert (g.name, g.input) == ("read_file", {"path": "a.py"})
+
+
+# ===========================================================================
+# S2: executor config block resolution (router-config.yaml pull_verifier:)
+# ===========================================================================
+
+
+class TestExecutorConfig:
+    def test_caps_from_config_reads_block(self):
+        cfg = {
+            "pull_verifier": {
+                "caps": {
+                    "max_turns": 20,
+                    "max_output_tokens": 24000,
+                    "token_budget": 500000,
+                    "cost_ceiling_usd": 2.5,
+                }
+            }
+        }
+        caps = pv.caps_from_config(cfg)
+        assert caps.max_turns == 20
+        assert caps.max_output_tokens == 24000
+        assert caps.token_budget == 500000
+        assert caps.cost_ceiling_usd == 2.5
+
+    def test_caps_from_config_falls_back_to_defaults(self):
+        # No block at all -> the exact S1 PullCaps defaults (backward compatible).
+        caps = pv.caps_from_config({})
+        assert caps == pv.PullCaps()
+
+    def test_caps_from_config_partial_block_merges_defaults(self):
+        caps = pv.caps_from_config({"pull_verifier": {"caps": {"max_turns": 3}}})
+        assert caps.max_turns == 3
+        assert caps.max_output_tokens == pv.PullCaps().max_output_tokens
+
+    def test_resolve_model_reads_executor_pin(self):
+        cfg = {"pull_verifier": {"models": {"openai": "gpt-5.4-mini"}}}
+        assert pv._resolve_model("openai", None, cfg) == "gpt-5.4-mini"
+
+    def test_resolve_model_explicit_wins_over_pin(self):
+        cfg = {"pull_verifier": {"models": {"openai": "gpt-5.4-mini"}}}
+        assert pv._resolve_model("openai", "gpt-5.4", cfg) == "gpt-5.4"
+
+    def test_resolve_model_falls_back_to_default_models(self):
+        assert pv._resolve_model("google", None, {}) == "gemini-2.5-pro"
+
+    def test_resolve_gen_params_reads_block(self):
+        cfg = {
+            "pull_verifier": {
+                "generation_params": {"openai": {"reasoning_effort": "high"}}
+            }
+        }
+        assert pv._resolve_gen_params("openai", cfg) == {"reasoning_effort": "high"}
+
+    def test_resolve_gen_params_empty_when_absent(self):
+        assert pv._resolve_gen_params("openai", {}) == {}
+
+    def test_real_router_config_resolves_executor_block(self):
+        # The shipped router-config.yaml must carry a valid pull_verifier block
+        # with all three provider pins + caps that the resolvers can read.
+        cfg = pv._load_router_config()
+        block = pv._executor_block(cfg)
+        assert block, "router-config.yaml is missing the pull_verifier block"
+        assert set(block["models"]) == {"anthropic", "openai", "google"}
+        caps = pv.caps_from_config(cfg)
+        # The shipped caps bump max_output_tokens for GPT-5.4 reasoning headroom.
+        assert caps.max_output_tokens >= 24000
+        for prov in ("anthropic", "openai", "google"):
+            assert pv._resolve_model(prov, None, cfg)

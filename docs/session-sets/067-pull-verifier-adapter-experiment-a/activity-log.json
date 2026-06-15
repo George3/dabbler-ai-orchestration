@@ -1,7 +1,7 @@
 {
   "sessionSetName": "067-pull-verifier-adapter-experiment-a",
   "createdDate": "2026-06-15T13:10:32.823191+00:00",
-  "totalSessions": 0,
+  "totalSessions": 4,
   "entries": [
     {
       "sessionNumber": 1,
@@ -13,6 +13,60 @@
       "routedApiCalls": [],
       "kind": "path_aware_critique",
       "choice": "required"
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "register",
+      "dateTime": "2026-06-15T10:08:44.077319-04:00",
+      "description": "Registered S2 start; read guidance, S1 deliverables (pull_verifier.py, tool-contract.md), providers.py, config.py, router-config.yaml; confirmed 3 provider keys present.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "openai-binding",
+      "dateTime": "2026-06-15T10:17:52.500727-04:00",
+      "description": "Added OpenAIBinding (Responses API: function_call/function_call_output, previous_response_id reasoning chaining) - chat completions rejects function tools+reasoning_effort for gpt-5.4.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "gemini-binding",
+      "dateTime": "2026-06-15T10:17:52.500727-04:00",
+      "description": "Added GeminiBinding (function_declarations/functionCall/functionResponse, bounded thinkingBudget, thoughts folded into output tokens).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "config-wired",
+      "dateTime": "2026-06-15T10:17:52.500727-04:00",
+      "description": "Wired pull_verifier executor block in router-config.yaml (per-provider model pins, caps max_output_tokens=24000, per-provider generation_params); resolvers caps_from_config/_resolve_model/_resolve_gen_params read it.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "three-provider-parity",
+      "dateTime": "2026-06-15T10:17:52.500727-04:00",
+      "description": "Metered headless check: all 3 providers drove read-only tool loop, issued real probes (2-3 each), returned schema-valid ISSUES_FOUND, all caught seeded defect; ~$0.048 total. s2-headless-results.json.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "s2-verified",
+      "dateTime": "2026-06-15T10:35:10.902619-04:00",
+      "description": "Cross-provider verification (gpt-5.4): R1 ISSUES_FOUND 3 Minor (OpenAI cursor not failure-atomic; OpenAI nudge-offset test gap; Gemini multi-same-name + gemini-3 test gaps) -> fixed -> R2 1 Minor (cursor committed before parse) -> fixed (parse-before-commit + non-dict-item skip) -> R3 VERIFIED. Full ai_router suite GREEN 1492 passed/1 skipped. disposition.json + s2-issues*.json + routed S3 next-orch rec (claude-opus-4-8 high) written.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

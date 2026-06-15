@@ -635,6 +635,46 @@ verification:
     # Verification prompt template
     prompt_template_file: prompt-templates/verification.md
 
+# --- Pull-verifier executor (Set 067) ---
+# Config for the route()-PARALLEL agentic seam in ai_router/pull_verifier.py
+# (pull_route). This is NOT a single-shot routed model: the verifier drives a
+# multi-turn read-only tool loop and the orchestrator answers tool calls with
+# raw ground truth. Distinct from the routing table above on purpose - it owns
+# its own per-provider model pins, the shared per-run caps, and the per-provider
+# generation knobs. The providers: block above is shared (api_key_env /
+# base_url / timeout_seconds); only the call path differs.
+pull_verifier:
+  # Per-provider model pin. Resolved by pull_verifier._resolve_model when the
+  # caller does not pass model=...; falls back to _DEFAULT_MODELS if absent.
+  models:
+    anthropic: claude-sonnet-4-6
+    openai: gpt-5.4
+    google: gemini-2.5-pro
+  # Shared per-run bounds (PullCaps). The loop stops at the first ceiling.
+  # max_output_tokens is deliberately generous: GPT-5.4 reasoning consumes the
+  # output budget, and a too-small ceiling yields empty content (the observed
+  # 9000-is-empty / 24000-is-fine failure mode), so 24000 keeps reasoning +
+  # the tool call + the verdict inside one call across all three providers.
+  caps:
+    max_turns: 14
+    max_output_tokens: 24000
+    token_budget: 300000
+    cost_ceiling_usd: 1.00
+  # Per-provider reasoning knobs (same vocabulary as providers.py /
+  # generation_params). Bounded for Gemini per L-064-1 (no -1 dynamic budget in
+  # a headless loop); medium reasoning for the frontier models keeps the
+  # path-aware critique careful without runaway spend.
+  generation_params:
+    anthropic:
+      effort: medium
+      thinking:
+        enabled: true
+        type: adaptive
+    openai:
+      reasoning_effort: medium
+    google:
+      thinking_budget: 8192
+
 # --- Metrics ---
 # Controls the append-only metrics log read by report.py (Session 4).
 # Disable if you want to stop collecting. Retention note: log is

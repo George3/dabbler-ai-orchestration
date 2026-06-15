@@ -1,21 +1,22 @@
 {
   "status": "completed",
-  "summary": "Set 067 Session 1 of 4: first-party tool-loop pull-verifier adapter core + Anthropic binding. Shipped ai_router/pull_verifier.py with pull_route() -- a route()-PARALLEL agentic seam (verifier drives a read-only tool loop; the orchestrator is a deterministic servant returning RAW ground truth). Includes: read-only toolset read_file/grep/list_dir, hardened sandbox confinement (_safe + _within_sandbox + os.walk followlinks=False covering every dereference), turn/token/cost caps with post-hoc stop reasons, the Anthropic tool_use binding behind a provider-agnostic loop driver, a forced submit_verdict matching the Set 066 path-aware-critique.json critique-entry shape, tool-call-trace instrumentation (raw/elided flags; zero-probe run flagged ok=False), and the load-bearing deterministic-servant guardrail (_canonical_result + _guard_raw_ground_truth: a summarizing OR fake-error servant is a HARD failure). 54 new unit tests (FakeBinding; no metered calls). Exported the seam from ai_router/__init__.py. Tool contract pinned in tool-contract.md. NO release (S4). Full pytest suite GREEN (1458 prior + 54 new = 1512 pass, 1 pre-existing skip). VERIFICATION: gpt-5.4 cross-provider, R1 ISSUES_FOUND (1 Critical grep sandbox breakout via unconfined rglob + 3 Major: error-exemption hole, char-vs-byte elision, config=None pricing) -> all fixed -> R2 ISSUES_FOUND (1 new Major: dropped regular-file filter in _walk_files; 1 Minor schema/parser misalignment) -> both fixed -> R3 VERIFIED, no new defects. Verify spend ~$0.669 (+$0.176 aborted max_tokens run, L-064-1). OpenAI/Gemini bindings + router-config executor wiring + 3-provider headless check = Session 2.",
+  "summary": "Set 067 Session 2 of 4: OpenAI + Gemini pull-verifier bindings + router-config executor wiring. Added two bindings behind the SAME provider-agnostic pull_route loop driver shipped in S1: OpenAIBinding (uses the Responses API, not chat/completions, because gpt-5.4 returns HTTP 400 for function tools + reasoning_effort on chat/completions -> keeps reasoning items server-side via previous_response_id chaining, store=true, sending only the entries new since the last response each turn; stateful for one run) and GeminiBinding (function_declarations / functionCall <-> functionResponse positional matching with synthesized internal ids; bounded thinkingBudget; thoughtsTokenCount folded into output_tokens for honest cost/budget caps). Extended the ProviderBinding interface with generation_params and applied effort/thinking in AnthropicBinding too. Wired a dedicated pull_verifier executor block into router-config.yaml (per-provider model pins, shared caps with max_output_tokens=24000 for gpt-5.4 reasoning headroom, per-provider generation_params) + resolvers caps_from_config / _resolve_model / _resolve_gen_params (no-block path == exact S1 PullCaps defaults; explicit caps= still wins). 3-PROVIDER HEADLESS CAPABILITY CHECK (small metered live test): all three providers drove the read-only tool loop, issued real probe tool calls (2-3 each), returned schema-valid ISSUES_FOUND verdicts, and all three caught the seeded average()-subtracts-1 defect (~$0.048 total; s2-headless-results.json). Tests: pull_verifier suite 80 -> 86 (OpenAI Responses-API shape + stateful chaining + nudge offset + failure-atomicity; Gemini positional multi-call + thinking-level branch; tool-call parity across all three; executor config resolution + real-config load). NO release (Session 4). Full ai_router pytest suite GREEN. VERIFICATION: gpt-5.4 cross-provider, R1 ISSUES_FOUND (3 Minor: OpenAI cursor-not-failure-atomic, OpenAI nudge-offset test gap, Gemini multi-same-name + gemini-3 test gap) -> fixed -> R2 ISSUES_FOUND (1 Minor: cursor still committed before parse) -> fixed (parse-before-commit + defensive non-dict-item skip) -> R3 VERIFIED, no regression. Verify spend ~$0.481. Session 3 = Experiment A capability study.",
   "files_changed": [
     "ai_router/pull_verifier.py",
-    "ai_router/__init__.py",
+    "ai_router/router-config.yaml",
     "ai_router/tests/test_pull_verifier.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/tool-contract.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/ai-assignment.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification-round-2.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-verification-round-3.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s1-issues.json",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification_r2.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s1_verification_r3.py",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/next-orchestrator-rec.md",
-    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_next_orch.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_headless_check.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-headless-results.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-issues.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification_r2.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification-round-2.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-issues-round-2.json",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_s2_verification_r3.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/s2-verification-round-3.md",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/run_next_orch_s3.py",
+    "docs/session-sets/067-pull-verifier-adapter-experiment-a/next-orchestrator-rec-s3.md",
     "docs/session-sets/067-pull-verifier-adapter-experiment-a/activity-log.json",
     "docs/session-sets/067-pull-verifier-adapter-experiment-a/disposition.json"
   ],
@@ -25,10 +26,10 @@
     "engine": "claude-code",
     "provider": "anthropic",
     "model": "claude-opus-4-8",
-    "effort": "medium",
+    "effort": "high",
     "reason": {
       "code": "continue-current-trajectory",
-      "specifics": "Routed rec (gemini-pro): S2 extends the S1 binding interface (OpenAI tool_calls + Gemini function_declarations behind the same provider-agnostic loop driver); the incumbent has full context on the loop driver and the Anthropic reference binding."
+      "specifics": "Routed rec (gemini-pro): Session 3 is an empirical capability study (pre-register criteria, build a seeded-defect mock-repo + falsifier suite, run the 2x2 arms with K-repeats, analyze into experiment-a-results.md). It needs rigorous experimental-design + statistical-honesty reasoning; the incumbent has full adapter context and the high-effort reasoning the study warrants. Effort bumped to high for the analysis."
     }
   },
   "blockers": [],
@@ -37,6 +38,6 @@
     "L-064-1",
     "L-064-3",
     "L-064-6",
-    "L-065-1"
+    "L-064-10"
   ]
 }

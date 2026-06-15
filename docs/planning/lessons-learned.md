@@ -212,7 +212,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   alongside the diff so additions are visible.
 
 ## State The Suite Baseline And Release Contract Up Front In Verification Round 1
-<!-- lesson: id="L-064-10" added-set="062" last-used-set="065" status="promoted" scope="portable" -->
+<!-- lesson: id="L-064-10" added-set="062" last-used-set="067" status="promoted" scope="portable" -->
 
 - **Promoted.** This lesson now lives at `project-guidance.md` →
   Conventions → Workflow Expectations: *"Open every session-verification

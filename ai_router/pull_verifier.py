@@ -663,6 +663,7 @@ class ProviderBinding:
         max_output_tokens: int,
         model: str,
         config: dict,
+        generation_params: Optional[dict] = None,
     ) -> BindingResponse:
         raise NotImplementedError
 
@@ -682,9 +683,11 @@ class AnthropicBinding(ProviderBinding):
         max_output_tokens: int,
         model: str,
         config: dict,
+        generation_params: Optional[dict] = None,
     ) -> BindingResponse:
         import httpx
 
+        gp = generation_params or {}
         api_key = _resolve_api_key(config)
         messages = self._to_messages(transcript)
         body = {
@@ -694,6 +697,14 @@ class AnthropicBinding(ProviderBinding):
             "tools": [self._to_anthropic_tool(t) for t in tools],
             "messages": messages,
         }
+        # Reasoning knobs (same shape as providers.py): effort + adaptive
+        # thinking. Optional; absent keys leave the API defaults in place.
+        thinking = gp.get("thinking") or {}
+        if thinking.get("enabled"):
+            body["thinking"] = {"type": thinking.get("type", "adaptive")}
+        effort = gp.get("effort")
+        if effort:
+            body.setdefault("output_config", {})["effort"] = effort
         if force_verdict:
             body["tool_choice"] = {"type": "tool", "name": SUBMIT_VERDICT_TOOL}
         headers = {
@@ -775,9 +786,329 @@ class AnthropicBinding(ProviderBinding):
         )
 
 
-# Binding registry. S2 fills in openai / google.
+class OpenAIBinding(ProviderBinding):
+    """OpenAI Responses API function-tool binding.
+
+    GPT-5.x rejects function tools combined with ``reasoning_effort`` on
+    ``/v1/chat/completions`` (the API returns 400 "use /v1/responses
+    instead"), and the pull verifier always presents tools AND wants
+    reasoning for a careful path-aware critique. So this binding uses the
+    Responses API, where the provider's tool vocabulary is the
+    ``function_call`` / ``function_call_output`` item pair (the Responses-API
+    spelling of OpenAI's ``tool_calls``).
+
+    Reasoning items are kept **server-side** via ``previous_response_id``
+    chaining (``store: true``), so the driver's neutral transcript never has
+    to carry opaque reasoning blobs that the API would otherwise require be
+    echoed back. Each turn sends only the entries new since the last response
+    (the user message or the ``function_call_output`` results); OpenAI threads
+    the prior reasoning + ``function_call`` context itself. The binding is
+    therefore **stateful for the lifetime of one** :func:`pull_route` run -
+    the driver constructs one fresh instance per run, so the state is per-run.
+    """
+
+    provider_name = "openai"
+
+    def __init__(self) -> None:
+        self._response_id: Optional[str] = None
+        self._sent_upto: int = 0
+
+    def request(
+        self,
+        *,
+        system: str,
+        transcript: List[dict],
+        tools: List[dict],
+        force_verdict: bool,
+        max_output_tokens: int,
+        model: str,
+        config: dict,
+        generation_params: Optional[dict] = None,
+    ) -> BindingResponse:
+        import httpx
+
+        gp = generation_params or {}
+        api_key = _resolve_api_key(config)
+        # Stage the new cursor; commit it ONLY after a successful response so a
+        # failed/retried request on the same instance cannot skip unsent items
+        # (GPT-5.4 S2 verification, finding 1 - failure-atomicity).
+        input_items, new_upto = self._to_input_items(transcript, self._sent_upto)
+        body: dict = {
+            "model": model,
+            "instructions": system,
+            "input": input_items,
+            "max_output_tokens": max_output_tokens,
+            "tools": [self._to_openai_tool(t) for t in tools],
+            # store=true keeps reasoning + function_call context server-side so
+            # previous_response_id chaining works without echoing reasoning.
+            "store": True,
+        }
+        if self._response_id:
+            body["previous_response_id"] = self._response_id
+        effort = gp.get("reasoning_effort")
+        if effort:
+            body["reasoning"] = {"effort": effort}
+        if force_verdict:
+            body["tool_choice"] = {"type": "function", "name": SUBMIT_VERDICT_TOOL}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        base = config.get("base_url", "https://api.openai.com/v1")
+        url = f"{base}/responses"
+        timeout = config.get("timeout_seconds", 120)
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, headers=headers, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+        # Parse FIRST, then commit chaining state - so a parse failure on a
+        # malformed-but-JSON response leaves the cursor untouched and a retry
+        # resends rather than skips (GPT-5.4 S2 verification R2, finding 1).
+        parsed = self._from_response(data)
+        self._response_id = data.get("id") or self._response_id
+        self._sent_upto = new_upto
+        return parsed
+
+    @staticmethod
+    def _to_openai_tool(tool: dict) -> dict:
+        # Responses API flattens function tools (no nested "function" key).
+        return {
+            "type": "function",
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["parameters"],
+        }
+
+    @staticmethod
+    def _to_input_items(
+        transcript: List[dict], start: int
+    ) -> Tuple[List[dict], int]:
+        """Translate only the transcript entries new since ``start``.
+
+        Assistant turns are stored server-side (referenced by
+        ``previous_response_id``) and must NOT be resent - resending a
+        ``function_call`` without its server-side reasoning item is exactly
+        the error the chaining design avoids. Returns ``(items, new_start)``.
+        """
+        items: List[dict] = []
+        for entry in transcript[start:]:
+            role = entry["role"]
+            if role == "user":
+                items.append({"role": "user", "content": entry["text"]})
+            elif role == "tool":
+                for r in entry["results"]:
+                    items.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": r["id"],
+                            "output": r["content"],
+                        }
+                    )
+            # assistant: skip (server-side via previous_response_id)
+        return items, len(transcript)
+
+    @staticmethod
+    def _from_response(data: dict) -> BindingResponse:
+        text_parts: List[str] = []
+        tool_calls: List[NeutralToolCall] = []
+        for item in data.get("output", []) or []:
+            if not isinstance(item, dict):
+                continue  # defensive: skip a malformed (e.g. null) output item
+            itype = item.get("type")
+            if itype == "function_call":
+                raw_args = item.get("arguments") or "{}"
+                try:
+                    parsed = json.loads(raw_args)
+                except (ValueError, TypeError):
+                    parsed = {}
+                if not isinstance(parsed, dict):
+                    parsed = {}
+                tool_calls.append(
+                    NeutralToolCall(
+                        id=item.get("call_id", ""),
+                        name=item.get("name", ""),
+                        input=parsed,
+                    )
+                )
+            elif itype == "message":
+                for c in item.get("content", []) or []:
+                    if c.get("type") in ("output_text", "text"):
+                        text_parts.append(c.get("text", ""))
+        usage = data.get("usage", {}) or {}
+        in_tok = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        out_tok = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        status = data.get("status", "completed")
+        if status == "incomplete":
+            reason = (data.get("incomplete_details") or {}).get("reason")
+            stop = (
+                "max_tokens"
+                if reason == "max_output_tokens"
+                else (reason or "incomplete")
+            )
+        else:
+            stop = "end_turn"
+        return BindingResponse(
+            text="".join(text_parts),
+            tool_calls=tool_calls,
+            input_tokens=int(in_tok),
+            output_tokens=int(out_tok),
+            stop_reason=stop,
+        )
+
+
+class GeminiBinding(ProviderBinding):
+    """Google Gemini ``function_declarations`` binding.
+
+    Gemini has no per-call tool-call id: a model turn carries ``functionCall``
+    parts and the matching results go back as ``functionResponse`` parts in a
+    following ``user`` turn, matched positionally by name. The driver's neutral
+    ids are synthesized here for internal result routing only and are never
+    sent on the wire.
+    """
+
+    provider_name = "google"
+
+    def request(
+        self,
+        *,
+        system: str,
+        transcript: List[dict],
+        tools: List[dict],
+        force_verdict: bool,
+        max_output_tokens: int,
+        model: str,
+        config: dict,
+        generation_params: Optional[dict] = None,
+    ) -> BindingResponse:
+        import httpx
+
+        gp = generation_params or {}
+        api_key = _resolve_api_key(config)
+        base = config.get(
+            "base_url", "https://generativelanguage.googleapis.com/v1beta"
+        )
+        url = f"{base}/models/{model}:generateContent?key={api_key}"
+
+        generation_config: dict = {"maxOutputTokens": max_output_tokens}
+        thinking_cfg: dict = {}
+        if model.startswith("gemini-3"):
+            level = gp.get("thinking_level")
+            if level:
+                thinking_cfg["thinkingLevel"] = str(level).upper()
+        else:
+            budget = gp.get("thinking_budget")
+            if budget is not None:
+                thinking_cfg["thinkingBudget"] = int(budget)
+        if thinking_cfg:
+            generation_config["thinkingConfig"] = thinking_cfg
+
+        body: dict = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": self._to_contents(transcript),
+            "tools": [
+                {"function_declarations": [self._to_decl(t) for t in tools]}
+            ],
+            "generationConfig": generation_config,
+        }
+        if force_verdict:
+            body["tool_config"] = {
+                "function_calling_config": {
+                    "mode": "ANY",
+                    "allowed_function_names": [SUBMIT_VERDICT_TOOL],
+                }
+            }
+        timeout = config.get("timeout_seconds", 120)
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+        return self._from_response(data)
+
+    @staticmethod
+    def _to_decl(tool: dict) -> dict:
+        return {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["parameters"],
+        }
+
+    @staticmethod
+    def _to_contents(transcript: List[dict]) -> List[dict]:
+        contents: List[dict] = []
+        for entry in transcript:
+            role = entry["role"]
+            if role == "user":
+                contents.append(
+                    {"role": "user", "parts": [{"text": entry["text"]}]}
+                )
+            elif role == "assistant":
+                parts: List[dict] = []
+                if entry.get("text"):
+                    parts.append({"text": entry["text"]})
+                for tc in entry.get("tool_calls", []):
+                    parts.append(
+                        {"functionCall": {"name": tc.name, "args": tc.input}}
+                    )
+                contents.append({"role": "model", "parts": parts})
+            elif role == "tool":
+                # functionResponse parts go in a user turn, matched by name.
+                parts = [
+                    {
+                        "functionResponse": {
+                            "name": r["name"],
+                            "response": {"result": r["content"]},
+                        }
+                    }
+                    for r in entry["results"]
+                ]
+                contents.append({"role": "user", "parts": parts})
+        return contents
+
+    @staticmethod
+    def _from_response(data: dict) -> BindingResponse:
+        candidates = data.get("candidates") or [{}]
+        parts = (candidates[0].get("content", {}) or {}).get("parts", []) or []
+        text_chunks: List[str] = []
+        tool_calls: List[NeutralToolCall] = []
+        for i, part in enumerate(parts):
+            if "text" in part:
+                text_chunks.append(part["text"])
+            fc = part.get("functionCall")
+            if fc:
+                name = fc.get("name", "")
+                tool_calls.append(
+                    NeutralToolCall(
+                        id=f"{name}-{i}", name=name, input=fc.get("args", {}) or {}
+                    )
+                )
+        usage = data.get("usageMetadata", {}) or {}
+        # thoughtsTokenCount is billed as output but reported separately; fold
+        # it into output_tokens so the cost/token caps see honest spend.
+        out_tokens = usage.get("candidatesTokenCount", 0) + usage.get(
+            "thoughtsTokenCount", 0
+        )
+        finish = candidates[0].get("finishReason", "STOP")
+        stop_reason = (
+            "max_tokens"
+            if finish == "MAX_TOKENS"
+            else "end_turn"
+            if finish == "STOP"
+            else str(finish).lower()
+        )
+        return BindingResponse(
+            text="".join(text_chunks),
+            tool_calls=tool_calls,
+            input_tokens=usage.get("promptTokenCount", 0),
+            output_tokens=out_tokens,
+            stop_reason=stop_reason,
+        )
+
+
+# Binding registry. S2 added openai / google behind the same driver.
 _BINDINGS: Dict[str, type] = {
     "anthropic": AnthropicBinding,
+    "openai": OpenAIBinding,
+    "google": GeminiBinding,
 }
 
 
@@ -830,10 +1161,13 @@ def _provider_config(provider: str, config: Optional[dict]) -> dict:
     return pcfg
 
 
-# Default model pins per provider (S1: Anthropic). S2 wires these from a
-# dedicated executor block in router-config.yaml.
+# Default model pins per provider, used only when the executor config block
+# (router-config.yaml ``pull_verifier.models``) does not pin one. S2 wires the
+# config block; these are the last-resort fallbacks.
 _DEFAULT_MODELS: Dict[str, str] = {
     "anthropic": "claude-sonnet-4-6",
+    "openai": "gpt-5.4",
+    "google": "gemini-2.5-pro",
 }
 
 # Fallback pricing per model id ($/1M tokens) for cost-cap accounting when the
@@ -841,13 +1175,62 @@ _DEFAULT_MODELS: Dict[str, str] = {
 _FALLBACK_PRICING: Dict[str, Tuple[float, float]] = {
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-opus-4-8": (5.00, 25.00),
+    "gpt-5.4": (2.50, 15.00),
+    "gpt-5.4-mini": (0.75, 4.50),
+    "gemini-2.5-pro": (1.25, 10.00),
+    "gemini-2.5-flash": (0.30, 2.50),
 }
 
 
-def _resolve_model(provider: str, model: Optional[str]) -> str:
+# ---------------------------------------------------------------------------
+# Executor config block (router-config.yaml ``pull_verifier:``).
+#
+# This is the route()-PARALLEL executor's own config: per-provider model pins,
+# the shared caps, and optional per-provider generation knobs. It is DISTINCT
+# from the single-shot routing table (models / tier_assignments) - the pull
+# verifier is not a routed model, it is an agentic seam.
+# ---------------------------------------------------------------------------
+
+
+def _executor_block(config: Optional[dict]) -> dict:
+    return (config or {}).get("pull_verifier", {}) or {}
+
+
+def caps_from_config(config: Optional[dict]) -> PullCaps:
+    """Build :class:`PullCaps` from the ``pull_verifier.caps`` block.
+
+    Any field absent from the block falls back to the :class:`PullCaps`
+    dataclass default, so a config with no ``pull_verifier`` block yields the
+    exact S1 defaults (backward compatible).
+    """
+    caps_cfg = _executor_block(config).get("caps", {}) or {}
+    base = PullCaps()
+    return PullCaps(
+        max_turns=int(caps_cfg.get("max_turns", base.max_turns)),
+        max_output_tokens=int(
+            caps_cfg.get("max_output_tokens", base.max_output_tokens)
+        ),
+        token_budget=int(caps_cfg.get("token_budget", base.token_budget)),
+        cost_ceiling_usd=float(
+            caps_cfg.get("cost_ceiling_usd", base.cost_ceiling_usd)
+        ),
+    )
+
+
+def _resolve_gen_params(provider: str, config: Optional[dict]) -> dict:
+    """Per-provider generation knobs from ``pull_verifier.generation_params``."""
+    gp = _executor_block(config).get("generation_params", {}) or {}
+    return gp.get(provider, {}) or {}
+
+
+def _resolve_model(
+    provider: str, model: Optional[str], config: Optional[dict] = None
+) -> str:
     if model:
         return model
-    pinned = _DEFAULT_MODELS.get(provider)
+    pinned = _executor_block(config).get("models", {}).get(provider)
+    if not pinned:
+        pinned = _DEFAULT_MODELS.get(provider)
     if not pinned:
         raise PullVerifierError(
             f"no default pull-verifier model for provider {provider!r}; "
@@ -913,19 +1296,22 @@ def pull_route(
     sandbox = Path(sandbox_dir).resolve()
     if not sandbox.is_dir():
         raise PullVerifierError(f"sandbox is not a directory: {sandbox}")
-    caps = caps or PullCaps()
     servant = servant or DeterministicServant()
     if binding is None:
         binding = _get_binding(provider)
     provider_name = binding.provider_name
-    model = _resolve_model(provider_name, model)
-    # Load config ONCE here so pricing and the provider block both see the same
-    # resolved config. Previously _provider_config lazily loaded a config that
-    # _pricing_for never saw (it still got None), so configured model pricing
-    # was silently ignored on the default path (GPT-5.4 S1 verification, Major
-    # #4b) and cost accounting fell back to the conservative table.
+    # Load config ONCE here so pricing, the provider block, the executor model
+    # pin, the caps, and the generation knobs all see the same resolved config.
+    # Previously _provider_config lazily loaded a config that _pricing_for never
+    # saw (it still got None), so configured model pricing was silently ignored
+    # on the default path (GPT-5.4 S1 verification, Major #4b) and cost
+    # accounting fell back to the conservative table.
     if config is None:
         config = _load_router_config()
+    model = _resolve_model(provider_name, model, config)
+    # Caps default from the executor block; an explicit caps= always wins.
+    caps = caps or caps_from_config(config)
+    gen_params = _resolve_gen_params(provider_name, config)
     pcfg = _provider_config(provider_name, config)
     in_price, out_price = _pricing_for(model, config)
 
@@ -953,6 +1339,7 @@ def pull_route(
             max_output_tokens=caps.max_output_tokens,
             model=model,
             config=pcfg,
+            generation_params=gen_params,
         )
         trace.api_turns += 1
         trace.input_tokens += response.input_tokens
