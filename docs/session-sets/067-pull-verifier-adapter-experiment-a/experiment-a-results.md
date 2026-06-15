@@ -248,3 +248,43 @@ suspicious parameter name; a suspicious `str(ref)`).
   (the D16 class) and for *authoring* the falsifiers.
 - **Producer wiring (S4):** capability confirmed → wire the opt-in automated
   `path-aware-critique.json` producer.
+
+---
+
+## 8. Erratum — audit asymmetry and the H1-magnitude / H2 claims (added 2026-06-15)
+
+A post-release whole-set adversarial path-aware critique (GPT-5.4 + Gemini-2.5-Pro,
+the `adversarial-critique-prompt.md` flow) raised two well-founded methodological
+points about Sections 2–5 above. They do **not** overturn the headline
+*direction*, but they do bound what was actually established and correct an
+overclaim. Recorded here rather than silently editing the original analysis.
+
+1. **The manual audit was one-directional.** As `audit.json` itself states, only
+   **routed × cross-file** cells were quote-adjudicated, and the strict
+   "names the actual mechanism" rule was applied **only to subtract** routed
+   (A1/A2) credits. Path-aware (B1/B2) cross-file catches were treated as
+   evidence-grounded and were **not** held to the identical quoted-mechanism
+   standard. That asymmetry biases the *magnitude* of the H1 gap upward. A
+   symmetric re-grade (holding B1/B2 cross-file findings to the same standard)
+   is the honest way to quantify the effect and is **carried to Set 068**.
+
+2. **The headline gap uses the audited *union*, not the pre-registered primary
+   metric.** The pre-registration framed the **automated** grade as primary and
+   the noise band off the across-K replicate sample. On the persisted automated
+   replicate means, the **Gemini same-provider contrast is B2−A2 ≈ +0.083**,
+   which sits **inside** the recorded **0.111** noise band. The reported
+   **+0.361** (and the parallel "H2 resolved") come from the audited
+   **union-over-K** metric — a different, audit-dependent measure. So:
+   - **H1 direction stands** on the strongest, least-disputable evidence: the
+     two seeded **Criticals D5 (dup-key) and D9 (index undercount)** were caught
+     by path-aware and by **neither** routed arm — existence proofs independent
+     of the audit, reproducing the Set 065 C3/C9 result.
+   - **H1 *magnitude* (+0.31/+0.36) and the H2 "resolved" reading are downgraded
+     to exploratory / audit-dependent**, not established by the pre-registered
+     primary analysis — especially for the Gemini contrast, which is within the
+     noise band under the automated grade.
+
+   The S4 producer-wiring decision is unaffected (it turned only on
+   capability *direction*, which holds), but the cadence/keep-demote-retire work
+   in **Set 068** should treat the magnitude as open and re-grade symmetrically
+   before relying on it.

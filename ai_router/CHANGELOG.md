@@ -5,6 +5,56 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.21.1] — 2026-06-15 (Set 067 follow-up — whole-set adversarial-critique fixes)
+
+A post-release whole-set path-aware critique (GPT-5.4 + Gemini-2.5-Pro via the
+`adversarial-critique-prompt.md` flow) found defects in the 0.21.0 adapter +
+producer that the per-session and per-set reviews missed. All fixed; no API
+surface change.
+
+### Fixed
+
+- **Unrecognized tool calls no longer break the loop (Critical).** `pull_route`
+  dispatched only `read_file`/`grep`/`list_dir` and silently dropped any other
+  tool name, leaving the model's `tool_use` unanswered — which Anthropic/OpenAI
+  reject with a `400` on the next turn (and made the servant's "unknown tool"
+  error branch dead code). Every non-`submit_verdict` tool call is now dispatched
+  to the servant, which returns a raw `ERROR: unknown tool …` the model can
+  recover from.
+- **A malformed/truncated verdict no longer crashes the run (Major).**
+  `_parse_verdict` is now caught inside the loop: the error is fed back to the
+  model to resubmit; if a forced final turn still can't produce a valid verdict
+  the run ends with `ok=False` rather than raising `VerdictSchemaError`.
+- **Budget-aware forced verdict now has a backstop (Major).** The adaptive
+  reserve could still be defeated by a single over-sized call (no reserve on the
+  first turn; a later call much larger than the previous), exiting with no
+  verdict. The loop now spends exactly **one** forced-verdict call once a ceiling
+  is crossed before honoring the stop (caps remain post-hoc; overshoot bounded
+  to one output-capped call). The 0.21.0 "commit a verdict instead of stopping
+  empty" claim is corrected: it greatly reduces — does not eliminate — empty
+  stops.
+- **`grep` ReDoS guard (Major).** The model-authored regex is now screened for
+  over-long patterns and the nested-quantifier catastrophic-backtracking shape
+  (`(a+)+`, `(.*)*`) and rejected as a raw `ERROR` rather than compiled. A
+  portable heuristic, not full isolation — re2/subprocess caging is tracked for
+  Set 068.
+- **Producer default sandbox is the repo root, not `cwd` (Major).**
+  `produce_path_aware_critique` defaulted `sandbox_dir` to `Path.cwd()`, so an
+  invocation from a subdirectory silently under-scoped the review while the
+  artifact still passed the gate. It now defaults to the git repo root
+  containing the session-set dir.
+- **Removed dead `seen_providers` accumulator** in the producer (distinctness is
+  enforced by `validate_path_aware_critique_artifact`).
+
+### Docs
+
+- `docs/session-sets/067-…/experiment-a-results.md` gains an **erratum**: the
+  Experiment A audit was one-directional and the headline H1 *magnitude* /
+  "H2 resolved" used the audited-union metric, not the pre-registered automated
+  primary (under which the Gemini contrast is within the noise band). H1's
+  *direction* still holds on the D5/D9 Critical existence proofs; magnitude is
+  downgraded to exploratory and a symmetric re-grade is carried to Set 068.
+
 ## [0.21.0] — 2026-06-15 (Set 067 — first-party pull-verifier adapter + path-aware-critique producer)
 
 Ships the first-party, multi-provider **tool-loop "pull" verifier adapter**

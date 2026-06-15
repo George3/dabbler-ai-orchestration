@@ -238,6 +238,28 @@ def _now_iso_local() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat()
 
 
+def _default_sandbox_for(set_dir: Path) -> Path:
+    """The default review sandbox: the git repo root containing ``set_dir``.
+
+    A path-aware critique of a session set must be able to read the *whole
+    repository the set lives in* (cross-file defects are the point), not
+    whichever directory the operator happened to run from. Defaulting to
+    ``Path.cwd()`` silently under-scoped the review when invoked from a
+    subdirectory, yet the artifact still passed the close-out gate (the gate
+    checks structure / identity, not the review surface) -- a
+    gate-passing-but-under-scoped artifact (set-067 whole-set critique, GPT
+    finding 2). Walk up from the resolved set dir to the nearest ``.git``;
+    fall back to the set dir's top-most existing parent only if none is found.
+    """
+    cur = set_dir.resolve()
+    for candidate in (cur, *cur.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    # No git root found (e.g. a non-repo fixture) -> the set dir itself, which
+    # is always inside the review surface and never an unrelated cwd subtree.
+    return cur
+
+
 def produce_path_aware_critique(
     session_set_dir: Union[str, Path],
     *,
@@ -252,10 +274,12 @@ def produce_path_aware_critique(
     """Run a multi-provider path-aware critique and assemble the Set 066 artifact.
 
     Drives :func:`pull_route` once per ``(provider, model)`` in ``providers``
-    over ``sandbox_dir`` (default: the current working directory - the repo
-    root, so a critic can read changed source anywhere in the tree), collects
-    each usable verdict, and assembles the ``path-aware-critique.json`` envelope
-    the Set 066 close-out gate validates.
+    over ``sandbox_dir`` (default: the **git repo root containing
+    ``session_set_dir``** via :func:`_default_sandbox_for`, so a critic can read
+    changed source anywhere in the tree -- NOT ``Path.cwd()``, which could
+    silently under-scope the review), collects each usable verdict, and
+    assembles the ``path-aware-critique.json`` envelope the Set 066 close-out
+    gate validates.
 
     The producer **refuses to write a gate-failing artifact**: if fewer than two
     DISTINCT providers return a usable verdict (a schema-valid critique from a
@@ -292,12 +316,13 @@ def produce_path_aware_critique(
     if instruction is None:
         instruction = build_instruction(set_dir)
     if sandbox_dir is None:
-        sandbox_dir = Path.cwd()
+        # The repo the set lives in -- NOT Path.cwd() (set-067 critique, GPT
+        # finding 2). An explicit sandbox_dir override still wins.
+        sandbox_dir = _default_sandbox_for(set_dir)
 
     results: List[PullResult] = []
     critiques: List[dict] = []
     skipped: List[str] = []
-    seen_providers: set = set()
 
     for provider, model in providers:
         label = f"{provider}/{model or '(config default)'}"
@@ -321,9 +346,10 @@ def produce_path_aware_critique(
             )
             skipped.append(f"{label}: {why}")
             continue
-        # The adapter stamps the REAL provider/model on the critique entry; key
-        # distinctness off that, not the requested provider string.
-        seen_providers.add(result.critique.provider)
+        # The adapter stamps the REAL provider/model on the critique entry.
+        # Distinctness (>= 2 distinct stamped providers) is enforced by
+        # validate_path_aware_critique_artifact below, which keys off the
+        # stamped ``provider`` -- so no separate accumulator is needed here.
         critiques.append(result.critique.to_critique_entry())
 
     artifact = {
@@ -448,7 +474,10 @@ def _main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--sandbox",
         default=None,
-        help="read-only review sandbox (default: current working directory)",
+        help=(
+            "read-only review sandbox (default: the git repo root containing "
+            "the session-set dir)"
+        ),
     )
     parser.add_argument(
         "--level",

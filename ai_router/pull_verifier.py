@@ -349,8 +349,131 @@ def _walk_files(root: Path, sandbox_real: Path) -> List[Path]:
     return found
 
 
+# Conservative ReDoS guard for the model-authored grep pattern (set-067
+# whole-set critique, Gemini finding 3). Python's ``re`` has no step/time
+# bound, so a pattern with an (unbounded) quantifier applied to a subexpression
+# whose body itself contains an unbounded quantifier -- the classic
+# catastrophic-backtracking shape ``(a+)+`` / ``(.*)*`` / and the NESTED variant
+# ``((a+))+`` / ``(ab(c+)d)+`` -- can hang the orchestrator process. A single
+# regex cannot see arbitrary group nesting (set-067 0.21.1 R1), so this is a
+# linear scanner that tracks group nesting and per-group "body contains an
+# unbounded quantifier" state. A normal pattern like ``(foo|bar)+`` or ``\d+``
+# or ``(\d{3})+`` is unaffected (its quantified group's body has no ``*``/``+``).
+# Portable + dependency-free HEURISTIC, not a complete defense; full isolation
+# (an re2 engine or a subprocess/timeout cage) is tracked for Set 068.
+_MAX_REGEX_LEN = 1000
+# A brace quantifier: {n} (bounded), {n,m} (bounded), or {n,} (UNBOUNDED).
+_BRACE_RE = re.compile(r"\{(\d*)(,?)(\d*)\}")
+
+
+def _brace_quant_at(pattern: str, i: int) -> Tuple[Optional[str], int]:
+    """Classify a ``{...}`` at index ``i``.
+
+    Returns ``(kind, end)`` where ``kind`` is ``"unbounded"`` for ``{n,}``,
+    ``"bounded"`` for ``{n}`` / ``{n,m}``, or ``None`` if ``{`` is a literal
+    (not a valid brace quantifier). ``end`` is the index just past the brace
+    (or ``i`` when it is a literal).
+    """
+    m = _BRACE_RE.match(pattern, i)
+    if not m:
+        return None, i
+    _lo, comma, hi = m.group(1), m.group(2), m.group(3)
+    return ("unbounded" if (comma and not hi) else "bounded"), m.end()
+
+
+def _has_nested_quantifier(pattern: str) -> bool:
+    """True if an UNBOUNDED quantifier is applied to a quantifier-bearing group.
+
+    The catastrophic-backtracking signature is an unbounded quantifier (``*``,
+    ``+``, or ``{n,}``) applied to a subexpression whose body itself contains an
+    unbounded quantifier (``(a+)+``, ``(.*)*``, ``(a{2,})+``, and the nested
+    variants ``((a+))+`` / ``(ab(c+)d)+``). BOUNDED reps (``(a+){2}`` /
+    ``(\\d{3})+``) are NOT catastrophic and are allowed (set-067 0.21.1 R2).
+
+    Linear single pass with a group stack: each frame tracks whether that
+    group's body contains an unbounded quantifier, and an inner unbounded
+    quantifier propagates outward through group boundaries so nesting is caught.
+    Escapes (``\\x``) and character classes (``[...]``, where ``*``/``+`` are
+    literal) are skipped so they neither mark a body nor open a group.
+    """
+    body_has_quant: List[bool] = []  # one bool per open group
+    i, n = 0, len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "\\":  # escaped atom -> skip the next char
+            i += 2
+            continue
+        if c == "[":  # character class: quantifier chars inside are literal
+            i += 1
+            if i < n and pattern[i] == "^":
+                i += 1
+            if i < n and pattern[i] == "]":  # a leading ] is a literal member
+                i += 1
+            while i < n and pattern[i] != "]":
+                i += 2 if pattern[i] == "\\" else 1
+            i += 1  # past the closing ]
+            continue
+        if c == "(":
+            body_has_quant.append(False)
+            i += 1
+            continue
+        if c == ")":
+            had = body_has_quant.pop() if body_has_quant else False
+            nxt = pattern[i + 1] if i + 1 < n else ""
+            if nxt == "{":
+                kind, _end = _brace_quant_at(pattern, i + 1)
+            elif nxt in "*+":
+                kind = "unbounded"
+            elif nxt == "?":
+                kind = "bounded"  # optional: not catastrophic
+            else:
+                kind = None
+            if had and kind == "unbounded":
+                return True
+            # An inner quantifier, or the group's OWN quantifier, is also a
+            # quantifier inside the ENCLOSING body. Only an UNBOUNDED one can
+            # seed a catastrophic outer pairing, so propagate unbounded-ness.
+            if body_has_quant and (had or kind == "unbounded"):
+                body_has_quant[-1] = True
+            i += 1
+            continue
+        if c in "*+":  # an unbounded quantifier in the current body
+            if body_has_quant:
+                body_has_quant[-1] = True
+            i += 1
+            continue
+        if c == "{":  # a brace quantifier in the current body
+            kind, end = _brace_quant_at(pattern, i)
+            if kind == "unbounded" and body_has_quant:
+                body_has_quant[-1] = True
+            i = end if kind is not None else i + 1
+            continue
+        i += 1
+    return False
+
+
+def _reject_dangerous_regex(pattern: str) -> None:
+    """Raise ``ValueError`` if ``pattern`` is over-long or ReDoS-prone.
+
+    Surfaced to the model as a raw ``ERROR: ...`` tool result (via
+    :func:`_canonical_result`), so it can simplify and retry.
+    """
+    if len(pattern) > _MAX_REGEX_LEN:
+        raise ValueError(
+            f"grep pattern rejected: too long ({len(pattern)} > "
+            f"{_MAX_REGEX_LEN} chars)"
+        )
+    if _has_nested_quantifier(pattern):
+        raise ValueError(
+            "grep pattern rejected: nested quantifier (potential catastrophic "
+            "backtracking / ReDoS); simplify the pattern (avoid a quantifier "
+            "on a group whose body is itself quantified, e.g. (a+)+ or (.*)*)."
+        )
+
+
 def _canonical_grep(sandbox: Path, args: dict) -> GroundTruth:
     root = _safe(sandbox, args.get("path", "."))
+    _reject_dangerous_regex(args["pattern"])
     pattern = re.compile(args["pattern"])
     sandbox_real = sandbox.resolve()
     files = _walk_files(root, sandbox_real)
@@ -1323,39 +1446,52 @@ def pull_route(
     # forced verdict below.
     last_call_tokens = 0
     last_call_cost = 0.0
+    # Backstop flag: when spend has already crossed a ceiling, spend exactly ONE
+    # final forced-verdict call before honoring the stop (see below).
+    budget_exceeded_forced = False
     t0 = time.time()
 
     for turn in range(caps.max_turns):
-        # Stop at the first cost/token ceiling reached BEFORE issuing the call.
-        if trace.input_tokens + trace.output_tokens >= caps.token_budget:
-            trace.stop_reason = STOP_TOKEN_BUDGET
-            break
-        if trace.cost_usd >= caps.cost_ceiling_usd:
-            trace.stop_reason = STOP_COST_CEILING
-            break
-
-        # Budget-aware forced verdict (Set 067 S4 dogfood; L-067-1). The
-        # final-turn force alone does NOT protect against budget exhaustion: a
-        # verbose-probing reasoning model (GPT-5.4 / Sonnet observed at 17-28
-        # probes) can spend the whole token/cost budget probing, and the loop
-        # would then break at the top with NO verdict. So force submit_verdict
-        # once ONE MORE call of the last call's measured size would breach
-        # either ceiling -- an adaptive headroom reserve (the last turn's spend),
-        # which is far tighter than a fixed fraction a single large turn could
-        # blow past (S4 R3 verifier). Caps remain POST-HOC (tool-contract sec 5):
-        # a single in-flight call can still overshoot a ceiling by at most its
-        # own (output-capped) size, exactly as any probe could -- the reserve
-        # bounds, but cannot eliminate, that one-call overshoot. A verdict at a
-        # slight overshoot strictly dominates an empty cut-off.
-        projected_tokens = (
-            trace.input_tokens + trace.output_tokens + last_call_tokens
+        over_token = (
+            trace.input_tokens + trace.output_tokens >= caps.token_budget
         )
-        projected_cost = trace.cost_usd + last_call_cost
-        near_budget = (
-            projected_tokens >= caps.token_budget
-            or projected_cost >= caps.cost_ceiling_usd
-        )
-        force_verdict = (turn == caps.max_turns - 1) or near_budget
+        over_cost = trace.cost_usd >= caps.cost_ceiling_usd
+        if over_token or over_cost:
+            # Budget exhausted. Rather than stop EMPTY, spend ONE final forced
+            # call to extract a verdict, THEN honor the stop. The proactive
+            # reserve below can be defeated by a single over-sized call (the
+            # first turn has no reserve; a later call can be much larger than
+            # the previous), so without this backstop a verbose prober could
+            # still exit with no verdict (set-067 whole-set critique, GPT
+            # finding 3; reproduced). Caps remain POST-HOC (tool-contract
+            # sec 5): the backstop overshoots by at most one output-capped call.
+            if critique is None and not budget_exceeded_forced:
+                budget_exceeded_forced = True
+                force_verdict = True
+            else:
+                trace.stop_reason = (
+                    STOP_TOKEN_BUDGET if over_token else STOP_COST_CEILING
+                )
+                break
+        else:
+            # Budget-aware forced verdict (Set 067 S4 dogfood; L-067-1). The
+            # final-turn force alone does NOT protect against budget exhaustion:
+            # a verbose-probing reasoning model (GPT-5.4 / Sonnet observed at
+            # 17-28 probes) can spend the whole budget probing. So force
+            # submit_verdict PROACTIVELY once ONE MORE call of the last call's
+            # measured size would breach either ceiling -- an adaptive headroom
+            # reserve, tighter than a fixed fraction a single large turn could
+            # blow past (S4 R3 verifier). The over-budget backstop above is the
+            # safety net when even this is defeated.
+            projected_tokens = (
+                trace.input_tokens + trace.output_tokens + last_call_tokens
+            )
+            projected_cost = trace.cost_usd + last_call_cost
+            near_budget = (
+                projected_tokens >= caps.token_budget
+                or projected_cost >= caps.cost_ceiling_usd
+            )
+            force_verdict = (turn == caps.max_turns - 1) or near_budget
         response = binding.request(
             system=_SYSTEM_PROMPT,
             transcript=transcript,
@@ -1388,22 +1524,46 @@ def pull_route(
             }
         )
 
-        # A submit_verdict call ends the loop.
         verdict_calls = [
             tc for tc in response.tool_calls if tc.name == SUBMIT_VERDICT_TOOL
         ]
-        probe_calls = [
-            tc for tc in response.tool_calls if tc.name in PROBE_TOOL_NAMES
+        # EVERY non-verdict tool call is dispatched to the servant -- including
+        # a tool name we do not recognize. Filtering unknown tools out before
+        # dispatch (the old ``tc.name in PROBE_TOOL_NAMES`` test) left the
+        # model's tool_use UNANSWERED, which Anthropic/OpenAI reject with a 400
+        # on the next turn (an assistant tool_use must be followed by a matching
+        # tool_result) and made the servant's "ERROR: unknown tool" branch dead
+        # code (set-067 whole-set critique, Gemini finding 1; reproduced). The
+        # servant returns a raw ERROR for an unknown tool, which the model sees
+        # and can recover from.
+        non_verdict_calls = [
+            tc for tc in response.tool_calls if tc.name != SUBMIT_VERDICT_TOOL
         ]
 
-        if verdict_calls:
-            critique = _parse_verdict(
-                provider_name, model, verdict_calls[0].input
-            )
-            trace.stop_reason = STOP_VERDICT
+        # Finalize on the FIRST VALID verdict; remember errors for invalid ones.
+        verdict_errors: Dict[str, str] = {}
+        finalized = False
+        for vc in verdict_calls:
+            try:
+                critique = _parse_verdict(provider_name, model, vc.input)
+                trace.stop_reason = STOP_VERDICT
+                finalized = True
+                break
+            except VerdictSchemaError as exc:
+                # A malformed / truncated forced verdict (e.g. cut off by
+                # max_output_tokens) must NOT crash the run (set-067 critique
+                # Gemini finding 4). Record the error to feed back; on a final
+                # forced turn with no retry the loop ends with no verdict
+                # (ok=False), never an unhandled exception.
+                verdict_errors[vc.id] = (
+                    f"ERROR: invalid submit_verdict: {exc}. Re-call "
+                    "submit_verdict with a non-empty verdict and a non-empty "
+                    "summary OR at least one finding with a description."
+                )
+        if finalized:
             break
 
-        if not probe_calls:
+        if not response.tool_calls:
             # Model returned text with no tool use. Nudge it toward a verdict;
             # the next turn (or the forced final turn) will resolve it.
             transcript.append(
@@ -1417,9 +1577,13 @@ def pull_route(
             )
             continue
 
-        # Dispatch probe calls through the servant, guarded for raw truth.
+        # Answer EVERY tool_use this turn with a tool_result so the next request
+        # is API-valid -- probes + unknown tools through the servant, and EVERY
+        # (invalid) submit_verdict call with its error text, including extra /
+        # sibling verdict calls (set-067 0.21.1 R1: answering only the first
+        # left extras unanswered -> a 400 on the next turn).
         results = []
-        for tc in probe_calls:
+        for tc in non_verdict_calls:
             tool_result = servant.run(tc.name, tc.input, sandbox)
             _guard_raw_ground_truth(tc.name, tc.input, tool_result, sandbox)
             is_error = tool_result.content.startswith("ERROR: ")
@@ -1439,6 +1603,19 @@ def pull_route(
                     "id": tc.id,
                     "name": tc.name,
                     "content": tool_result.content,
+                }
+            )
+        for vc in verdict_calls:
+            results.append(
+                {
+                    "id": vc.id,
+                    "name": SUBMIT_VERDICT_TOOL,
+                    "content": verdict_errors.get(
+                        vc.id,
+                        "ERROR: invalid submit_verdict; resubmit a valid "
+                        "payload (non-empty verdict; non-empty summary OR a "
+                        "finding with a description).",
+                    ),
                 }
             )
         transcript.append({"role": "tool", "results": results})

@@ -12,6 +12,7 @@ CLI surface.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -287,6 +288,38 @@ def test_session_name_resolved_from_dot_invocation(tmp_path, monkeypatch):
     res = pc.produce_path_aware_critique(".", sandbox_dir=tmp_path, run_pull=run)
     assert res.artifact["sessionSetName"] == "102-dot-set"
     assert res.ok
+
+
+def test_default_sandbox_is_repo_root_not_cwd(tmp_path, monkeypatch):
+    # set-067 critique GPT finding 2: with no --sandbox, the review must default
+    # to the git repo root containing the set, NOT Path.cwd() (which could
+    # under-scope the review while still passing the gate).
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    set_dir = repo / "docs" / "session-sets" / "104-deep-set"
+    set_dir.mkdir(parents=True)
+    (set_dir / "spec.md").write_text("# Deep Spec\n", encoding="utf-8")
+    (set_dir / "activity-log.json").write_text(
+        json.dumps({"sessionSetName": "104-deep-set", "entries": []}),
+        encoding="utf-8",
+    )
+    record_path_aware_critique(set_dir, "required", session_number=1)
+
+    captured = {}
+
+    def run_pull(sandbox, instruction, *, provider, model, config):
+        captured["sandbox"] = sandbox
+        return _fake_result(provider, "m")
+
+    # cwd is some unrelated dir, NOT the repo.
+    monkeypatch.chdir(tmp_path)
+    pc.produce_path_aware_critique(
+        set_dir,
+        providers=(("openai", None), ("google", None)),
+        write=False,
+        run_pull=run_pull,
+    )
+    assert Path(captured["sandbox"]).resolve() == repo.resolve()
 
 
 def test_produced_artifact_passes_the_real_close_out_gate(tmp_path):

@@ -130,6 +130,49 @@ class TestServantRawContent:
         r = servant.run("grep", {"pattern": "zzzz"}, sandbox)
         assert r.content == "(no matches)"
 
+    def test_grep_rejects_nested_quantifier_redos(self, sandbox):
+        # set-067 critique Gemini finding 3 + 0.21.1 R1: catastrophic-
+        # backtracking patterns -- including NESTED-group variants -- are
+        # rejected as a raw ERROR (not compiled / run), so they cannot hang.
+        servant = pv.DeterministicServant()
+        for pat in ("(.*)*", "(a+)+", "((a+))+", "(ab(c+)d)+", "(a+)*"):
+            r = servant.run("grep", {"pattern": pat}, sandbox)
+            assert r.content.startswith("ERROR: "), pat
+            assert "nested quantifier" in r.content, pat
+
+    def test_has_nested_quantifier_unit(self):
+        f = pv._has_nested_quantifier
+        # Catastrophic: an UNBOUNDED quantifier on a body with an unbounded
+        # quantifier (incl. nested groups and unbounded {n,}).
+        assert f("(a+)+") and f("(.*)*") and f("((a+))+") and f("(ab(c+)d)+")
+        assert f("(a+){2,}")   # unbounded {n,} outer
+        assert f("(a{2,})+")   # unbounded {n,} in the body
+        # Safe (must NOT false-positive): no quantifier in the quantified
+        # group's body, BOUNDED reps, quantifier chars literal in a class,
+        # escaped parens, and an optional group.
+        assert not f("(foo|bar)+")
+        assert not f(r"\d+")
+        assert not f(r"(\d{3})+")
+        assert not f("(a+){2}")      # bounded {n} outer -> allowed (R2)
+        assert not f("(ab(c+)d){3}")  # bounded outer on a nested body -> allowed
+        assert not f("(a{2,3})+")    # bounded {n,m} body -> allowed
+        assert not f("(a+)?")        # optional -> not catastrophic
+        assert not f("[*+]+")        # *,+ literal inside the class
+        assert not f(r"\(a+\)+")      # escaped parens -> not a group
+
+    def test_grep_rejects_overlong_pattern(self, sandbox):
+        servant = pv.DeterministicServant()
+        r = servant.run("grep", {"pattern": "a" * (pv._MAX_REGEX_LEN + 1)}, sandbox)
+        assert r.content.startswith("ERROR: ")
+        assert "too long" in r.content
+
+    def test_grep_allows_normal_quantified_group(self, sandbox):
+        # A quantified group whose body has NO quantifier (foo|bar)+ is safe and
+        # must NOT be rejected by the heuristic.
+        servant = pv.DeterministicServant()
+        r = servant.run("grep", {"pattern": "(alpha|beta)+"}, sandbox)
+        assert not r.content.startswith("ERROR: ")
+
     def test_list_dir_marks_directories(self, sandbox):
         servant = pv.DeterministicServant()
         r = servant.run("list_dir", {}, sandbox)
@@ -553,6 +596,11 @@ class TestLoopTermination:
 
 class TestCaps:
     def test_token_budget_cap(self, sandbox):
+        # Over-budget now triggers ONE backstop forced-verdict call before the
+        # stop (set-067 critique GPT finding 3). The default FakeBinding ignores
+        # the force (no force_response), so that call yields no verdict and the
+        # NEXT iteration honors STOP_TOKEN_BUDGET: turn 0 probe (60 tokens) ->
+        # turn 1 over-budget backstop (forced) -> turn 2 stop.
         binding = FakeBinding(
             default=_resp(
                 tool_calls=[_tc("read_file", {"path": "a.py"})], it=30, ot=30
@@ -566,13 +614,15 @@ class TestCaps:
             caps=pv.PullCaps(token_budget=50, max_turns=10),
         )
         assert result.trace.stop_reason == pv.STOP_TOKEN_BUDGET
-        assert result.trace.api_turns == 1  # second turn blocked by budget
+        assert result.trace.api_turns == 2  # probe + one backstop forced call
+        assert binding.force_flags == [False, True]  # backstop forced the 2nd
 
     def test_cost_ceiling_cap(self, sandbox):
         # sonnet fallback pricing 3/15 per 1M: 1000 in + 1000 out = $0.018/turn.
-        # The ceiling is a POST-HOC stop (tool-contract section 5): the loop
-        # stops once incurred spend crosses it, so it bounds the number of
-        # further calls rather than the exact spend of the in-flight one.
+        # The ceiling is a POST-HOC stop (tool-contract section 5). Over-ceiling
+        # spends ONE backstop forced-verdict call (set-067 critique GPT finding
+        # 3), which here yields no verdict (FakeBinding ignores force), so the
+        # loop honors STOP_COST_CEILING on the following iteration.
         binding = FakeBinding(
             default=_resp(
                 tool_calls=[_tc("read_file", {"path": "a.py"})], it=1000, ot=1000
@@ -586,7 +636,148 @@ class TestCaps:
             caps=pv.PullCaps(cost_ceiling_usd=0.01, max_turns=10),
         )
         assert result.trace.stop_reason == pv.STOP_COST_CEILING
-        assert result.trace.api_turns == 1  # stopped after the first crossing
+        assert result.trace.api_turns == 2  # probe + one backstop forced call
+        assert binding.force_flags == [False, True]
+
+    def test_unknown_tool_call_dispatched_as_error_not_nudge(self, sandbox):
+        # set-067 critique Gemini finding 1: an unrecognized tool name must be
+        # DISPATCHED to the servant (raw "ERROR: unknown tool ...") so the
+        # tool_use is answered, not silently dropped (which left an unanswered
+        # tool_use -> provider 400 next turn). Turn 0 emits an unknown tool;
+        # turn 1 submits a verdict.
+        binding = FakeBinding(
+            queue=[
+                _resp(tool_calls=[_tc("search_web", {"q": "x"}, "u1")]),
+                _resp(
+                    tool_calls=[
+                        _tc(
+                            "submit_verdict",
+                            {"verdict": "VERIFIED", "summary": "ok"},
+                            "v1",
+                        )
+                    ]
+                ),
+            ]
+        )
+        result = pv.pull_route(sandbox, "review", binding=binding, config=CONFIG)
+        assert result.trace.stop_reason == pv.STOP_VERDICT
+        unknown = [tc for tc in result.trace.tool_calls if tc.name == "search_web"]
+        assert len(unknown) == 1
+        assert unknown[0].error is True  # servant returned a raw ERROR result
+
+    def test_truncated_verdict_is_fed_back_not_crash(self, sandbox):
+        # set-067 critique Gemini finding 4: a malformed/truncated verdict must
+        # not raise out of pull_route. An invalid submit_verdict (no summary and
+        # no findings -> trivial) is fed back as an error; the retry succeeds.
+        binding = FakeBinding(
+            queue=[
+                _resp(tool_calls=[_tc("submit_verdict", {"verdict": "VERIFIED"}, "v1")]),
+                _resp(
+                    tool_calls=[
+                        _tc(
+                            "submit_verdict",
+                            {"verdict": "VERIFIED", "summary": "read a.py; fine"},
+                            "v2",
+                        )
+                    ]
+                ),
+            ]
+        )
+        result = pv.pull_route(sandbox, "review", binding=binding, config=CONFIG)
+        # No crash; the invalid verdict was fed back and the retry parsed.
+        assert result.trace.stop_reason == pv.STOP_VERDICT
+        assert result.critique is not None
+        assert result.critique.summary == "read a.py; fine"
+
+    def test_multiple_invalid_verdict_calls_all_answered(self, sandbox):
+        # set-067 0.21.1 R1: if a turn emits MORE THAN ONE (invalid) verdict
+        # call, EVERY one must get a tool_result or the next request 400s.
+        class CapturingBinding(pv.ProviderBinding):
+            provider_name = "anthropic"
+
+            def __init__(self, queue):
+                self.queue = list(queue)
+                self.transcripts = []
+
+            def request(self, *, force_verdict, transcript, **kw):
+                self.transcripts.append([dict(e) for e in transcript])
+                return self.queue.pop(0)
+
+        binding = CapturingBinding(
+            [
+                _resp(
+                    tool_calls=[
+                        _tc("submit_verdict", {"verdict": "VERIFIED"}, "v1"),
+                        _tc("submit_verdict", {"verdict": "VERIFIED"}, "v2"),
+                    ]
+                ),
+                _resp(
+                    tool_calls=[
+                        _tc(
+                            "submit_verdict",
+                            {"verdict": "VERIFIED", "summary": "fine"},
+                            "v3",
+                        )
+                    ]
+                ),
+            ]
+        )
+        result = pv.pull_route(sandbox, "review", binding=binding, config=CONFIG)
+        assert result.trace.stop_reason == pv.STOP_VERDICT
+        # The transcript sent on the 2nd request must answer BOTH v1 and v2.
+        second = binding.transcripts[1]
+        tool_turns = [e for e in second if e["role"] == "tool"]
+        answered = {r["id"] for e in tool_turns for r in e["results"]}
+        assert {"v1", "v2"} <= answered
+
+    def test_persistently_invalid_verdict_ends_gracefully(self, sandbox):
+        # If every forced verdict is invalid, the loop ends with no verdict
+        # (ok=False) rather than raising VerdictSchemaError.
+        binding = FakeBinding(
+            default=_resp(
+                tool_calls=[_tc("submit_verdict", {"verdict": "VERIFIED"}, "v1")]
+            )
+        )
+        result = pv.pull_route(
+            sandbox, "review", binding=binding, config=CONFIG,
+            caps=pv.PullCaps(max_turns=3),
+        )
+        assert result.critique is None
+        assert result.ok is False  # no crash
+
+    def test_budget_backstop_forces_verdict_on_first_turn_overshoot(self, sandbox):
+        # GPT finding 3, reproduced: a single FIRST probe that overshoots the
+        # budget previously exited EMPTY (no reserve on turn 0). The backstop
+        # now spends one forced-verdict call; with a force_response the model
+        # commits a verdict instead of stopping empty.
+        forced = _resp(
+            tool_calls=[
+                _tc(
+                    "submit_verdict",
+                    {"verdict": "ISSUES_FOUND", "summary": "forced at budget"},
+                    "v1",
+                )
+            ]
+        )
+        binding = FakeBinding(
+            default=_resp(
+                tool_calls=[_tc("read_file", {"path": "a.py"})], it=80, ot=80
+            ),
+            force_response=forced,
+        )
+        result = pv.pull_route(
+            sandbox,
+            "review",
+            binding=binding,
+            config=CONFIG,
+            caps=pv.PullCaps(token_budget=100, max_turns=10),
+        )
+        # turn 0 probe overshoots (160 > 100); turn 1 is the over-budget backstop
+        # (forced) and produces the verdict -> STOP_VERDICT, not an empty stop.
+        assert result.trace.stop_reason == pv.STOP_VERDICT
+        assert result.ok is True
+        assert result.critique.verdict == "ISSUES_FOUND"
+        assert binding.force_flags == [False, True]
 
     def test_cost_accounting_accumulates(self, sandbox):
         binding = FakeBinding(
