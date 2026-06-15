@@ -48,16 +48,16 @@
     {
       "number": 4,
       "title": "Routed keep / demote / retire decision",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-15T19:20:41.494549-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-15T19:39:22.845695-04:00",
       "orchestrator": {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-opus-4-8",
         "effort": "high"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     },
     {
       "number": 5,
