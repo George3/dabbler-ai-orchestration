@@ -14,6 +14,24 @@
 
 ---
 
+## Erratum (2026-06-15)
+
+A **path-aware** review (GitHub Copilot driving GPT-5.4 + Gemini-Pro over the
+repo) of the Set 066 decomposition found a factual error in this proposal:
+Candidate 1 (§5) and §7 claim Path-Aware Critique can **reuse the content-aware
+close-out gate that `dedicated-sessions` already implements**. That is
+**incorrect** — that gate is **inert on Full tier**: `dedicated_verification.py`
+(see its module header, ~L440) states the mode machinery applies only to
+`tier: lightweight`, and `close_session.py` (~L1709) wires the gate only when
+`verificationMode == dedicated-sessions` (a Lightweight Set-057 feature).
+**Full-tier Path-Aware Critique close-out wiring is net-new work, not free
+reuse** — Set 066 scopes it accordingly. (Verified against the code on
+2026-06-15. Noted in passing: the routed cross-provider verification of this
+proposal — gpt-5.4, four rounds — did not catch this; the path-aware review did,
+which is itself an instance of the marginal-value thesis the proposal argues.)
+
+---
+
 ## 1. Executive summary
 
 The framework today outsources every reasoning task through `route()`, a
