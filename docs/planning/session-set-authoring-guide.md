@@ -306,6 +306,13 @@ prerequisites:           # optional; sets that must complete before this one is 
   attribute, the saved-artifact contract, and the blast-radius predicate
   that recommends a value (`python -m ai_router.blast_radius <paths…>` —
   **advisory only; the operator confirms, it is never a hard auto-set**).
+  When a set declares `advisory` or `required`, the operator runs the
+  **end-of-set Path-Aware Critique stage** before the set-terminal close — a
+  multi-provider, path-aware review using the reusable template
+  `ai_router/prompt-templates/path-aware-critique.md`, saved as
+  `path-aware-critique.json` ([`docs/path-aware-critique-schema.md`](../path-aware-critique-schema.md)).
+  The stage mechanics live in `docs/ai-led-session-workflow.md` →
+  *The end-of-set Path-Aware Critique stage*.
 
 - **`requiresUAT: true`** — the set must produce a
   `<slug>-uat-checklist.json` and human-UAT review is a precondition

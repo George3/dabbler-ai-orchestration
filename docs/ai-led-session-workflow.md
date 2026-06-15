@@ -1814,7 +1814,13 @@ required` field; see the authoring guide) — is `advisory` or `required`.
 On the **set-terminal** close it confirms a valid **multi-provider**
 `path-aware-critique.json` artifact exists at the session-set root (`>=2`
 distinct providers, each carrying a non-empty summary or a finding with a
-description; validated by `ai_router.path_aware_critique`). Fail posture:
+description; validated by `ai_router.path_aware_critique`). The gate also
+checks **artifact identity** — the artifact's `sessionSetName` must match this
+set and its `pathAwareCritique` must match the recorded policy level, so a
+critique copied from another set (or labelled with a weaker level) does not
+satisfy the gate — and surfaces a loud, non-blocking **warning** when
+`activity-log.json` exists but is unreadable (so a corrupt log cannot silently
+disarm a `required` set). Fail posture:
 
 - `required` — **hard-blocks in an interactive TTY** (`gate_failed`,
   `failed_checks: ["path_aware_critique_gate"]`) and **soft-warns in
@@ -1831,9 +1837,49 @@ proposal's "reuse the dedicated gate" claim was a verified erratum). Like
 the Q6 gate it fires only on the set-terminal close and is fail-open in the
 non-block direction — any internal error never wedges close-out. The
 blast-radius predicate (`python -m ai_router.blast_radius <paths…>`)
-*recommends* a level (advisory only; the operator confirms). The manual
-operator flow that produces the artifact and the reusable prompt template
-are documented in Set 066 Session 3.
+*recommends* a level (advisory only; the operator confirms).
+
+**The end-of-set Path-Aware Critique stage (manual operator flow).** On a
+set whose recorded `pathAwareCritique` is `advisory` or `required`, the
+operator runs this stage **once per set, before the set-terminal
+`close_session`** (its artifact is what the gate above checks):
+
+1. **Recommend the level at set start.** Run `python -m
+   ai_router.blast_radius <changed-or-planned-paths…>` to get the
+   `P_set = any(P_task)` recommendation, confirm a level, and seed it in the
+   spec's `pathAwareCritique` field (or pass `start_session
+   --path-aware-critique <level>`). The choice is captured once and is
+   immutable thereafter.
+2. **Run the multi-provider critique (path-aware).** Open the repo in a
+   **GitHub-Copilot** editor so each critic has real, path-aware workspace
+   access (a Mode-2 *pull* review — the routed `route()` path cannot read the
+   repo). Fill the reusable template
+   [`ai_router/prompt-templates/path-aware-critique.md`](../ai_router/prompt-templates/path-aware-critique.md)
+   with the set's slug, change summary, file list, and the load-bearing
+   claims to check, then paste it **once under GPT-5.4 and once under
+   Gemini-Pro** — two independent passes from clean contexts (`>= 2` distinct
+   providers is the load-bearing property; the Set 065 010-vs-C3 split proved
+   one provider is insufficient).
+3. **Save the artifact raw.** Assemble the per-provider verdicts into
+   `docs/session-sets/<slug>/path-aware-critique.json` per
+   [`docs/path-aware-critique-schema.md`](path-aware-critique-schema.md) —
+   one critique entry per provider, each content-non-trivial (a non-empty
+   `summary` or a finding with a `description`). The artifact follows
+   verification-artifact discipline: **raw, multi-provider, never edited after
+   written**. A clean review still produces an artifact (its presence means
+   *the critique ran*, unlike `sN-issues.json` whose presence means issues
+   were found); never fabricate an entry to satisfy the gate.
+4. **Remediate, then close.** Fold any real findings into the work (the
+   orchestrator adjudicates per *Disagreement With A Verifier Finding* below),
+   commit, and run `close_session`. On `required` the gate confirms the saved
+   artifact is valid before allowing the set-terminal close; on `advisory` it
+   only warns.
+
+This is the **manual** flow today; the first-party tool-loop adapter that
+would *produce* the critique programmatically is deferred to Set 067. It is
+orthogonal to per-session routed verification (Step 6), which Set 066 leaves
+unchanged — the path-aware critique is an end-of-set, whole-set surface, not a
+per-session one.
 
 ### Step 7: Handle Verification Result
 

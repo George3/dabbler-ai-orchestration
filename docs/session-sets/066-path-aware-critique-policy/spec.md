@@ -23,6 +23,7 @@ tier: full
 requiresUAT: false
 requiresE2E: false
 uatScope: none
+pathAwareCritique: required   # Set 066 S3: this set dogfoods its own gate (see rationale)
 prerequisites:
   - slug: 065-verification-surface-empirics
     condition: complete
@@ -34,6 +35,18 @@ prerequisites:
 > and, fittingly, this set *dogfoods* the very manual path-aware practice it
 > institutionalizes. It ships a **PyPI `ai_router` release** so consumer repos
 > get the new close-out gate; **no Marketplace bump** (no extension change).
+>
+> **`pathAwareCritique: required` (added Session 3).** The set that ships the
+> Path-Aware Critique gate eats its own dogfood: its set-terminal close enforces
+> the very gate it builds. The blast-radius predicate scores this set
+> `required` (it touches `close_session.py` wiring and shared schema docs), and
+> S1/S2 started before the attribute existed, so the durable record was `none`;
+> Session 3 records `required` directly via the sanctioned writer
+> (`record_path_aware_critique`) as an **operator-initiated arming** — an upgrade
+> (none -> required), the safe direction the immutability rule protects (it
+> blocks silent *downgrades* that would disarm a gate, not an explicit arming).
+> S3 therefore cannot close until a valid multi-provider `path-aware-critique.json`
+> exists at this set's root — the first real instance of the practice.
 
 ---
 

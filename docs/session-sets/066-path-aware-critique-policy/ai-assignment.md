@@ -33,3 +33,34 @@ mirroring (not reusing) the Lightweight-only `dedicated_verification` gate.
 Both files were mapped by the Session-1 author, so continuity of that
 architectural context outweighs fresh-eyes value. See `disposition.json`
 `next_orchestrator`.
+
+---
+
+## Session 3 of 3 (FINAL) — Docs, prompt template, dogfood, release
+
+**Orchestrator:** claude-code / anthropic / claude-opus-4-8 / high
+(operator-confirmed; the S2 routed recommendation suggested a fresh-eyes
+engine, but the operator ran S3 on Claude — continuity for the docs +
+release, and the PyPI publish runbook is operator-driven regardless of engine).
+
+| Step | Work | Handled by | Rationale |
+|---|---|---|---|
+| Read S1/S2 deliverables + guidance | Context load | Orchestrator (direct) | Mechanical reads. |
+| Reusable prompt template + workflow/guidance docs | Docs | Orchestrator (direct) | Generalized from the 066 decomposition prompts; field-semantics already locked. |
+| Arm this set `pathAwareCritique=required` + version bump 0.20.0 | Config + release | Orchestrator (direct) | Mechanical; operator-initiated none->required upgrade for the dogfood. |
+| **Dogfood: whole-set path-aware critique** | Review | **Operator-run multi-provider → gpt-5.4 + gemini-2.5-pro** (Copilot, path-aware) | The manual path-aware flow this set institutionalizes; BOTH ISSUES_FOUND, 4 real defects caught. |
+| Remediate the 4 defects + 15 regression tests | Code + tests | Orchestrator (direct) | Bounded remediation of flagged issues. |
+| Remediation re-verification | Review | **Routed → analysis/verification** (cross-provider) | Re-verify after ISSUES_FOUND; returned VERIFIED. |
+| Next-session-set recommendation | Analysis | **Routed** (cross-provider) | L-064-6: never self-opine. Confirmed 067. |
+
+**Routed spend this session:** the dogfood critique was operator-run (Copilot
+subscription, not metered here); routed spend = the remediation verification +
+the next-set analysis (small).
+
+### Next-session-set recommendation (routed)
+
+**067 — first-party tool-loop adapter + Experiment A** (confirmed by routed
+analysis; see `s3-next-set-recommendation.md`). Recommended 067 S1 orchestrator:
+**claude-code / anthropic / claude-opus-4-8 / high**. Prerequisites to settle
+first: finalize the tool contract + Experiment A success criteria, and confirm
+Anthropic/OpenAI/Google API access before the bindings work.

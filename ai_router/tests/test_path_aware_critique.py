@@ -45,11 +45,14 @@ def _spec(d: Path, level=None, *, tier: str = "full") -> None:
     (d / "spec.md").write_text(body, encoding="utf-8")
 
 
-def _valid_artifact() -> dict:
+def _valid_artifact(level: str = "required", name: str = "066-set") -> dict:
+    # ``name`` / ``level`` default to the values _set_dir() produces so the
+    # gate identity check (artifact must self-declare THIS set + the recorded
+    # policy level) passes; callers that record a different level pass it here.
     return {
         "schemaVersion": 1,
-        "sessionSetName": "066-set",
-        "pathAwareCritique": "required",
+        "sessionSetName": name,
+        "pathAwareCritique": level,
         "critiques": [
             {
                 "provider": "openai",
@@ -340,6 +343,49 @@ class TestArtifactValidator:
         assert res.ok is False
         assert res.code == pac.ARTIFACT_SCHEMA_INVALID
 
+    # -- Validator/JSON-Schema parity (Gemini-Pro path-aware critique, S3
+    # dogfood): the pure-Python validator must reject the same wrong-typed
+    # values strict JSON Schema would, or an artifact passes the runtime gate
+    # but fails schema evaluation. -----------------------------------------
+
+    @pytest.mark.parametrize("bad_version", [1.0, True, "1", None, 2])
+    def test_schema_version_must_be_supported_int(self, bad_version):
+        art = _valid_artifact()
+        art["schemaVersion"] = bad_version
+        res = pac.validate_path_aware_critique_artifact(art)
+        assert res.ok is False
+        assert res.code == pac.ARTIFACT_SCHEMA_INVALID
+
+    def test_wrong_typed_critiqued_at_rejected(self):
+        art = _valid_artifact()
+        art["critiquedAt"] = 12345  # schema: string, minLength 1
+        res = pac.validate_path_aware_critique_artifact(art)
+        assert res.ok is False and res.code == pac.ARTIFACT_SCHEMA_INVALID
+
+    def test_wrong_typed_blast_radius_rejected(self):
+        art = _valid_artifact()
+        art["blastRadius"] = "not-an-object"  # schema: object
+        res = pac.validate_path_aware_critique_artifact(art)
+        assert res.ok is False and res.code == pac.ARTIFACT_SCHEMA_INVALID
+
+    def test_wrong_typed_finding_severity_rejected(self):
+        art = _valid_artifact()
+        art["critiques"][0]["findings"] = [
+            {"description": "d", "severity": 9}  # schema: string
+        ]
+        res = pac.validate_path_aware_critique_artifact(art)
+        assert res.ok is False and res.code == pac.ARTIFACT_SCHEMA_INVALID
+
+    def test_well_typed_optional_fields_accepted(self):
+        art = _valid_artifact()
+        art["critiquedAt"] = "2026-06-15T12:00:00-04:00"
+        art["blastRadius"] = {"pSet": True, "recommended": "required"}
+        art["critiques"][0]["findings"] = [
+            {"description": "d", "severity": "Major", "category": "correctness"}
+        ]
+        res = pac.validate_path_aware_critique_artifact(art)
+        assert res.ok is True and res.code == pac.ARTIFACT_VALID
+
     def test_find_artifact_helper(self, tmp_path):
         d = _set_dir(tmp_path)
         assert pac.find_path_aware_critique_artifact(d) is None
@@ -411,6 +457,49 @@ class TestGateValidator:
     def test_advisory_valid_artifact_ok(self, tmp_path):
         d = _set_dir(tmp_path)
         pac.record_path_aware_critique(d, ADV)
-        self._write_artifact(d, _valid_artifact())
+        # The artifact must be self-declared under the recorded policy (advisory).
+        self._write_artifact(d, _valid_artifact(level=ADV))
         res = pac.validate_path_aware_critique_gate(d)
         assert res.ok is True
+
+    # -- Artifact-identity rejection (GPT-5.4 path-aware critique, S3 dogfood):
+    # a structurally valid artifact from another set, or labelled with a
+    # different policy level, must NOT satisfy this set's gate. -----------
+
+    def test_wrong_set_name_artifact_rejected(self, tmp_path):
+        d = _set_dir(tmp_path)  # basename "066-set"
+        pac.record_path_aware_critique(d, REQ)
+        self._write_artifact(d, _valid_artifact(name="some-other-set"))
+        res = pac.validate_path_aware_critique_gate(d)
+        assert res.ok is False
+        assert "sessionSetName" in res.reason
+        # the underlying artifact is itself structurally valid -- only the
+        # gate's identity check rejects it.
+        assert res.artifact_result is not None and res.artifact_result.ok
+
+    def test_wrong_level_artifact_rejected(self, tmp_path):
+        d = _set_dir(tmp_path)
+        pac.record_path_aware_critique(d, REQ)
+        # artifact self-declares "advisory" while the set recorded "required".
+        self._write_artifact(d, _valid_artifact(level=ADV))
+        res = pac.validate_path_aware_critique_gate(d)
+        assert res.ok is False
+        assert "pathAwareCritique" in res.reason
+
+    def test_unreadable_record_does_not_silently_disarm(self, tmp_path):
+        # GPT-5.4 finding #1: a corrupt activity-log collapses read_path_aware_critique
+        # to "none" and has_record to False. The dedicated helper distinguishes
+        # "present but unreadable" from "absent" so the close path can surface it.
+        d = _set_dir(tmp_path, with_log=False)
+        (d / "activity-log.json").write_text("{ not valid json", encoding="utf-8")
+        assert pac.read_path_aware_critique(d) == NONE
+        assert pac.has_path_aware_critique_record(d) is False
+        assert pac.path_aware_critique_record_unreadable(d) is True
+
+    def test_unreadable_helper_false_when_absent_or_clean(self, tmp_path):
+        d = _set_dir(tmp_path, with_log=False)
+        assert pac.path_aware_critique_record_unreadable(d) is False  # absent
+        (d / "activity-log.json").write_text(
+            json.dumps({"entries": []}), encoding="utf-8"
+        )
+        assert pac.path_aware_critique_record_unreadable(d) is False  # clean

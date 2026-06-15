@@ -198,6 +198,36 @@ def has_path_aware_critique_record(session_set_dir: Union[str, Path]) -> bool:
     )
 
 
+def path_aware_critique_record_unreadable(
+    session_set_dir: Union[str, Path],
+) -> bool:
+    """True iff ``activity-log.json`` EXISTS but cannot be parsed.
+
+    Distinguishes "no durable record" (the file is absent, or present and
+    parseable but carrying no ``path_aware_critique`` entry -> a legitimate
+    ``none`` opt-out) from "the durable record is present but UNREADABLE" (the
+    file exists but is corrupt / unparseable JSON). :func:`read_path_aware_critique`
+    and :func:`has_path_aware_critique_record` both collapse the unreadable
+    case to the default ``none`` / ``False`` so they never raise; on their own
+    that means a corrupt activity log would let a set that opted into
+    ``required`` close as if it had no gate -- a *silent* disarm. The Set 066
+    close-out gate calls this to surface the unreadable case as a loud warning
+    instead of silently skipping (GPT-5.4 path-aware critique, S3 dogfood).
+
+    Returns ``False`` when the file is absent (the legitimate opt-out) or parses
+    cleanly; ``True`` only when the file exists and JSON/IO parsing fails.
+    """
+    log_path = Path(session_set_dir) / "activity-log.json"
+    if not log_path.exists():
+        return False
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return True
+    return False
+
+
 def resolve_and_record_path_aware_critique(
     session_set_dir: Union[str, Path],
     *,
@@ -374,6 +404,13 @@ class PathAwareCritiqueArtifactResult:
     providers: tuple
     critique_count: int
     findings_count: int
+    # The artifact's own self-declared identity fields, populated on the
+    # ``ok=True`` path so the close-out gate can confirm the artifact belongs
+    # to *this* set and was produced under the recorded policy (a stale or
+    # copied artifact from another set must not satisfy a ``required`` gate --
+    # GPT-5.4 path-aware critique, S3 dogfood). ``None`` on every failure path.
+    session_set_name: Optional[str] = None
+    artifact_level: Optional[str] = None
 
 
 def _critique_has_content(critique: dict) -> bool:
@@ -482,10 +519,20 @@ def validate_path_aware_critique_artifact(
         reasons.append(f"unknown top-level key(s): {extra_keys}")
 
     version = data.get("schemaVersion")
-    if version not in PATH_AWARE_CRITIQUE_ARTIFACT_SCHEMA_VERSIONS:
+    # Must be a true int (not a bool, not a float) to match the JSON Schema's
+    # ``"type": "integer"``. Python evaluates ``1.0 in (1,)`` and ``True in
+    # (1,)`` as truthy, so without an explicit type guard a float/bool
+    # schemaVersion would pass the pure-Python validator while failing strict
+    # JSON Schema evaluation -- a validator/schema parity gap (Gemini-Pro
+    # path-aware critique, S3 dogfood).
+    if (
+        not isinstance(version, int)
+        or isinstance(version, bool)
+        or version not in PATH_AWARE_CRITIQUE_ARTIFACT_SCHEMA_VERSIONS
+    ):
         reasons.append(
             f"schemaVersion {version!r} is not one of "
-            f"{PATH_AWARE_CRITIQUE_ARTIFACT_SCHEMA_VERSIONS}"
+            f"{PATH_AWARE_CRITIQUE_ARTIFACT_SCHEMA_VERSIONS} (must be an integer)"
         )
 
     set_name = data.get("sessionSetName")
@@ -498,6 +545,20 @@ def validate_path_aware_critique_artifact(
             f"pathAwareCritique {level!r} is not one of "
             f"{PATH_AWARE_CRITIQUE_VALUES}"
         )
+
+    # Optional top-level fields the JSON Schema constrains by type. The
+    # pure-Python validator must reject the same wrong-typed values the schema
+    # would, or a malformed artifact passes the runtime gate but fails strict
+    # schema evaluation (Gemini-Pro path-aware critique, S3 dogfood). Only
+    # checked when present (both fields are optional).
+    critiqued_at = data.get("critiquedAt")
+    if critiqued_at is not None and not (
+        isinstance(critiqued_at, str) and critiqued_at.strip()
+    ):
+        reasons.append("critiquedAt, when present, must be a non-empty string")
+    blast_radius = data.get("blastRadius")
+    if blast_radius is not None and not isinstance(blast_radius, dict):
+        reasons.append("blastRadius, when present, must be an object")
 
     critiques = data.get("critiques")
     if not isinstance(critiques, list) or not critiques:
@@ -543,6 +604,17 @@ def validate_path_aware_critique_artifact(
                             f"critiques[{i}].findings[{j}].description is "
                             "missing or empty"
                         )
+                    # severity / category are optional loose strings in the
+                    # JSON Schema -- reject a wrong-typed value when present so
+                    # the Python validator's accept-set matches the schema's
+                    # (Gemini-Pro path-aware critique, S3 dogfood).
+                    for opt in ("severity", "category"):
+                        opt_val = finding.get(opt)
+                        if opt_val is not None and not isinstance(opt_val, str):
+                            reasons.append(
+                                f"critiques[{i}].findings[{j}].{opt} must be "
+                                "a string"
+                            )
 
     providers = tuple(
         c["provider"].strip()
@@ -613,6 +685,8 @@ def validate_path_aware_critique_artifact(
         providers=distinct_providers,
         critique_count=len(critiques),
         findings_count=findings_count,
+        session_set_name=set_name,
+        artifact_level=level,
     )
 
 
@@ -725,6 +799,36 @@ def validate_path_aware_critique_gate(
 
     result = validate_path_aware_critique_artifact(artifact_path)
     if result.ok:
+        # Identity check: a structurally valid artifact must self-declare that
+        # it covers THIS set and was produced under the recorded policy level.
+        # Without this, a stale/copied artifact from another set (wrong
+        # ``sessionSetName``) or one labelled with a different level satisfies
+        # the gate for the wrong set (GPT-5.4 path-aware critique, S3 dogfood).
+        expected_name = Path(session_set_dir).name
+        mismatches: List[str] = []
+        if result.session_set_name != expected_name:
+            mismatches.append(
+                f"sessionSetName {result.session_set_name!r} does not match "
+                f"this set {expected_name!r}"
+            )
+        if result.artifact_level != level:
+            mismatches.append(
+                f"pathAwareCritique {result.artifact_level!r} does not match "
+                f"the recorded policy {level!r}"
+            )
+        if mismatches:
+            return PathAwareCritiqueGateResult(
+                level=level,
+                applicable=True,
+                ok=False,
+                reason=(
+                    f"pathAwareCritique={level} but the "
+                    f"{PATH_AWARE_CRITIQUE_ARTIFACT_FILENAME} artifact does "
+                    f"not match this set: {'; '.join(mismatches)}."
+                ),
+                corrective=_GATE_CORRECTIVE,
+                artifact_result=result,
+            )
         return PathAwareCritiqueGateResult(
             level=level,
             applicable=True,

@@ -171,6 +171,31 @@ one of these stable tokens:
 The function never raises on a malformed or missing artifact — it returns a
 result so the close-out gate decides posture rather than crash.
 
+The validator's accept-set is kept aligned with the JSON Schema: the optional
+`critiquedAt` (non-empty string), `blastRadius` (object), and finding
+`severity` / `category` (strings) are type-checked when present, and
+`schemaVersion` must be a true integer (a float `1.0` or boolean `True` is
+rejected, matching the schema's `"type": "integer"`). The only intended
+divergence remains the `>= 2` **distinct**-providers rule JSON Schema cannot
+express.
+
+### What the close-out gate additionally checks (artifact identity)
+
+The structural validator above is identity-agnostic. The **close-out gate**
+(`validate_path_aware_critique_gate`) adds two checks a structurally valid
+artifact must also pass before it satisfies a set's gate:
+
+- **`sessionSetName` must equal the session-set directory basename** — a
+  critique copied from another set does not satisfy this set's gate.
+- **`pathAwareCritique` must equal the recorded policy level** — an artifact
+  self-declared under a weaker level does not satisfy a stronger gate.
+
+Separately, if `activity-log.json` exists but is **unreadable** (corrupt JSON),
+the policy can no longer be read and collapses to `none`; rather than silently
+skipping the gate, the set-terminal `close_session` emits a loud, non-blocking
+**warning** so a corrupt log cannot silently disarm a `required` set. (Both
+hardening fixes came from this set's own S3 dogfood critique.)
+
 ---
 
 ## Examples

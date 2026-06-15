@@ -1801,6 +1801,7 @@ def run(
                 from path_aware_critique import (  # type: ignore[import-not-found]
                     PATH_AWARE_CRITIQUE_NONE,
                     PATH_AWARE_CRITIQUE_REQUIRED,
+                    path_aware_critique_record_unreadable,
                     read_path_aware_critique,
                     validate_path_aware_critique_gate,
                 )
@@ -1808,13 +1809,37 @@ def run(
                 from .path_aware_critique import (  # type: ignore[no-redef]
                     PATH_AWARE_CRITIQUE_NONE,
                     PATH_AWARE_CRITIQUE_REQUIRED,
+                    path_aware_critique_record_unreadable,
                     read_path_aware_critique,
                     validate_path_aware_critique_gate,
                 )
             pac_level = read_path_aware_critique(session_set_dir)
+            pac_is_terminal = _close_is_terminal(
+                session_set_dir, outcome.session_number
+            )
+            # A corrupt/unreadable activity-log silently collapses the durable
+            # policy to ``none`` (read_path_aware_critique never raises), which
+            # would let a set that opted into ``required`` close as if it had
+            # no gate. Surface that as a loud, non-blocking warning at the
+            # set-terminal close rather than disarming silently (GPT-5.4
+            # path-aware critique, S3 dogfood). Warning, not a hard block: the
+            # gate's "any internal error never wedges close-out" contract
+            # stands; the fix removes the *silence*, not the fail-open posture.
+            if pac_is_terminal and path_aware_critique_record_unreadable(
+                session_set_dir
+            ):
+                warn = (
+                    "WARNING (Set 066 path-aware-critique): activity-log.json "
+                    "exists but could not be parsed, so the pathAwareCritique "
+                    "policy could not be read; if this set opted into "
+                    "'advisory' or 'required', its close-out gate could NOT be "
+                    "verified. Repair the activity log and re-run close_session."
+                )
+                print(warn, file=sys.stderr)
+                outcome.messages.append(warn)
             if (
                 pac_level != PATH_AWARE_CRITIQUE_NONE
-                and _close_is_terminal(session_set_dir, outcome.session_number)
+                and pac_is_terminal
             ):
                 pac = validate_path_aware_critique_gate(session_set_dir)
                 if pac.applicable and not pac.ok:

@@ -5,6 +5,78 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-06-15 (Set 066 — Path-Aware Critique policy)
+
+Ships the **tier-orthogonal** Path-Aware Critique policy: a per-set attribute,
+a saved multi-provider critique artifact contract, a blast-radius predicate, and
+a net-new content-aware close-out gate that institutionalizes the manual
+operator-run path-aware review (GitHub Copilot driving GPT-5.4 + Gemini-Pro over
+the repo). The automated tool-loop adapter is deferred to Set 067; routed
+per-session verification is unchanged.
+
+### Added (Set 066 S1 — policy surface + artifact contract)
+
+- **`pathAwareCritique` per-set attribute** (`none` | `advisory` | `required`,
+  default `none`), parsed from the spec's Session Set Configuration block and
+  recorded **once at set start and immutable thereafter** as an
+  `activity-log.json` entry (`kind: "path_aware_critique"`). Tier-orthogonal —
+  valid on both Full and Lightweight. Mirrors the Set 057 `verificationMode`
+  machinery. `start_session --path-aware-critique <level>` seeds/records it.
+  (`ai_router/path_aware_critique.py`.)
+- **Multi-provider critique-artifact contract + validator.** A saved
+  `path-aware-critique.json` (`docs/path-aware-critique.schema.json` +
+  `docs/path-aware-critique-schema.md`) with a pure-Python runtime validator
+  `validate_path_aware_critique_artifact` (no `jsonschema` dependency at
+  runtime): requires `>= 2` **distinct** providers and content-non-trivial
+  entries; never raises on a malformed/missing artifact.
+- **Blast-radius predicate** `python -m ai_router.blast_radius <paths…>`
+  (`ai_router/blast_radius.py`): the `P_set = any(P_task)` heuristic that
+  classifies a set's surface (cross-artifact / shared-schema / wiring / index)
+  and **recommends** a level — advisory only; never a hard auto-set.
+
+### Added (Set 066 S2 — net-new content-aware close-out gate)
+
+- **`validate_path_aware_critique_gate`** + `close_session` wiring: on the
+  set-terminal close, when the recorded policy is `advisory` or `required`,
+  confirms a valid multi-provider artifact exists. `required` **hard-blocks in
+  an interactive TTY / soft-warns headless** (the Set 057 Q6 fail-posture);
+  `advisory` always soft-warns; `none` skips. Net-new on the Full-tier close
+  path (the Lightweight-only `dedicated-verification` gate could not be reused —
+  a verified erratum to the Set 065 proposal). Fail-open in the non-block
+  direction; emits `closeout_failed` with
+  `failed_checks: ["path_aware_critique_gate"]` on a hard block.
+
+### Added (Set 066 S3 — manual workflow + reusable prompt template)
+
+- **Reusable prompt template** `ai_router/prompt-templates/path-aware-critique.md`
+  — the canonical operator prompt for the end-of-set, multi-provider,
+  path-aware critique (Copilot driving GPT-5.4 + Gemini-Pro), generalized from
+  the Set 066 design-critique prompts.
+- **Workflow docs.** New *end-of-set Path-Aware Critique stage* in
+  `docs/ai-led-session-workflow.md`; pointers in
+  `docs/planning/session-set-authoring-guide.md` and
+  `docs/planning/project-guidance.md`.
+- **Dogfood.** This set declares `pathAwareCritique: required` and is gated by
+  its own close-out gate — the first real instance of the practice.
+
+### Fixed (Set 066 S3 — hardening from the dogfood critique)
+
+The set's own multi-provider path-aware critique (GPT-5.4 + Gemini-Pro) caught
+four real defects, all fixed before release:
+
+- **Corrupt `activity-log.json` could silently disarm the gate.** A policy of
+  `required` collapsed to `none` on an unreadable log, skipping the gate. The
+  set-terminal close now emits a loud, non-blocking warning instead of
+  disarming silently (new `path_aware_critique_record_unreadable` helper).
+- **A stale/copied artifact from another set satisfied the gate.** The gate now
+  enforces **artifact identity** — the artifact's `sessionSetName` must match
+  the set and its `pathAwareCritique` must match the recorded policy level.
+- **Validator/JSON-Schema parity gaps.** The pure-Python validator now
+  type-checks optional fields (`critiquedAt`, `blastRadius`, finding
+  `severity` / `category`) and rejects a non-integer `schemaVersion` (float
+  `1.0` / boolean `True`), matching strict JSON Schema evaluation.
+- **Regression tests** added for all four failure modes.
+
 ## [0.19.0] — 2026-06-14 (Set 064 — guidance lifecycle & pruning)
 
 ### Added (Set 064 — steady-state lifecycle D1–D5)

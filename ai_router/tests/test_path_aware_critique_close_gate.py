@@ -283,3 +283,36 @@ def test_non_terminal_close_does_not_fire_gate(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     outcome = run(_ns(d))
     assert outcome.result == "succeeded"
+
+
+# --- S3 dogfood remediations ------------------------------------------------
+
+def test_wrong_set_name_artifact_tty_hard_blocks(tmp_path, monkeypatch):
+    # GPT-5.4 finding #2: a structurally valid artifact copied from another set
+    # must not satisfy this set's required gate.
+    d = _make_set(
+        tmp_path, sessions=[_work(1, "in-progress")], total=1, level=REQUIRED,
+        artifact=_valid_artifact("some-other-set"),
+    )
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    outcome = run(_ns(d))
+    assert outcome.result == "gate_failed"
+    assert any("path_aware_critique" in m for m in outcome.messages)
+
+
+def test_unreadable_activity_log_warns_not_silently_disarms(
+    tmp_path, monkeypatch, capsys
+):
+    # GPT-5.4 finding #1: a corrupt activity-log collapses the policy read to
+    # 'none' (so the required gate cannot fire), but the terminal close now
+    # surfaces a loud, non-blocking warning instead of disarming silently.
+    d = _make_set(
+        tmp_path, sessions=[_work(1, "in-progress")], total=1, level=REQUIRED,
+        artifact=_valid_artifact("066-gate"),
+    )
+    (d / "activity-log.json").write_text("{ corrupt", encoding="utf-8")
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    outcome = run(_ns(d))
+    err = capsys.readouterr().err
+    assert "could not be parsed" in err
+    assert "path-aware-critique" in err
