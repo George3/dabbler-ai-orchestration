@@ -60,16 +60,16 @@
     {
       "number": 5,
       "title": "Ceiling -> floor ratchet + measured replacement gate",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-16T08:07:36.955972-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-16T08:48:46.177957-04:00",
       "orchestrator": {
         "engine": "claude",
         "provider": "anthropic",
         "model": "claude-opus-4-8",
         "effort": "high"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     },
     {
       "number": 6,
