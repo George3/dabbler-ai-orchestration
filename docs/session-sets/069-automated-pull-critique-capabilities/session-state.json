@@ -1,15 +1,18 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "069-automated-pull-critique-capabilities",
-  "status": "not-started",
+  "status": "in-progress",
   "sessions": [
     {
       "number": 1,
       "title": "Execution-evidence protocol + evidence-tiered findings",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-16T04:22:51.012512-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic"
+      },
       "verificationVerdict": null
     },
     {

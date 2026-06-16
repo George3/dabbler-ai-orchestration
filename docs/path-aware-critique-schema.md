@@ -169,6 +169,18 @@ object).
 | `description` | string | yes | critic |
 | `severity` | string | no | critic (loose) |
 | `category` | string | no | critic (loose) |
+| `evidenceTier` | string | no | **orchestrator** (`REPRODUCED` \| `ASSERTED` \| `HYPOTHESIS`) |
+| `transcript` | object | conditional | orchestrator (required when `evidenceTier` is `REPRODUCED`) |
+
+The Set 069 **execution-evidence** fields are additive and optional — every
+pre-069 artifact (no evidence tags) stays valid. `evidenceTier` is applied by
+the **orchestrator, never the agent's self-report**; an absent tier means
+`ASSERTED` (a read-only claim). A `REPRODUCED` finding must carry a `transcript`
+(a servant-captured run with a pristine replay through a real public
+entrypoint). The full protocol — tiers, the transcript shape, the
+orchestrator-tag rule, the pristine-replay requirement, and the meta-oracle rule
+— is documented in [`docs/evidence-protocol.md`](evidence-protocol.md) and
+implemented in `ai_router.evidence_protocol`.
 
 ---
 
@@ -186,6 +198,7 @@ one of these stable tokens:
 | `schema-invalid` | A required field is missing/empty/wrong-typed, or `critiques` has fewer than two entries. |
 | `single-provider` | Fewer than two **distinct** providers (two passes of one provider do not count). |
 | `trivial-content` | A critique entry has neither a non-empty `summary` nor any finding with a non-empty `description`. |
+| `invalid-evidence` | A finding carries an unknown `evidenceTier`, or is tagged `REPRODUCED` without a valid falsifier `transcript` (Set 069). |
 
 The function never raises on a malformed or missing artifact — it returns a
 result so the close-out gate decides posture rather than crash.
@@ -194,9 +207,30 @@ The validator's accept-set is kept aligned with the JSON Schema: the optional
 `critiquedAt` (non-empty string), `blastRadius` (object), and finding
 `severity` / `category` (strings) are type-checked when present, and
 `schemaVersion` must be a true integer (a float `1.0` or boolean `True` is
-rejected, matching the schema's `"type": "integer"`). The only intended
-divergence remains the `>= 2` **distinct**-providers rule JSON Schema cannot
-express.
+rejected, matching the schema's `"type": "integer"`). Every required non-empty
+string field carries `"pattern": "\\S"` in the schema (alongside `minLength: 1`)
+so a **whitespace-only** value (`" "`, `"\t"`) is rejected by the JSON Schema too
+— matching the Python validator, which tests `value.strip()`. (Set 069 closed
+this latent whitespace divergence across the whole contract.) The schema's
+ECMA-262 `\S` and the validator's Python `str.strip()` agree for all ASCII and
+common-Unicode whitespace; they define marginally different sets only at a few
+**exotic-Unicode-whitespace** codepoints (e.g. `U+0085`, `U+FEFF`), so a value
+consisting **entirely** of such codepoints could be accepted by one and rejected
+by the other. That is not a realistic input for any of these fields — the
+machine-oriented ones (git refs, SHA-256 hex digests, slugs, provider/model ids)
+are ASCII by construction, and a free-text `summary` / `description` is never a
+single run of exotic-whitespace — so the `\S` ≡ `.strip()` equivalence is exact
+in practice. (This is the same ECMA-vs-Python residual every `pattern` in the
+contract carries; it is not specific to the evidence fields.) Two intended Python-only
+semantic rules JSON Schema cannot express: the `>= 2` **distinct**-providers
+rule, and (Set 069) the cross-field **replay-hash equality** on a `REPRODUCED`
+transcript (`replay.outputHash == outputHash`) in
+`ai_router.evidence_protocol.validate_transcript`. Everything else about a
+`REPRODUCED` transcript **is** schema-expressed and both validators agree on it:
+transcript *presence* on `REPRODUCED` (via `if`/`then`), the full transcript
+structure, `commandId` **XOR** `templateId` (via `oneOf`), `pristineCheckout`
+== true (via `const`), and the public-entrypoint **meta-oracle** rule (via
+`EvidenceEntrypoint.kind`'s enum, which omits `agent_harness`).
 
 ### What the close-out gate additionally checks (artifact identity)
 

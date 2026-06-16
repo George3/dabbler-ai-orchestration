@@ -52,6 +52,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Union
 
+try:  # package vs bare-import (mirrors the rest of ai_router)
+    from .evidence_protocol import validate_finding_evidence
+except ImportError:  # pragma: no cover - test/bare context
+    from evidence_protocol import validate_finding_evidence  # type: ignore
+
 
 # ---------------------------------------------------------------------------
 # The pathAwareCritique policy attribute (Set 066 S1)
@@ -385,6 +390,10 @@ ARTIFACT_NOT_AN_OBJECT = "not-an-object"
 ARTIFACT_SCHEMA_INVALID = "schema-invalid"
 ARTIFACT_SINGLE_PROVIDER = "single-provider"
 ARTIFACT_TRIVIAL_CONTENT = "trivial-content"
+# Set 069 S1: a finding tagged REPRODUCED without a valid falsifier transcript
+# (or an unknown evidenceTier) makes the artifact invalid. The deep transcript
+# rules (pristine replay, meta-oracle) live in ai_router.evidence_protocol.
+ARTIFACT_INVALID_EVIDENCE = "invalid-evidence"
 
 
 @dataclass(frozen=True)
@@ -513,6 +522,11 @@ def validate_path_aware_critique_artifact(
         )
 
     reasons: List[str] = []
+    # Set 069 S1: evidence-tier violations are collected separately so a
+    # REPRODUCED-without-transcript finding surfaces as the actionable
+    # ARTIFACT_INVALID_EVIDENCE code (after structural / single-provider /
+    # trivial checks), not folded into the generic schema-invalid bucket.
+    evidence_reasons: List[str] = []
 
     extra_keys = sorted(set(data) - _ALLOWED_TOP_LEVEL_KEYS)
     if extra_keys:
@@ -615,6 +629,15 @@ def validate_path_aware_critique_artifact(
                                 f"critiques[{i}].findings[{j}].{opt} must be "
                                 "a string"
                             )
+                    # Set 069 S1: evidence-tier rule. An untagged finding is
+                    # ASSERTED (ok); a REPRODUCED finding is valid only with a
+                    # falsifier transcript (pristine replay + meta-oracle).
+                    ev = validate_finding_evidence(finding)
+                    if not ev.ok:
+                        evidence_reasons.extend(
+                            f"critiques[{i}].findings[{j}]: {r}"
+                            for r in ev.reasons
+                        )
 
     providers = tuple(
         c["provider"].strip()
@@ -673,6 +696,21 @@ def validate_path_aware_critique_artifact(
                 "one finding with a non-empty description; trivial entries: "
                 f"{trivial}",
             ),
+            providers=distinct_providers,
+            critique_count=len(critiques),
+            findings_count=findings_count,
+        )
+
+    # Set 069 S1: the evidence-tier rule is the deepest semantic check (after
+    # structure / multi-provider / non-trivial). A finding tagged REPRODUCED
+    # without a valid falsifier transcript invalidates the artifact, so the
+    # close-out gate refuses a critique that *claims* a reproduction it cannot
+    # back with a re-runnable transcript.
+    if evidence_reasons:
+        return PathAwareCritiqueArtifactResult(
+            ok=False,
+            code=ARTIFACT_INVALID_EVIDENCE,
+            reasons=tuple(evidence_reasons),
             providers=distinct_providers,
             critique_count=len(critiques),
             findings_count=findings_count,

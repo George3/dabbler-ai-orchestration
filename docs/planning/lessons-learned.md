@@ -91,7 +91,7 @@ last-pruned-set: (none)   generated: 2026-06-16
 - **Action for future sessions:** Trust the guard for cheap routed work.
 
 ## Persist Routed Output To Disk Before Display Or Logging
-<!-- lesson: id="L-064-3" last-used-set="068" status="active" scope="portable" -->
+<!-- lesson: id="L-064-3" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Any routed call on Windows where the default console code page
   is `cp1252`.
@@ -136,7 +136,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   2026-05-01 to avoid duplicate guidance drifting in two places.
 
 ## Always Route `ai-assignment.md` And Next-Orchestrator / Next-Set Recommendations
-<!-- lesson: id="L-064-6" last-used-set="068" status="active" scope="portable" -->
+<!-- lesson: id="L-064-6" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Authoring `ai-assignment.md` (Step 3.5) or next-orchestrator /
   next-session-set recommendations (Step 8).
@@ -148,7 +148,7 @@ last-pruned-set: (none)   generated: 2026-06-16
 - **Action for future sessions:** Never self-opine on which model is cheaper.
 
 ## Schema-Only Re-Verifies Need `max_tier` Pinned To Block Auto-Escalation
-<!-- lesson: id="L-064-7" last-used-set="067" status="active" scope="portable" -->
+<!-- lesson: id="L-064-7" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Round 2 of cross-provider session verification when the
   Round 1 response was substantively correct but used non-standard
@@ -195,7 +195,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   code before routing verification.
 
 ## `git diff`-Based Verification Evidence Omits Untracked Files
-<!-- lesson: id="L-064-9" added-set="063" last-used-set="068" status="active" scope="portable" -->
+<!-- lesson: id="L-064-9" added-set="063" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Building a cross-provider verification prompt whose
   evidence bundle includes `git diff` / `git diff --stat` output
@@ -212,7 +212,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   alongside the diff so additions are visible.
 
 ## State The Suite Baseline And Release Contract Up Front In Verification Round 1
-<!-- lesson: id="L-064-10" added-set="062" last-used-set="068" status="promoted" scope="portable" -->
+<!-- lesson: id="L-064-10" added-set="062" last-used-set="069" status="promoted" scope="portable" -->
 
 - **Promoted.** This lesson now lives at `project-guidance.md` →
   Conventions → Workflow Expectations: *"Open every session-verification
@@ -236,7 +236,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   the same rule.
 
 ## Propagate A Consistency Fix To Every Echo Before Re-Verifying
-<!-- lesson: id="L-065-1" added-set="065" last-used-set="068" status="active" scope="portable" -->
+<!-- lesson: id="L-065-1" added-set="065" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Cross-provider verification of a heavily cross-referenced
   synthesis document — a proposal, design doc, or spec whose central
@@ -260,7 +260,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   round.
 
 ## A Pure-Python Validator Mirroring A JSON Schema Drifts Looser — Type-Check Optional Fields And Guard Numeric Equivalence
-<!-- lesson: id="L-066-1" added-set="066" last-used-set="068" status="active" scope="portable" -->
+<!-- lesson: id="L-066-1" added-set="066" last-used-set="069" status="active" scope="portable" -->
 
 - **Context:** Any runtime validator written in plain Python to enforce the
   same contract as a JSON Schema (so the runtime path avoids a `jsonschema`

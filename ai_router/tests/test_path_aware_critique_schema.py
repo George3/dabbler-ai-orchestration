@@ -10,9 +10,15 @@ runtime validator the close-out gate calls. This module pins:
   validator (the dual-validation drift guard — they cannot diverge),
 - the structural guardrails (>=2 critiques, required fields, closed
   envelope, content-non-trivial via anyOf),
-- the one documented gap between the two validators: two entries from the
-  SAME provider pass the structural schema but are rejected by the Python
-  validator's multi-provider semantic rule.
+- the Set 069 evidence-tier additions (evidenceTier + the REPRODUCED
+  transcript) and their dual-validation parity,
+- the two documented runtime Python-only semantic gaps the schema cannot
+  express: (1) two entries from the SAME provider pass the structural
+  schema but are rejected by the Python validator's multi-provider rule,
+  and (2) the cross-field replay-hash equality on a REPRODUCED transcript.
+  Everything else (XOR, pristineCheckout==true, the meta-oracle kind,
+  whitespace-only rejection) is schema-expressed and the two validators
+  agree on it.
 """
 
 from __future__ import annotations
@@ -23,7 +29,8 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-import path_aware_critique as pac  # conftest puts ai_router/ on sys.path
+import evidence_protocol as ep  # conftest puts ai_router/ on sys.path
+import path_aware_critique as pac
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO_ROOT / "docs" / "path-aware-critique.schema.json"
@@ -190,6 +197,191 @@ class TestSchemaVsPythonValidatorGap:
         res = pac.validate_path_aware_critique_artifact(env)
         assert res.ok is False
         assert res.code == pac.ARTIFACT_SINGLE_PROVIDER
+
+
+def _valid_transcript() -> dict:
+    out = "Traceback (most recent call last): ...\nUnicodeDecodeError\n"
+    h = ep.hash_output(out)
+    return {
+        "pinnedRef": "deadbee",
+        "commandId": "validator-malformed-bytes",
+        "pristineCheckout": True,
+        "exitCode": 1,
+        "rawOutput": out,
+        "outputHash": h,
+        "entrypoint": {"kind": "public_command", "ref": "ai_router.contract_gate"},
+        "replay": {"pristineCheckout": True, "exitCode": 1, "outputHash": h},
+    }
+
+
+def _with_reproduced_finding() -> dict:
+    """A minimal artifact whose first finding is a valid REPRODUCED falsifier."""
+    env = _minimal()
+    env["critiques"][0]["findings"] = [
+        {
+            "description": "contract_gate crashes on a non-UTF-8 manifest.",
+            "severity": "Major",
+            "category": "correctness",
+            "evidenceTier": "REPRODUCED",
+            "transcript": _valid_transcript(),
+        }
+    ]
+    return env
+
+
+class TestEvidenceTierContract:
+    """Set 069 S1: the additive execution-evidence fields on a finding.
+
+    The JSON Schema enforces the enum, the transcript STRUCTURE, transcript
+    *presence* on a REPRODUCED finding (if/then), the commandId XOR templateId
+    (oneOf), pristineCheckout==true (const), and the meta-oracle entrypoint
+    kind (enum). The ONLY Set-069 Python-only semantic divergence is the
+    cross-field replay-hash equality, pinned in TestEvidenceSchemaVsPythonGap
+    below; the other transcript rules are 'rejected by both' in
+    TestEvidenceParity."""
+
+    def test_untagged_findings_still_valid_both(self, validator):
+        # Backward compatibility: the pre-069 example has no evidence tags.
+        env = _minimal()
+        validator.validate(env)
+        assert pac.validate_path_aware_critique_artifact(env).ok is True
+
+    def test_reproduced_with_valid_transcript_passes_both(self, validator):
+        env = _with_reproduced_finding()
+        validator.validate(env)
+        assert pac.validate_path_aware_critique_artifact(env).ok is True
+
+    def test_reproduced_without_transcript_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        del env["critiques"][0]["findings"][0]["transcript"]
+        with pytest.raises(jsonschema.ValidationError):
+            validator.validate(env)
+        res = pac.validate_path_aware_critique_artifact(env)
+        assert res.ok is False
+        assert res.code == pac.ARTIFACT_INVALID_EVIDENCE
+
+    def test_unknown_tier_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["evidenceTier"] = "MAYBE"
+        del env["critiques"][0]["findings"][0]["transcript"]
+        with pytest.raises(jsonschema.ValidationError):
+            validator.validate(env)
+        res = pac.validate_path_aware_critique_artifact(env)
+        assert res.ok is False
+        assert res.code == pac.ARTIFACT_INVALID_EVIDENCE
+
+    def test_asserted_finding_needs_no_transcript_both(self, validator):
+        env = _minimal()
+        env["critiques"][0]["findings"][0]["evidenceTier"] = "ASSERTED"
+        validator.validate(env)
+        assert pac.validate_path_aware_critique_artifact(env).ok is True
+
+
+class TestEvidenceSchemaVsPythonGap:
+    """The ONE Set-069 Python-only semantic rule JSON Schema cannot express:
+    cross-field replay-hash equality. Everything else about a REPRODUCED
+    transcript (XOR, pristineCheckout==true, meta-oracle kind) is schema-
+    expressed and pinned as 'rejected by both' in TestEvidenceParity below."""
+
+    def test_replay_hash_mismatch_passes_schema_fails_python(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["replay"][
+            "outputHash"
+        ] = ep.hash_output("a different run")
+        validator.validate(env)  # both hashes present + non-empty; schema fine
+        res = pac.validate_path_aware_critique_artifact(env)
+        assert res.ok is False
+        assert res.code == pac.ARTIFACT_INVALID_EVIDENCE
+
+
+class TestEvidenceParity:
+    """Set 069 S1 verifier regressions: malformed REPRODUCED transcripts and
+    stray non-REPRODUCED transcripts must be handled IDENTICALLY by the JSON
+    Schema and the Python validator (the L-066-1 parity holes)."""
+
+    def _python_ok(self, env) -> bool:
+        return pac.validate_path_aware_critique_artifact(env).ok
+
+    def test_stray_transcript_on_asserted_ignored_by_both(self, validator):
+        # A transcript on a non-REPRODUCED finding is untyped supporting context;
+        # BOTH validators ignore it, even when malformed.
+        env = _minimal()
+        env["critiques"][0]["findings"][0]["evidenceTier"] = "ASSERTED"
+        env["critiques"][0]["findings"][0]["transcript"] = {"garbage": True}
+        assert _schema_ok(validator, env) is True
+        assert self._python_ok(env) is True
+
+    def test_stray_transcript_on_hypothesis_ignored_by_both(self, validator):
+        env = _minimal()
+        env["critiques"][0]["findings"][0]["evidenceTier"] = "HYPOTHESIS"
+        env["critiques"][0]["findings"][0]["transcript"] = {"x": 1}
+        assert _schema_ok(validator, env) is True
+        assert self._python_ok(env) is True
+
+    def test_both_ids_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["templateId"] = "t"
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_command_valid_template_wrong_type_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["templateId"] = 7
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_template_valid_command_empty_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        t = env["critiques"][0]["findings"][0]["transcript"]
+        del t["commandId"]
+        t["templateId"] = "call-with-bad-parent"
+        t["commandId"] = ""
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_args_wrong_type_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["args"] = 7
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_replay_exit_code_bool_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["replay"][
+            "exitCode"
+        ] = True
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_non_pristine_checkout_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"][
+            "pristineCheckout"
+        ] = False
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_agent_harness_entrypoint_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["entrypoint"][
+            "kind"
+        ] = "agent_harness"
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_whitespace_only_session_set_name_rejected_by_both(self, validator):
+        # Set 069 closed the whitespace divergence: Python tests .strip(), the
+        # schema now carries pattern "\\S"; both reject a whitespace-only value.
+        env = _minimal()
+        env["sessionSetName"] = "   "
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
+
+    def test_whitespace_only_pinned_ref_rejected_by_both(self, validator):
+        env = _with_reproduced_finding()
+        env["critiques"][0]["findings"][0]["transcript"]["pinnedRef"] = "  "
+        assert _schema_ok(validator, env) is False
+        assert self._python_ok(env) is False
 
 
 class TestStructuralParity:

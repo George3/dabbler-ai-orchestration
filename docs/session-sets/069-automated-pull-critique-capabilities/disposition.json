@@ -1,0 +1,40 @@
+{
+  "status": "completed",
+  "summary": "Set 069 Session 1 of 6: the single execution-evidence protocol + evidence-tiered findings schema. Ran on claude-opus-4-8 high (operator launch). This session closes the FIRST rung of the proposal-panel capability ladder before any execution lane ships -- the two-standards fix (manual and automated critics speak ONE evidence protocol). SHIPPED CODE: ai_router/evidence_protocol.py (NEW, pure-Python, dependency-free, ASCII-only, never-raises) -- the protocol. (1) Three evidence tiers EVIDENCE_REPRODUCED / EVIDENCE_ASSERTED / EVIDENCE_HYPOTHESIS; DEFAULT_EVIDENCE_TIER = ASSERTED so an untagged finding is a read-claim and the field is purely ADDITIVE (every pre-069 artifact stays valid). (2) The ORCHESTRATOR-APPLIES-THE-TAG rule: authoritative_tier(proposed, transcript) confers REPRODUCED ONLY on a valid transcript; a REPRODUCED *claim* without one collapses to ASSERTED; HYPOTHESIS preserved -- the agent can never self-grant REPRODUCED (trust rests on the artifact, not the agent's word). (3) The transcript falsifier contract validate_transcript(): pinnedRef; commandId XOR templateId (a TRUSTED operator-authored id, never model-authored argv); pristineCheckout==true; exitCode int|null (bool rejected); rawOutput str; outputHash (sha256 via hash_output); the PRISTINE-REPLAY requirement (replay on a SECOND pristine checkout with replay.outputHash == outputHash -> a re-runnable falsifier); and the META-ORACLE rule (entrypoint.kind a real public kind in {public_command, public_api, cli, test_entrypoint}, NEVER agent_harness). (4) validate_finding_evidence() -- the per-finding rule the Set 066 artifact validator consumes. SCHEMA/VALIDATOR: ai_router/path_aware_critique.py validate_path_aware_critique_artifact now calls validate_finding_evidence per finding and returns a NEW code ARTIFACT_INVALID_EVIDENCE (ordered after structural/single-provider/trivial) -- a REPRODUCED finding without a valid falsifier transcript invalidates the artifact, so a 'required' set cannot pass the close-out gate on a critique that CLAIMS a reproduction it cannot back. docs/path-aware-critique.schema.json gains evidenceTier (enum) + $defs/EvidenceTranscript / EvidenceEntrypoint / EvidenceReplay; the transcript $ref lives INSIDE the if(evidenceTier==REPRODUCED)/then block (so a transcript on a non-REPRODUCED finding is ignored by BOTH validators); oneOf enforces commandId XOR templateId; pristineCheckout/replay.pristineCheckout are const:true; the kind enum enforces the meta-oracle. schemaVersion stays 1 (additive, backward compatible). DOCS: docs/evidence-protocol.md (NEW canonical narrative) + docs/path-aware-critique-schema.md updates (Finding-table evidence fields, the invalid-evidence code, the parity paragraph). VERIFICATION (cross-provider, gpt-5-4, REQUIRED because the 7-file ai_router+docs diff trips routed_gate -- blast-radius shared-schema + multi-module + breadth; up-front conventions block per L-064-10): a 4-round L-066-1 parity-hardening loop. R1 FAIL (4 real findings: F1 schema validated a transcript on a non-REPRODUCED finding while Python ignored it; F2 validate_transcript did not type-check optional fields templateId/args/replay.exitCode; F3 docs/schema OVERCLAIMED commandId-XOR and the meta-oracle kind as 'Python-only' when both are schema-expressible; F4 tests missed the holes). R2: F1 fixed (moved the transcript $ref into the REPRODUCED if/then so BOTH validators ignore a stray transcript), F2 fixed (type checks added), F4 fixed (parity regressions) -- but F3 left a residual whitespace divergence (Python _nonempty_str uses .strip() -> rejects ' ' while schema minLength:1 accepted it). R3: F3 schema-complete confirmed (added pattern '\\S' alongside minLength:1 on ALL 13 required-string fields -- the new evidence fields AND the pre-existing Set-066 fields -- so the schema now rejects whitespace-only too, matching .strip(); this closed a pre-existing latent class across the whole contract), but two doc-precision blockers (an over-broad 'ASCII by construction' carve-out for free-text summary/description, and two stale test docstrings). R4 VERIFIED (doc-precision reworded; max_tier pinned per L-064-7 since wording-only). The ONLY remaining Python-only semantic rules JSON Schema cannot express are now (1) distinct-providers and (2) the cross-field replay-hash equality -- documented honestly. Full ai_router pytest suite GREEN: 1736 passed / 1 pre-existing skip (baseline 1670 + 66 new). Metered verification ~$0.851 (R1 $0.428 + R2 $0.179 + R3 $0.198 + R4 $0.046) + next-session rec $0.002. NO release this session (PyPI is S6); ai_router version unchanged; NO Marketplace/extension change (spec non-goal: no UI this whole set). The execution lanes that GENERATE transcripts are S2 (trusted-command exec + get_diff + bounded probing), S3 (probe-template lane), S4 (Podman) -- all feed findings through THIS protocol; until they land every automated finding stays ASSERTED (read-only), so the protocol changes no existing behavior. Next-session rec routed (next-session-rec.md): a capable frontier engine for the S2 agentic-loop wiring (the tier-1 analysis returned stale model names -> orchestrator caveat recorded in ai-assignment.md; operator picks among opus-4-8/high, codex gpt-5.4/high, gemini-2.5-pro).",
+  "files_changed": [
+    "ai_router/evidence_protocol.py",
+    "ai_router/path_aware_critique.py",
+    "ai_router/tests/test_evidence_protocol.py",
+    "ai_router/tests/test_path_aware_critique_schema.py",
+    "docs/evidence-protocol.md",
+    "docs/path-aware-critique-schema.md",
+    "docs/path-aware-critique.schema.json",
+    "docs/session-sets/069-automated-pull-critique-capabilities/ai-assignment.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/next-session-rec.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/run_s1_assignment.py",
+    "docs/session-sets/069-automated-pull-critique-capabilities/run_s1_verification.py",
+    "docs/session-sets/069-automated-pull-critique-capabilities/run_s1_verification_r2.py",
+    "docs/session-sets/069-automated-pull-critique-capabilities/run_s1_verification_r3.py",
+    "docs/session-sets/069-automated-pull-critique-capabilities/run_s1_verification_r4.py",
+    "docs/session-sets/069-automated-pull-critique-capabilities/s1-verification.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/s1-verification-round-2.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/s1-verification-round-3.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/s1-verification-round-4.md",
+    "docs/session-sets/069-automated-pull-critique-capabilities/activity-log.json",
+    "docs/session-sets/069-automated-pull-critique-capabilities/session-state.json",
+    "docs/session-sets/069-automated-pull-critique-capabilities/session-events.jsonl"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "blockers": [],
+  "verification_verdict": "VERIFIED",
+  "lessons_cited": [
+    "L-066-1",
+    "L-064-10",
+    "L-064-7",
+    "L-064-9",
+    "L-064-3",
+    "L-064-6",
+    "L-065-1"
+  ]
+}
