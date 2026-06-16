@@ -60,6 +60,51 @@
       "description": "Full ai_router suite GREEN: 1988 passed, 5 skipped (the 5 are Set 069 S4 real-Podman-on-Windows by-design skips). Cross-provider verification (gpt-5-4, routed_gate REQUIRED via blast-radius+breadth): R1 ISSUES_FOUND (3: hard-coded providerEqual/modelEqual; pull framing classified from rendered instruction=spoofable; committed_ref misstated provenance) -> all fixed; R2 (3 resolved, 1 NEW: pull_template/pull_instruction drift) -> fixed via pairing guard; R3 (devil's advocate: even paired, 2 inputs can diverge) -> fixed via SINGLE source of truth (removed pull_instruction param; instruction rendered from pull_template); R4 VERIFIED. Next-session orchestrator recommendation routed (gemini-pro): claude/sonnet-4-6/medium.",
       "status": "completed",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "provenance-merge",
+      "dateTime": "2026-06-16T14:12:29.415449-04:00",
+      "description": "Built provenance merge (merge_findings/MergedFinding/MergeResult): stable defectKey only, never free-text; unkeyed never merged (safe over-split); provenanceComplete flag + per-surface unkeyed counts.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "comparison-artifact",
+      "dateTime": "2026-06-16T14:12:29.416048-04:00",
+      "description": "Built comparison artifact (build/validate_comparison_artifact + dual-surface-comparison.schema.json + example): L-066-1 parity, closed envelope, int-not-bool, cross-field provenance invariants the schema cannot express.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "fair-shake-telemetry",
+      "dateTime": "2026-06-16T14:12:29.416048-04:00",
+      "description": "Built scoring: score_comparison (push/pull/shared high-sev tallies + upper-bound flag), score_against_benchmark (ground-truth RETIRE telemetry over Set 069 registration, underpowered->inconclusive), aggregate_retire_telemetry (refuses to pool sampled+opt-in).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "dual-surface-mode",
+      "dateTime": "2026-06-16T14:12:29.417056-04:00",
+      "description": "Wired dualSurfaceMode verificationMode-pattern option (activity-log record once-at-set-start+immutable, read/has/unreadable/spec-seed, should_run_dual_surface injected-draw sampled/opt-in trigger) + CLI record-mode/read-mode/score.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "s2-verified",
+      "dateTime": "2026-06-16T14:40:00.256047-04:00",
+      "description": "Cross-provider verification (gpt-5-4, routed_gate REQUIRED): R1 ISSUES x3 (provenanceComplete/count honesty; record-mode malformed-log crash; test adequacy)->fixed; R2 ISSUES x2 (L-069-1 incomplete class-fix: readers+stepNumber still TypeError on non-list entries)->hardened all readers; R3 VERIFIED. Full ai_router suite GREEN 2063/5. Lessons cited L-066-1/L-069-1/L-064-10/L-064-9/L-064-3. Deferred residual recorded: same non-list-entries pattern in path_aware_critique.py + dedicated_verification.py siblings. No release (S3).",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

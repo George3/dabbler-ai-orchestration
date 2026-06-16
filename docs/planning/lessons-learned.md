@@ -290,7 +290,7 @@ last-pruned-set: (none)   generated: 2026-06-16
   per-session routed verification had missed.
 
 ## A Bug Is A Bug CLASS — Fix Every Sibling Site, Not Just The Reported One
-<!-- lesson: id="L-069-1" added-set="069" last-used-set="069" status="active" scope="portable" -->
+<!-- lesson: id="L-069-1" added-set="069" last-used-set="070" status="active" scope="portable" -->
 
 - **Context:** Fixing a defect that is an instance of a *class* (a robustness gap
   in one of several parallel readers/validators that all do the same thing). Set
