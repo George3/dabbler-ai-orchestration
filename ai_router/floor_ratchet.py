@@ -156,7 +156,7 @@ def _signoff_status(candidate: dict) -> Optional[str]:
 
 
 def _eval_mechanical_gates(candidate: dict, min_flake_runs: int) -> List[Tuple[str, bool, str]]:
-    """Return [(gate_name, passed, reason_if_failed), ...] for the six gates.
+    """Return [(gate_name, passed, reason_if_failed), ...] for the five gates.
 
     Each gate is evaluated independently so the caller can both decide admission
     and render a full checklist. ``reason_if_failed`` is ASCII and empty when the
@@ -272,7 +272,7 @@ def admission_decision(
     - ``humanSignoff.status == "waived"`` -> :data:`ADMIT_WAIVED` (an explicit
       operator decision not to promote; satisfies the mandatory coverage rule but
       admits nothing). A waiver must carry a non-empty ``note``.
-    - all six mechanical gates pass AND ``humanSignoff.status == "approved"`` ->
+    - all five mechanical gates pass AND ``humanSignoff.status == "approved"`` ->
       :data:`ADMIT_ADMITTED` (``admitted=True``) - it joins the floor.
     - the gates pass but sign-off is still ``pending`` (or absent) ->
       :data:`ADMIT_PENDING` (awaiting a human).

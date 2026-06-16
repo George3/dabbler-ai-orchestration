@@ -1,9 +1,17 @@
 # Proposal — Capabilities for the automated pull-critique process
 
-> **Status:** Design synthesis (pre-Set-069), **operator-reviewed 2026-06-16**.
-> The §3 sandbox resolution is **operator-adopted (Podman, surgical, spike-first)**;
-> the §1 capability ladder is the agreed direction, **gated behind the §3.6 Podman
-> feasibility spike** before it is marketed as the standard process.
+> **Status:** **BUILT — Set 069 (`ai_router` 0.23.0).** This design synthesis was
+> operator-reviewed 2026-06-16 and then implemented in full across Set 069 S1–S6.
+> The §3.6 Podman feasibility spike came back **GREEN** (6/6 acceptance criteria,
+> podman 4.9.3), so the entire §5 sequence shipped: the §1 capability ladder
+> (rungs 1–6) plus the §3 Podman model-authored-probe lane (rung b). See
+> [`docs/verification-surface-strategy.md`](../../verification-surface-strategy.md)
+> § *Set 069 — the execution-backed evidence layer* for the as-built record and the
+> module map. The text below is preserved as the **design-rationale record**; where
+> the as-built differs in detail (e.g. an authored-probe finding is capped at
+> `HYPOTHESIS`, not minted `REPRODUCED`), the strategy doc and
+> [`ai_router/docs/pull-verifier.md`](../../../ai_router/docs/pull-verifier.md) are
+> authoritative.
 > **Date:** 2026-06-16.
 > **Method:** generate-diverse -> adversarial cross-critique -> synthesize, per
 > [`docs/planning/orchestration-strategy.md`](../../planning/orchestration-strategy.md).

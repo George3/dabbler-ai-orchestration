@@ -24,7 +24,11 @@ The framework verifies AI-led work on **three layers**, chosen by a single
    multi-provider, **repository-reading** (Mode-2 *pull*) review at set close,
    reserved for the **non-probeable residual** and for *authoring* the
    falsifiers. Catches the cross-artifact / index / fabricated-data class a
-   snippet-fed (Mode-1 *push*) verifier structurally cannot see.
+   snippet-fed (Mode-1 *push*) verifier structurally cannot see. **Set 069 made
+   this ceiling *executable*:** the automated producer can now generate
+   **replayable, execution-backed evidence** (not just read-only commentary) and
+   pay reproduced probeable defects back into the floor under a quality gate — see
+   §6.
 3. **Targeted — per-session routed verification, now gated** (Set 068 S4 +
    S6). The every-session cross-provider review is **demoted**: it fires only
    when a deterministic blast-radius / coupling predicate trips on the session
@@ -212,3 +216,108 @@ magnitudes illustrative), and path-aware E is not a perfect ceiling (a provider
 missed a cross-file Critical) — which is itself an argument for the multi-provider
 (≥2) requirement on the ceiling and for keeping the gated routed layer rather than
 retiring it.
+
+---
+
+## 6. Set 069 — the execution-backed evidence layer
+
+The 0.22.x release exposed the ceiling's weak spot: the **automated**
+`pull_critique` producer drove its critics **read-only** (`read_file` / `grep` /
+`list_dir`), so it was a *commentator* where the **manual** critic (a frontier
+model in an editor with a terminal) was an **evidence-producing probe runner** —
+the manual run reproduced two Major bugs by executing code; the automated run
+could not. Set 069 closed that gap by making the ceiling **executable**, built to
+the operator-reviewed
+[`proposals/2026-06-16-pull-architecture-capabilities/proposal.md`](proposals/2026-06-16-pull-architecture-capabilities/proposal.md)
+panel synthesis and shipped in `ai_router` **0.23.0**.
+
+**The reframe (the load-bearing idea).** The floor does **not** make execution
+*safe* — containment does (the cage / the container). The floor makes the agent's
+*claims* into **re-runnable falsifiers**, so trust never rests on the agent's
+word. Every capability below is governed by the **deterministic-servant**
+discipline: tools return raw ground truth, and the **orchestrator** applies the
+evidence tag, **never the agent**.
+
+### 6.1 The single execution-evidence protocol (S1)
+
+`ai_router/evidence_protocol.py` defines one protocol both the manual and
+automated critics share. A finding carries an **evidence tier** —
+`REPRODUCED` / `ASSERTED` / `HYPOTHESIS` (default `ASSERTED`, additive) — that the
+**orchestrator** stamps, never the agent. `REPRODUCED` is conferred only when a
+servant-captured **transcript** (pinned ref, trusted `commandId` **XOR**
+`templateId` + typed args, pristine-checkout status, exit, raw output, output
+hash) **replays on a second pristine checkout and the output hash matches**. The
+**meta-oracle rule** holds by construction: an executed finding must drive a
+**real public entrypoint**, not an agent-built harness. The Set 066
+validator/schema enforce it (`ARTIFACT_INVALID_EVIDENCE`): a `REPRODUCED` finding
+lacking a valid replayed transcript is **invalid**.
+
+### 6.2 The capability ladder, as built
+
+The producer gained a **constrained evidence-generation lane** — all additive
+(absent the new config, a critique is byte-for-byte the read-only Set 067/068
+loop):
+
+- **Trusted-command execution + diff-awareness (S2).** A critic may **trigger**
+  an operator-authored **command id** in the disposable-worktree `run_test` cage
+  (never author argv) and read `get_diff` (raw unified diff + changed paths).
+  Loop depth is **blast-radius-budgeted**, not a magic constant.
+- **The probe-template lane — "the missing middle" (S3).** Operator-authored,
+  **versioned** probe harnesses the critic invokes with **typed, validated args**
+  (`ai_router/probe_templates.py`). The narrowest lane that finds *novel-but-local*
+  edge cases without authoring code — exactly the 0.22.x bug shape. Its seed
+  library **dogfooded a still-latent instance of the 0.22.x `UnicodeError` class**
+  (four readers in `path_aware_critique.py`), confirming the class-fix discipline
+  (L-069-1).
+- **The Podman model-authored-probe lane — rung (b) (S4).** The one lane where
+  the model **authors the probe body**, so it runs **only inside a real Podman
+  container** (`ai_router/podman_sandbox.py`: `--network=none`, read-only repo,
+  tmpfs scratch, `--cap-drop=ALL`, crash-safe teardown, lane-labeled disk
+  hygiene). Autonomous + severity-gated; the AI safety check is **triage-only**
+  (may reject/escalate, never approve — the container is the boundary). Shipped
+  **only because the §3.6 Podman feasibility spike came back GREEN** (6/6
+  acceptance criteria, podman 4.9.3). **Central safety property:** a
+  model-authored probe can **never** mint `REPRODUCED` — `_build_transcript`
+  returns `None` for an authored execution, so the finding is **capped at
+  `HYPOTHESIS`** (a container-backed suspicion a human verifies), and the S5
+  ratchet is the only path that promotes it.
+
+### 6.3 The ceiling → floor ratchet + the measured replacement gate (S5)
+
+- **The quality-gated ratchet** (`ai_router/floor_ratchet.py`). A reproduced
+  probeable defect yields a **candidate falsifier artifact** that is **never
+  auto-merged**. Admission requires five mechanical gates (fails-on-old,
+  passes-on-fixed on a *different* ref, drives a **public contract**, an N-run
+  flake check, has-owner) **AND** human sign-off; a **rubber-stamp guard** rejects
+  a human-approved candidate whose mechanical gate fails, so a brittle
+  agent-authored test can never poison the deterministic floor. This is how a
+  good autonomous (`HYPOTHESIS`) probe is graduated into a trusted template that
+  *can* then mint `REPRODUCED`.
+- **The measured replacement gate** (`ai_router/replacement_gate.py`). A
+  **pre-registered** seeded + holdout (recent real misses, e.g. the two 0.22.0
+  Major bugs) benchmark whose verdict is **derived, never hand-asserted** (recall
+  / precision / replay-success / false-`REPRODUCED`), plus the gated-surface
+  **telemetry** the §5 RETIRE-reopen decision waits on. Honesty rules:
+  underpowered (`real_cases < minCasesForPower`) **forces** `meets_thresholds =
+  False`; the **manual run is never retired** — the strongest recommendation the
+  gate can emit is *reduce the manual cadence to a periodic backstop*, because the
+  human watching execution remains the current defense against the meta-oracle
+  problem.
+
+### 6.4 What this changes about §5's open question
+
+Set 069 does **not** retire anything: the manual whole-set critique and the gated
+routed layer both stand. What it adds is the **instrumentation** §5 named as the
+precondition for reopening RETIRE — the replacement gate's scoreboard and
+telemetry are exactly the escaped-defect / catch-timing / rework / false-positive
+/ predicate-miss signals §5 listed. The cadence decision is now **a measurement,
+not a matter of faith** — but the measurement has not yet run at scale, so the
+honesty caveats of §5 (small author-seeded instruments) carry forward unchanged
+until the queued pilots (the two complex projects + the Access Harvester) supply
+real-workload data.
+
+Module map: `evidence_protocol.py` (S1) · `pull_critique.py` execution lanes +
+`get_diff` (S2) · `probe_templates.py` (S3) · `podman_sandbox.py` +
+`podman/Containerfile` (S4) · `floor_ratchet.py` + `replacement_gate.py` (S5).
+As-built detail lives in
+[`ai_router/docs/pull-verifier.md`](../ai_router/docs/pull-verifier.md).

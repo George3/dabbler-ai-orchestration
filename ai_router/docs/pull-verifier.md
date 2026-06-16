@@ -360,3 +360,64 @@ schema are byte-for-byte the prior behavior. The cage-mechanics regressions
 podman + a built image, so they run on Linux CI / WSL and **skip on the Windows
 host** (where podman lives in WSL2); the lane-wiring + evidence-tiering tests fake
 the cage and run everywhere.
+
+## What Set 069 S5 added (the ceiling→floor ratchet + the measured replacement gate — rungs 5–6)
+
+S1–S4 let a critic produce **execution-backed evidence**; S5 is how that evidence
+**pays rent into the deterministic floor** and how the automated process is
+**measured** against the manual run rather than assumed equal to it. Both modules
+are net-new pure-Python libraries imported by no existing runtime path — zero
+behavioral change to any existing flow.
+
+- **The quality-gated ratchet** (`ai_router/floor_ratchet.py`). A reproduced
+  probeable defect (a `REPRODUCED` finding from the S1 protocol) yields a
+  **candidate falsifier artifact** (`candidate-falsifiers.json`) that is **NEVER
+  auto-merged**: `build_candidate_from_finding` always emits
+  `humanSignoff={status: "pending"}` (only a human writes `"approved"`) and
+  extracts the trusted falsifier (`commandId` XOR `templateId` + args, pinned ref,
+  public entrypoint) **from the reproduced transcript**, so the promoted falsifier
+  *is* the reproduced probe, not an agent re-authoring. `admission_decision` runs
+  five mechanical gates — **fails-on-old** (failed on a named ref), **passes-on-fixed**
+  (passed on a *different* ref — a real differential), **drives-a-public-contract**
+  (a `PUBLIC_ENTRYPOINT_KINDS` entrypoint AND `contractKind == "public_contract"`,
+  so an incidental string/timing is rejected even with a public entrypoint),
+  **flake-check** (`runs >= min` AND stable AND a strict agreeing majority),
+  **has-owner** — and admits to the floor **only when all five pass AND
+  `humanSignoff.status == "approved"`**. A **rubber-stamp guard** returns REJECTED
+  when a human approved but a mechanical gate fails — a human approval can never
+  override a failing gate, so a brittle agent-authored test cannot poison the
+  deterministic floor. `check_floor_ratchet_coverage` enforces the **mandatory**
+  rule (every `REPRODUCED` finding in a `path-aware-critique.json` needs a
+  candidate that is admitted / pending / waived; a PENDING candidate satisfies it
+  so the gate never blocks on human-review latency; a REJECTED one does not).
+  This is also how a good autonomous Podman-lane (`HYPOTHESIS`) probe is
+  **graduated** into a trusted template that can *then* mint `REPRODUCED`.
+- **The measured replacement gate** (`ai_router/replacement_gate.py`). A
+  **pre-registered** benchmark (`benchmark-registration.json`: seeded classes +
+  `>= 1` holdout = a recent real miss, e.g. the two 0.22.0 Major bugs; thresholds
+  committed before scoring; `minCasesForPower`) + a **raw** scoreboard
+  (`replacement-scoreboard.json`: per-case detected / replayed / false-`REPRODUCED`
+  + the gated-surface **telemetry** the Set 068 DEMOTE said RETIRE reopens on —
+  escaped-defect rate, intro-stage-vs-end-of-set timing, rework saved,
+  false-positive churn, predicate-should-have-fired misses). `score_benchmark`
+  **derives** recall / precision / replay-success / false-`REPRODUCED` — the
+  verdict is derived, **never hand-asserted** (the closed top-level schema rejects
+  a smuggled `verdict`/`meets`/`cadence` field). Honesty rules: underpowered
+  (`real_cases < minCasesForPower`) **forces** `meets_thresholds = False`;
+  zero-denominator metrics are `None` (never coerced 0/1) and a `None` never
+  satisfies a threshold; a `caseId` not in the pre-registration is rejected. **The
+  manual run is never retired** — the strongest cadence recommendation the gate can
+  emit is *reduce manual to a periodic backstop* (the human stays the meta-oracle
+  defense).
+
+Schemas: `docs/candidate-falsifier.schema.json`,
+`docs/benchmark-registration.schema.json`,
+`docs/replacement-scoreboard.schema.json` (+ example fixtures + pure-Python
+validators with L-066-1 parity). CLIs:
+`python -m ai_router.floor_ratchet --session-set-dir <dir>` and
+`python -m ai_router.replacement_gate --session-set-dir <dir>`.
+
+> **Strategy context.** How these layers fit the settled verification surface —
+> floor / ceiling / gated-routed, and how Set 069 made the ceiling *executable* —
+> is in [`../../docs/verification-surface-strategy.md`](../../docs/verification-surface-strategy.md)
+> § *Set 069 — the execution-backed evidence layer*.

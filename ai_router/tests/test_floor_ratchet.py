@@ -1,6 +1,6 @@
 """Set 069 S5 - the quality-gated ceiling->floor ratchet.
 
-Covers the admission gate (the six quality gates + the never-auto-merge and
+Covers the admission gate (the five quality gates + the never-auto-merge and
 rubber-stamp-guard safety properties), the builder from a REPRODUCED finding, the
 pure-Python artifact validator (L-066-1 parity with the JSON Schema), the
 mandatory coverage check, and the CLI. No metered calls.
@@ -103,7 +103,7 @@ def _good_artifact(**overrides):
 
 
 # ---------------------------------------------------------------------------
-# The admission gate - the six quality gates
+# The admission gate - the five quality gates
 # ---------------------------------------------------------------------------
 
 

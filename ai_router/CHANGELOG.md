@@ -5,6 +5,78 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-06-16 (Set 069 — the execution-backed evidence layer)
+
+> Carries the whole of Set 069 (S1–S6): the automated pull-critique producer is no
+> longer a read-only commentator — it can now generate **execution-backed,
+> replayable** evidence, and reproduced probeable defects can be promoted into the
+> deterministic floor under a quality gate. This closes the automated-vs-manual
+> gap the 0.22.x release exposed (the automated run missed two Major bugs the
+> manual run reproduced by executing code). All additive — absent the new config a
+> critique is byte-for-byte the read-only Set 067/068 loop. No extension /
+> Marketplace change this set. Design rationale:
+> `docs/proposals/2026-06-16-pull-architecture-capabilities/proposal.md`
+> (**now BUILT**); full strategy: `docs/verification-surface-strategy.md` § 6.
+
+### Added
+
+- **Single execution-evidence protocol (`evidence_protocol.py`, S1).** Findings
+  carry an evidence tier — `REPRODUCED` / `ASSERTED` / `HYPOTHESIS` (default
+  `ASSERTED`, additive) — that the **orchestrator** applies, never the agent.
+  `REPRODUCED` requires a servant-captured transcript (trusted `commandId` XOR
+  `templateId` + typed args, pinned ref, exit, raw output, output hash) that
+  **replays on a second pristine checkout** with a matching hash; the meta-oracle
+  rule (drive a real public entrypoint, not an agent harness) holds by
+  construction. The Set 066 validator/schema enforce it
+  (`ARTIFACT_INVALID_EVIDENCE`): a `REPRODUCED` finding lacking a valid replayed
+  transcript is invalid.
+- **Trusted-command execution + `get_diff` in the producer (`pull_critique.py`,
+  S2).** Pass a `RunTestConfig` and each critic may **trigger** an
+  operator-authored command id in the disposable-worktree `run_test` cage (never
+  author argv, fresh checkout, hard caps); pass a `DiffConfig` and the critics get
+  a read-only `get_diff` (raw unified diff + changed paths). Loop depth is
+  **blast-radius-budgeted** (`budget_caps_for_paths`), not a magic constant. CLI:
+  `--run-test-cmd` / `--run-test-named` / `--exec-ref` / `--diff-base` /
+  `--diff-head`.
+- **The probe-template lane (`probe_templates.py`, S3).** Operator-authored,
+  **versioned** probe harnesses the critic invokes with **typed, validated args**
+  (`validate_template_args` never raises) — the narrowest lane that finds
+  *novel-but-local* edge cases without authoring code. The seed library
+  (`BUILTIN_PROBE_TEMPLATES`) drives `ai_router`'s own public entrypoints and would
+  have caught the two 0.22.x bug classes; dogfooding it found a **still-latent
+  instance of the 0.22.x `UnicodeError` class** (four readers in
+  `path_aware_critique.py`), now fixed (L-069-1). Tool: `run_probe_template`; CLI:
+  `--probe-templates`.
+- **The Podman model-authored-probe lane (`podman_sandbox.py`,
+  `podman/Containerfile`, S4).** The one lane where the model authors the probe
+  body — so it runs **only inside a real Podman container** (`--network=none`,
+  read-only repo, tmpfs scratch, `--cap-drop=ALL`, crash-safe teardown,
+  lane-labeled disk hygiene). Shipped **only because the Podman feasibility spike
+  came back GREEN** (6/6, podman 4.9.3). Autonomous + severity-gated; the AI safety
+  check is **triage-only** (reject/escalate, never approve). **A model-authored
+  probe can never mint `REPRODUCED`** — the finding is capped at `HYPOTHESIS` (a
+  container-backed suspicion a human verifies); only the S5 ratchet promotes it.
+  Tool: `run_authored_probe`; CLI: `--podman-lane` / `--podman-image`. (The
+  real-podman cage regressions run on Linux CI / WSL and skip on the Windows host.)
+- **Ceiling→floor ratchet (`floor_ratchet.py`, S5).** A reproduced probeable
+  defect yields a candidate falsifier (`candidate-falsifiers.json`) that is
+  **never auto-merged**: five mechanical admission gates (fails-on-old,
+  passes-on-fixed on a different ref, drives-a-public-contract, flake-check,
+  has-owner) **AND** human sign-off, with a **rubber-stamp guard** so a human
+  approval can never override a failing gate. `check_floor_ratchet_coverage`
+  enforces the mandatory-coverage rule. Schema:
+  `docs/candidate-falsifier.schema.json`; CLI:
+  `python -m ai_router.floor_ratchet`.
+- **Measured replacement gate (`replacement_gate.py`, S5).** A pre-registered
+  seeded + holdout benchmark (`benchmark-registration.json`) and a raw scoreboard
+  (`replacement-scoreboard.json`) whose verdict is **derived, never hand-asserted**
+  (recall / precision / replay-success / false-`REPRODUCED` + the gated-surface
+  telemetry the Set 068 DEMOTE said RETIRE reopens on). Underpowered forces
+  `meets_thresholds = False`; **the manual run is never retired**. Schemas:
+  `docs/benchmark-registration.schema.json`,
+  `docs/replacement-scoreboard.schema.json`; CLI:
+  `python -m ai_router.replacement_gate`.
+
 ## [0.22.1] — 2026-06-16 (post-0.22.0 fixes — Set 068 whole-set critique)
 
 > **Why 0.22.1 exists.** The `v0.22.0` tag was pushed at commit `32874dd`, which
