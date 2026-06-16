@@ -271,6 +271,60 @@
           "cost_usd": 0.104083
         }
       ]
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "session-005/register-and-read",
+      "dateTime": "2026-06-15T19:45:50.068477-04:00",
+      "description": "Registered S5 (claude-opus-4-8/high; next-orch-rec suggested sonnet-4-6 but operator launched opus). Read project-guidance, lessons-learned, spec S5, routed-fate-decision (DEMOTE+transition-guard), run-test-contract (S1 cage API), experiment-a-regrade (H1/H4), path_aware_critique + dedicated_verification (posture mirror), close_session gate wiring, router-config verification block.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "session-005/contract-gate-design",
+      "dateTime": "2026-06-15T20:02:22.109863-04:00",
+      "description": "Pinned contract-gate-design.md: deterministic floor mirroring Set 066 path-aware (produce->validate); per-set contractGate attr; manifest+floor-result artifacts; coverage rule (probeable must be covered; non-probeable=agent residual); posture model.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "session-005/implement",
+      "dateTime": "2026-06-15T20:02:22.109863-04:00",
+      "description": "Built ai_router/contract_gate.py (policy attr machinery, manifest+floor-result pure-Python validators per L-066-1, floor producer driving S1 cage, validate_contract_gate close-out, CLI run/validate) + __init__ exports.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "session-005/wire",
+      "dateTime": "2026-06-15T20:02:22.109863-04:00",
+      "description": "Wired contract gate into close_session.py (set-terminal, required hard-TTY/soft-headless, advisory soft, none skip, fail-open, corrupt-log warning) + router-config comment anchor. Added docs/contract-gate.md + 2 JSON schemas + 2 example fixtures.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "session-005/tests",
+      "dateTime": "2026-06-15T20:02:22.109863-04:00",
+      "description": "Added test_contract_gate.py + test_contract_gate_close.py + test_contract_gate_schema.py (84 tests). Full suite 1632 pass / 1 skip (baseline 1548 + 84).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "session-005/cross-provider-verification",
+      "dateTime": "2026-06-15T20:13:57.537161-04:00",
+      "description": "Cross-provider verification routed to gpt-5-4 (different provider than opus orchestrator; MANDATORY per S4 transition guard). R1 ISSUES_FOUND 1 Major (malformed-but-parseable activity-log silently disarms required gate / raises past never-raises contract) -> fixed via shared _read_activity_entries shape-guard. R2 ISSUES_FOUND 2 Majors (UnicodeDecodeError uncaught; non-dict entries silently filtered) -> both fixed (catch UnicodeError; flag any non-dict element as corruption; writer refuses). R3 VERIFIED. ~$0.442 total. +9 hardening tests; contract-gate tests 93 pass.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }

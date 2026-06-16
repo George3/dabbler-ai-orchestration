@@ -1885,6 +1885,108 @@ def run(
             )
             return outcome
 
+        # Set 068 S5 contract-test / CDC gate (net-new, tier-ORTHOGONAL). When
+        # the durable ``contractGate`` record is ``advisory`` or ``required``,
+        # confirm a valid contract manifest + a PASSING, identity-matched contract
+        # floor result exists at the SET-TERMINAL close, with every probeable
+        # defect class covered by a contract test (the deterministic floor that
+        # Experiment A's H4 supports; the residual is reserved for the path-aware
+        # critique). Posture MIRRORS the Set 066 path-aware gate exactly:
+        # ``required`` HARD-blocks in an interactive TTY, SOFT-warns
+        # non-TTY/headless/--accept-suggestions; ``advisory`` ALWAYS soft-warns;
+        # ``none`` skips. Fires ONLY on the set-terminal close, and fail-open in
+        # the non-block direction - any internal error here never wedges close-out
+        # (the module import lives INSIDE the broad guard, like the Set 066 block).
+        contract_gate_failed = False
+        contract_detail = ""
+        try:
+            try:
+                from contract_gate import (  # type: ignore[import-not-found]
+                    CONTRACT_GATE_NONE,
+                    CONTRACT_GATE_REQUIRED,
+                    contract_gate_record_unreadable,
+                    read_contract_gate,
+                    validate_contract_gate,
+                )
+            except ImportError:
+                from .contract_gate import (  # type: ignore[no-redef]
+                    CONTRACT_GATE_NONE,
+                    CONTRACT_GATE_REQUIRED,
+                    contract_gate_record_unreadable,
+                    read_contract_gate,
+                    validate_contract_gate,
+                )
+            contract_level = read_contract_gate(session_set_dir)
+            contract_is_terminal = _close_is_terminal(
+                session_set_dir, outcome.session_number
+            )
+            # A corrupt/unreadable activity-log silently collapses the durable
+            # policy to ``none`` (read_contract_gate never raises), which would
+            # let a set that opted into ``required`` close as if it had no gate.
+            # Surface that as a loud, non-blocking warning at the set-terminal
+            # close rather than disarming silently (mirrors the Set 066 S3
+            # dogfood fix). Warning, not a hard block: the fail-open posture
+            # stands; the fix removes the *silence*.
+            if contract_is_terminal and contract_gate_record_unreadable(
+                session_set_dir
+            ):
+                warn = (
+                    "WARNING (Set 068 contract-gate): activity-log.json exists "
+                    "but could not be parsed, so the contractGate policy could "
+                    "not be read; if this set opted into 'advisory' or "
+                    "'required', its close-out gate could NOT be verified. "
+                    "Repair the activity log and re-run close_session."
+                )
+                print(warn, file=sys.stderr)
+                outcome.messages.append(warn)
+            if (
+                contract_level != CONTRACT_GATE_NONE
+                and contract_is_terminal
+            ):
+                cg = validate_contract_gate(session_set_dir)
+                if cg.applicable and not cg.ok:
+                    contract_detail = f"{cg.reason} {cg.corrective}".strip()
+                    if contract_level == CONTRACT_GATE_REQUIRED:
+                        non_interactive = bool(
+                            getattr(args, "accept_suggestions", False)
+                        ) or not sys.stdin.isatty()
+                        if non_interactive:
+                            soft = (
+                                "WARNING (Set 068 contract-gate soft gate, "
+                                "non-TTY/--accept-suggestions): "
+                                f"{contract_detail}"
+                            )
+                            print(soft, file=sys.stderr)
+                            outcome.messages.append(soft)
+                        else:
+                            contract_gate_failed = True
+                    else:
+                        # advisory: never blocks; always soft-warns so a
+                        # missing/invalid/non-passing floor is visible at close.
+                        soft = (
+                            "WARNING (Set 068 contract-gate advisory): "
+                            f"{contract_detail}"
+                        )
+                        print(soft, file=sys.stderr)
+                        outcome.messages.append(soft)
+        except Exception:
+            contract_gate_failed = False
+        if contract_gate_failed:
+            outcome.result = "gate_failed"
+            outcome.messages.append(
+                "gate contract_gate failed (Set 068, hard-TTY): "
+                f"{contract_detail} Pass --accept-suggestions to bypass "
+                "non-interactively (incident/headless only)."
+            )
+            _emit_event(
+                session_set_dir,
+                "closeout_failed",
+                outcome.session_number,
+                outcome,
+                failed_checks=["contract_gate"],
+            )
+            return outcome
+
         outcome.result = "succeeded"
         # Include the orchestrator-identity snapshot in the
         # closeout_succeeded payload so the audit trail records

@@ -965,6 +965,39 @@ from .run_test_sandbox import (
     RegexError,
 )
 
+# Set 068 S5: the contract-test / CDC gate (the deterministic verification floor).
+# A per-set, opt-in contractGate (none|advisory|required) whose close-out gate
+# confirms a set's contract/falsifier tests ran and PASSED in the S1 cage and
+# cover every probeable defect class, reserving the path-aware agent for the
+# non-probeable residual. The replacement floor the S4 routed-demotion transition
+# guard waits on. See contract_gate.py + docs/contract-gate.md.
+from .contract_gate import (
+    read_contract_gate,
+    read_spec_contract_gate,
+    has_contract_gate_record,
+    contract_gate_record_unreadable,
+    record_contract_gate,
+    resolve_and_record_contract_gate,
+    validate_contract_manifest,
+    validate_contract_floor_result,
+    find_contract_manifest,
+    find_contract_floor_result,
+    produce_contract_floor,
+    validate_contract_gate,
+    ContractManifestResult,
+    ContractFloorResultValidation,
+    ContractGateResult,
+    ProduceFloorResult,
+    ContractGateError,
+    CONTRACT_GATE_NONE,
+    CONTRACT_GATE_ADVISORY,
+    CONTRACT_GATE_REQUIRED,
+    CONTRACT_GATE_VALUES,
+    DEFAULT_CONTRACT_GATE,
+    CONTRACT_MANIFEST_FILENAME,
+    CONTRACT_FLOOR_RESULT_FILENAME,
+)
+
 
 def print_session_set_status(base_dir: str = "docs/session-sets") -> None:
     """Print a status table of every session set under *base_dir*.

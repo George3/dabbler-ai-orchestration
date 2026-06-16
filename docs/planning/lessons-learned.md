@@ -195,7 +195,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   code before routing verification.
 
 ## `git diff`-Based Verification Evidence Omits Untracked Files
-<!-- lesson: id="L-064-9" added-set="063" last-used-set="067" status="active" scope="portable" -->
+<!-- lesson: id="L-064-9" added-set="063" last-used-set="068" status="active" scope="portable" -->
 
 - **Context:** Building a cross-provider verification prompt whose
   evidence bundle includes `git diff` / `git diff --stat` output
@@ -260,7 +260,7 @@ last-pruned-set: (none)   generated: 2026-06-15
   round.
 
 ## A Pure-Python Validator Mirroring A JSON Schema Drifts Looser — Type-Check Optional Fields And Guard Numeric Equivalence
-<!-- lesson: id="L-066-1" added-set="066" last-used-set="066" status="active" scope="portable" -->
+<!-- lesson: id="L-066-1" added-set="066" last-used-set="068" status="active" scope="portable" -->
 
 - **Context:** Any runtime validator written in plain Python to enforce the
   same contract as a JSON Schema (so the runtime path avoids a `jsonschema`

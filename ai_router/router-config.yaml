@@ -695,6 +695,21 @@ pull_verifier:
       wall_seconds: 120        # hard wall-clock; the process tree is killed on overrun
       output_byte_cap: 60000   # per-stream byte cap; over-cap output elided to a raw head slice
 
+# --- Contract-test / CDC gate (Set 068 S5) ---
+# The deterministic verification FLOOR: a per-set, opt-in contractGate
+# (none|advisory|required) whose close-out gate confirms a set's contract /
+# falsifier tests ran and PASSED in the run_test cage above and cover every
+# probeable defect class, reserving the path-aware critique agent for the
+# non-probeable residual (Experiment A H4: ~95% of seeded defects are probeable).
+# There is NO behavioral flag to flip here - the gate is declared per-set
+# (contract-manifest.json) and produced via `python -m ai_router.contract_gate
+# run`; the floor's execution bounds are the pull_verifier.run_test.caps block
+# above (the gate's producer drives the same cage). This gate is the replacement
+# floor the Set 068 S4 routed-demotion transition guard waits on; S6 wires the
+# blast-radius gating predicate that flips per-session routed to gated. Doc:
+# docs/contract-gate.md; design:
+# docs/session-sets/068-cadence-study-and-contract-gate/contract-gate-design.md.
+
 # --- Metrics ---
 # Controls the append-only metrics log read by report.py (Session 4).
 # Disable if you want to stop collecting. Retention note: log is
