@@ -325,6 +325,78 @@
       "description": "Cross-provider verification routed to gpt-5-4 (different provider than opus orchestrator; MANDATORY per S4 transition guard). R1 ISSUES_FOUND 1 Major (malformed-but-parseable activity-log silently disarms required gate / raises past never-raises contract) -> fixed via shared _read_activity_entries shape-guard. R2 ISSUES_FOUND 2 Majors (UnicodeDecodeError uncaught; non-dict entries silently filtered) -> both fixed (catch UnicodeError; flag any non-dict element as corruption; writer refuses). R3 VERIFIED. ~$0.442 total. +9 hardening tests; contract-gate tests 93 pass.",
       "status": "complete",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 1,
+      "stepKey": "register",
+      "dateTime": "2026-06-16T01:12:51.000560-04:00",
+      "description": "Registered S6 (final): synthesis + docs + release + dogfood + close. Read S1-S5 deliverables + required guidance.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 2,
+      "stepKey": "predicate-wired",
+      "dateTime": "2026-06-16T01:12:51.000560-04:00",
+      "description": "Wired the routed-gate predicate (ai_router/routed_gate.py +27 tests): executes the S4 DEMOTE cut-over -- per-session routed verification mandatory -> GATED on a deterministic blast-radius/coupling predicate. Exported from __init__.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 3,
+      "stepKey": "cut-over",
+      "dateTime": "2026-06-16T01:12:51.002053-04:00",
+      "description": "Flipped the workflow default: docs/ai-led-session-workflow.md Step 6 + Session-def + Cross-Provider-Verification echoes + diagram (mandatory -> gated; transition guard cleared) + router-config.yaml verification anchor + live routed_gate sub-block.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 4,
+      "stepKey": "synthesis-written",
+      "dateTime": "2026-06-16T01:12:51.003063-04:00",
+      "description": "Authored docs/verification-surface-strategy.md -- the settled synthesis; supersedes the Set 065 proposal open questions.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 5,
+      "stepKey": "docs-updated",
+      "dateTime": "2026-06-16T01:12:51.004063-04:00",
+      "description": "Updated ai_router/docs/close-out.md + pull-verifier.md. Prepared adversarial-critique-prompt.md. Refined L-067-1.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 6,
+      "stepKey": "released",
+      "dateTime": "2026-06-16T01:12:51.005369-04:00",
+      "description": "pyproject 0.21.1 -> 0.22.0; fixed stale __version__ 0.20.0 -> 0.22.0 (dogfood-caught); CHANGELOG 0.22.0; change-log.md S2-S6; routed next-set rec (Set 069). Operator pushes tag v0.22.0.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 7,
+      "stepKey": "dogfooded",
+      "dateTime": "2026-06-16T01:12:51.007086-04:00",
+      "description": "pathAwareCritique=required dogfood via the automated producer over the full repo-root sandbox (google VERIFIED + openai ISSUES); real findings folded (version drift + 2 workflow echoes per L-065-1). Gate OK (2 distinct providers).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 8,
+      "stepKey": "s6-verified",
+      "dateTime": "2026-06-16T01:12:51.008084-04:00",
+      "description": "Cross-provider session verification gpt-5-4 (S6 diff trips the predicate -> REQUIRED): R1 FAIL -> fixes -> R2 PASS. Full suite 1668 passed / 1 skip.",
+      "status": "completed",
+      "routedApiCalls": []
     }
   ]
 }
