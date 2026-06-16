@@ -37,6 +37,7 @@ Load-bearing invariants:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -47,17 +48,21 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 try:  # package vs bare-import (mirrors the rest of ai_router)
     from .evidence_protocol import (
+        ENTRYPOINT_PUBLIC_API,
         ENTRYPOINT_TEST,
         EVIDENCE_HYPOTHESIS,
         EVIDENCE_REPRODUCED,
+        PUBLIC_ENTRYPOINT_KINDS,
         authoritative_tier,
         hash_output,
     )
 except ImportError:  # pragma: no cover - test/bare context
     from evidence_protocol import (  # type: ignore
+        ENTRYPOINT_PUBLIC_API,
         ENTRYPOINT_TEST,
         EVIDENCE_HYPOTHESIS,
         EVIDENCE_REPRODUCED,
+        PUBLIC_ENTRYPOINT_KINDS,
         authoritative_tier,
         hash_output,
     )
@@ -586,6 +591,21 @@ GET_DIFF_TOOL = "get_diff"
 # passed to pull_route(); absent it, the loop is byte-for-byte the prior behavior.
 RUN_PROBE_TEMPLATE_TOOL = "run_probe_template"
 
+# Set 069 S4: the Podman model-authored-probe lane (proposal rung (b)). The ONE
+# lane where the model AUTHORS the probe body - so it runs ONLY inside a real
+# Podman container (the container is the security boundary, NOT the floor). Like
+# run_test it dispatches to a CAGE (execution, non-re-derivable, OUTSIDE the
+# byte-equality guard) and is NOT a member of _CANONICAL. AUTONOMOUS +
+# SEVERITY-GATED (fire only for a critical/major issue unconfirmable by reading /
+# run_test / run_probe_template); the AI safety check is TRIAGE ONLY (may
+# reject/escalate, never approve - the container makes approval unnecessary).
+# Because the probe is MODEL-AUTHORED (not a trusted operator command/template),
+# it can NEVER mint REPRODUCED: the orchestrator caps an authored-probe-backed
+# finding at HYPOTHESIS (an unverified, container-backed suspicion the S5
+# human-gated ratchet may promote). Offered ONLY when a PodmanLaneConfig is passed
+# to pull_route(); absent it, the loop is byte-for-byte the prior behavior.
+RUN_AUTHORED_PROBE_TOOL = "run_authored_probe"
+
 
 @dataclass(frozen=True)
 class RunTestConfig:
@@ -672,6 +692,13 @@ class _Execution:
       the validated ``template_args``; the transcript carries ``templateId`` +
       ``args`` and the template's declared PUBLIC ``entrypoint_kind`` /
       ``entrypoint_ref`` (meta-oracle).
+    - ``"authored"`` (run_authored_probe, Set 069 S4): the MODEL-AUTHORED probe
+      body, run in the Podman container. It carries ``probe_id`` /  ``probe_body``
+      + the model's declared ``entrypoint_kind`` / ``entrypoint_ref`` and a
+      ``replay_matched`` re-runnability flag. Because the probe is model-authored
+      (not a trusted falsifier), it can NEVER back a REPRODUCED transcript
+      (:func:`_build_transcript` returns None for this kind); it only caps a
+      finding at HYPOTHESIS.
     """
 
     command_id: str  # the stable trusted-command id (requested name or "default")
@@ -679,11 +706,20 @@ class _Execution:
     argv: Tuple[str, ...]
     exit_code: Optional[int]
     raw_output: str
-    kind: str = "command"  # "command" (run_test) | "template" (run_probe_template)
+    kind: str = "command"  # "command" | "template" | "authored"
     template_id: str = ""  # the operator-authored probe-template id (template lane)
     template_args: Optional[dict] = None  # validated typed args (template lane)
     entrypoint_kind: str = ENTRYPOINT_TEST  # transcript entrypoint kind (template lane)
     entrypoint_ref: str = ""  # transcript entrypoint ref (template lane)
+    # The Podman model-authored lane (Set 069 S4): the model's probe + its
+    # re-runnability check. ``probe_id`` is the stable id the agent cites in a
+    # finding; ``replay_matched`` is True iff a second container run reproduced the
+    # same probe output (a flake/re-runnability signal surfaced to the agent + the
+    # human - it does NOT elevate the tier, which the authored lane caps at
+    # HYPOTHESIS).
+    probe_id: str = ""  # the authored-probe id (authored lane)
+    probe_body: str = ""  # the model-authored probe body (authored lane)
+    replay_matched: Optional[bool] = None  # second-run hash match (authored lane)
     # The replay context CAPTURED FROM THE LANE THAT RAN THIS PROBE (Set 069 S3,
     # GPT-5.4 R2 finding 1): each execution carries its OWN repo_root / ref / caps
     # so the pristine replay re-runs it against the SAME tree it ran against -
@@ -696,8 +732,12 @@ class _Execution:
 
     @property
     def match_id(self) -> str:
-        """The id the agent names to back a REPRODUCED claim (command or template)."""
-        return self.template_id if self.kind == "template" else self.command_id
+        """The id the agent names to reference this run (command/template/probe)."""
+        if self.kind == "template":
+            return self.template_id
+        if self.kind == "authored":
+            return self.probe_id
+        return self.command_id
 
 
 def _dispatch_run_test(
@@ -914,6 +954,289 @@ def _dispatch_run_probe_template(
 
 
 # ---------------------------------------------------------------------------
+# Set 069 S4: the Podman model-authored-probe lane (proposal rung (b)).
+# ---------------------------------------------------------------------------
+
+# A triage check is TRIAGE ONLY: it may REJECT or ESCALATE a probe, never APPROVE
+# it (the container is the boundary, so approval is unnecessary - proposal sec
+# 3.4). A triage callable takes (probe_body, claim) and returns None to PROCEED,
+# or a raw ASCII reason to BLOCK (an "ESCALATE:" prefix marks a rung-(c) escape
+# needing human approval; a plain reason is a reject the model can correct). It
+# never returns an approval.
+Triage = Callable[[str, str], Optional[str]]
+
+# Cheap escape-signal substrings: a probe that reaches for the network or a
+# subprocess is trying to ESCAPE the container (rung (c), human-gated), not to
+# drive a public entrypoint. The container blocks these anyway (--network=none,
+# --cap-drop=ALL), so this is triage (skip a pointless spin-up), not a boundary.
+_ESCAPE_SIGNALS = (
+    "import socket", "urllib", "requests", "http.client",
+    "subprocess", "os.system", "os.popen",
+)
+
+
+def default_triage(probe_body: str, claim: str) -> Optional[str]:
+    """The default heuristic triage (reject / escalate only; never approve).
+
+    Cheap, dependency-free, no metered call (proposal sec 3.4 - "reject an
+    obviously-pathological / pointless probe before paying a spin-up"):
+
+    - an empty / whitespace probe is rejected (nothing to run);
+    - an empty ``claim`` is rejected (severity-gating: the lane fires only for a
+      stated critical/major issue, not idle exploration);
+    - a probe that never references the code under review (no ``ai_router``) is
+      rejected (the meta-oracle rule: drive a REAL public entrypoint, not a
+      freestanding harness);
+    - a probe reaching for the network / a subprocess is ESCALATED (that is a
+      rung-(c) escape, human-gated - not an autonomous rung-(b) probe).
+
+    Returns None to PROCEED, else a raw reason. A deployment may swap in a routed
+    AI triage with the same contract; this default keeps the loop metered-free.
+    """
+    body = probe_body if isinstance(probe_body, str) else ""
+    if not body.strip():
+        return "empty probe body; author a probe that drives a public entrypoint"
+    if not (isinstance(claim, str) and claim.strip()):
+        return (
+            "missing 'claim'; the Podman lane is severity-gated - state the "
+            "critical/major issue this probe confirms (not idle exploration)"
+        )
+    if "ai_router" not in body:
+        return (
+            "probe does not reference the code under review (no ai_router "
+            "import); a reproduced finding must drive a REAL public entrypoint, "
+            "not a freestanding harness (meta-oracle rule)"
+        )
+    low = body.lower()
+    for sig in _ESCAPE_SIGNALS:
+        if sig in low:
+            return (
+                f"ESCALATE: probe appears to attempt a container escape ({sig!r}: "
+                "network / subprocess). That is a rung-(c) escape requiring human "
+                "approval, not an autonomous rung-(b) probe; the container blocks "
+                "it anyway."
+            )
+    return None
+
+
+@dataclass(frozen=True)
+class PodmanLaneConfig:
+    """Cage wiring for the ``run_authored_probe`` tool (Set 069 S4).
+
+    Carries the git ``repo_root`` (mounted READ-ONLY at /repo, so the model's
+    probe imports the live code under review), the operator's digest-pinned
+    ``image`` ref (defaults to ``podman_sandbox.DEFAULT_IMAGE_TAG`` for spike /
+    local dev), the cage ``caps`` (``podman_sandbox.PodmanCaps``; None -> default),
+    and the ``triage`` hook (None -> :func:`default_triage`). ``ref`` is provenance
+    only (the bind-mount is the live working tree, not a checkout at a ref). The
+    model supplies only the probe body + its declared public entrypoint; it never
+    authors a ``podman`` flag.
+    """
+
+    repo_root: str
+    image: str = ""  # "" -> podman_sandbox.DEFAULT_IMAGE_TAG
+    caps: Optional[object] = None  # podman_sandbox.PodmanCaps; None -> default
+    triage: Optional[Triage] = None  # None -> default_triage
+    ref: str = "HEAD"  # provenance only
+
+
+def _run_authored_probe_tool_schema() -> dict:
+    kinds = list(PUBLIC_ENTRYPOINT_KINDS)
+    return {
+        "name": RUN_AUTHORED_PROBE_TOOL,
+        "description": (
+            "Run a probe you AUTHOR inside a locked-down Podman container "
+            "(--network=none, read-only /repo mount, tmpfs scratch, dropped "
+            "caps). Use this ONLY for a CRITICAL or MAJOR issue you cannot "
+            "confirm by reading or via run_test / run_probe_template - it is "
+            "autonomous but severity-gated and rare. Author 'probe' as a Python "
+            "body that imports the code under review (PYTHONPATH=/repo is set, so "
+            "`import ai_router...` resolves to the code being reviewed), drives a "
+            "REAL public entrypoint (not a hand-built harness), prints ONE "
+            "deterministic line 'PROBE_RESULT: <stable text>' (no addresses / "
+            "temp paths) and exits 1 if it reproduced the defect, 0 if the "
+            "entrypoint was robust, 2 on a probe error. Because the probe is YOUR "
+            "code (not a trusted operator command), the strongest tier it can "
+            "earn is HYPOTHESIS - a flagged, container-backed suspicion a human "
+            "verifies; it can NEVER be REPRODUCED. To back a HYPOTHESIS finding, "
+            "propose evidenceTier=HYPOTHESIS and cite the probeId this returns. "
+            "Returns the raw exit + output; network / subprocess / writes to the "
+            "real tree are blocked."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "probe": {
+                    "type": "string",
+                    "description": "the Python probe body (see above)",
+                },
+                "entrypointRef": {
+                    "type": "string",
+                    "description": (
+                        "the real public entrypoint the probe drives, e.g. "
+                        "'ai_router.contract_gate.validate_contract_gate'"
+                    ),
+                },
+                "entrypointKind": {
+                    "type": "string",
+                    "description": f"optional: one of {kinds} (default public_api)",
+                },
+                "claim": {
+                    "type": "string",
+                    "description": (
+                        "the critical/major issue this probe confirms "
+                        "(severity-gating; required)"
+                    ),
+                },
+            },
+            "required": ["probe", "entrypointRef", "claim"],
+        },
+    }
+
+
+def _dispatch_run_authored_probe(
+    cfg: "PodmanLaneConfig", args: dict
+) -> Tuple[str, bool, bool, Optional["_Execution"]]:
+    """Run one ``run_authored_probe`` call in the Podman cage (Set 069 S4).
+
+    Returns ``(raw_text, is_error, elided, execution)``. ``execution`` is an
+    ``authored``-kind :class:`_Execution` captured ONLY for a clean run that
+    REPRODUCED (exit 1, no cage error, container removed) - so a finding can be
+    capped at HYPOTHESIS and the re-runnability recorded. Invalid args / a triage
+    rejection / a robust-or-error probe come back as a raw result with no
+    execution. Dispatched OUTSIDE the byte-equality guard (container execution is
+    non-re-derivable, like run_test).
+
+    A model-authored probe is NOT a trusted falsifier, so this lane NEVER mints
+    REPRODUCED; the strongest outcome it backs is HYPOTHESIS (the S5 human-gated
+    ratchet promotes a good autonomous probe by graduating it into a trusted
+    template). The pristine "replay" here is a second container run used as a
+    re-runnability / flake signal surfaced to the agent + the human - it does not
+    elevate the tier.
+    """
+    try:
+        from .podman_sandbox import (
+            DEFAULT_IMAGE_TAG,
+            PROBE_ERROR_EXIT,
+            build_probe_argv,
+            run_probe_in_container,
+        )
+    except ImportError:  # pragma: no cover - test/bare context
+        from podman_sandbox import (  # type: ignore
+            DEFAULT_IMAGE_TAG,
+            PROBE_ERROR_EXIT,
+            build_probe_argv,
+            run_probe_in_container,
+        )
+
+    if not isinstance(args, dict):
+        args = {}
+    probe = args.get("probe")
+    entry_ref = args.get("entrypointRef")
+    entry_kind = args.get("entrypointKind") or ENTRYPOINT_PUBLIC_API
+    claim = args.get("claim") or ""
+
+    if not (isinstance(probe, str) and probe.strip()):
+        return (
+            "ERROR: run_authored_probe: 'probe' is required (a Python probe "
+            "body that drives a real public entrypoint)",
+            True, False, None,
+        )
+    if not (isinstance(entry_ref, str) and entry_ref.strip()):
+        return (
+            "ERROR: run_authored_probe: 'entrypointRef' is required (name the "
+            "real public entrypoint the probe drives - meta-oracle rule)",
+            True, False, None,
+        )
+    if entry_kind not in PUBLIC_ENTRYPOINT_KINDS:
+        return (
+            f"ERROR: run_authored_probe: entrypointKind {entry_kind!r} must be "
+            f"one of {list(PUBLIC_ENTRYPOINT_KINDS)} (a real public surface)",
+            True, False, None,
+        )
+
+    # Triage: reject / escalate only (never approve - proposal sec 3.4).
+    triage = cfg.triage or default_triage
+    reason = triage(probe, claim if isinstance(claim, str) else "")
+    if reason:
+        return (
+            f"ERROR: run_authored_probe: probe rejected by triage: {reason}",
+            True, False, None,
+        )
+
+    try:
+        from .podman_sandbox import image_is_digest_pinned
+    except ImportError:  # pragma: no cover - test/bare context
+        from podman_sandbox import image_is_digest_pinned  # type: ignore
+
+    image = cfg.image or DEFAULT_IMAGE_TAG
+    caps = cfg.caps
+    argv = build_probe_argv(probe)
+    res = run_probe_in_container(image, argv, repo_root=cfg.repo_root, caps=caps)
+    content = res.render()
+    is_error = content.startswith("ERROR: ")
+    elided = "[... elided " in content
+    # Surface an un-pinned image at RUNTIME (proposal sec 3.2/3.5: production MUST
+    # be digest-pinned; a bare tag is dev/CI only). The container is still the
+    # boundary, so this is a provenance NOTE, not an error.
+    if not image_is_digest_pinned(image):
+        content = (
+            f"NOTE: cage image {image!r} is NOT digest-pinned (a bare tag; "
+            "dev/CI only). Production must pass a name@sha256:... ref.\n"
+            + content
+        )
+
+    # A probe-internal error (exit 2) ran cleanly but could not perform its
+    # check; surface it as an error so the model treats it as a failed probe.
+    if (
+        getattr(res, "ran", False)
+        and getattr(res, "error", None) is None
+        and getattr(res, "exit_code", None) == PROBE_ERROR_EXIT
+    ):
+        is_error = True
+
+    execution: Optional[_Execution] = None
+    if res.reproduced:
+        # Re-runnability: a second container run (this lane's "pristine replay").
+        # The same read-only mount + --network=none + a fresh tmpfs make a
+        # deterministic probe reproduce the same probe_output bytes; a mismatch
+        # flags a flaky / non-deterministic probe to the agent + the human.
+        replay = run_probe_in_container(
+            image, argv, repo_root=cfg.repo_root, caps=caps
+        )
+        replay_matched = bool(
+            replay.reproduced
+            and hash_output(replay.probe_output) == hash_output(res.probe_output)
+        )
+        probe_id = "authored-" + hashlib.sha1(
+            probe.encode("utf-8")
+        ).hexdigest()[:8]
+        execution = _Execution(
+            command_id="", requested_name="", argv=tuple(argv),
+            exit_code=res.exit_code, raw_output=res.probe_output,
+            kind="authored", entrypoint_kind=entry_kind, entrypoint_ref=entry_ref,
+            probe_id=probe_id, probe_body=probe, replay_matched=replay_matched,
+            repo_root=cfg.repo_root, ref=getattr(cfg, "ref", "HEAD"), caps=caps,
+        )
+        replay_note = (
+            "a second container run reproduced the same probe output "
+            "(re-runnable)"
+            if replay_matched
+            else "a second container run did NOT reproduce the same output "
+            "(flaky / non-deterministic probe - treat with extra caution)"
+        )
+        content = (
+            f"probeId={probe_id}\n"
+            f"replay_matched={replay_matched} ({replay_note})\n"
+            "NOTE: this probe is model-authored, so the strongest tier it can "
+            "earn is HYPOTHESIS - propose evidenceTier=HYPOTHESIS and cite this "
+            "probeId; a human verifies it (it can never be REPRODUCED).\n"
+            + content
+        )
+    return content, is_error, elided, execution
+
+
+# ---------------------------------------------------------------------------
 # Deterministic servant (pluggable; default delegates to the canonical fns).
 # ---------------------------------------------------------------------------
 
@@ -1050,38 +1373,45 @@ def _probe_tool_schemas() -> List[dict]:
 
 
 def _verdict_tool_schema(
-    allow_evidence: bool = False, allow_template_evidence: bool = False
+    allow_evidence: bool = False,
+    allow_template_evidence: bool = False,
+    allow_authored_evidence: bool = False,
 ) -> dict:
     """Build the ``submit_verdict`` schema.
 
     ``allow_evidence`` (Set 069 S2) gates the per-finding ``evidenceTier`` /
     ``commandId`` proposal fields - offered when the ``run_test`` lane is active.
     ``allow_template_evidence`` (Set 069 S3) gates the ``templateId`` proposal
-    field - offered when the ``run_probe_template`` lane is active. ``evidenceTier``
-    is added when EITHER lane can back a replay. The orchestrator confers
-    REPRODUCED only by replaying the named probe on a fresh checkout (you cannot
-    self-grant it). When BOTH flags are False the schema is byte-for-byte the Set
-    067/068 read-only shape, so the no-config agent-facing surface is unchanged
-    (GPT-5.4 S2 verification, finding 2).
+    field - offered when the ``run_probe_template`` lane is active.
+    ``allow_authored_evidence`` (Set 069 S4) gates the ``probeId`` field - offered
+    when the Podman ``run_authored_probe`` lane is active. ``evidenceTier`` is
+    added when ANY lane is active. The orchestrator confers REPRODUCED only by
+    replaying a TRUSTED probe (command/template) on a fresh checkout (you cannot
+    self-grant it), and an authored-probe-backed finding is capped at HYPOTHESIS.
+    When ALL flags are False the schema is byte-for-byte the Set 067/068 read-only
+    shape, so the no-config agent-facing surface is unchanged (GPT-5.4 S2
+    verification, finding 2).
     """
     finding_props: dict = {
         "description": {"type": "string"},
         "severity": {"type": "string"},
         "category": {"type": "string"},
     }
-    if allow_evidence or allow_template_evidence:
+    if allow_evidence or allow_template_evidence or allow_authored_evidence:
         # The agent may PROPOSE an evidence tier; it is advisory only. The
-        # orchestrator confers REPRODUCED solely by replaying the named probe on
-        # a fresh checkout (you cannot self-grant it).
+        # orchestrator confers REPRODUCED solely by replaying a TRUSTED probe on
+        # a fresh checkout (you cannot self-grant it); a model-authored Podman
+        # probe caps at HYPOTHESIS.
         finding_props["evidenceTier"] = {
             "type": "string",
             "description": (
-                "optional: propose REPRODUCED (only if a probe you triggered - a "
-                "run_test or a run_probe_template - reproduced this defect) or "
-                "HYPOTHESIS (a flagged suspicion). Omit for a read-claim. The "
-                "orchestrator replays a REPRODUCED claim and downgrades it to a "
-                "read-claim if the replay does not match - you cannot self-grant "
-                "it."
+                "optional: propose REPRODUCED (only if a TRUSTED probe you "
+                "triggered - a run_test or a run_probe_template - reproduced this "
+                "defect) or HYPOTHESIS (a flagged suspicion, incl. anything a "
+                "model-authored run_authored_probe surfaced). Omit for a "
+                "read-claim. The orchestrator replays a REPRODUCED claim and "
+                "downgrades it if the replay does not match (or it was a "
+                "model-authored probe) - you cannot self-grant it."
             ),
         }
     if allow_evidence:
@@ -1100,6 +1430,15 @@ def _verdict_tool_schema(
                 "optional: the run_probe_template id that reproduced this defect; "
                 "required to back a REPRODUCED proposal from the probe-template "
                 "lane."
+            ),
+        }
+    if allow_authored_evidence:
+        finding_props["probeId"] = {
+            "type": "string",
+            "description": (
+                "optional: the run_authored_probe id (as returned by the tool) "
+                "that surfaced this defect; cite it to flag the finding "
+                "HYPOTHESIS. A model-authored probe can never back REPRODUCED."
             ),
         }
     return {
@@ -1237,6 +1576,13 @@ def _build_transcript(execution: "_Execution") -> Optional[dict]:
     ``test_entrypoint`` (a trusted operator-authored command) or the template's
     declared PUBLIC entrypoint - satisfying the meta-oracle rule by construction.
     """
+    # A MODEL-AUTHORED Podman probe (Set 069 S4) is not a trusted falsifier
+    # (validate_transcript requires a commandId XOR a templateId - never
+    # model-authored argv), so it can never back a REPRODUCED transcript. Refuse
+    # it explicitly here (the caller caps such a finding at HYPOTHESIS) rather
+    # than emitting a transcript that validate_transcript would reject anyway.
+    if getattr(execution, "kind", "") == "authored":
+        return None
     replay = _run_pristine_replay(execution)
     if (
         replay is None
@@ -1312,9 +1658,12 @@ def _stamp_evidence_tiers(
     # execution (GPT-5.4 S3 verification, finding 2). First run wins for a given id.
     by_command: Dict[str, _Execution] = {}
     by_template: Dict[str, _Execution] = {}
+    by_probe: Dict[str, _Execution] = {}
     for ex in executions:
         if ex.kind == "template":
             by_template.setdefault(ex.template_id, ex)
+        elif ex.kind == "authored":
+            by_probe.setdefault(ex.probe_id, ex)
         else:
             by_command.setdefault(ex.command_id, ex)
 
@@ -1323,12 +1672,29 @@ def _stamp_evidence_tiers(
         proposed = None
         command_id = None
         template_id = None
+        probe_id = None
         if i < len(raw_findings) and isinstance(raw_findings[i], dict):
             proposed = raw_findings[i].get("evidenceTier")
             command_id = raw_findings[i].get("commandId")
             template_id = raw_findings[i].get("templateId")
+            probe_id = raw_findings[i].get("probeId")
         has_cmd = isinstance(command_id, str) and command_id != ""
         has_tpl = isinstance(template_id, str) and template_id != ""
+        has_probe = (
+            isinstance(probe_id, str) and probe_id != "" and probe_id in by_probe
+        )
+
+        # Set 069 S4: a finding the agent backs with a MODEL-AUTHORED Podman probe
+        # caps at HYPOTHESIS - container-backed but not a trusted falsifier, so it
+        # can never mint REPRODUCED (the S5 human-gated ratchet promotes it by
+        # graduating the probe into a trusted template). Checked first so an
+        # authored-probe REPRODUCED *claim* is DOWNGRADED to HYPOTHESIS (a flagged
+        # suspicion), not collapsed to a bare read-claim - it did execute.
+        if has_probe:
+            new_findings.append(
+                replace(finding, evidence_tier=EVIDENCE_HYPOTHESIS)
+            )
+            continue
 
         if proposed == EVIDENCE_REPRODUCED:
             ex: Optional[_Execution] = None
@@ -1343,6 +1709,13 @@ def _stamp_evidence_tiers(
             elif len(executions) == 1:
                 # No probe named, but exactly one run happened -> unambiguous.
                 ex = executions[0]
+            # A model-authored execution can never back REPRODUCED; if the sole
+            # run was authored, cap at HYPOTHESIS rather than dropping the signal.
+            if ex is not None and ex.kind == "authored":
+                new_findings.append(
+                    replace(finding, evidence_tier=EVIDENCE_HYPOTHESIS)
+                )
+                continue
             transcript = _build_transcript(ex) if ex else None
             tier = authoritative_tier(EVIDENCE_REPRODUCED, transcript)
             if tier == EVIDENCE_REPRODUCED:
@@ -2036,6 +2409,7 @@ def pull_route(
     run_test_config: Optional[RunTestConfig] = None,
     diff_config: Optional[DiffConfig] = None,
     probe_template_config: Optional["object"] = None,
+    podman_lane_config: Optional["PodmanLaneConfig"] = None,
 ) -> PullResult:
     """Drive a capped, instrumented, sandbox-confined read-only tool loop.
 
@@ -2080,14 +2454,17 @@ def pull_route(
         tools.append(_get_diff_tool_schema())
     if probe_template_config is not None:
         tools.append(_run_probe_template_tool_schema(probe_template_config))
-    # The evidence-proposal fields are offered ONLY when an execution lane that can
-    # back a REPRODUCED replay is active (run_test -> commandId; run_probe_template
-    # -> templateId), so the no-config agent-facing surface is byte-for-byte the
-    # Set 067/068 read-only schema.
+    if podman_lane_config is not None:
+        tools.append(_run_authored_probe_tool_schema())
+    # The evidence-proposal fields are offered ONLY when an execution lane is
+    # active (run_test -> commandId; run_probe_template -> templateId; the Podman
+    # run_authored_probe -> probeId, capped at HYPOTHESIS), so the no-config
+    # agent-facing surface is byte-for-byte the Set 067/068 read-only schema.
     tools.append(
         _verdict_tool_schema(
             allow_evidence=run_test_config is not None,
             allow_template_evidence=probe_template_config is not None,
+            allow_authored_evidence=podman_lane_config is not None,
         )
     )
     transcript: List[dict] = [{"role": "user", "text": instruction}]
@@ -2211,6 +2588,7 @@ def pull_route(
                 exec_lane = (
                     run_test_config is not None
                     or probe_template_config is not None
+                    or podman_lane_config is not None
                 )
                 if exec_lane and critique.findings:
                     critique = _stamp_evidence_tiers(
@@ -2309,6 +2687,34 @@ def pull_route(
             ):
                 content, is_error, elided, execution = _dispatch_run_probe_template(
                     probe_template_config, tc.input
+                )
+                if execution is not None:
+                    executions.append(execution)
+                trace.tool_calls.append(
+                    ToolCallRecord(
+                        turn=turn,
+                        name=tc.name,
+                        args=tc.input,
+                        raw=True,
+                        elided=elided,
+                        result_chars=len(content),
+                        error=is_error,
+                    )
+                )
+                results.append(
+                    {"id": tc.id, "name": tc.name, "content": content}
+                )
+                continue
+            # Set 069 S4: run_authored_probe -> the Podman CAGE (the model-authored
+            # lane; the container is the boundary, OUTSIDE the byte-equality guard).
+            # A reproduced run is captured so the finding can be capped at
+            # HYPOTHESIS (a model-authored probe can never mint REPRODUCED).
+            if (
+                tc.name == RUN_AUTHORED_PROBE_TOOL
+                and podman_lane_config is not None
+            ):
+                content, is_error, elided, execution = _dispatch_run_authored_probe(
+                    podman_lane_config, tc.input
                 )
                 if execution is not None:
                     executions.append(execution)

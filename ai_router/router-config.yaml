@@ -711,6 +711,23 @@ pull_verifier:
     caps:
       wall_seconds: 120        # hard wall-clock; the process tree is killed on overrun
       output_byte_cap: 60000   # per-stream byte cap; over-cap output elided to a raw head slice
+  # Set 069 S4: the Podman model-authored-probe cage (podman_sandbox.PodmanCaps).
+  # The run_authored_probe lane is OFFERED to the loop only when a
+  # PodmanLaneConfig is built and passed to pull_route() AND a green Podman spike
+  # + a built image exist; these are the cage's per-probe bounds. wall_seconds is
+  # the LOAD-BEARING bound on a rootless-cgroups-v1 host, where --memory/
+  # --pids-limit/--cpus are ignored (spike finding 1) - it is kept conservative
+  # because the timeout teardown path is ~10s in rootless WSL (spike finding 2).
+  # enforce_resource_caps is omitted -> auto-detect the cgroup version (emit the
+  # resource caps only on cgroup v2, where they are honored); pin it true/false to
+  # override. The container is the security boundary, not these caps.
+  podman:
+    caps:
+      wall_seconds: 30         # hard wall-clock; the timed-out container is force-removed by name
+      output_byte_cap: 60000   # per-stream byte cap (stdout=probe output, stderr=runtime diagnostics)
+      memory: 512m             # cgroup-v2 only (ignored on rootless cgroups-v1)
+      pids_limit: 256          # cgroup-v2 only
+      cpus: "2"                # cgroup-v2 only
 
 # --- Contract-test / CDC gate (Set 068 S5) ---
 # The deterministic verification FLOOR: a per-set, opt-in contractGate

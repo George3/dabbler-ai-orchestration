@@ -279,6 +279,84 @@ the prior behavior.
     escape (the run_test mkdtemp-escaped-try/finally class).
 
 The *mechanism* is repo-portable; the *seed library* is repo-authored (a consumer
-repo writes its own templates against its own public entrypoints). The Podman
-model-authored-probe lane (rung b) and the ceiling→floor ratchet (rungs 5–6)
-remain later sessions.
+repo writes its own templates against its own public entrypoints). The
+ceiling→floor ratchet (rungs 5–6) remains a later session.
+
+## What Set 069 S4 added (the Podman model-authored-probe lane — rung b)
+
+Rungs 1–4 never run **model-authored** code: a critic may only *trigger* an
+operator-authored `run_test` command, read `get_diff`, or *parameterize* an
+operator-authored probe template. Rung (b) is the one lane where the model
+**authors the probe body** — so it runs **only inside a real Podman container**
+(the container is the security boundary, **not** the floor). It graduated into
+`ai_router/` only after the **GREEN** Podman feasibility spike
+(`docs/proposals/2026-06-16-pull-architecture-capabilities/podman-spike/`, 6/6
+acceptance criteria, podman 4.9.3).
+
+- **The cage** (`ai_router/podman_sandbox.py`) — `run_test_sandbox`'s sibling,
+  isolation by `podman run` instead of `git worktree add`. Containment:
+  `--network=none`, `--read-only` rootfs, the repo bind-mounted **read-only** at
+  `/repo`, a **tmpfs** `/scratch` (the only writable place), `--cap-drop=ALL`,
+  `--security-opt=no-new-privileges`, `--rm`, and a hard wall-clock timeout with
+  **crash-safe teardown** (the timed-out container is force-removed by name). The
+  image is operator-authored and no-secrets (`ai_router/podman/Containerfile`).
+  The **checked-in** image uses a tag base (dev/CI); production **must**
+  digest-pin both the base (`FROM python@sha256:...`) and the runtime ref
+  (`name@sha256:...`) — an operator/arch deploy step deliberately not hard-coded
+  in the portable template. `image_is_digest_pinned()` is the runtime enforcement
+  seam: the lane prepends a `NOTE:` to its tool result whenever it runs an
+  un-pinned image, so an un-pinned production run is visible, never silent. The
+  model authors only the probe **body** (`build_probe_argv` wraps it as `python -B
+  -c <body>` with `PYTHONPATH=/repo` — `-I`/`-E` are deliberately NOT used, they
+  would drop `PYTHONPATH`); it never authors a `podman` flag.
+- **The three spike findings, carried into production:**
+  1. **Rootless cgroups-v1 ignores `--memory`/`--pids-limit`/`--cpus`.**
+     `cgroup_caps_enforceable()` detects the cgroup version and emits the
+     resource-cap flags **only on cgroup v2** (where they are honored), so a v1
+     host leans on the wall-clock cap (the effective bound) instead of being
+     polluted by the ignore-warning. Restoring the caps is an environment change
+     (enable cgroup v2 + delegation), then they are used automatically.
+  2. **Timeout teardown is ~10 s in rootless WSL** (vs ~1.5 s steady-state), so
+     `wall_seconds` defaults conservative and `PodmanResult.wall_seconds` reports
+     the cost.
+  3. **Probe output is separated from podman runtime warnings:** stdout
+     (`probe_output`, the bytes hashed for the re-runnability check) vs stderr
+     (`runtime_diagnostics`, never hashed), so a runtime warning cannot perturb
+     the replay match.
+- **`run_authored_probe` tool.** Pass a `PodmanLaneConfig` (repo root + image +
+  caps + a triage hook) to `pull_route()` (or `--podman-lane` [+ `--podman-image`]
+  on the producer CLI). The model supplies `probe` (the Python body), the
+  `entrypointRef`/`entrypointKind` of the **real public entrypoint** it drives
+  (meta-oracle), and the `claim` (the critical/major issue — severity-gating).
+- **Autonomous + severity-gated.** No human approval for (b) itself (the
+  container is the boundary); the tool is documented for use **only** on a
+  critical/major issue unconfirmable by reading / `run_test` / `run_probe_template`.
+- **The AI safety check is triage-only** (`default_triage`): it may **reject /
+  escalate**, **never approve** (the container makes approval unnecessary). The
+  default heuristic rejects an empty probe, a missing `claim`, or a probe that
+  never references the code under review (meta-oracle), and **escalates** a probe
+  that reaches for the network / a subprocess (a rung-(c) escape, human-gated). It
+  is metered-free; a deployment may swap in a routed AI triage with the same
+  contract.
+- **A model-authored probe can NEVER mint `REPRODUCED`.** `validate_transcript`
+  requires a **trusted** `commandId` XOR `templateId` (never model-authored argv),
+  so `_build_transcript` returns `None` for an authored execution and the
+  orchestrator **caps an authored-probe-backed finding at `HYPOTHESIS`** — a
+  flagged, container-backed suspicion a human verifies. Promotion to the floor is
+  the **S5 human-gated ratchet** (graduate a good autonomous probe into a trusted
+  template, which can then mint `REPRODUCED`). This keeps the human as the
+  meta-oracle defense (a deliberate S4 non-goal to retire it).
+- **Disk hygiene is a hard requirement** (the Docker bloat failure mode):
+  `--rm` containers, tmpfs scratch (no named volumes), one image reused across all
+  probes (never rebuilt per probe). Every container carries a lane **label**
+  (`pull-probe-lane`); `podman_footprint()` filters by it so the check is
+  **lane-local on a shared host** (a co-tenant's containers/volumes are never
+  miscounted), and the S4 regression asserts **0 leftover labeled containers + 0
+  labeled volumes + the reused image still present** after N probes.
+
+The lane is **additive**: absent a `PodmanLaneConfig` the offered tools + verdict
+schema are byte-for-byte the prior behavior. The cage-mechanics regressions
+(`--network=none`, read-only mount, teardown, disk footprint) require a real
+podman + a built image, so they run on Linux CI / WSL and **skip on the Windows
+host** (where podman lives in WSL2); the lane-wiring + evidence-tiering tests fake
+the cage and run everywhere.

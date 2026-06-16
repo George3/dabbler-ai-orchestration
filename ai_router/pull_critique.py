@@ -67,6 +67,8 @@ try:  # package vs bare-import (mirrors the rest of ai_router)
     from .blast_radius import classify_paths
     from .run_test_sandbox import run_test_caps_from_config
     from .probe_templates import BUILTIN_PROBE_TEMPLATES, ProbeTemplateConfig
+    from .pull_verifier import PodmanLaneConfig
+    from .podman_sandbox import podman_caps_from_config
     from .config import load_config
 except ImportError:  # pragma: no cover - test/bare context
     from pull_verifier import (  # type: ignore
@@ -92,6 +94,8 @@ except ImportError:  # pragma: no cover - test/bare context
         BUILTIN_PROBE_TEMPLATES,
         ProbeTemplateConfig,
     )
+    from pull_verifier import PodmanLaneConfig  # type: ignore
+    from podman_sandbox import podman_caps_from_config  # type: ignore
     from config import load_config  # type: ignore
 
 
@@ -352,6 +356,7 @@ def produce_path_aware_critique(
     run_test_config: Optional[RunTestConfig] = None,
     diff_config: Optional[DiffConfig] = None,
     probe_template_config: Optional["ProbeTemplateConfig"] = None,
+    podman_lane_config: Optional["object"] = None,
     caps: Optional[PullCaps] = None,
     run_pull: Callable[..., PullResult] = pull_route,
 ) -> ProducerResult:
@@ -400,6 +405,16 @@ def produce_path_aware_critique(
         human-authored; the model supplies only inputs), and a reproduced defect
         flows through the S1 evidence protocol (orchestrator-replayed,
         ``templateId`` transcript-backed). Absent it, no template tool is offered.
+    podman_lane_config:
+        Set 069 S4 - when provided, the critics are offered the Podman
+        ``run_authored_probe`` lane: the ONE lane where a critic may AUTHOR the
+        probe body, run ONLY inside a locked-down Podman container (the container
+        is the boundary). It is autonomous + severity-gated and the AI safety
+        check is triage-only. Because the probe is model-authored (not a trusted
+        falsifier), it can never mint REPRODUCED - an authored-probe-backed
+        finding is capped at HYPOTHESIS (the S5 human-gated ratchet promotes it).
+        Requires a GREEN Podman feasibility spike + a built image. Absent it, no
+        authored-probe tool is offered.
     caps:
         Per-run :class:`PullCaps`. Default ``None`` resolves the configured caps
         in :func:`pull_route`; but when an execution lane is active (a
@@ -438,6 +453,7 @@ def produce_path_aware_critique(
         run_test_config is not None
         or diff_config is not None
         or probe_template_config is not None
+        or podman_lane_config is not None
     )
     if caps is None and exec_enabled:
         cfg_for_caps = config if config is not None else load_config(
@@ -466,6 +482,7 @@ def produce_path_aware_critique(
                 run_test_config=run_test_config,
                 diff_config=diff_config,
                 probe_template_config=probe_template_config,
+                podman_lane_config=podman_lane_config,
             )
         except Exception as exc:  # a provider failure must not abort the others
             skipped.append(f"{label}: run raised {type(exc).__name__}: {exc}")
@@ -579,14 +596,20 @@ def _parse_providers(specs: Optional[List[str]]) -> Tuple[Tuple[str, Optional[st
 
 def _build_exec_configs(
     args, repo_root: str, config: Optional[dict]
-) -> Tuple[Optional[RunTestConfig], Optional[DiffConfig], Optional[ProbeTemplateConfig]]:
-    """Build the optional ``RunTestConfig`` / ``DiffConfig`` / ``ProbeTemplateConfig``.
+) -> Tuple[
+    Optional[RunTestConfig],
+    Optional[DiffConfig],
+    Optional[ProbeTemplateConfig],
+    Optional["PodmanLaneConfig"],
+]:
+    """Build the optional execution-lane configs from CLI args.
 
-    Raises :class:`PullCritiqueError` on a misconfiguration (run_test or
-    probe-templates requested without a pinned ref, or a malformed ``NAME=CMD``).
-    A shell-style command string is ``shlex.split`` into an argv; no shell is ever
-    invoked (the cage runs ``shell=False``), so this only tokenizes an
-    operator-authored command.
+    Returns ``(run_test_config, diff_config, probe_template_config,
+    podman_lane_config)``. Raises :class:`PullCritiqueError` on a misconfiguration
+    (run_test or probe-templates requested without a pinned ref, or a malformed
+    ``NAME=CMD``). A shell-style command string is ``shlex.split`` into an argv; no
+    shell is ever invoked (the cage runs ``shell=False``), so this only tokenizes
+    an operator-authored command.
     """
     import shlex
 
@@ -642,7 +665,19 @@ def _build_exec_configs(
             templates=dict(BUILTIN_PROBE_TEMPLATES),
             caps=run_test_caps_from_config(config),
         )
-    return run_test_config, diff_config, probe_template_config
+
+    # Set 069 S4: the Podman model-authored-probe lane. The repo is bind-mounted
+    # READ-ONLY (no checkout at a ref), so this lane does NOT require --exec-ref;
+    # --exec-ref, if given, is recorded as provenance.
+    podman_lane_config: Optional[PodmanLaneConfig] = None
+    if getattr(args, "podman_lane", False):
+        podman_lane_config = PodmanLaneConfig(
+            repo_root=repo_root,
+            image=getattr(args, "podman_image", "") or "",
+            caps=podman_caps_from_config(config),
+            ref=args.exec_ref or "HEAD",
+        )
+    return run_test_config, diff_config, probe_template_config, podman_lane_config
 
 
 def _main(argv: Optional[List[str]] = None) -> int:
@@ -752,6 +787,27 @@ def _main(argv: Optional[List[str]] = None) -> int:
             "invokes with typed args). Requires --exec-ref."
         ),
     )
+    # Set 069 S4: the Podman model-authored-probe lane (GREEN spike required).
+    parser.add_argument(
+        "--podman-lane",
+        action="store_true",
+        help=(
+            "enable the Podman run_authored_probe lane: the ONE lane where a "
+            "critic AUTHORS the probe body, run only inside a locked-down Podman "
+            "container (the container is the boundary; autonomous + "
+            "severity-gated; triage-only safety check). A model-authored probe "
+            "can never mint REPRODUCED - findings cap at HYPOTHESIS. Requires a "
+            "GREEN Podman spike + a built image."
+        ),
+    )
+    parser.add_argument(
+        "--podman-image",
+        default=None,
+        help=(
+            "the cage image for --podman-lane (default: pull-probe:local). "
+            "Production should pass a DIGEST-PINNED ref (name@sha256:...)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     providers = _parse_providers(args.provider)
@@ -768,9 +824,12 @@ def _main(argv: Optional[List[str]] = None) -> int:
     except Exception:  # pragma: no cover - config load is best-effort for caps
         cli_config = None
     try:
-        run_test_config, diff_config, probe_template_config = _build_exec_configs(
-            args, repo_root, cli_config
-        )
+        (
+            run_test_config,
+            diff_config,
+            probe_template_config,
+            podman_lane_config,
+        ) = _build_exec_configs(args, repo_root, cli_config)
     except PullCritiqueError as exc:
         print(f"ERROR: {_ascii(exc)}", file=sys.stderr)
         return 2
@@ -785,6 +844,7 @@ def _main(argv: Optional[List[str]] = None) -> int:
             run_test_config=run_test_config,
             diff_config=diff_config,
             probe_template_config=probe_template_config,
+            podman_lane_config=podman_lane_config,
         )
     except PullCritiqueError as exc:
         # ASCII-sanitize the error path too: a non-ASCII set path / message must

@@ -2537,3 +2537,209 @@ class TestEvidenceLaneMatching:
         t = pv._build_transcript(ex)
         assert seen == {"repo_root": "/tmpl-repo", "ref": "tmpl-ref"}
         assert t["pinnedRef"] == "tmpl-ref"
+
+
+# ===========================================================================
+# Set 069 S4: the Podman model-authored-probe lane (run_authored_probe).
+# Offered only when configured; dispatched to the Podman cage (faked here);
+# a MODEL-AUTHORED probe can NEVER mint REPRODUCED - it caps at HYPOTHESIS.
+# ===========================================================================
+
+import podman_sandbox as _ps  # noqa: E402
+
+_PODMAN_CFG = pv.PodmanLaneConfig(repo_root=".")
+
+
+def _fake_podman_result(*, exit_code=1, probe_output="PROBE_RESULT: reproduced",
+                        removed=True, error=None, ran=True):
+    return _ps.PodmanResult(
+        ran=ran, exit_code=exit_code, timed_out=False,
+        probe_output=probe_output, runtime_diagnostics="WARN: ignored cap",
+        wall_seconds=1.5, container_removed=removed, image="img",
+        image_digest_pinned=False, resource_caps_enforced=False,
+        argv=("podman", "run"), error=error,
+    )
+
+
+class TestDefaultTriage:
+    def test_proceeds_on_a_real_probe(self):
+        assert pv.default_triage(
+            "import ai_router; print('PROBE_RESULT: x')", "a Major bug"
+        ) is None
+
+    def test_rejects_empty_body_and_missing_claim(self):
+        assert "empty probe body" in pv.default_triage("", "claim")
+        assert "severity-gated" in pv.default_triage("import ai_router", "")
+
+    def test_rejects_probe_not_touching_code_under_review(self):
+        # meta-oracle: a freestanding harness that never imports ai_router.
+        assert "meta-oracle" in pv.default_triage("print(1+1)", "Major bug")
+
+    def test_escalates_an_escape_attempt(self):
+        r = pv.default_triage("import ai_router\nimport socket", "Major bug")
+        assert r and r.startswith("ESCALATE:")
+
+
+class TestRunAuthoredProbeWiring:
+    def test_not_offered_without_config(self, sandbox):
+        b = _ToolCapturingBinding(
+            queue=[_resp(tool_calls=[_tc("read_file", {"path": "a.py"})]),
+                   _VERDICT_OK]
+        )
+        pv.pull_route(sandbox, "review", binding=b, config=CONFIG)
+        assert all("run_authored_probe" not in names for names in b.tools_seen)
+
+    def test_offered_and_dispatched_to_cage(self, sandbox, monkeypatch):
+        calls = []
+
+        def fake_dispatch(cfg, args):
+            calls.append((cfg, args))
+            return ("probeId=authored-abc\n--- output ---\nok", False, False, None)
+
+        monkeypatch.setattr(pv, "_dispatch_run_authored_probe", fake_dispatch)
+        verdict = _resp(tool_calls=[_tc(
+            "submit_verdict", {"verdict": "VERIFIED", "summary": "probed"}, "v1")])
+        b = _ToolCapturingBinding(queue=[
+            _resp(tool_calls=[_tc("run_authored_probe", {
+                "probe": "import ai_router", "entrypointRef": "ai_router.x",
+                "claim": "Major"}, "p1")]),
+            verdict,
+        ])
+        result = pv.pull_route(
+            sandbox, "review", binding=b, config=CONFIG,
+            podman_lane_config=_PODMAN_CFG,
+        )
+        assert "run_authored_probe" in b.tools_seen[0]
+        assert len(calls) == 1 and result.ok is True
+        rec = result.trace.tool_calls[0]
+        assert rec.name == "run_authored_probe" and rec.raw is True
+
+
+class TestDispatchRunAuthoredProbe:
+    def test_reproduced_builds_authored_execution(self, monkeypatch):
+        monkeypatch.setattr(
+            _ps, "run_probe_in_container", lambda *a, **k: _fake_podman_result()
+        )
+        content, is_error, _el, ex = pv._dispatch_run_authored_probe(
+            _PODMAN_CFG,
+            {"probe": "import ai_router",
+             "entrypointRef": "ai_router.contract_gate.x",
+             "entrypointKind": "public_api", "claim": "Major crash"},
+        )
+        assert is_error is False and ex is not None
+        assert ex.kind == "authored"
+        assert ex.probe_id.startswith("authored-")
+        assert ex.entrypoint_ref == "ai_router.contract_gate.x"
+        assert ex.replay_matched is True  # second run reproduced same output
+        assert ex.match_id == ex.probe_id
+        assert "probeId=" in content and "HYPOTHESIS" in content
+
+    def test_robust_probe_captures_no_execution(self, monkeypatch):
+        monkeypatch.setattr(
+            _ps, "run_probe_in_container",
+            lambda *a, **k: _fake_podman_result(exit_code=0, probe_output="ok"),
+        )
+        _c, _e, _el, ex = pv._dispatch_run_authored_probe(
+            _PODMAN_CFG,
+            {"probe": "import ai_router", "entrypointRef": "ai_router.x",
+             "claim": "Major"},
+        )
+        assert ex is None
+
+    def test_missing_entrypoint_is_an_error_before_the_cage(self, monkeypatch):
+        ran = []
+        monkeypatch.setattr(
+            _ps, "run_probe_in_container",
+            lambda *a, **k: ran.append(1) or _fake_podman_result(),
+        )
+        content, is_error, _el, ex = pv._dispatch_run_authored_probe(
+            _PODMAN_CFG, {"probe": "import ai_router", "claim": "Major"}
+        )
+        assert is_error and ex is None and not ran
+        assert "entrypointRef" in content
+
+    def test_bad_entrypoint_kind_is_an_error(self, monkeypatch):
+        monkeypatch.setattr(
+            _ps, "run_probe_in_container", lambda *a, **k: _fake_podman_result()
+        )
+        content, is_error, _el, ex = pv._dispatch_run_authored_probe(
+            _PODMAN_CFG,
+            {"probe": "import ai_router", "entrypointRef": "ai_router.x",
+             "entrypointKind": "agent_harness", "claim": "Major"},
+        )
+        assert is_error and ex is None and "agent_harness" in content
+
+    def test_triage_rejection_skips_the_cage(self, monkeypatch):
+        ran = []
+        monkeypatch.setattr(
+            _ps, "run_probe_in_container",
+            lambda *a, **k: ran.append(1) or _fake_podman_result(),
+        )
+        content, is_error, _el, ex = pv._dispatch_run_authored_probe(
+            _PODMAN_CFG,
+            {"probe": "import ai_router", "entrypointRef": "ai_router.x",
+             "claim": ""},
+        )
+        assert is_error and ex is None and not ran
+        assert "triage" in content
+
+
+class TestAuthoredEvidenceCapsAtHypothesis:
+    def _authored_ex(self, probe_id="authored-deadbeef"):
+        return pv._Execution(
+            command_id="", requested_name="", argv=("python", "-B", "-c", "x"),
+            exit_code=1, raw_output="PROBE_RESULT: reproduced", kind="authored",
+            entrypoint_kind="public_api", entrypoint_ref="ai_router.x",
+            probe_id=probe_id, probe_body="import ai_router", replay_matched=True,
+            repo_root=".", ref="HEAD",
+        )
+
+    def test_authored_build_transcript_is_none(self):
+        # A model-authored probe is never a trusted falsifier.
+        assert pv._build_transcript(self._authored_ex()) is None
+
+    def test_reproduced_claim_with_probeid_caps_at_hypothesis(self):
+        crit = _crit([pv.Finding(description="bug", severity="Major")])
+        payload = {"findings": [{"description": "bug",
+                                 "evidenceTier": "REPRODUCED",
+                                 "probeId": "authored-deadbeef"}]}
+        out = pv._stamp_evidence_tiers(crit, payload, [self._authored_ex()])
+        f = out.findings[0]
+        # DOWNGRADED from a REPRODUCED claim to HYPOTHESIS (executed but
+        # model-authored), NOT minted REPRODUCED and NOT a bare read-claim.
+        assert f.evidence_tier == pv.EVIDENCE_HYPOTHESIS
+        assert f.transcript is None
+
+    def test_sole_authored_run_cannot_mint_reproduced(self):
+        crit = _crit([pv.Finding(description="bug")])
+        payload = {"findings": [{"description": "bug",
+                                 "evidenceTier": "REPRODUCED"}]}
+        out = pv._stamp_evidence_tiers(crit, payload, [self._authored_ex()])
+        assert out.findings[0].evidence_tier == pv.EVIDENCE_HYPOTHESIS
+
+    def test_authored_probeid_does_not_cross_bind_a_command_lane(self):
+        cmd_ex = pv._Execution(
+            command_id="default", requested_name="", argv=("pytest",),
+            exit_code=1, raw_output="x", repo_root=".", ref="HEAD",
+        )
+        crit = _crit([pv.Finding(description="bug")])
+        payload = {"findings": [{"description": "bug",
+                                 "evidenceTier": "REPRODUCED",
+                                 "probeId": "authored-deadbeef"}]}
+        # probeId names an authored run that did NOT happen -> not has_probe ->
+        # only an unnamed command run exists -> collapses to a read-claim.
+        out = pv._stamp_evidence_tiers(crit, payload, [cmd_ex])
+        assert out.findings[0].evidence_tier == ""
+
+
+class TestVerdictSchemaAuthoredGating:
+    def test_authored_lane_offers_probeid(self):
+        props = (pv._verdict_tool_schema(allow_authored_evidence=True)
+                 ["parameters"]["properties"]["findings"]["items"]["properties"])
+        assert "evidenceTier" in props and "probeId" in props
+        assert "commandId" not in props and "templateId" not in props
+
+    def test_no_lane_offers_no_probeid(self):
+        props = (pv._verdict_tool_schema()["parameters"]["properties"]
+                 ["findings"]["items"]["properties"])
+        assert "probeId" not in props

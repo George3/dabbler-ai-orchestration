@@ -327,6 +327,32 @@ def test_default_sandbox_is_repo_root_not_cwd(tmp_path, monkeypatch):
     assert Path(captured["sandbox"]).resolve() == repo.resolve()
 
 
+def test_podman_lane_config_is_threaded_to_pull_route(tmp_path):
+    # Set 069 S4: a podman_lane_config passed to the producer reaches pull_route
+    # (so the run_authored_probe lane is actually offered per provider).
+    set_dir = _make_set(tmp_path, level="required")
+    captured = {}
+
+    def run_pull(sandbox, instruction, *, provider, model, config, **kwargs):
+        captured["podman_lane_config"] = kwargs.get("podman_lane_config")
+        captured["caps"] = kwargs.get("caps")
+        return _fake_result(provider, "m")
+
+    cfg = pv.PodmanLaneConfig(repo_root=str(tmp_path), image="pull-probe:local")
+    pc.produce_path_aware_critique(
+        set_dir,
+        providers=(("openai", None), ("google", None)),
+        sandbox_dir=tmp_path,
+        write=False,
+        podman_lane_config=cfg,
+        run_pull=run_pull,
+    )
+    assert captured["podman_lane_config"] is cfg
+    # An active execution lane (even the podman one alone) triggers blast-radius
+    # budgeted caps rather than leaving caps=None.
+    assert captured["caps"] is not None
+
+
 def test_produced_artifact_passes_the_real_close_out_gate(tmp_path):
     # End-to-end: a produced artifact must satisfy the ACTUAL close-out gate
     # (validate_path_aware_critique_gate), not just the structural validator
@@ -510,6 +536,7 @@ def _exec_args(**overrides):
     base = dict(
         run_test_cmd=None, run_test_named=None, exec_ref=None,
         diff_base=None, diff_head="", probe_templates=False,
+        podman_lane=False, podman_image=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -526,12 +553,15 @@ def test_build_exec_configs_builds_both():
         run_test_cmd="pytest -q", run_test_named=["unit=python -m pytest x"],
         exec_ref="HEAD", diff_base="main",
     )
-    rt, diff, probe = pc._build_exec_configs(args, repo_root="/r", config=None)
+    rt, diff, probe, podman = pc._build_exec_configs(
+        args, repo_root="/r", config=None
+    )
     assert rt.repo_root == "/r" and rt.ref == "HEAD"
     assert rt.command == ("pytest", "-q")
     assert rt.commands == {"unit": ("python", "-m", "pytest", "x")}
     assert diff.base_ref == "main"
     assert probe is None  # --probe-templates not requested
+    assert podman is None  # --podman-lane not requested
 
 
 def test_build_exec_configs_rejects_bad_named():
@@ -542,8 +572,10 @@ def test_build_exec_configs_rejects_bad_named():
 
 def test_build_exec_configs_none_when_no_flags():
     args = _exec_args()
-    rt, diff, probe = pc._build_exec_configs(args, repo_root=".", config=None)
-    assert rt is None and diff is None and probe is None
+    rt, diff, probe, podman = pc._build_exec_configs(
+        args, repo_root=".", config=None
+    )
+    assert rt is None and diff is None and probe is None and podman is None
 
 
 # --- Set 069 S3: CLI builds the probe-template config; producer threads it ---
@@ -551,12 +583,28 @@ def test_build_exec_configs_none_when_no_flags():
 
 def test_build_exec_configs_builds_probe_template_config():
     args = _exec_args(probe_templates=True, exec_ref="HEAD")
-    rt, diff, probe = pc._build_exec_configs(args, repo_root="/r", config=None)
-    assert rt is None and diff is None
+    rt, diff, probe, podman = pc._build_exec_configs(
+        args, repo_root="/r", config=None
+    )
+    assert rt is None and diff is None and podman is None
     assert probe is not None
     assert probe.repo_root == "/r" and probe.ref == "HEAD"
     # The built-in seed library is wired in.
     assert "malformed_artifact_bytes" in probe.templates
+
+
+def test_build_exec_configs_builds_podman_lane_config():
+    # Set 069 S4: --podman-lane builds a PodmanLaneConfig; the read-only bind
+    # mount means it does NOT require --exec-ref (ref is provenance only).
+    args = _exec_args(podman_lane=True, podman_image="pull-probe@sha256:abc")
+    rt, diff, probe, podman = pc._build_exec_configs(
+        args, repo_root="/r", config=None
+    )
+    assert rt is None and diff is None and probe is None
+    assert podman is not None
+    assert podman.repo_root == "/r"
+    assert podman.image == "pull-probe@sha256:abc"
+    assert podman.ref == "HEAD"  # default provenance
 
 
 def test_build_exec_configs_probe_templates_requires_ref():

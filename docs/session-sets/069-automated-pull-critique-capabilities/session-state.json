@@ -46,10 +46,15 @@
     {
       "number": 4,
       "title": "Podman model-authored-probe lane (GATED on a green spike)",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-16T07:08:31.352233-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "high"
+      },
       "verificationVerdict": null
     },
     {

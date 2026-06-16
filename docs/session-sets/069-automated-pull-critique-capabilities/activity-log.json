@@ -103,6 +103,60 @@
       "description": "gpt-5-4 gated->REQUIRED: R1 FAIL (3 findings: exit-code gating, lane-keyed match, test gap) -> R2 (3 confirmed + 1 new: shared replay cfg) -> R3 PASS. ~$0.705 metered.",
       "status": "completed",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "spike-gate-checked",
+      "dateTime": "2026-06-16T07:08:40.310675-04:00",
+      "description": "Registered S4 (claude/opus-4-8/high). Read podman-spike/spike-result.json + README results table: GREEN -- 6/6 acceptance criteria passed (raw exit/output fidelity, --network=none, read-only repo + no-leak, tmpfs-writable, wall-clock kill, crash-safe teardown), podman 4.9.3, per-probe ~1.5s. Verdict GO -> the Podman model-authored-probe lane PROCEEDS (not NO-GO). Read proposal sec 3.2-3.6, evidence_protocol.py (S1), pull_verifier.py lane wiring (run_test/probe-template), probe_templates.py + run_test_sandbox.py (siblings to mirror), router-config pull_verifier block. Carrying the spike three findings into S4: (1) cgroup v2 + delegation to restore --memory/--pids-limit/--cpus (rootless cgroups-v1 ignores them); (2) timeout/teardown ~10s rootless WSL -> tune; (3) separate probe output from podman runtime warnings.",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "podman-lane",
+      "dateTime": "2026-06-16T07:40:57.969567-04:00",
+      "description": "Graduated the spike harness into ai_router/podman_sandbox.py (run_test_sandbox sibling): the podman run cage (--network=none, --read-only, --cap-drop=ALL, --security-opt=no-new-privileges, repo bind-mount RO at /repo, tmpfs /scratch, --rm, hard wall-clock + crash-safe force-remove-by-name teardown) built on the shared run_subprocess_capped; PodmanCaps + podman_caps_from_config; image_is_digest_pinned + build_image + DEFAULT_IMAGE_TAG + CONTAINERFILE_DIR; podman_footprint disk-hygiene helper. Carried the spike THREE findings: (1) cgroup_caps_enforceable() emits --memory/--pids-limit/--cpus ONLY on cgroup v2 (rootless v1 ignores them); (2) timeout force-removes the --rm container by name (~10s rootless-WSL path), wall reported; (3) stdout=probe_output (replay-hashed) vs stderr=runtime_diagnostics (not hashed). Added graduated ai_router/podman/Containerfile (no-secrets, digest-pin TODO). build_probe_argv wraps the model body as python -B -c with PYTHONPATH=/repo (NOT -I/-E which drop PYTHONPATH).",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "lane-wired",
+      "dateTime": "2026-06-16T07:40:57.970524-04:00",
+      "description": "Wired the autonomous, severity-gated run_authored_probe lane into pull_verifier.pull_route: RUN_AUTHORED_PROBE_TOOL + _run_authored_probe_tool_schema + _dispatch_run_authored_probe + PodmanLaneConfig + default_triage (TRIAGE-ONLY: reject empty/no-claim/no-ai_router=meta-oracle, ESCALATE network/subprocess; NEVER approve). _Execution gains kind=authored + probe_id/probe_body/replay_matched; match_id returns probe_id. CENTRAL SAFETY PROPERTY: a model-authored probe can NEVER mint REPRODUCED -- _build_transcript returns None for authored; _stamp_evidence_tiers caps an authored-backed finding (probeId match OR sole authored exec) at HYPOTHESIS (downgrade a REPRODUCED claim, not collapse to read-claim). by_probe lane-keyed (no cross-bind). Verdict schema gains gated probeId (allow_authored_evidence). Dispatch does a second-container pristine replay -> replay_matched re-runnability signal (does not elevate tier). Threaded PodmanLaneConfig through pull_critique producer + --podman-lane/--podman-image CLI + router-config pull_verifier.podman.caps block. ADDITIVE: no config = byte-for-byte prior behavior.",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "tests",
+      "dateTime": "2026-06-16T07:40:57.970524-04:00",
+      "description": "Added 37 tests (14 podman_sandbox unit + 4 real-podman skipif regressions [network/read-only+no-leak/timeout-teardown/disk-footprint, run on Linux-CI/WSL, skip on Windows host]; 17 pull_verifier lane-wiring/triage/HYPOTHESIS-cap; 2 producer threading/CLI). Updated ai_router/docs/pull-verifier.md (What Set 069 S4 added). routed_gate on the staged ai_router diff = REQUIRED (blast-radius + breadth + build-ci-config).",
+      "status": "done",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "s4-verified",
+      "dateTime": "2026-06-16T07:43:07.597848-04:00",
+      "description": "Full ai_router pytest suite GREEN: 1853 passed / 5 skipped (baseline 1820/1 + 33 new passes + 4 new real-podman skips). Running cross-provider verification next.",
+      "status": "in-progress",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "s4-verified",
+      "dateTime": "2026-06-16T07:59:22.585351-04:00",
+      "description": "Cross-provider verification (gpt-5-4, gated->REQUIRED). R1 NEEDS_FIX with the CENTRAL SAFETY CLAIM already PASS (model-authored probe can never mint REPRODUCED; caps at HYPOTHESIS) + 4 findings: (1) digest-pin honesty -> runtime NOTE when image not pinned + honest doc/Containerfile; (2) footprint not lane-local -> lane LABEL + label-filtered podman_footprint + image-exists; (3) replay_matched=False misleading text -> branch-correct; (4) no build_probe_argv -B/no-I test -> added. All 4 FIXED. R2 PASS: all resolved, central claim PASS unchanged, no regressions, no new defects. Full suite 1856 passed / 5 skipped. Metered ~/usr/bin/bash.784 (R1 0.424 + R2 0.359). VERIFIED.",
+      "status": "done",
+      "routedApiCalls": []
     }
   ]
 }
