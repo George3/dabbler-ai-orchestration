@@ -29,7 +29,7 @@
     "model": "claude-opus-4-8",
     "effort": "medium",
     "reason": {
-      "code": "continue",
+      "code": "continue-current-trajectory",
       "specifics": "Routed analysis (next-session-rec.md) recommends anthropic/opus-4-8 medium for S5 (ceiling->floor ratchet + measured replacement gate): a design-heavy task with real solution-variance (what makes a good candidate-falsifier admission gate; how to pre-register an honest small-n benchmark; the telemetry schema) where architectural soundness minimizes high-cost rework, so a top-tier reasoning engine is the cheapest-CAPABLE choice on dollars+rework (it returned a stale opus model name, mapped to the closest current candidate). Operator may instead pick codex gpt-5.4/high or sonnet-4-6/high; cross-provider verification stays REQUIRED (the diff will trip routed_gate). No release (that is S6)."
     }
   },
