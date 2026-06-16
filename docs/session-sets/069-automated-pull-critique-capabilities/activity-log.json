@@ -220,6 +220,42 @@
       "description": "Routed S6 next-session rec (sonnet-4-6, stale name mapped + orchestrator caveat: S6 ships a release, treat effort>=medium). Wrote disposition.json (VERIFIED). Cited L-066-1/L-064-10/L-064-7/L-064-6/L-064-9. Committing + close_session.",
       "status": "completed",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 1,
+      "stepKey": "session-006/synthesis-docs",
+      "dateTime": "2026-06-16T09:26:09.367734-04:00",
+      "description": "Updated verification-surface-strategy.md (new section 6: execution-backed evidence layer; GREEN Podman spike), pull-verifier.md (S5 ratchet+replacement-gate), proposal status->BUILT; change-log.md (all 6 sessions).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 2,
+      "stepKey": "session-006/release",
+      "dateTime": "2026-06-16T09:26:09.367734-04:00",
+      "description": "Bumped ai_router 0.22.1->0.23.0 (minor; additive) + CHANGELOG 0.23.0 entry; packaging-hygiene green. PyPI publish operator-driven (push tag v0.23.0 on green-Test SHA).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 3,
+      "stepKey": "session-006/verification",
+      "dateTime": "2026-06-16T09:26:09.367734-04:00",
+      "description": "Cross-provider gated->REQUIRED verification (gpt-5-4): R1 ISSUES (2 Minor doc-accuracy: six->five gate count; stale baseline) -> fixed every echo -> R2 VERIFIED.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 6,
+      "stepNumber": 4,
+      "stepKey": "session-006/dogfood",
+      "dateTime": "2026-06-16T09:26:09.367734-04:00",
+      "description": "Execution-capable producer over set diff (openai+google): google VERIFIED, gpt-5.4 caught 1 Major (coverage description-fallback) + 1 Minor (falseReproduced prose) the S5 routed verification missed -> fixed + patch re-verified VERIFIED. Contract-floor light dogfood PASSED.",
+      "status": "complete",
+      "routedApiCalls": []
     }
   ]
 }
