@@ -26,6 +26,16 @@
   ],
   "verification_method": "api",
   "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "effort": "high",
+    "reason": {
+      "code": "switch-due-to-cost",
+      "specifics": "Routed analysis (next-session-rec.md) recommended a capable frontier engine for S2's multi-turn agentic read->run->read wiring, not a cut-rate tier; the tier-1 analysis returned stale model names so it is advisory. sonnet-4-6/high is the cost-effective capable choice (cheaper than the opus-4-8 this session ran) for the run_test-trigger + get_diff + bounded-loop coding in the shared pull adapter, with cross-provider verification REQUIRED. Operator may instead pick opus-4-8/high or codex gpt-5.4/high."
+    }
+  },
   "blockers": [],
   "verification_verdict": "VERIFIED",
   "lessons_cited": [
