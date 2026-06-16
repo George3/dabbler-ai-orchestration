@@ -206,7 +206,24 @@ def _read_disposition(session_set_dir: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def build_instruction(session_set_dir: Union[str, Path]) -> str:
+def prompt_body_of(template_text: str) -> str:
+    """Return the fillable prompt body of a raw template text.
+
+    The body is everything after the ``=== PROMPT ===`` marker (the operator-
+    facing preamble is stripped); a template with no marker is used whole. Shared
+    so a caller can classify the *exact* slice that :func:`build_instruction`
+    will render and execute (no classify-vs-execute drift)."""
+    idx = template_text.find(_PROMPT_MARKER)
+    if idx == -1:
+        return template_text.strip()
+    return template_text[idx + len(_PROMPT_MARKER):].strip()
+
+
+def build_instruction(
+    session_set_dir: Union[str, Path],
+    *,
+    template_text: Optional[str] = None,
+) -> str:
     """Build the path-aware critique instruction for a session set.
 
     Reuses the manual template's prompt body (so the automated and manual
@@ -214,6 +231,11 @@ def build_instruction(session_set_dir: Union[str, Path]) -> str:
     the set's own ``spec.md`` title and ``disposition.json`` (the close-time
     change summary + files-changed list the orchestrator already wrote). Falls
     back to a self-contained instruction when the template is unavailable.
+
+    When ``template_text`` is given, the prompt body is taken from **that** raw
+    template (via :func:`prompt_body_of`) instead of the shipped file - the seam
+    the dual-surface runner uses so the framing it classifies and the instruction
+    it executes derive from a SINGLE source (no attestation/execution drift).
 
     Placeholder substitution uses ``str.replace`` (not ``str.format``) so the
     template's other literal braces are never misinterpreted.
@@ -249,7 +271,7 @@ def build_instruction(session_set_dir: Union[str, Path]) -> str:
         "that implements it."
     )
 
-    body = _template_prompt_body()
+    body = prompt_body_of(template_text) if template_text is not None else _template_prompt_body()
     if body is None:
         return _FALLBACK_INSTRUCTION.replace("{slug}", slug).replace(
             "{change_summary}", change_summary

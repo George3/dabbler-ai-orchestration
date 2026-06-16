@@ -1,0 +1,65 @@
+{
+  "sessionSetName": "070-dual-surface-verification-telemetry",
+  "createdDate": "2026-06-16T15:46:22.785538+00:00",
+  "totalSessions": 3,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/path-aware-critique",
+      "dateTime": "2026-06-16T15:46:22.786537+00:00",
+      "description": "Operator set pathAwareCritique: required.",
+      "status": "complete",
+      "routedApiCalls": [],
+      "kind": "path_aware_critique",
+      "choice": "required"
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/contract-gate",
+      "dateTime": "2026-06-16T15:47:35.045686+00:00",
+      "description": "Operator set contractGate: advisory.",
+      "status": "complete",
+      "routedApiCalls": [],
+      "kind": "contract_gate",
+      "choice": "advisory"
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "steelman-push",
+      "dateTime": "2026-06-16T12:37:15.024837-04:00",
+      "description": "Upgraded ai_router/prompt-templates/verification.md from weak ('evaluate it objectively') to the strong devil's-advocate framing pull uses, preserving the build_verification_prompt/parse_verification_response machine contract (placeholders + VERIFIED/ISSUES FOUND + Issue/Category/Severity). Added test_verification_framing.py pinning the strong framing (so a future silent weakening is caught) and the machine contract.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "contractgate-seed-fix",
+      "dateTime": "2026-06-16T12:37:15.024837-04:00",
+      "description": "Shipped the start_session contractGate-seed fix (--contract-gate flag + _capture_contract_gate, mirroring _capture_path_aware_critique, delegating to the existing contract_gate.resolve_and_record_contract_gate; best-effort fail-open). Recorded this set's durable contractGate:advisory seed at set start (closing the Set 069 S6 gap). Added 5 capture tests to test_start_session.py.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "dual-surface-runner",
+      "dateTime": "2026-06-16T12:37:15.024837-04:00",
+      "description": "Built ai_router/dual_surface_verify.py: run_dual_surface drives the PUSH arm (snippet-fed single-shot over the committed diff under verification.md) and the PULL arm (pull_route repo-reading agentic loop under path-aware-critique.md) over the same committed state, provider+model+framing held EQUAL. Framing is classified from each arm's SINGLE-source raw template body (pull instruction rendered from the same pull_template via build_instruction(template_text=...)); provider/model equality DERIVED from each arm's actual reported identity; refuses unequal (UnequalArmsError) \u2014 framing pre-arm, provider/model post-arm. NO merge (S2). Both arms injectable; no metered call at import. 20 hermetic tests in test_dual_surface_verify.py.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "s1-verified",
+      "dateTime": "2026-06-16T12:37:15.024837-04:00",
+      "description": "Full ai_router suite GREEN: 1988 passed, 5 skipped (the 5 are Set 069 S4 real-Podman-on-Windows by-design skips). Cross-provider verification (gpt-5-4, routed_gate REQUIRED via blast-radius+breadth): R1 ISSUES_FOUND (3: hard-coded providerEqual/modelEqual; pull framing classified from rendered instruction=spoofable; committed_ref misstated provenance) -> all fixed; R2 (3 resolved, 1 NEW: pull_template/pull_instruction drift) -> fixed via pairing guard; R3 (devil's advocate: even paired, 2 inputs can diverge) -> fixed via SINGLE source of truth (removed pull_instruction param; instruction rendered from pull_template); R4 VERIFIED. Next-session orchestrator recommendation routed (gemini-pro): claude/sonnet-4-6/medium.",
+      "status": "completed",
+      "routedApiCalls": []
+    }
+  ]
+}

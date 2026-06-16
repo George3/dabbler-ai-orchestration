@@ -341,6 +341,27 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "immutable after the first record."
         ),
     )
+    p.add_argument(
+        "--contract-gate",
+        dest="contract_gate",
+        default=None,
+        choices=["none", "advisory", "required"],
+        help=(
+            "Set 070 (S1): record the contractGate policy once at set start, "
+            "the same way --path-aware-critique already does. ``required`` arms "
+            "the Set-068 contract-test/CDC close-out gate (a valid contract-floor "
+            "result must exist before a set-terminal close); ``advisory`` warns "
+            "but never blocks; ``none`` (the default) is no gate. When omitted, "
+            "the writer seeds the choice from spec.md's Session Set Configuration "
+            "``contractGate`` field if present (recorded only when no choice "
+            "exists yet); otherwise nothing is recorded and the default ``none`` "
+            "applies implicitly. The durable record is an activity-log.json entry "
+            "every later step reads; it is immutable after the first record. "
+            "Before Set 070 the contractGate seed was NOT captured at set start "
+            "(unlike pathAwareCritique), so the Set 069 contractGate close-out "
+            "gate silently no-op'd; this flag + the seed capture close that gap."
+        ),
+    )
     # Set 048 Session 2: --no-router mode flag. Highest precedence
     # source for runtime_mode.resolve_no_router_mode (CLI flag > env
     # var DABBLER_NO_ROUTER > spec.md tier field > default full mode).
@@ -419,6 +440,40 @@ def _capture_path_aware_critique(
                 resolve_and_record_path_aware_critique,
             )
         resolve_and_record_path_aware_critique(
+            session_set_dir,
+            cli_choice=cli_choice,
+            session_number=session_number,
+        )
+    except Exception:
+        pass
+
+
+def _capture_contract_gate(
+    session_set_dir: str,
+    session_number: int,
+    cli_choice: Optional[str],
+) -> None:
+    """Set 070 (S1): record the contractGate policy once at set start.
+
+    Best-effort: delegates to
+    :func:`contract_gate.resolve_and_record_contract_gate` (CLI choice wins;
+    otherwise the spec.md ``contractGate`` seed is recorded only when no durable
+    record exists yet). This closes the Set 069 S6 gap where the contractGate
+    seed -- unlike ``pathAwareCritique`` -- was never captured at set start, so
+    the contractGate close-out gate silently no-op'd. A bad explicit
+    ``--contract-gate`` is already rejected by argparse ``choices``; any other
+    failure here must never block the session-start write, so it is swallowed.
+    """
+    try:
+        try:
+            from contract_gate import (  # type: ignore[import-not-found]
+                resolve_and_record_contract_gate,
+            )
+        except ImportError:
+            from .contract_gate import (  # type: ignore[no-redef]
+                resolve_and_record_contract_gate,
+            )
+        resolve_and_record_contract_gate(
             session_set_dir,
             cli_choice=cli_choice,
             session_number=session_number,
@@ -744,6 +799,15 @@ def _run_under_lock(args: argparse.Namespace) -> int:
     # record exists yet). Best-effort — never blocks the boundary write.
     _capture_path_aware_critique(
         session_set_dir, requested, getattr(args, "path_aware_critique", None)
+    )
+
+    # Set 070 (S1): capture the contractGate policy once at set start (CLI flag
+    # wins; spec.md seed recorded only when no record exists yet). Closes the
+    # Set 069 S6 gap where the contractGate seed was never captured here, so the
+    # contractGate close-out gate silently no-op'd. Best-effort -- never blocks
+    # the boundary write.
+    _capture_contract_gate(
+        session_set_dir, requested, getattr(args, "contract_gate", None)
     )
 
     # Set 049 (T5): best-effort observability log so a post-hoc

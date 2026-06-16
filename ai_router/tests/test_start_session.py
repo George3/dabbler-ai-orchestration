@@ -650,3 +650,130 @@ def test_start_session_drift_scan_error_is_non_fatal(tmp_path: Path, monkeypatch
 
     monkeypatch.setattr(start_session, "summarize_drift", boom)
     assert start_session.run(_args(set_dir)) == start_session.EXIT_OK
+
+
+# ---------------------------------------------------------------------------
+# Group: Set 070 — contractGate seed capture at set start
+#
+# Closes the Set 069 S6 gap: pre-Set-070 start_session captured the
+# pathAwareCritique seed but NOT the contractGate seed, so the contractGate
+# close-out gate silently no-op'd. These tests pin that start_session now
+# captures the contractGate choice the same way (CLI flag wins; spec seed
+# recorded once; immutable thereafter; never blocks the boundary write).
+# ---------------------------------------------------------------------------
+
+def _contract_gate_records(set_dir: Path) -> list:
+    """Return the recorded contractGate (kind=='contract_gate') entries.
+
+    Tolerates a missing activity-log.json: when nothing is seeded, the capture
+    records nothing and never creates the file (strictly opt-in)."""
+    log_path = set_dir / "activity-log.json"
+    if not log_path.exists():
+        return []
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    return [e for e in log.get("entries", []) if e.get("kind") == "contract_gate"]
+
+
+def test_contract_gate_seed_recorded_from_spec(tmp_path: Path):
+    """A spec declaring ``contractGate: advisory`` is captured at set start
+    even with no ``--contract-gate`` flag (the Set 069 S6 gap)."""
+    set_dir = tmp_path / "cg-set"
+    set_dir.mkdir()
+    (set_dir / "spec.md").write_text(
+        "# spec\n\n"
+        "## Session Set Configuration\n\n"
+        "```yaml\n"
+        "totalSessions: 3\n"
+        "requiresUAT: false\n"
+        "requiresE2E: false\n"
+        "contractGate: advisory\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    synthesize_not_started_state(str(set_dir))
+
+    rc = start_session.run(_args(set_dir))
+    assert rc == start_session.EXIT_OK
+
+    records = _contract_gate_records(set_dir)
+    assert len(records) == 1
+    assert records[0].get("choice") == "advisory"
+
+
+def test_contract_gate_cli_flag_wins_over_spec(tmp_path: Path):
+    """An explicit ``--contract-gate required`` overrides the spec seed."""
+    set_dir = tmp_path / "cg-cli-set"
+    set_dir.mkdir()
+    (set_dir / "spec.md").write_text(
+        "# spec\n\n"
+        "## Session Set Configuration\n\n"
+        "```yaml\n"
+        "totalSessions: 3\n"
+        "contractGate: advisory\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    synthesize_not_started_state(str(set_dir))
+
+    rc = start_session.run(_args(set_dir, contract_gate="required"))
+    assert rc == start_session.EXIT_OK
+
+    records = _contract_gate_records(set_dir)
+    assert len(records) == 1
+    assert records[0].get("choice") == "required"
+
+
+def test_contract_gate_no_seed_records_nothing(tmp_path: Path):
+    """A spec with no ``contractGate`` field and no flag records nothing —
+    the feature stays strictly opt-in (default ``none`` applies implicitly)."""
+    set_dir = _fresh_set(tmp_path)  # fixture spec has no contractGate field
+
+    rc = start_session.run(_args(set_dir))
+    assert rc == start_session.EXIT_OK
+
+    assert _contract_gate_records(set_dir) == []
+
+
+def test_contract_gate_seed_immutable_after_first_record(tmp_path: Path):
+    """Once recorded, a later start_session with a different choice is a
+    no-op — a mid-set downgrade cannot silently disarm an armed gate."""
+    set_dir = tmp_path / "cg-immutable"
+    set_dir.mkdir()
+    (set_dir / "spec.md").write_text(
+        "# spec\n\n## Session Set Configuration\n\n"
+        "```yaml\ntotalSessions: 3\ncontractGate: required\n```\n",
+        encoding="utf-8",
+    )
+    synthesize_not_started_state(str(set_dir))
+
+    assert start_session.run(_args(set_dir)) == start_session.EXIT_OK
+    # Re-run (idempotent resume of the in-flight session) asking for none.
+    assert start_session.run(_args(set_dir, contract_gate="none")) == start_session.EXIT_OK
+
+    records = _contract_gate_records(set_dir)
+    assert len(records) == 1
+    assert records[0].get("choice") == "required"
+
+
+def test_contract_gate_capture_never_blocks_boundary_write(tmp_path: Path, monkeypatch):
+    """If the contractGate capture raises, start_session must still succeed
+    (best-effort, fail-open — same posture as the pathAwareCritique capture)."""
+    set_dir = tmp_path / "cg-failopen"
+    set_dir.mkdir()
+    (set_dir / "spec.md").write_text(
+        "# spec\n\n## Session Set Configuration\n\n"
+        "```yaml\ntotalSessions: 3\ncontractGate: advisory\n```\n",
+        encoding="utf-8",
+    )
+    synthesize_not_started_state(str(set_dir))
+
+    import contract_gate as cg
+
+    def boom(*a, **k):
+        raise RuntimeError("capture blew up")
+
+    monkeypatch.setattr(cg, "resolve_and_record_contract_gate", boom)
+    assert start_session.run(_args(set_dir)) == start_session.EXIT_OK
+    # The boundary write still landed even though capture failed.
+    state = read_session_state(str(set_dir)) or {}
+    assert state.get("status") == "in-progress"

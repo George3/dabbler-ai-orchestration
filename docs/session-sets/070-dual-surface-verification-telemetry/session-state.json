@@ -1,15 +1,20 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "070-dual-surface-verification-telemetry",
-  "status": "not-started",
+  "status": "in-progress",
   "sessions": [
     {
       "number": 1,
       "title": "Steelman push + the dual-surface comparison core",
-      "status": "not-started",
-      "startedAt": null,
+      "status": "in-progress",
+      "startedAt": "2026-06-16T11:47:35.038823-04:00",
       "completedAt": null,
-      "orchestrator": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "high"
+      },
       "verificationVerdict": null
     },
     {

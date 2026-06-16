@@ -1,0 +1,43 @@
+{
+  "status": "completed",
+  "summary": "Set 070 Session 1 of 3 -- steelman push + the dual-surface comparison core. Ran on claude-opus-4-8 high. DELIVERED: (1) STEELMAN PUSH -- upgraded ai_router/prompt-templates/verification.md from the weak 'evaluate it objectively' framing to the strong devil's-advocate framing pull already uses ('assume the work is flawed and try to prove it; a rubber-stamp is a failure'), so the standing per-session push runs at its strongest form (L-069-2). The upgrade PRESERVES the machine contract build_verification_prompt/parse_verification_response depend on -- the {original_task}/{task_type}/{original_response} placeholders and the VERIFIED/ISSUES FOUND verdict + Issue/Category/Severity finding shape. Added ai_router/tests/test_verification_framing.py pinning the strong-framing phrases (a future silent weakening trips it), the removal of the weak phrase, push==pull framing parity, and the preserved machine contract. (2) CONTRACTGATE-SEED FIX -- ai_router/start_session.py gains a --contract-gate {none,advisory,required} flag and a _capture_contract_gate helper that mirrors _capture_path_aware_critique exactly (best-effort fail-open, delegates to the EXISTING contract_gate.resolve_and_record_contract_gate -- no reimplementation), wired in _run_under_lock right after the pathAwareCritique capture. This closes the Set 069 S6 gap where the contractGate seed -- unlike pathAwareCritique -- was never captured at set start, so the contractGate close-out gate silently no-op'd; ALSO recorded this set's own durable contractGate:advisory seed at set start (re-running start_session after the fix landed; the spec required recording it). 5 capture tests added to test_start_session.py (seed-from-spec, CLI-wins, no-seed-records-nothing, immutability, fail-open). (3) DUAL-SURFACE RUNNER -- new ai_router/dual_surface_verify.py: run_dual_surface drives the PUSH arm (snippet-fed single-shot over the committed diff via providers.call_model under verification.md -- provider-pinned, repo-BLIND) and the PULL arm (pull_route repo-reading agentic tool loop under path-aware-critique.md) over the SAME committed state, with provider + model + framing held EQUAL across arms (a steelman of each surface isolating *surface* as the only variable). S1 scope: returns BOTH arms' RAW verdicts + a recorded equal-arms attestation; NO merge (that is S2). Both arms injectable (run_push/run_pull) so unit tests fake them -- no metered LLM call and no real git at import or in unit tests (20 hermetic tests). VERIFICATION (cross-provider, gpt-5-4, routed_gate -> REQUIRED via blast-radius + breadth=6 files; up-front conventions block per L-064-10): a FOUR-ROUND devil's-advocate loop, each round finding a NEW substantive honesty/correctness defect (not echoes): R1 ISSUES_FOUND x3 -- (a) providerEqual/modelEqual were HARD-CODED True in the attestation (false-confidence; violates 'honest telemetry, never hand-asserted'); (b) pull framing was classified from the RENDERED instruction (build_instruction output), so session-specific interpolation could SPOOF the adversarial markers; (c) committed_ref misstated provenance when head_ref was empty (labeled the worktree diff as a bare ref). All fixed: attestation now DERIVES providerEqual/modelEqual from each arm's ACTUAL reported identity (added _PushRaw.provider/model echo; post-arm UnequalArmsError); pull framing classified from the RAW template; committed_ref now '{base}..{head}' or '{base}..WORKTREE'. R2 -- 3 resolved, 1 NEW: a caller could override pull_template (classified) without pull_instruction (executed) -> drift. Fixed with a pairing guard. R3 (devil's advocate) -- even paired, TWO inputs can diverge (adversarial template + weak instruction). Fixed properly via SINGLE SOURCE OF TRUTH: removed the independent pull_instruction param entirely; the pull arm now has ONE source (pull_template) -- framing classified from prompt_body_of(pull_template) (the UNFILLED body, so interpolation can't spoof) and the executed instruction rendered from that SAME template via build_instruction(set_dir, template_text=pull_template) (new seam + prompt_body_of helper in pull_critique.py). Push was already single-source. R4 VERIFIED. The 4 rounds exceeded the usual 2-retry guideline but each found genuinely new substance and the final design (single source of truth per arm; equality measured not assumed) is materially better; recorded faithfully here per L-065-1 (each round was new substance, not stale echoes). SUITE: full ai_router GREEN 1988 passed / 5 skipped (baseline 1954/5 + ~30 new tests; the 5 skips are the Set 069 S4 real-podman-on-Windows by-design skips). No release this session (the ai_router bump + PyPI publish is S3). Metered spend: verify R1 $0.157 + R2 $0.158 + R3 $0.058 + R4 $0.095 + next-orch analysis $0.0025 = ~$0.471. Session 1 VERIFIED.",
+  "files_changed": [
+    "ai_router/dual_surface_verify.py",
+    "ai_router/prompt-templates/verification.md",
+    "ai_router/start_session.py",
+    "ai_router/pull_critique.py",
+    "ai_router/tests/test_dual_surface_verify.py",
+    "ai_router/tests/test_verification_framing.py",
+    "ai_router/tests/test_start_session.py",
+    "docs/session-sets/070-dual-surface-verification-telemetry/activity-log.json",
+    "docs/session-sets/070-dual-surface-verification-telemetry/session-state.json",
+    "docs/session-sets/070-dual-surface-verification-telemetry/session-events.jsonl",
+    "docs/session-sets/070-dual-surface-verification-telemetry/s1-verification.md",
+    "docs/session-sets/070-dual-surface-verification-telemetry/s1-verification-round-2.md",
+    "docs/session-sets/070-dual-surface-verification-telemetry/s1-verification-round-3.md",
+    "docs/session-sets/070-dual-surface-verification-telemetry/s1-verification-round-4.md",
+    "docs/session-sets/070-dual-surface-verification-telemetry/s1-next-orchestrator.md"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude-code",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "effort": "medium",
+    "reason": {
+      "code": "next-session-recommended",
+      "specifics": "For Session 2 of 3 (provenance merge + fair-shake telemetry + mode wiring). Routed analysis (gemini-pro, s1-next-orchestrator.md) recommends claude/anthropic/sonnet-4-6 at medium effort: S2 is well-specified hermetic Python -- a comparison-artifact schema, a provenance-preserving merge/dedup, a pure-Python validator with L-066-1 parity, the scoring over the Set 069 replacement_gate benchmark, and verificationMode-pattern mode wiring + CLI -- code-generation-of-known-spec work rather than the prompt-driven analysis S1 needed. ORCHESTRATOR CAVEAT (a note, not self-opinion): the headline S2 risk is exactly the L-066-1 pure-Python-validator-drifts-looser trap (the merge dedup + the comparison-artifact validator), so at-least-medium effort is warranted and claude-opus-4-8 is a defensible upgrade if the operator prefers extra rigor on the validator-parity + provenance-preserving-dedup logic; codex/gpt-5.4 gives a non-anthropic perspective. The operator decides."
+    }
+  },
+  "blockers": [],
+  "verification_verdict": "VERIFIED",
+  "lessons_cited": [
+    "L-069-2",
+    "L-066-1",
+    "L-064-10",
+    "L-065-1",
+    "L-064-9",
+    "L-064-3"
+  ]
+}
