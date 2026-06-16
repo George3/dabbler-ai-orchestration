@@ -157,6 +157,69 @@
       "description": "Cross-provider verification (gpt-5-4, gated->REQUIRED). R1 NEEDS_FIX with the CENTRAL SAFETY CLAIM already PASS (model-authored probe can never mint REPRODUCED; caps at HYPOTHESIS) + 4 findings: (1) digest-pin honesty -> runtime NOTE when image not pinned + honest doc/Containerfile; (2) footprint not lane-local -> lane LABEL + label-filtered podman_footprint + image-exists; (3) replay_matched=False misleading text -> branch-correct; (4) no build_probe_argv -B/no-I test -> added. All 4 FIXED. R2 PASS: all resolved, central claim PASS unchanged, no regressions, no new defects. Full suite 1856 passed / 5 skipped. Metered ~/usr/bin/bash.784 (R1 0.424 + R2 0.359). VERIFIED.",
       "status": "done",
       "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 1,
+      "stepKey": "s5-register-read",
+      "dateTime": "2026-06-16T08:08:02.886364-04:00",
+      "description": "Registered S5 start; read proposal (rungs 5-6), spec S5, evidence_protocol.py, contract_gate.py + manifest schema, guidance docs, S4 disposition. Designing the quality-gated ceiling->floor ratchet + measured replacement gate.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 2,
+      "stepKey": "floor-ratchet",
+      "dateTime": "2026-06-16T08:29:01.989334-04:00",
+      "description": "Built ai_router/floor_ratchet.py (candidate-falsifier artifact + admission gate: fails-on-old/passes-on-fixed/drives-public-contract/N-run-flake/owner/human-signoff; never-auto-merge builder always emits pending; rubber-stamp guard rejects approved-but-failing; mandatory coverage check) + docs/candidate-falsifier.schema.json + example. Progress key floor-ratchet.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 3,
+      "stepKey": "replacement-gate",
+      "dateTime": "2026-06-16T08:29:01.989334-04:00",
+      "description": "Built ai_router/replacement_gate.py (pre-registered seeded+holdout benchmark validator; raw scoreboard validator incl gated-surface telemetry; score_benchmark DERIVES recall/precision/replay-success/false-REPRODUCED; underpowered forces meets=False; cadence never retires manual, max backstop) + two schemas + examples. Progress key replacement-gate.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 4,
+      "stepKey": "s5-tests-suite",
+      "dateTime": "2026-06-16T08:29:01.989334-04:00",
+      "description": "Wrote test_floor_ratchet.py + test_replacement_gate.py (82 tests incl schema<->validator parity per L-066-1). Full ai_router suite GREEN 1938 passed / 5 skipped (baseline 1856/5 + 82; 5 skips are S4 real-podman, by design).",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 5,
+      "stepKey": "s5-verify-r1",
+      "dateTime": "2026-06-16T08:36:17.226587-04:00",
+      "description": "Cross-provider verification R1 (gpt-5-4, REQUIRED) FAIL: 6 real findings, all L-066-1 parity / coverage. Fixed: (1) rejected candidate no longer satisfies mandatory coverage; (2) builder two-guardrail-raise contract documented; (3) candidate validator now enforces top-level closed keys + notes type + entrypoint.kind enum + typed optional sub-fields (failsOnOld/passesOnFixed/flakeCheck/humanSignoff); (4) replacement validators enforce top-level closed keys (closes the C.1 smuggled-verdict loophole) + notes + non-negative timing. +15 parity tests. Re-verifying R2.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 6,
+      "stepKey": "s5-verify-r2",
+      "dateTime": "2026-06-16T08:45:05.930692-04:00",
+      "description": "Cross-provider verification R2 (gpt-5-4, max_tier pinned per L-064-7) PASS: all 6 R1 findings resolved (cited file:line), regression check A/B/C/E all PASS, example fixtures still conform, no new defects. ~$0.554 R2 + $0.342 R1. Full suite GREEN 1953/5.",
+      "status": "completed",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 5,
+      "stepNumber": 7,
+      "stepKey": "s5-closeout",
+      "dateTime": "2026-06-16T08:48:00.246704-04:00",
+      "description": "Routed S6 next-session rec (sonnet-4-6, stale name mapped + orchestrator caveat: S6 ships a release, treat effort>=medium). Wrote disposition.json (VERIFIED). Cited L-066-1/L-064-10/L-064-7/L-064-6/L-064-9. Committing + close_session.",
+      "status": "completed",
+      "routedApiCalls": []
     }
   ]
 }

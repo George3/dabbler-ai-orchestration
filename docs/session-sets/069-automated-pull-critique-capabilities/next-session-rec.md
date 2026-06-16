@@ -1,4 +1,6 @@
-*   **Engine**: Claude (anthropic)
-*   **Model Tier**: `claude-3-opus-20240229`
-*   **Effort**: Medium
-*   **Why**: Session 5 is a design-heavy task focused on abstract quality systems (gates, benchmarks), where architectural soundness is paramount and logical errors lead to high-cost rework. Claude Opus is selected for its superior performance in complex reasoning and systems-thinking, which directly mitigates the primary risk of a flawed initial design. This prioritizes minimizing total project cost (dollars + rework) over raw token cost, as a more robust initial architecture from a top-tier reasoning engine will require fewer expensive correction cycles compared to cheaper but less capable alternatives.
+*   **Engine**: `anthropic`
+*   **Model Tier**: `sonnet-4-6` (medium; maps to current Claude 3.5 Sonnet)
+*   **Effort**: `low`
+*   **Why**: Best cost-capability ratio for synthesis-heavy work.
+
+The final session's workload is dominated by documentation, synthesis, and applying existing critique capabilities, not generating novel complex logic. This profile makes a high-throughput, cost-effective model the optimal choice, as it can capably handle the synthesis and code analysis tasks without the expense of a flagship model. Claude Sonnet offers the best performance-per-dollar for this specific task mix, minimizing direct cost and rework risk. The mandatory cross-provider verification provides a quality backstop, making the selection of a more expensive primary engine an unnecessary cost for a session focused on finalization and release.
