@@ -77,6 +77,25 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `docs/replacement-scoreboard.schema.json`; CLI:
   `python -m ai_router.replacement_gate`.
 
+### Fixed (Set 069 S6 dogfood — the new execution-capable producer, run over this
+set's own diff, caught two defects the S5 per-session routed verification missed)
+
+- **Floor-ratchet coverage could be under-enforced by a free-text description
+  match (Major).** `check_floor_ratchet_coverage` matched a candidate to a
+  reproduced finding on the stable `<provider>:<index>` ref **OR** the finding's
+  free-text `description`. Descriptions are not unique (two providers can report
+  the same defect, or two findings can share wording), so one description-keyed
+  candidate could satisfy coverage for several distinct reproduced defects. Removed
+  the description fallback — coverage now matches only the stable ref (which the
+  canonical `build_candidate_from_finding` always records). +regression test.
+- **`falseReproduced` schema prose drifted from the metric (Minor).** The
+  scoreboard schema described `falseReproduced` as "wrongly tagged REPRODUCED
+  without a valid replay", implying it derives from `replayed == false`, but
+  `score_benchmark` (correctly) records it as an **independent** integrity flag — a
+  replay can run yet validate the wrong entrypoint (a meta-oracle failure). Clarified
+  the schema description; the code is unchanged (the independent flag is the
+  correct design).
+
 ## [0.22.1] — 2026-06-16 (post-0.22.0 fixes — Set 068 whole-set critique)
 
 > **Why 0.22.1 exists.** The `v0.22.0` tag was pushed at commit `32874dd`, which

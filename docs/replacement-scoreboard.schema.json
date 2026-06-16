@@ -50,7 +50,7 @@
           "type": "boolean"
         },
         "falseReproduced": {
-          "description": "Was this detection wrongly tagged REPRODUCED without a valid replay (the integrity metric)?",
+          "description": "Integrity flag recorded by the scorer: did this detection carry a REPRODUCED tag that was NOT actually backed by a sound pristine replay (a false REPRODUCED)? Recorded independently of `replayed` -- a replay may have run yet validated the wrong thing (a meta-oracle failure), so this is not derived from `replayed == false`.",
           "type": "boolean"
         }
       }

@@ -784,13 +784,15 @@ def check_floor_ratchet_coverage(
 
     uncovered: List[str] = []
     for ref, finding in repro:
-        # A candidate covers a finding when its findingRef matches the
-        # "<provider>:<index>" ref OR (looser) the finding's own description -
-        # producers may key on either; the ref is the stable identifier.
-        desc = finding.get("description") if isinstance(finding, dict) else None
+        # A candidate covers a finding ONLY when its findingRef matches the
+        # stable "<provider>:<index>" ref. There is deliberately NO free-text
+        # description fallback: descriptions are not unique (two providers can
+        # report the same defect, or two findings can share wording), so a
+        # single description-keyed candidate would satisfy coverage for several
+        # distinct reproduced defects and under-enforce the mandatory rule. The
+        # canonical builder (build_candidate_from_finding) always records the
+        # stable ref, so the strict match is the correct one.
         if ref in covered_refs:
-            continue
-        if _is_nonempty_str(desc) and desc in covered_refs:
             continue
         uncovered.append(ref)
 

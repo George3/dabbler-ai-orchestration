@@ -168,9 +168,23 @@
 - **Release.** `ai_router` bumped **0.22.1 → 0.23.0**; CHANGELOG 0.23.0 entry;
   PyPI publish per the runbook (green-`Test`-on-the-tagged-SHA prerequisite;
   tag's commit verified == the fixed SHA; operator pushes/approves the tag).
-- **Dogfood.** This set ran under `pathAwareCritique: required` (its own gate) +
-  `contractGate: advisory`, plus the now-execution-capable producer over this
-  set's own diff.
+- **Dogfood (the headline).** This set ran under `pathAwareCritique: required`
+  (its own gate), and the **now-execution-capable producer** ran over this set's
+  own diff (default `openai` + `google`; `get_diff` + the probe-template lane + a
+  trusted `run_test` command enabled). Gemini returned VERIFIED; **GPT-5.4 caught
+  one Major + one Minor that the S5 per-session routed verification had missed** —
+  the exact path-aware-dogfood-beats-per-session pattern of Sets 067/068:
+  - **Major** — `check_floor_ratchet_coverage` matched coverage on the finding's
+    free-text `description` as well as the stable ref, so one description-keyed
+    candidate could cover several distinct reproduced defects. Removed the
+    fallback (stable-ref-only match) + regression test.
+  - **Minor** — the scoreboard schema described `falseReproduced` as "without a
+    valid replay", implying derivation from `replayed`; clarified to the
+    independent integrity flag the code already (correctly) records.
+
+  Both fixed pre-release; the patch was routed-re-verified and the full suite
+  stayed green. The dogfood `path-aware-critique.json` is preserved as the record
+  of what the new lanes caught.
 
 ### End-of-set deliverables (all present)
 

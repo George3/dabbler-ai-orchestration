@@ -427,6 +427,20 @@ class TestCoverage:
         cov = fr.check_floor_ratchet_coverage(crit, art)
         assert not cov.ok and "openai:0" in cov.uncovered
 
+    def test_description_keyed_candidate_does_not_cover(self):
+        # Regression (Set 069 S6 dogfood, Major): a candidate keyed on the
+        # finding's free-text DESCRIPTION must NOT satisfy coverage -- only the
+        # stable "<provider>:<index>" ref counts. Descriptions are not unique, so
+        # a description fallback would let one candidate cover several distinct
+        # reproduced defects and under-enforce the mandatory rule.
+        crit = _critique_with_reproduced()
+        desc = crit["critiques"][0]["findings"][0]["description"]
+        art = {"schemaVersion": 1, "sessionSetName": "069-x",
+               "candidates": [_good_candidate(defect={
+                   "findingRef": desc, "description": desc})]}
+        cov = fr.check_floor_ratchet_coverage(crit, art)
+        assert not cov.ok and "openai:0" in cov.uncovered
+
     def test_no_reproduced_defects_is_vacuously_covered(self):
         crit = {"schemaVersion": 1, "sessionSetName": "069-x",
                 "pathAwareCritique": "required",
