@@ -261,6 +261,19 @@ class TestManifestValidator:
         r = cg.validate_contract_manifest(p)
         assert not r.ok and r.code == cg.ARTIFACT_UNREADABLE
 
+    def test_invalid_utf8_is_unreadable_not_a_crash(self, tmp_path):
+        # Invalid UTF-8 raises UnicodeDecodeError (a ValueError, NOT an OSError
+        # or JSONDecodeError); the validators promise never-raising, so it must
+        # come back as ARTIFACT_UNREADABLE, not crash close-out (Set 068 S6
+        # whole-set critique, GPT-5.4, Major).
+        p = tmp_path / "m.json"
+        p.write_bytes(b"\x80\x81not-utf8")
+        r = cg.validate_contract_manifest(p)
+        assert not r.ok and r.code == cg.ARTIFACT_UNREADABLE
+        # the floor-result validator shares _load_json_artifact -> same guard
+        r2 = cg.validate_contract_floor_result(p)
+        assert not r2.ok and r2.code == cg.ARTIFACT_UNREADABLE
+
     def test_not_an_object(self):
         r = cg.validate_contract_manifest([1, 2])
         assert not r.ok and r.code == cg.ARTIFACT_NOT_AN_OBJECT

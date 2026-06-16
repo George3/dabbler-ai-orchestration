@@ -492,7 +492,11 @@ def _load_json_artifact(
         try:
             with path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+            # UnicodeError (invalid UTF-8 bytes) is a ValueError, NOT an OSError
+            # or JSONDecodeError, so it would otherwise escape the validators'
+            # never-raising contract and crash close-out (Set 068 S6 whole-set
+            # critique, GPT-5.4, Major; same class as the S5 activity-log fix).
             return None, ARTIFACT_UNREADABLE, f"could not read artifact JSON: {exc}"
     else:
         data = artifact

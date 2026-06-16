@@ -133,8 +133,11 @@ than disarming the gate in silence.
 ## Relationship to the routed-verification decision
 
 The Set 068 S4 decision **DEMOTE**d per-session routed verification but with a
-**transition guard**: the demotion does not take effect until this contract-test
-gate is "live and stable." S5 builds the gate; **S6** wires the blast-radius
-gating predicate that flips per-session routed to gated and updates the workflow
-doc. Until then per-session routed verification stays mandatory on every Full-tier
-session.
+**transition guard**: the demotion did not take effect until this contract-test
+gate was "live and stable." S5 built the gate; **S6 cleared the guard** — it
+wired the blast-radius gating predicate (`ai_router/routed_gate.py`) that flips
+per-session routed verification from mandatory to **gated** and updated the
+workflow doc. As of S6 the cut-over is **live**: per-session routed verification
+now fires only when the predicate trips on the session diff (see
+[`docs/verification-surface-strategy.md`](verification-surface-strategy.md) and
+`docs/ai-led-session-workflow.md` → *Verification-surface policy*).

@@ -215,6 +215,26 @@ malformed-activity-log robustness fixed via a shared shape-guard). Suite 1641/1.
 Per-session routed verification REQUIRED for S6's own diff (multi-module +
 blast-radius + breadth + build-config); cross-provider verified at close.
 
+### Post-close, pre-release: manual whole-set path-aware critique
+
+After the set's close-out, the operator ran the prepared
+`adversarial-critique-prompt.md` under **GPT-5.4 + Gemini-2.5-Pro**
+(`set-068-critique-{gpt,gemini}.md`) — **before pushing the `v0.22.0` tag**. It
+found **5 real defects** the per-session routed verification AND the automated
+dogfood both missed, all fixed and folded into the unpublished 0.22.0 (no version
+re-bump): (1, Major) `run_test_in_cage` `mkdtemp` ran outside the protected block
+→ a bad `worktrees_parent` raised instead of a raw cage error; (2, Major)
+`contract_gate._load_json_artifact` did not catch `UnicodeError` → invalid-UTF-8
+artifacts crashed the never-raising validators (same class as the S5 activity-log
+fix, different reader); (3, Major) `docs/contract-gate.md` + (4, Minor)
+`router-config.yaml` `contractGate` comment + (5, Minor) `__init__.py` `run_test`
+note still carried stale "mandatory / transition-guard pending" / overstated-
+containment wording (L-065-1 echoes my workflow-doc sweep missed). +2 regression
+tests (the exact repros). This is the path-aware critique earning its keep — the
+whole-set, repository-reading review caught correctness bugs the snippet-context
+surfaces could not. Suite green after the fixes; the `v0.22.0` tag is pushed on
+the post-fix SHA.
+
 ---
 
 ## Set outcome
@@ -223,6 +243,7 @@ A shipped write-caged execution sandbox, an answered cadence question (does not
 hold via B3), a decided-and-**cut-over** DEMOTE for per-session routed
 verification, and a deterministic contract-test gate — completing the
 verification-surface program Set 065 framed and Sets 066–067 began.
-`ai_router` **0.22.0** published; no Marketplace change. Next set recommendation:
+`ai_router` **0.22.0** staged for PyPI (operator pushes tag `v0.22.0` on the
+post-critique-fix green SHA); no Marketplace change. Next set recommendation:
 **Set 069 — instrument the gated verification surface** (telemetry to reopen
 RETIRE), routed in `next-set-rec.md`.

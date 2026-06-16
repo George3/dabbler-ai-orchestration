@@ -190,6 +190,23 @@ class TestRunTestInCage:
         assert res.ran is False
         assert "no run_test command configured" in res.error
 
+    def test_temp_dir_creation_failure_is_error_not_crash(self, git_repo, tmp_path):
+        # A bad worktrees_parent makes tempfile.mkdtemp raise; that setup failure
+        # must come back as a raw error result (contract: a cage that cannot be
+        # created reports an explicit error), not an escaped exception. Nothing
+        # was created, so it is not a leak (worktree_removed=True). (Set 068 S6
+        # whole-set critique, GPT-5.4, Major.)
+        missing = tmp_path / "does-not-exist" / "nested"
+        res = rts.run_test_in_cage(
+            git_repo, "HEAD", [sys.executable, "-c", "pass"],
+            worktrees_parent=missing,
+        )
+        assert res.ran is False
+        assert res.worktree_created is False
+        assert res.worktree_removed is True
+        assert res.error and "temp-dir creation failed" in res.error
+        assert _registered_worktrees(git_repo) == 0
+
     def test_render_is_raw_ascii(self, git_repo):
         res = rts.run_test_in_cage(
             git_repo, "HEAD", [sys.executable, "-c", "print('hello-cage')"]

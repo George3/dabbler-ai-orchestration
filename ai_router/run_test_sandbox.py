@@ -415,7 +415,20 @@ def run_test_in_cage(
             error=f"not a git repository: {repo_root}",
         )
 
-    parent = Path(tempfile.mkdtemp(prefix="run-test-cage-", dir=worktrees_parent))
+    # Temp-dir creation is itself a cage-setup step: if it fails (e.g. a bad
+    # worktrees_parent), convert it to a raw error result like the other setup
+    # failures above, rather than letting the exception escape the contract
+    # (Set 068 S6 whole-set critique, GPT-5.4, Major). Nothing was created yet,
+    # so there is nothing to tear down -> worktree_removed=True (no leak).
+    try:
+        parent = Path(tempfile.mkdtemp(prefix="run-test-cage-", dir=worktrees_parent))
+    except OSError as exc:
+        return RunTestResult(
+            ran=False, exit_code=None, output="", timed_out=False,
+            wall_seconds=0.0, command=cmd, worktree_created=False,
+            worktree_removed=True,
+            error=f"run_test cage temp-dir creation failed: {exc}",
+        )
     cage = parent / "wt"
     created = False
     base: RunTestResult

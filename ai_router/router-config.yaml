@@ -722,8 +722,9 @@ pull_verifier:
 # (contract-manifest.json) and produced via `python -m ai_router.contract_gate
 # run`; the floor's execution bounds are the pull_verifier.run_test.caps block
 # above (the gate's producer drives the same cage). This gate is the replacement
-# floor the Set 068 S4 routed-demotion transition guard waits on; S6 wires the
-# blast-radius gating predicate that flips per-session routed to gated. Doc:
+# floor the Set 068 S4 routed-demotion transition guard waited on; S6 wired the
+# blast-radius gating predicate (routed_gate.py) that flipped per-session routed
+# verification to gated (cut-over now LIVE -- see the verification: anchor). Doc:
 # docs/contract-gate.md; design:
 # docs/session-sets/068-cadence-study-and-contract-gate/contract-gate-design.md.
 

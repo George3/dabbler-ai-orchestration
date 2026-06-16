@@ -66,6 +66,29 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   is bounded by a hard subprocess timeout (raw `ERROR:` returned, parent never
   hangs) rather than relying on the heuristic as the sole defense.
 
+### Fixed (pre-release, caught by the Set 068 whole-set path-aware critique)
+
+The operator's manual whole-set critique (GPT-5.4 + Gemini-2.5-Pro) of the
+0.22.0 candidate found defects the per-session routed verification and the
+automated dogfood both missed; all fixed before the tag was pushed:
+
+- **`run_test` temp-dir creation could escape the cage contract (Major).**
+  `run_test_in_cage` created the temp parent with `tempfile.mkdtemp` *before* the
+  protected `try`/`finally`, so a failing `worktrees_parent` raised instead of
+  returning the contracted raw `error` result. Moved under a guard that converts
+  the setup failure into `RunTestResult(error=…)` (`run_test_sandbox.py`).
+- **Contract-gate validators could raise on invalid UTF-8 (Major).**
+  `_load_json_artifact` caught only `OSError` / `json.JSONDecodeError`, so a
+  non-UTF-8 `contract-manifest.json` / `contract-floor-result.json` raised
+  `UnicodeDecodeError` through validators that promise never-raising — crashing
+  close-out instead of yielding the documented unreadable path. Now also catches
+  `UnicodeError` (`contract_gate.py`; same class as the S5 activity-log fix).
+- **Stale cut-over echoes (Major/Minor).** `docs/contract-gate.md`, the
+  `router-config.yaml` `contractGate` comment, and the `__init__.py` `run_test`
+  export note still described the demotion as pending / overstated the cage's
+  containment; updated to the live gated policy and the bounded (not-an-OS-sandbox)
+  guarantee.
+
 ### Docs
 
 - New canonical `docs/verification-surface-strategy.md` synthesis (supersedes the

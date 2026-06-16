@@ -949,8 +949,13 @@ from .pull_critique import (
 # Set 068 S1: the disposable-worktree run_test execution cage (the first
 # write-capable but caged adapter tool) + the relocated grep ReDoS isolation.
 # run_test runs a bounded, operator-configured command in a disposable, detached
-# git worktree with crash-safe teardown and returns the RAW exit code + output;
-# the real tree is never mutated. See run_test_sandbox.py and
+# git worktree with crash-safe teardown and returns the RAW exit code + output.
+# This is disposable-CWD isolation of a TRUSTED command -- ordinary
+# working-directory writes land in the throwaway worktree -- NOT an OS sandbox:
+# a command that deliberately writes an absolute path, follows a committed
+# symlink, discovers the main worktree, or spawns a detached child can still
+# reach the real filesystem (run-test-contract.md, "Scope of the isolation").
+# See run_test_sandbox.py and
 # docs/session-sets/068-cadence-study-and-contract-gate/run-test-contract.md.
 from .pull_verifier import RunTestConfig
 from .run_test_sandbox import (
