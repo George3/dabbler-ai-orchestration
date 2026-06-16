@@ -125,6 +125,11 @@ falsifiers.
   never orchestration; token cost is bounded by construction, runtime by caps.
 - **Flake-aware integrity.** Any "re-run and void on mismatch" uses an N-run
   majority before it can fire (no false accusations of honest critics).
+- **No growing disk footprint (operator requirement).** The Podman lane must not
+  accumulate images/containers/volumes (the Docker bloat failure mode): `--rm`
+  containers, **tmpfs** scratch, one **digest-pinned reused** image (never rebuilt
+  per probe), and a prune step after any intentional image bump. The spike
+  confirmed 0 leftover containers/volumes; S4 keeps it that way and tests it.
 - **Pre-registered, honest benchmarks** for the replacement gate (effect-size
   clarity; state when n is too small to resolve).
 
@@ -206,7 +211,13 @@ find novel-but-local edge cases without authoring code; session **VERIFIED**.
    only** (may reject/escalate, never approve); evidence flows through the S1
    protocol (drive a real entrypoint; replay).
 3. Tests (cage mechanics against a trivial probe; the metered model loop is not in
-   unit). Add a `--network=none` / read-only / teardown regression.
+   unit). Add a `--network=none` / read-only / teardown regression **and a
+   disk-footprint regression** (run N probes, assert 0 leftover containers + 0
+   volumes + image count == the pinned set). Carry the spike's three findings:
+   enable **cgroup v2 + delegation** to restore `--memory`/`--pids-limit`/`--cpus`
+   (rootless cgroups-v1 ignores them); tune the timeout/teardown path (~10s in
+   rootless WSL); separate probe output from podman runtime warnings in the
+   transcript.
 4. Cross-provider verification; `disposition.json`; commit + push; `close_session`.
 
 **Ends with:** model-authored probes run autonomously *inside Podman* (green spike)

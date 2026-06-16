@@ -138,6 +138,17 @@ lean version. **Windows reality:** Podman runs via a WSL2-backed `podman machine
   `template_id` + typed args) and one tool call; it never authors `podman` flags
   or orchestration. **Token cost is low by construction; runtime cost is capped
   separately.**
+- **Disk hygiene is a hard requirement (operator concern — the Docker
+  image/container-bloat failure mode).** The cage must leave **no growing
+  footprint**: every container runs `--rm` (auto-removed — the spike confirmed 0
+  leftover even on a timed-out probe); scratch is **tmpfs** (RAM-backed, no named
+  volumes, nothing on disk); the base image is **built/pulled once, digest-pinned,
+  and reused** across all probes — **never rebuilt per probe** (per-build layer
+  churn is the usual Docker bloat). An intentional image bump (rare, operator-
+  driven) is followed by a **prune** of the now-dangling layers + build cache
+  (`podman image prune` / `podman system prune` — never `-a` in a shared env
+  without knowing the image set). The harness asserts the footprint stays bounded
+  (post-run: 0 containers, 0 volumes; image count == the pinned set).
 
 ### 3.3 The execution ladder (what the verifier may do beyond existing tests)
 - **(a) Propose tests/changes via a markdown file** — cheapest, zero execution
