@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "068-cadence-study-and-contract-gate",
-  "status": "in-progress",
+  "status": "complete",
   "sessions": [
     {
       "number": 1,
@@ -76,16 +76,16 @@
     {
       "number": 6,
       "title": "Synthesis + docs + release + dogfood + close",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-16T00:24:40.288265-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-16T01:13:11.414314-04:00",
       "orchestrator": {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-opus-4-8",
         "effort": "high"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     }
   ]
 }
