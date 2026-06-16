@@ -26,7 +26,7 @@
     "model": "claude-sonnet-4-6",
     "effort": "medium",
     "reason": {
-      "code": "next-session-recommended",
+      "code": "switch-due-to-cost",
       "specifics": "For Session 2 of 3 (provenance merge + fair-shake telemetry + mode wiring). Routed analysis (gemini-pro, s1-next-orchestrator.md) recommends claude/anthropic/sonnet-4-6 at medium effort: S2 is well-specified hermetic Python -- a comparison-artifact schema, a provenance-preserving merge/dedup, a pure-Python validator with L-066-1 parity, the scoring over the Set 069 replacement_gate benchmark, and verificationMode-pattern mode wiring + CLI -- code-generation-of-known-spec work rather than the prompt-driven analysis S1 needed. ORCHESTRATOR CAVEAT (a note, not self-opinion): the headline S2 risk is exactly the L-066-1 pure-Python-validator-drifts-looser trap (the merge dedup + the comparison-artifact validator), so at-least-medium effort is warranted and claude-opus-4-8 is a defensible upgrade if the operator prefers extra rigor on the validator-parity + provenance-preserving-dedup logic; codex/gpt-5.4 gives a non-anthropic perspective. The operator decides."
     }
   },
