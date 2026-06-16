@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "069-automated-pull-critique-capabilities",
+  "status": "not-started",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Execution-evidence protocol + evidence-tiered findings",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "Trusted-command execution + diff-awareness + deeper probing",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "The probe-template lane (the missing middle)",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 4,
+      "title": "Podman model-authored-probe lane (GATED on a green spike)",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 5,
+      "title": "Ceiling -> floor ratchet + measured replacement gate",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 6,
+      "title": "Synthesis + docs + release + dogfood + close",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}
