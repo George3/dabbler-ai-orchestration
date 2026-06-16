@@ -319,6 +319,36 @@ last-pruned-set: (none)   generated: 2026-06-16
   practical, ship a probe template that drives the class so it cannot silently
   re-open.
 
+## Measure A Verification Surface At Its Strongest Framing Before Demoting Or Retiring It
+<!-- lesson: id="L-069-2" added-set="069" last-used-set="069" status="active" scope="portable" -->
+
+- **Context:** Comparing two verification surfaces (e.g. snippet-fed *push* /
+  routed vs. repository-reading *pull* / path-aware) to decide whether one earns
+  its keep — the Set 065→068 keep/demote/retire program, and the forward telemetry
+  the Set 069 `070` pilot will gather.
+- **Failure or friction:** *Framing strength* (the adversarial intensity of the
+  reviewer prompt) is a real, cheap, prompt-only lever that is **orthogonal** to
+  the surface and to provider count, and it is easy to leave uncontrolled. The
+  production per-session push template (`verification.md`) ships *"evaluate
+  objectively"* (**weak**); Experiment A held both arms at *"find every defect"*
+  (**moderate**, constant — so its context-access conclusion is sound); the pull
+  template (`path-aware-critique.md`) is *"devil's advocate, assume flawed, prove
+  it"* (**strong**). The DEMOTE evidence therefore tested push at *moderate* and
+  deploys it at *weak* — **never at strong** — while comparing it against
+  adversarially-framed pull. Operator field experience is that the strong framing
+  consistently lifts push's catch rate. A demote/retire decided on that asymmetry
+  risks retiring a surface measured in a hobbled form ("throwing out the baby").
+- **Lesson:** Before demoting or retiring any verification surface, run it at its
+  **strongest adversarial framing**, and in any A/B make framing a **controlled,
+  equal** variable across arms (a "steelman" of each surface). "Second provider
+  buys nothing" (provider *count*) does **not** cover framing — they are separate
+  axes. The clean instrument is a **dual-surface comparison with provenance**
+  (which surface uniquely caught which high-severity defect), both arms adversarial.
+- **Action for future sessions:** (1) Upgrade `verification.md` to the
+  devil's-advocate framing pull uses. (2) In the `070` telemetry, run push at the
+  strong framing and record push-unique vs pull-unique catches. (3) Never cite a
+  push-vs-pull result whose arms used unequal framing as evidence for retiring push.
+
 ---
 
 ## Repo-Specific Lessons

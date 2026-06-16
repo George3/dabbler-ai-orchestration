@@ -217,6 +217,41 @@ missed a cross-file Critical) — which is itself an argument for the multi-prov
 (≥2) requirement on the ceiling and for keeping the gated routed layer rather than
 retiring it.
 
+### 5.1 Before RETIRE: push must be measured at its adversarial best (operator directive, 2026-06-16)
+
+A precondition on any future RETIRE decision: **the push (routed, snippet-fed)
+layer must be evaluated in its strongest form — adversarial "devil's-advocate"
+framing — not the form it ships in today.** Three framings exist at different
+strengths, and they are *not* equivalent: the production per-session push template
+(`ai_router/prompt-templates/verification.md`) says *"evaluate objectively"*
+(**weak**); Experiment A held both arms at *"meticulous, find every defect"*
+(**moderate**, and constant across the contrast — so the context-access conclusion
+is sound); the production pull template (`path-aware-critique.md`) says *"be a
+genuine devil's advocate: assume the work is flawed and try to prove it"*
+(**strong**). Operator field experience is that the strong framing **consistently
+lifts push's catch rate** — a cheap, prompt-only lever **orthogonal** to the
+"second provider buys nothing" finding (that finding is about provider *count*, not
+framing). Consequences, all forward commitments:
+
+1. **Adversarial framing is the floor for push.** `verification.md` should be
+   upgraded to the devil's-advocate framing pull already uses (a small `ai_router`
+   change; own release-bearing pass).
+2. **Steelman-push is a required control.** Any push-vs-pull comparison that feeds
+   a RETIRE decision must run push at the strong framing — comparing
+   adversarial-pull against objective-push is confounded and would retire push on a
+   hobbled measurement. The DEMOTE evidence tested push at *moderate* and deploys it
+   at *weak*; it has **never** been measured at *strong*.
+3. **The instrument is a dual-surface ("overdetermined") verification mode**
+   (proposed): at end of a sampled or opted-in session, run **both** push and pull
+   (both adversarial) over the same committed state, merge findings **with
+   provenance** (push-only / pull-only / both), and record the disjoint sets — that
+   push-unique-vs-pull-unique high-severity tally is exactly the telemetry the
+   RETIRE criterion above needs. Random sampling gives unbiased telemetry;
+   operator/orchestrator opt-in gives a high-assurance mode for complex
+   modernization work. This is the forward A/B the §2 evidence always pointed to;
+   it is the natural mechanism for the `070-pilot-harvester-telemetry` set to
+   collect the data, and may graduate into a standing `verificationMode` option.
+
 ---
 
 ## 6. Set 069 — the execution-backed evidence layer
