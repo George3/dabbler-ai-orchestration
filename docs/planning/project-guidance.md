@@ -85,6 +85,26 @@ validated — consider it, apply judgment).
   `encoding="utf-8"`. Promoted from `lessons-learned.md` on
   2026-05-01 after consistent application across five+ CLI surfaces.
 
+- **A pure-Python validator that mirrors a JSON Schema must hold parity in
+  both directions.** When a runtime validator enforces the same contract as a
+  JSON Schema (so the runtime path avoids a `jsonschema` dependency), the two
+  drift apart silently unless every schema-constrained field is checked on
+  **both** sides. Rules: (1) check the **optional** fields the schema constrains,
+  not just the required ones; (2) add an explicit `isinstance` guard wherever
+  JSON Schema's `"type"` is stricter than Python's `in`/`==` — especially
+  `isinstance(x, int) and not isinstance(x, bool)` for integer fields
+  (`1.0 == 1 == True` in Python); (3) when a cross-field or cross-array invariant
+  is **expressible** in JSON Schema (`if`/`then`, `not`/`contains`, `uniqueItems`),
+  encode it in the schema too — do not assume "the schema can't express it" without
+  checking, or a schema-only consumer accepts artifacts the runtime rejects; (4)
+  "all tests green" does not prove parity — **dogfood the gate by arming the
+  shipping set under its own policy**, since a multi-provider path-aware critique of
+  the set's own changes repeatedly catches parity gaps the per-session routed
+  verification misses. Promoted from `lessons-learned.md` (L-066-1) on 2026-06-16
+  after instrumental application across Sets 066, 069, and 070 (Set 070's dogfood
+  alone caught a duplicate-`surfaces` gap and two `provenanceComplete` schema↔validator
+  parity gaps).
+
 > **TODO:** Add additional code style conventions (naming, formatting,
 > nullable, async suffix, file layout, etc.).
 

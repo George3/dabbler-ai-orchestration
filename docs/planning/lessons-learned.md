@@ -272,7 +272,14 @@ last-pruned-set: (none)   generated: 2026-06-16
   round.
 
 ## A Pure-Python Validator Mirroring A JSON Schema Drifts Looser — Type-Check Optional Fields And Guard Numeric Equivalence
-<!-- lesson: id="L-066-1" added-set="066" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-066-1" added-set="066" last-used-set="070" status="promoted" scope="portable" -->
+
+- **Promoted to `project-guidance.md` → Conventions → Code Style on 2026-06-16**
+  after instrumental application across Sets 066, 069, and 070. The detailed
+  failure-mode record is retained below for reference; the durable rule (incl. the
+  Set 070 addition that *cross-field/cross-array invariants which JSON Schema CAN
+  express must be encoded in the schema too*, and that dogfooding the gate under its
+  own policy is what surfaces parity gaps) now lives in the Convention.
 
 - **Context:** Any runtime validator written in plain Python to enforce the
   same contract as a JSON Schema (so the runtime path avoids a `jsonschema`
@@ -360,6 +367,37 @@ last-pruned-set: (none)   generated: 2026-06-16
   devil's-advocate framing pull uses. (2) In the `070` telemetry, run push at the
   strong framing and record push-unique vs pull-unique catches. (3) Never cite a
   push-vs-pull result whose arms used unequal framing as evidence for retiring push.
+
+## An Iterative Dogfood Keeps Its Own Gate Artifact "Pre-Fix" — Frame It As Evidence, Not A Clean Snapshot
+<!-- lesson: id="L-070-1" added-set="070" last-used-set="070" status="active" scope="portable" -->
+
+- **Context:** A set whose close-out runs an **iterative** multi-provider dogfood
+  (e.g. the end-of-set path-aware critique) that *keeps finding real defects* round
+  after round — each fix driving the next round (Set 070 S3: the path-aware critique
+  caught five real defects across four rounds that six rounds of single-shot
+  cross-provider verification's R1 had missed).
+- **Failure or friction:** Every time the dogfood drives a fix, the committed gate
+  artifact it produced now **predates** that fix, so a reviewer (correctly) flags it
+  as "stale / not the final tree." Chasing a clean post-fix re-run is a treadmill:
+  the next run finds the next thing, re-staling the artifact. Set 070 S3 burned ~3
+  extra verification rounds (R2/R3 each re-flagged the staleness) before recognizing
+  the pattern.
+- **Lesson:** A `required` path-aware-critique gate needs a **valid multi-provider
+  artifact**, not a clean-verdict one that post-dates every fix. Frame the iterative
+  dogfood honestly as **evidence** — preserve the round that caught the headline
+  defect, commit the **final round as the gate artifact**, and **adjudicate every
+  finding in the disposition** (fixed / false-positive / deferred-residual). The
+  authoritative per-session **VERIFIED** gate is the **cross-provider session
+  verification**, which is a *different* surface and need not post-date the
+  path-aware fixes. Converge the dogfood when a round drives **no new code change**
+  (only characterizations / false-positives / by-design), not when it finally
+  returns a clean verdict.
+- **Action for future sessions:** When an end-of-set dogfood enters a fix→re-run
+  loop, stop re-running it for a pristine snapshot. Keep the final run as the gate
+  artifact, record the lineage + per-finding adjudication in `disposition.json`, and
+  rely on the cross-provider verification rounds for the authoritative verdict. Only
+  a *new code defect* (not a doc-lag or an already-adjudicated item) justifies
+  another dogfood round.
 
 ---
 
