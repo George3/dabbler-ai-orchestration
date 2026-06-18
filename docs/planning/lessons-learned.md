@@ -207,7 +207,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   code before routing verification.
 
 ## `git diff`-Based Verification Evidence Omits Untracked Files
-<!-- lesson: id="L-064-9" added-set="063" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-064-9" added-set="063" last-used-set="071" status="active" scope="portable" -->
 
 - **Context:** Building a cross-provider verification prompt whose
   evidence bundle includes `git diff` / `git diff --stat` output
@@ -224,7 +224,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   alongside the diff so additions are visible.
 
 ## State The Suite Baseline And Release Contract Up Front In Verification Round 1
-<!-- lesson: id="L-064-10" added-set="062" last-used-set="070" status="promoted" scope="portable" -->
+<!-- lesson: id="L-064-10" added-set="062" last-used-set="071" status="promoted" scope="portable" -->
 
 - **Promoted.** This lesson now lives at `project-guidance.md` →
   Conventions → Workflow Expectations: *"Open every session-verification
@@ -248,7 +248,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   the same rule.
 
 ## Propagate A Consistency Fix To Every Echo Before Re-Verifying
-<!-- lesson: id="L-065-1" added-set="065" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-065-1" added-set="065" last-used-set="071" status="active" scope="portable" -->
 
 - **Context:** Cross-provider verification of a heavily cross-referenced
   synthesis document — a proposal, design doc, or spec whose central
@@ -339,7 +339,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   re-open.
 
 ## Measure A Verification Surface At Its Strongest Framing Before Demoting Or Retiring It
-<!-- lesson: id="L-069-2" added-set="069" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-069-2" added-set="069" last-used-set="071" status="active" scope="portable" -->
 
 - **Context:** Comparing two verification surfaces (e.g. snippet-fed *push* /
   routed vs. repository-reading *pull* / path-aware) to decide whether one earns
@@ -369,7 +369,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   push-vs-pull result whose arms used unequal framing as evidence for retiring push.
 
 ## An Iterative Dogfood Keeps Its Own Gate Artifact "Pre-Fix" — Frame It As Evidence, Not A Clean Snapshot
-<!-- lesson: id="L-070-1" added-set="070" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-070-1" added-set="070" last-used-set="071" status="active" scope="portable" -->
 
 - **Context:** A set whose close-out runs an **iterative** multi-provider dogfood
   (e.g. the end-of-set path-aware critique) that *keeps finding real defects* round
