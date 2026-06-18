@@ -1556,6 +1556,60 @@ log a `Major` issue and proceed to commit). Do not skip commit just
 because verification is provider-broken — the work is preserved in
 git for human review and the next session can re-attempt.
 
+#### Materiality and the re-verify loop discipline (Set 071)
+
+The verifier runs at its **strongest adversarial framing** (devil's advocate,
+assume the work is flawed — the Set 070 steelman-push framing the reviewer
+templates carry, never to be weakened: **L-069-2**). Strong framing without a
+materiality bar manufactures **Minor / false-positive** findings and the
+re-verify loop then **churns rounds on them** (the canonical case: three rounds
+spent on `pytest` vs `python -m pytest -v`, a distinction with no behavioural
+difference). Set 071 adds a materiality bar to the templates (the "so what?"
+gate) **and** the loop discipline below, so the loop keeps its real-defect
+ceiling without spinning on nits. This discipline governs the re-verify loop on
+**both** tiers — the routed `api` path (Step 7's *"Re-run verification (max 2
+retries)"*) and the Lightweight Mode-B verify→remediate loop (its bounded-round
+item points here).
+
+1. **Blocking is severity-anchored — and is NOT the bare verdict token.** Decide
+   whether a verification result opens / continues a remediation round with
+   `ai_router.verification.is_blocking_verdict(verdict, issues)` (or
+   `classify_blocking(...)` for the blocking-vs-nit split + a log reason), **not**
+   by switching on the `VERIFIED` / `ISSUES_FOUND` token alone. A round is
+   justified **only** by **≥1 Critical or Major** finding. A **Minor-only /
+   nits-only** result is **effectively VERIFIED for the loop**: it is recorded
+   (raw output in `sN-verification*.md`; nits noted) but opens **no** remediation
+   round. The binary verdict grammar is preserved (no third token — Set 071
+   operator decision, cross-provider-confirmed); blocking-ness is a derived,
+   first-class predicate instead. The predicate is **surface-agnostic** — it
+   consumes severity-bearing findings from either surface (the push surface via
+   `parse_verification_response`, the path-aware pull surface via
+   `pull_verifier.Finding`, which carries its own structured `severity`), so the
+   same blocking decision governs both reviewer surfaces.
+2. **Anti-laundering — when in doubt, escalate.** An `ISSUES_FOUND` result whose
+   findings have **unknown / missing severity**, or that parsed to **no** findings,
+   is treated as **blocking** by `is_blocking_verdict`. Materiality lowers the
+   noise floor; it must never launder a real Major into an ignored Minor. The
+   merge-impact anchor in the templates (Major = *would change a reasonable
+   reviewer's merge decision*) plus the plausible-path-to-harm escalation are what
+   keep the demotion honest.
+3. **A round continues only on new or unresolved Critical/Major** — tracked by a
+   **cross-round issue ledger**. Each blocking finding is given a stable
+   `issueId`; each round, `reconcile_issue_ledger(prior_status, current_blocker_ids)`
+   marks prior blockers `RESOLVED` (absent now) or `UNRESOLVED` (still present) and
+   flags any **resurrection** — an id that was `RESOLVED` and reappears. **A
+   settled point is never re-opened under fresh wording:** the orchestrator gives a
+   rephrased-but-same point the **same** ledger id (so it is recognised as settled
+   and the resurrection is refused), while a genuinely new finding gets a new id
+   and faces the materiality gate on its own merits. The keying is on the stable
+   id, not free text, so the no-reopen rule is deterministic; recognising that two
+   differently-worded findings are the *same* point is the orchestrator's judgment.
+4. **The bounded-round bound is unchanged; this only narrows what counts as a
+   round-justifying finding.** The existing **1–2 automatic / 3+ human** rule still
+   holds (and a human-stop disposition or an unfixed Critical/Major still stops to
+   a human). Set 071 does not add rounds — it removes the *Minor-only* and
+   *resurrected-nit* rounds that should never have opened.
+
 #### Lightweight tier — verification (per-set; two modes)
 
 When the set's spec.md declares `tier: "lightweight"` (Set 048 §3.6),
@@ -1833,6 +1887,10 @@ typed session is:
    a **Critical/Major finding is not fixed**, the workflow stops to a
    human (`awaiting-human`) rather than spinning further. The bounded loop
    guarantees the work never silently stops *and* never loops forever.
+   **A Minor-only / nits-only verification round is non-blocking** — it does
+   not count as a round-justifying result and opens no remediation round (see
+   *Materiality and the re-verify loop discipline* under Step 6; this narrows
+   what counts as a round, it does not change the 1–2/3+ bound).
 
 7. **Tie-breaker — operator-initiated second opinion (Set 057 L4).** From
    `awaiting-human`, the operator (and only the operator) may invoke the
@@ -1968,7 +2026,15 @@ per-session one.
 
 **VERIFIED:** Proceed to commit.
 
-**ISSUES_FOUND:**
+**ISSUES_FOUND — but check blocking-ness first (Set 071).** An `ISSUES_FOUND`
+token does not by itself justify a remediation round. Run
+`is_blocking_verdict(verdict, issues)` (see *Materiality and the re-verify loop
+discipline* under Step 6): if the only findings are **Minor / nits**, the result
+is **effectively VERIFIED** — record the nits, proceed to commit, and open **no**
+remediation round. Only a **Critical/Major** (or unknown-severity) finding makes
+the branch below apply.
+
+**ISSUES_FOUND (blocking):**
 1. Parse issues from the verifier's response.
 2. Fix each issue. Update status to "fixed" or "deferred".
 3. Record the findings and what happened to them in the current
@@ -1983,8 +2049,11 @@ per-session one.
   prose in `sN-verification*.md` and `sN-close-reason.md` remains the
   canonical record. There is no required `issue-logs/` directory in the
   current workflow.
-4. Re-run verification (max 2 retries). Use `complexity_hint=85` if any
-   issue is Major or Critical.
+4. Re-run verification (max 2 retries) — **only when the round is blocking**
+   (≥1 Critical/Major; a Minor-only round is not re-run). Track each blocking
+   finding in the cross-round issue ledger so a settled point is not resurrected
+   under fresh wording (see *Materiality and the re-verify loop discipline* under
+   Step 6). Use `complexity_hint=85` if any issue is Major or Critical.
 
 #### Disagreement With A Verifier Finding
 

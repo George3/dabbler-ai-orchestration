@@ -129,7 +129,10 @@ from .notifications import (
 )
 from .verification import (
     pick_verifier_model, build_verification_prompt,
-    parse_verification_response, VerifierSelection,
+    parse_verification_response, parse_nits, VerifierSelection,
+    is_blocking_verdict, classify_blocking, BlockingClassification,
+    reconcile_issue_ledger, LedgerReconciliation,
+    LEDGER_RESOLVED, LEDGER_UNRESOLVED,
 )
 from .close_out import (
     CLOSE_OUT_RESULTS,
@@ -191,6 +194,16 @@ class VerificationResult:
     verifier_output_tokens: int
     verifier_cost_usd: float
     raw_response: str          # full verifier response text
+    # Set 071 (S2): the severity-derived re-verify decision + the non-blocking
+    # nits, surfaced at the one programmatic verification site so the re-verify
+    # loop reads them directly instead of switching on the bare verdict token.
+    # ``blocking`` is is_blocking_verdict(verdict, issues): a round reopens only
+    # when True (>=1 Critical/Major, or unknown-severity in a non-VERIFIED
+    # result); a Minor-only / nits-only round is non-blocking ("effectively
+    # VERIFIED for the loop"). ``nits`` is the read-only NITS list (never
+    # blocking). Defaulted so existing constructors stay backward-compatible.
+    blocking: bool = False
+    nits: list = field(default_factory=list)
 
 
 @dataclass
@@ -756,6 +769,10 @@ def _run_verification(
         )
 
         verdict, issues = parse_verification_response(v_result.content)
+        # Set 071 (S2): derive the re-verify decision from the parsed findings
+        # (severity-anchored, not the bare token) and read the non-blocking nits.
+        blocking = is_blocking_verdict(verdict, issues)
+        nits = parse_nits(v_result.content)
 
         # Record verifier-call metrics (best-effort). Mark the record
         # as a fallback if we got here via the second attempt.
@@ -798,6 +815,8 @@ def _run_verification(
             verifier_output_tokens=v_result.output_tokens,
             verifier_cost_usd=v_cost,
             raw_response=v_result.content,
+            blocking=blocking,
+            nits=nits,
         )
 
     # Unreachable: the loop either returns or raises on every path.

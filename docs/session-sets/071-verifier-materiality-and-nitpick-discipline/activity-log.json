@@ -1,7 +1,7 @@
 {
   "sessionSetName": "071-verifier-materiality-and-nitpick-discipline",
   "createdDate": "2026-06-18T13:15:19.392190+00:00",
-  "totalSessions": 0,
+  "totalSessions": 3,
   "entries": [
     {
       "sessionNumber": 1,
@@ -76,6 +76,69 @@
       "stepKey": "session-001/s1-verified",
       "dateTime": "2026-06-18T10:21:38.952523-04:00",
       "description": "Wrote disposition.json (VERIFIED, status completed). Routed S2 next-orchestrator rec = claude/sonnet-4-6/medium. Saved 11 raw verification rounds + harness. Progress keys: materiality-push-template, materiality-pull-template, framing-pins-green, s1-verified all met.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 1,
+      "stepKey": "session-002/read-required",
+      "dateTime": "2026-06-18T11:05:54.774990-04:00",
+      "description": "Read spec S2, project-guidance, lessons (L-069-2/L-065-1/L-070-1/L-066-1), S1 deliverables (verification.md, path-aware-critique.md), verification.py (build_verification_prompt/parse_verification_response), test_verification_framing.py, ai-led-session-workflow.md Step 6 + Mode B disposition enum, dual_surface_verify.classify_framing_strength.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 2,
+      "stepKey": "session-002/grammar-consult",
+      "dateTime": "2026-06-18T11:05:54.774990-04:00",
+      "description": "Operator-requested cross-provider consult on binary-vs-three-state verdict grammar (decision-time consensus). Routed brief to gpt-5-4 + gemini-pro independently, then synthesized via fresh opus. UNANIMOUS = BINARY (matches spec default + operator lean). Refinement adopted: make is_blocking_verdict a first-class, fully-tested, DOCUMENTED contract artifact; doc note that bare VERIFIED token is insufficient to infer non-blocking. Raw: s2-grammar-consult-{gpt,gemini,claude-synthesis}.md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 3,
+      "stepKey": "session-002/blocking-classifier",
+      "dateTime": "2026-06-18T11:15:11.894766-04:00",
+      "description": "Added severity-anchored blocking logic to verification.py: is_blocking_verdict(verdict,issues) (>=1 Critical/Major OR unknown-severity in non-VERIFIED -> blocking; Minor-only/nits-only -> non-blocking; ISSUES_FOUND-no-issues -> blocking, anti-laundering) + classify_blocking (BlockingClassification split+reason) + reconcile_issue_ledger/LedgerReconciliation (stable-id RESOLVED/UNRESOLVED + resurrection flag). Exported via __init__. CONTRACT NOTE documented: bare verdict token insufficient, callers MUST consult predicate (binary grammar preserved, blocking-ness first-class). Also fixed a real load-bearing parse_verification_response bug: ISSUES-FOUND header self-match (spurious severity-less finding) + severity regex could not read \"**Severity:** Minor\" (colon-before-asterisks) -> Minor read as unknown -> blocking = the churn this set kills. parse_verification_response (verdict,issues) contract preserved.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 4,
+      "stepKey": "session-002/loop-discipline-doc",
+      "dateTime": "2026-06-18T11:15:11.902619-04:00",
+      "description": "Encoded re-verify loop discipline in ai-led-session-workflow.md: new Step-6 subsection \"Materiality and the re-verify loop discipline (Set 071)\" (severity-anchored blocking via is_blocking_verdict not bare token; Minor-only=effectively VERIFIED opens no round; anti-laundering; cross-round issue ledger no-resurrection-under-new-wording; 1-2/3+ bound unchanged, only narrows round-justifying findings; cites L-069-2). Wired Step-7 ISSUES_FOUND branch + max-2-retries item + Mode-B bounded-round item to it (L-065-1: all echoes in one pass).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 5,
+      "stepKey": "session-002/churn-regression-fixture",
+      "dateTime": "2026-06-18T11:15:11.902619-04:00",
+      "description": "tests/test_blocking_classifier.py (new): is_blocking_verdict matrix (VERIFIED/Critical/Major/Minor-only/mixed/unknown/empty/case-insensitive), classify_blocking partition, the VERBATIM pytest-vs-python-m-pytest-v churn (3 rounds r2/r3/r4 end-to-end through parse_verification_response -> Minor-only -> NON-blocking), real-Major-still-blocks-through-parser, reconcile_issue_ledger (first-round/resolve/resurrection/dedupe/empty-round). Operator grammar decision = BINARY (unanimous consult). Full suite 2150 passed/5 skipped (was 2126/5; +24). S1 framing pins all green (additive).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 6,
+      "stepKey": "session-002/cross-provider-verification",
+      "dateTime": "2026-06-18T13:07:49.413763-04:00",
+      "description": "Cross-provider verification (gpt-5-4, routed_gate REQUIRED: blast-radius/multi-module/breadth): 6 rounds. R1 Major REAL (incomplete header class-fix: underscored ISSUES_FOUND + VERDICT: prefix; L-069-1) ADOPTED. R2 Major FALSE-POSITIVE (claimed parser must learn path-aware Findings grammar; architecturally wrong - pull uses structured pull_verifier.Finding) ADJUDICATED + hardened w/ surface-agnostic test. R3 Major REAL (is_blocking_verdict short-circuited on token vs doc) ADOPTED: made severity-DERIVED + parse_nits. R4 Major REAL (end-to-end anti-laundering) ADOPTED then over-reached. R5 Major x2: Issue1 = R4 substring-scan REINTRODUCED false-positive churn -> REVERTED to token-trust; Issue2 = no programmatic consumer -> WIRED blocking/nits onto VerificationResult. R6 Major = genuine DESIGN SPLIT (token-trust vs severity-derivation, conflicting w/ R5) ESCALATED to operator per 3+-human rule -> operator chose TRUST VERIFIED token (record_adjudication: genuine-split/accept-dismissal). Adjudicated verdict VERIFIED. Suite 2165/5. Raw rounds s2-verification[-round-N].md.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 2,
+      "stepNumber": 7,
+      "stepKey": "session-002/s2-verified",
+      "dateTime": "2026-06-18T13:07:49.414772-04:00",
+      "description": "Wrote disposition.json (VERIFIED adjudicated, status completed). Routed S3 next-orchestrator rec = claude/opus-4-8/medium (s2-next-orchestrator.md, gemini-pro; irreversible PyPI release + durable guidance favor tier-3 + continuity, medium effort for runbook+synthesis). Progress keys met: blocking-classifier, loop-discipline-doc, churn-regression-fixture, s2-verified. Lessons cited: L-069-2/L-069-1/L-065-1/L-070-1/L-066-1/L-064-10.",
       "status": "complete",
       "routedApiCalls": []
     }

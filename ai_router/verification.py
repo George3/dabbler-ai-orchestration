@@ -25,8 +25,8 @@ later by flipping one flag.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Iterable, Optional
 
 
 @dataclass
@@ -209,11 +209,54 @@ def parse_verification_response(response: str) -> tuple[str, list]:
     """
     upper = response.upper().strip()
 
-    if upper.startswith("VERIFIED") or upper.startswith("**VERIFIED**"):
+    # Normalize an optional leading "VERDICT:" prefix and surrounding markdown
+    # emphasis (``*`` / ``_`` / ``#`` / ``>`` / ``-``) before detecting the
+    # verdict token. The push template says "start with VERIFIED / ISSUES
+    # FOUND", but the canonical machine grammar and the path-aware surface lead
+    # with "VERDICT:", and models drift between the two. Without this,
+    # "VERDICT: VERIFIED" falls through to ISSUES_FOUND and a clean pass is
+    # misread as a blocking result — the exact spurious reopen Set 071 kills.
+    head = re.sub(r'^[\s*_#>-]*VERDICT\s*[:.\-]?\s*', '', upper)
+    head = re.sub(r'^[\s*_#>-]+', '', head)
+    if head.startswith("VERIFIED"):
+        # A VERIFIED verdict carries no issues. On the push surface the verdict
+        # token IS the verifier's severity judgment — the template binds
+        # VERIFIED <=> "no Critical/Major" — so the parser TRUSTS the token and
+        # returns no findings. This is the safe, churn-free behaviour: it never
+        # manufactures a blocking finding from a clean pass (incl. a VERIFIED +
+        # NITS review). The severity-derived anti-laundering safety net lives in
+        # is_blocking_verdict, which still blocks a Critical/Major handed to it
+        # from a surface that returns structured findings (the pull surface's
+        # Finding objects, or any direct caller). We deliberately do NOT scan a
+        # VERIFIED body for "Severity: Major" substrings: a clean review that
+        # merely *discusses* severity in prose would be misread as blocking —
+        # the exact false positive Set 071 exists to eliminate.
         return "VERIFIED", []
 
     # Default to ISSUES_FOUND for anything that isn't a clear VERIFIED
     verdict = "ISSUES_FOUND"
+
+    # Strip a leading "ISSUES FOUND" / "ISSUES_FOUND" header (optionally
+    # "VERDICT:"-prefixed) *before* scanning for issues. The plural header
+    # contains the substring "ISSUE", which the issue marker pattern below used
+    # to mis-match — emitting a spurious, severity-less finding that (under
+    # Set 071's anti-laundering default) reads as blocking. BOTH the spaced and
+    # the underscored forms are stripped: the underscored ``ISSUES_FOUND`` is
+    # the canonical machine spelling, and ``_`` is not whitespace, so it needs
+    # its own character class (fixing only the spaced form left the canonical
+    # sibling self-matching again — L-069-1, a bug is a bug *class*).
+    body = re.sub(
+        r'^[\s*_#>-]*(?:VERDICT\s*[:.\-]?\s*)?\*?\*?ISSUES?[\s_]*FOUND\*?\*?\s*[-:.]?\s*',
+        '', response, flags=re.IGNORECASE
+    ).strip()
+
+    # Drop a trailing NITS section *before* issue parsing so non-blocking nits
+    # never bleed into an issue's description (they are read separately, for
+    # logging only, via :func:`parse_nits`). This keeps "nits stay out of the
+    # issues list" literally true.
+    nits_head = re.search(r'(?im)^\s*#{0,6}\s*\*{0,2}NITS\b.*$', body)
+    if nits_head:
+        body = body[: nits_head.start()].rstrip()
 
     # Parse individual issues
     issues = []
@@ -223,21 +266,28 @@ def parse_verification_response(response: str) -> tuple[str, list]:
         re.IGNORECASE | re.DOTALL
     )
 
-    matches = issue_pattern.findall(response)
+    matches = issue_pattern.findall(body)
     for match in matches:
         issue = {"description": match.strip()}
 
-        # Try to extract category
+        # Try to extract category. The separator class is permissive about
+        # markdown emphasis / punctuation order, and the value stops at the line
+        # end (or a ``*``) so it does not swallow the following Severity line.
         cat_match = re.search(
-            r'\*?\*?Category\*?\*?\s*[:.]?\s*([\w\s]+)',
+            r'Category[\s*:.\-_]*([^\n*]+)',
             match, re.IGNORECASE
         )
         if cat_match:
             issue["category"] = cat_match.group(1).strip()
 
-        # Try to extract severity
+        # Try to extract severity. The separator class tolerates any order of
+        # markdown emphasis and punctuation, so "**Severity:** Minor",
+        # "Severity: Minor", and "Severity - Major" all parse. The old regex
+        # required asterisks *before* the colon and so silently dropped the
+        # label on "**Severity:** Minor", making a Minor finding read as
+        # unknown-severity -> blocking — reintroducing the churn Set 071 kills.
         sev_match = re.search(
-            r'\*?\*?Severity\*?\*?\s*[:.]?\s*(Critical|Major|Minor)',
+            r'Severity[\s*:.\-_]*(Critical|Major|Minor)',
             match, re.IGNORECASE
         )
         if sev_match:
@@ -246,14 +296,9 @@ def parse_verification_response(response: str) -> tuple[str, list]:
         if issue["description"]:
             issues.append(issue)
 
-    # If no structured issues found but verdict is ISSUES_FOUND,
-    # treat the whole response as one issue
+    # If no structured issue parsed but verdict is ISSUES_FOUND, treat the whole
+    # (header-stripped) body as one issue so it is never silently dropped.
     if not issues and verdict == "ISSUES_FOUND":
-        # Strip the "ISSUES FOUND" header
-        body = re.sub(
-            r'^\*?\*?ISSUES?\s*FOUND\*?\*?\s*[-:.]?\s*',
-            '', response, flags=re.IGNORECASE
-        ).strip()
         if body:
             issues.append({
                 "description": body,
@@ -262,3 +307,295 @@ def parse_verification_response(response: str) -> tuple[str, list]:
             })
 
     return verdict, issues
+
+
+def parse_nits(response: str) -> list:
+    """Extract the non-blocking NITS observations from a verifier response.
+
+    **Additive and observability-only.** Nits are deliberately kept OUT of the
+    ``issues`` list returned by :func:`parse_verification_response` — an S1,
+    cross-provider-verified invariant: a nit must **never** become a blocking
+    issue (it must not grow the issue set, change the verdict, or reopen the
+    loop). This helper lets a caller *read/log* the nits a review raised (under
+    **either** verdict — a ``VERIFIED`` review may still list nits) without
+    touching the ``(verdict, issues)`` contract or the blocking decision. It is
+    the read side of the Set 071 ``NITS`` grammar; it does not change behaviour.
+
+    Args:
+        response: the raw verifier response text.
+
+    Returns:
+        The list of nit observation strings (empty when there is no NITS section
+        or it carries no ``Nit:`` bullets).
+    """
+    if not response:
+        return []
+    # Locate the NITS section heading/label (optionally markdown-bold or a
+    # ``#``-heading), then read to end or the next ``#`` heading.
+    head = re.search(r'(?im)^\s*#{0,6}\s*\*{0,2}NITS\b.*$', response)
+    if not head:
+        return []
+    tail = response[head.end():]
+    stop = re.search(r'(?m)^\s*#{1,6}\s+\S', tail)
+    section = tail[: stop.start()] if stop else tail
+
+    nits: list = []
+    for line in section.splitlines():
+        # Match a nit bullet: "- **Nit:** x", "- Nit: x", "* Nit - x".
+        m = re.match(
+            r'(?i)^\s*[-*]\s*\*{0,2}Nit\*{0,2}\s*[:.\-]?\s*(.+?)\s*$', line
+        )
+        if m:
+            text = m.group(1).strip().strip("*").strip()
+            if text:
+                nits.append(text)
+    return nits
+
+
+# ---------------------------------------------------------------------------
+# Set 071 (S2): severity-anchored blocking classification + cross-round ledger.
+#
+# Set 071 stops a strong adversarial verifier from churning re-verify rounds on
+# immaterial findings, WITHOUT weakening the devil's-advocate framing that
+# catches real defects (hard constraint L-069-2). The materiality "so what?"
+# gate, the anti-nitpick clause, and the merge-impact severity anchor ship in
+# the reviewer prompt templates (Set 071 S1). The two helpers below are the
+# *code* half: the predicate the re-verify loop consults to decide whether a
+# round is justified, and the deterministic ledger that keeps a settled point
+# from being resurrected across rounds.
+#
+# CONTRACT NOTE (load-bearing — do not bypass). The binary ``verdict`` token
+# (``VERIFIED`` / ``ISSUES_FOUND``) is NOT sufficient to infer whether a result
+# blocks the re-verify loop: an ``ISSUES_FOUND`` whose only findings are Minor /
+# nits is non-blocking, and a Minor-only result is "effectively VERIFIED" for
+# loop purposes. Callers MUST consult :func:`is_blocking_verdict` (or
+# :func:`classify_blocking`) rather than switching on ``verdict`` alone. This is
+# why Set 071 keeps the binary grammar (no third ``VERIFIED_WITH_NITS`` token)
+# but makes blocking-ness a first-class, tested predicate instead.
+#
+# SURFACE NOTE. :func:`is_blocking_verdict` / :func:`classify_blocking` are
+# **surface-agnostic**: they consume any list of severity-bearing finding dicts
+# (``{"severity": ...}``). The two verification surfaces feed them by different
+# routes — the *push* (routed session-verification) surface via
+# :func:`parse_verification_response` here, and the *pull* (path-aware critique)
+# surface via :class:`ai_router.pull_verifier.Finding` (whose ``to_dict`` emits
+# the same ``severity`` key, parsed structurally from the ``submit_verdict``
+# tool). So :func:`parse_verification_response` is the push parser **by design**;
+# it does not (and should not) learn the pull "Findings" grammar — the pull
+# surface already parses severity structurally. The blocking decision is shared.
+# ---------------------------------------------------------------------------
+
+# Severities that justify reopening / continuing a re-verify round. Compared
+# case-insensitively against the parsed ``severity`` field.
+BLOCKING_SEVERITIES = frozenset({"critical", "major"})
+# The only severity that is recorded but never loop-opening on its own.
+NONBLOCKING_SEVERITIES = frozenset({"minor"})
+
+
+def _severity_of(issue: dict) -> str:
+    """The lower-cased severity of a parsed issue ('' when missing)."""
+    return str((issue or {}).get("severity") or "").strip().lower()
+
+
+def is_blocking_verdict(verdict: str, issues: list) -> bool:
+    """Whether a verification result should open / continue a re-verify round.
+
+    The Set 071 loop discipline: a round is justified ONLY by a Critical/Major
+    finding. A Minor-only / nits-only result is recorded but **non-blocking**
+    (effectively VERIFIED for loop purposes), so the strong adversarial framing
+    can keep its catch ceiling without manufacturing churn on immaterial points.
+
+    Severity-DERIVED, not token-derived (the doc contract: "blocking is
+    severity-anchored, NOT the bare verdict token"). The findings decide first;
+    the verdict token only resolves the no-findings case.
+
+    Rules (anti-laundering by design — *when in doubt, escalate*):
+
+    * any finding Critical/Major           -> **blocking**, regardless of the
+      verdict token (a Major under a mislabeled VERIFIED is never waved through).
+    * any finding whose severity is unknown /
+      missing / unrecognised               -> **blocking** (a real defect must not
+      be laundered into a nit by an absent label).
+    * findings present, **all** Minor      -> non-blocking (the VERIFIED-with-nits
+      and the Minor-only-ISSUES_FOUND shapes both land here).
+    * **no** findings + ``VERIFIED``       -> non-blocking.
+    * **no** findings + non-VERIFIED       -> **blocking** (the verifier reported
+      issues but none parsed; never silently drop them).
+
+    Args:
+        verdict: the parsed verdict token (``VERIFIED`` / ``ISSUES_FOUND``).
+        issues: the parsed issue list from :func:`parse_verification_response`.
+
+    Returns:
+        True if the result blocks (justifies another re-verify round).
+    """
+    issues = issues or []
+    # Severity-DERIVED, not token-derived. A Critical/Major (or unknown-severity)
+    # finding blocks regardless of the verdict token — a Major present under a
+    # (mislabeled) VERIFIED must never be laundered through. Only when there are
+    # NO blocking findings does the verdict token decide the no-findings case.
+    for issue in issues:
+        if _severity_of(issue) not in NONBLOCKING_SEVERITIES:
+            return True
+    if issues:
+        return False  # every finding present is Minor -> non-blocking
+    # No findings parsed: VERIFIED -> non-blocking; a non-VERIFIED verdict
+    # (ISSUES_FOUND) with no parsed findings is conservatively blocking.
+    return not str(verdict or "").strip().upper().startswith("VERIFIED")
+
+
+@dataclass
+class BlockingClassification:
+    """Richer result of :func:`classify_blocking` for the re-verify loop / logs.
+
+    Attributes:
+        blocking: the :func:`is_blocking_verdict` decision.
+        blocking_issues: issues that justify a round (Critical/Major or
+            unknown-severity in a non-VERIFIED result).
+        nit_issues: issues recorded as Minor (non-blocking on their own).
+        reason: a short human-readable explanation, for the session log.
+    """
+    blocking: bool
+    blocking_issues: list = field(default_factory=list)
+    nit_issues: list = field(default_factory=list)
+    reason: str = ""
+
+
+def classify_blocking(verdict: str, issues: list) -> BlockingClassification:
+    """Split a verification result into blocking vs. nit findings + a reason.
+
+    Same decision as :func:`is_blocking_verdict`, but returns the partition the
+    loop discipline and the session log want: which findings opened the round and
+    which were recorded as non-blocking nits. The ``reason`` mirrors the rule that
+    fired so a skipped re-verify round is an auditable decision.
+    """
+    issues = issues or []
+    # Partition by severity FIRST (severity-derived, same as is_blocking_verdict).
+    blocking_issues, nit_issues = [], []
+    for issue in issues:
+        if _severity_of(issue) in NONBLOCKING_SEVERITIES:
+            nit_issues.append(issue)
+        else:
+            blocking_issues.append(issue)
+    if blocking_issues:
+        return BlockingClassification(
+            blocking=True,
+            blocking_issues=blocking_issues,
+            nit_issues=nit_issues,
+            reason=f"{len(blocking_issues)} Critical/Major (or unknown-severity) "
+                   f"finding(s) -> blocking",
+        )
+    if nit_issues:
+        return BlockingClassification(
+            blocking=False,
+            nit_issues=nit_issues,
+            reason=f"all {len(nit_issues)} finding(s) Minor -> non-blocking "
+                   f"(effectively VERIFIED for the loop)",
+        )
+    # No findings parsed: the verdict token resolves it.
+    if str(verdict or "").strip().upper().startswith("VERIFIED"):
+        return BlockingClassification(
+            blocking=False,
+            reason="verdict VERIFIED, no findings -> non-blocking",
+        )
+    return BlockingClassification(
+        blocking=True,
+        reason="ISSUES_FOUND with no parsed findings -> blocking "
+               "(conservative: do not silently drop)",
+    )
+
+
+# Ledger statuses tracked per prior blocking finding, keyed on a stable id.
+LEDGER_RESOLVED = "RESOLVED"
+LEDGER_UNRESOLVED = "UNRESOLVED"
+
+
+@dataclass
+class LedgerReconciliation:
+    """Result of reconciling the cross-round issue ledger by stable id.
+
+    Attributes:
+        resolved: prior blocker ids that are absent this round (now settled).
+        unresolved: prior blocker ids still present this round.
+        new_blockers: blocker ids appearing for the first time this round.
+        resurrected: ids previously marked ``RESOLVED`` that reappear this round —
+            the forbidden churn pattern (a settled point re-litigated). These are
+            reported so the loop can refuse to reopen them.
+        status: the updated id -> ``RESOLVED`` / ``UNRESOLVED`` map after this
+            round (excludes resurrected ids, which stay ``RESOLVED``).
+    """
+    resolved: list = field(default_factory=list)
+    unresolved: list = field(default_factory=list)
+    new_blockers: list = field(default_factory=list)
+    resurrected: list = field(default_factory=list)
+    status: dict = field(default_factory=dict)
+
+
+def reconcile_issue_ledger(
+    prior_status: Optional[dict],
+    current_blocker_ids: Iterable[str],
+) -> LedgerReconciliation:
+    """Reconcile the cross-round issue ledger keyed on a stable blocker id.
+
+    The Set 071 re-verify loop tracks each *blocking* finding by a stable
+    ``issueId``. Each round, prior blockers are marked ``RESOLVED`` (absent now)
+    or ``UNRESOLVED`` (still present). A finding whose id was previously
+    ``RESOLVED`` but reappears is a **resurrection** — the churn pattern this set
+    forbids (the same settled point raised again). Keying on the stable id, not
+    free text, makes the no-reopen rule deterministic: the orchestrator assigns a
+    rephrased-but-same point the **same** ledger id (so it is recognised as
+    settled), while a genuinely new finding gets a new id and is judged on its own
+    merits against the materiality gate.
+
+    Note: the "no resurrection under *new wording*" rule is enforced here only to
+    the extent the orchestrator keeps the id stable for the same point — the
+    judgment that two differently-worded findings are the *same* point is a human
+    one (documented in the Step 6 loop discipline). This helper enforces the
+    deterministic half: once an id is ``RESOLVED``, reopening it is flagged.
+
+    Args:
+        prior_status: id -> ``RESOLVED`` / ``UNRESOLVED`` from prior rounds
+            (``None`` / empty on the first round).
+        current_blocker_ids: blocker ids in the current round.
+
+    Returns:
+        A :class:`LedgerReconciliation`.
+    """
+    prior = dict(prior_status or {})
+    current = list(dict.fromkeys(current_blocker_ids))  # de-dupe, keep order
+    current_set = set(current)
+
+    resurrected = [
+        i for i in current if prior.get(i) == LEDGER_RESOLVED
+    ]
+    resurrected_set = set(resurrected)
+
+    new_blockers = [
+        i for i in current if i not in prior
+    ]
+    unresolved = [
+        i for i in current if i in prior and i not in resurrected_set
+    ]
+    resolved = [
+        i for i in prior if prior[i] == LEDGER_UNRESOLVED and i not in current_set
+    ]
+
+    status = dict(prior)
+    # Prior unresolved blockers no longer present become RESOLVED.
+    for i in resolved:
+        status[i] = LEDGER_RESOLVED
+    # New blockers this round are UNRESOLVED.
+    for i in new_blockers:
+        status[i] = LEDGER_UNRESOLVED
+    # Still-present prior blockers stay UNRESOLVED.
+    for i in unresolved:
+        status[i] = LEDGER_UNRESOLVED
+    # Resurrected ids stay RESOLVED (the loop refuses to reopen them).
+
+    return LedgerReconciliation(
+        resolved=resolved,
+        unresolved=unresolved,
+        new_blockers=new_blockers,
+        resurrected=resurrected,
+        status=status,
+    )
