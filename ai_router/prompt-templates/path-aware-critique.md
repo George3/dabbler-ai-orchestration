@@ -107,6 +107,45 @@ does), verify it against the actual file before accepting it.
 5. **Anything unforeseen** — hidden coupling, cost/perf blowups, ASCII/encoding
    hazards on Windows `cp1252`, a wrong default, a stale reference.
 
+## Materiality — the "so what?" gate
+
+Be adversarial, **not** a nitpicker. The devil's-advocate stance exists to catch
+defects that **matter**, not to manufacture a finding so the critique doesn't look
+like a rubber-stamp. A correct, complete change **should** come back `VERIFIED` —
+that is the right verdict when you genuinely tried to break it and could not.
+**Manufacturing a Minor / "false-positive" finding just to avoid a clean verdict is
+itself a false-positive failure**, and this section forbids it.
+
+Before you report any **blocking** finding (Critical or Major), it must clear the
+three-part "so what?" test — state all three in the **Description**:
+
+1. **Violation** — the exact requirement, contract, or claim that is broken (quote it).
+2. **Impact** — the concrete consequence: what breaks, for whom, or which merge
+   decision it changes. "Could theoretically be clearer" is not an impact.
+3. **Evidence** — the ground truth you read on disk that proves it.
+
+A finding that cannot produce all three is a **nit, not a blocker** — record it under
+**NITS** (below), never as a Finding.
+
+**Judge semantic equivalence, not textual identity.** Two forms that behave
+identically are equivalent; do not flag a cosmetic difference as a defect. (A task
+that says `pytest` and output showing `python -m pytest -v` ran the same test
+session — not a finding.) The sole exception: when the **exact text is itself the
+contract** (a required literal token, a public API name, a wire-format string),
+textual identity *is* correctness and a mismatch is a real defect.
+
+## Severity anchoring
+
+- **Critical / Major** — block. **Major = a defect that would change a reasonable
+  reviewer's merge decision** ("fix this before merge").
+- **Minor** — a real but immaterial observation that would **not** change a merge
+  decision. Minor findings **do not block**.
+- **Plausible-path-to-harm escalation (anti-laundering):** to call something
+  **Minor** you must be confident there is **no plausible path** by which it leads to
+  a Major/Critical failure. **When in doubt, escalate** — a real bug mislabeled Minor
+  and waved through is the failure mode this guards against. Materiality lowers the
+  noise floor; it must never launder a real defect.
+
 ## Output format
 
 Begin with a one-line **VERDICT**: `VERIFIED` (no significant issues) or
@@ -115,12 +154,31 @@ Begin with a one-line **VERDICT**: `VERIFIED` (no significant issues) or
 - If `VERIFIED`: 1–3 sentences on **what you actually read** (which files, which
   claims you checked) and why you are confident. A bare "looks good" is a failed
   review.
+  Only **Critical or Major** findings justify the `ISSUES_FOUND` verdict. If the
+  only things you found are Minor or immaterial, the verdict is `VERIFIED` and they
+  belong under **NITS**, not as Findings.
 - If `ISSUES_FOUND`: a **Findings** list. For each finding give:
-  - **Severity:** Critical / Major / Minor
+  - **Severity:** Critical / Major (a blocking Finding is never Minor — Minor goes
+    under NITS)
   - **Category:** correctness / contract-drift / completeness / false-confidence / other
   - **Location:** the exact `file:line` (or file + symbol)
-  - **Description:** what is wrong, the ground truth you read that proves it, and
-    the concrete fix.
+  - **Description:** the three-part "so what?" — the **violation** (quote it), the
+    concrete **impact** (which merge decision it changes), the **evidence** you read
+    that proves it — and the concrete fix.
+
+### NITS (optional, non-blocking)
+
+The single home for **every non-blocking observation** — both **Minor** findings
+(real but immaterial) and sub-Minor nits (cosmetic / stylistic / "could be
+marginally clearer" points that fail the "so what?" test). NITS are non-blocking by
+definition: on their own they **never** change the verdict to `ISSUES_FOUND` and
+**never** justify another remediation round. They may appear under **either** verdict
+— a `VERIFIED` critique may still list nits, and an `ISSUES_FOUND` critique (driven by
+a Critical/Major Finding) may also carry nits — but NITS alone never block:
+
+- **Nit:** [observation] (`file:line` if useful)
+
+Omit this section entirely when you have nothing immaterial to note.
 
 Do NOT re-do the work. Only evaluate what was produced. Report only defects you
 can substantiate from files you actually opened.

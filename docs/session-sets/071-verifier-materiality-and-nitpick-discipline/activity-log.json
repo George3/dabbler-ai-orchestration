@@ -1,0 +1,83 @@
+{
+  "sessionSetName": "071-verifier-materiality-and-nitpick-discipline",
+  "createdDate": "2026-06-18T13:15:19.392190+00:00",
+  "totalSessions": 0,
+  "entries": [
+    {
+      "sessionNumber": 1,
+      "stepNumber": 1,
+      "stepKey": "session-001/path-aware-critique",
+      "dateTime": "2026-06-18T13:15:19.392190+00:00",
+      "description": "Operator set pathAwareCritique: required.",
+      "status": "complete",
+      "routedApiCalls": [],
+      "kind": "path_aware_critique",
+      "choice": "required"
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 2,
+      "stepKey": "session-001/contract-gate",
+      "dateTime": "2026-06-18T13:15:19.392190+00:00",
+      "description": "Operator set contractGate: advisory.",
+      "status": "complete",
+      "routedApiCalls": [],
+      "kind": "contract_gate",
+      "choice": "advisory"
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 3,
+      "stepKey": "session-001/read-required",
+      "dateTime": "2026-06-18T09:22:52.316970-04:00",
+      "description": "Read spec, project-guidance, lessons (L-069-2/L-065-1/L-070-1), verification.md, path-aware-critique.md, verification.py, test_verification_framing.py, classify_framing_strength.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 4,
+      "stepKey": "session-001/materiality-push-template",
+      "dateTime": "2026-06-18T09:22:52.316970-04:00",
+      "description": "Added materiality \"so what?\" gate + anti-nitpick (semantic-equivalence, pytest-vs-python-m-pytest example) + severity anchor (Major=merge decision) + plausible-path-to-harm escalation + non-blocking NITS section to verification.md, additively; strong-framing phrases/placeholders/verdict tokens preserved.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 5,
+      "stepKey": "session-001/materiality-pull-template",
+      "dateTime": "2026-06-18T09:22:52.317963-04:00",
+      "description": "Mirrored the same materiality + anti-nitpick + severity-anchoring + NITS layer into path-aware-critique.md, fitting its VERDICT/Findings grammar (L-065-1).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 6,
+      "stepKey": "session-001/framing-pins-green",
+      "dateTime": "2026-06-18T09:22:52.317963-04:00",
+      "description": "Extended test_verification_framing.py: 6 materiality phrases pinned in BOTH templates + classify_framing_strength still ADVERSARIAL for both (additivity/dual-surface-equality proof). Suite 2093 passed/5 skipped (was 2079/5; +14).",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 7,
+      "stepKey": "session-001/cross-provider-verification",
+      "dateTime": "2026-06-18T10:21:38.952523-04:00",
+      "description": "Cross-provider verification (gpt-5-4, routed_gate REQUIRED via --high-blast+--contract-uncovered): 11 rounds. Every substantive finding adopted (R2 prompt_body_of pull pin; R3-R5 full-clause+pytest-contrast pins; R6 parser-compat+ordered-triad+NITS-compat-gap; R7 real NITS/Minor grammar contradiction fixed in both templates; R8 parser-test honesty; R9 section-anchored triad false-pass; R10 section-anchored NITS-heading pin). Recurring R3-R11 over-restraint theme adjudicated NON-BLOCKING per the materiality bar. Suite 2126/5. Adjudicated verdict VERIFIED.",
+      "status": "complete",
+      "routedApiCalls": []
+    },
+    {
+      "sessionNumber": 1,
+      "stepNumber": 8,
+      "stepKey": "session-001/s1-verified",
+      "dateTime": "2026-06-18T10:21:38.952523-04:00",
+      "description": "Wrote disposition.json (VERIFIED, status completed). Routed S2 next-orchestrator rec = claude/sonnet-4-6/medium. Saved 11 raw verification rounds + harness. Progress keys: materiality-push-template, materiality-pull-template, framing-pins-green, s1-verified all met.",
+      "status": "complete",
+      "routedApiCalls": []
+    }
+  ]
+}
