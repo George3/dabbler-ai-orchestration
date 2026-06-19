@@ -1,0 +1,40 @@
+{
+  "status": "completed",
+  "summary": "Set 072 Session 1 of 4 -- the matrix-mode seam + L-069-1 sibling-reader hardening. Ran on claude-opus-4-8/high. Registered with the durable contractGate:advisory seed recorded at set start (start_session --contract-gate advisory; pathAwareCritique:required also auto-seeded from spec). DELIVERED, all ADDITIVE & opt-in: (1) MATRIX-MODE SEAM in ai_router/dual_surface_verify.py:run_dual_surface -- new optional per-arm push_provider/pull_provider/push_model/pull_model; matrix_mode = any(per-arm set); each arm resolves its identity independently via _resolve_model (unset falls back to the equal-arms scalar, so the no-per-arm-params path is byte-for-byte unchanged); the strong-adversarial FRAMING gate stays on BOTH arms (L-069-2 -- matrix varies provider, NEVER framing); ONLY the provider/model equality refusal is skipped in matrix mode and the divergence is recorded as intentional, never raised. (2) Attestation extended with mode / intentionalDivergence / requestedPush+PullProvider+Model; existing measured keys preserved for back-compat. (3) DualSurfaceRun.mode field threaded onto to_dict() and build_comparison_artifact; COMPARISON_SCHEMA_VERSIONS -> (1, 2) (v1 still ACCEPTED; the writer emits v2 carrying mode; the validator REQUIRES mode on v2, tolerates its absence on v1) + COMPARISON_SCHEMA_VERSION_CURRENT=2; new RUN_MODE_EQUAL_ARMS/RUN_MODE_MATRIX/RUN_MODES constants exported. (4) _arms_held_equal STRENGTHENED (not weakened) to reject a matrix artifact as RETIRE evidence up front on the recorded posture, independent of whether the per-arm identities happen to match -- so a matrix run can never be scored as RETIRE telemetry (non-goal honored). (5) L-066-1 PARITY: docs/dual-surface-comparison.schema.json updated in lockstep -- schemaVersion enum [1]->[1,2], new mode enum property, and an if/then requiring mode on v2 -- so the JSON Schema and the pure-Python validator accept/reject the same artifacts (the S2 schema-conformance test pins this). (6) L-069-1 SIBLING-READER HARDENING (the deferred set-072-consolidate residual): the proven non-list-entries guard + non-dict-log guard + per-entry isinstance(dict) skip applied to ALL FOUR sibling readers -- read_path_aware_critique / has_path_aware_critique_record (path_aware_critique.py) and read_verification_mode / has_verification_mode_record (dedicated_verification.py) -- plus UnicodeError added to the two dedicated_verification.py readers' except clauses (the path_aware pair already had it from Set 069 S3); all four now collapse a malformed activity log to the no-record default on the close-out path, never raising. TESTS (+20, all hermetic injected-fakes, NO metered calls): test_dual_surface_matrix_mode.py -- equal-arms default records mode==equal-arms; equal-arms provider divergence STILL raises UnequalArmsError; matrix intentional divergence (push=anthropic/pull=google) does NOT raise with mode==matrix/intentionalDivergence==True and both arms strong adversarial; single-arm override engages matrix; equal-providers matrix records intentionalDivergence False; framing STILL enforced in matrix mode; _arms_held_equal rejects a matrix artifact (and score_comparison.ok False) while the equal-arms artifact stays scoreable; schemaVersion-2-requires-mode, legacy-v1-without-mode validates, bad-mode rejected. test_activity_log_reader_hardening.py -- all four readers return the no-record default (no raise) on non-list entries / non-dict log / non-dict entry members (skipped, valid record still found) / invalid UTF-8, plus the missing-file path. SUITE: full ai_router GREEN 2185 passed / 5 skipped (-m 'not e2e'; the 5 skips are the Set 069 S4 real-Podman-on-Windows by-design skips; +20 from this session). SESSION VERIFICATION: cross-provider, routed_gate REQUIRED (triggers blast-radius/multi-module/breadth; 6 files, modules {ai_router, docs}); routed session-verification to gpt-5-4 (cross-provider from the anthropic orchestrator; ~130s reasoning, $0.232) with an up-front conventions block (L-064-10: suite baseline + additive-scope + L-069-2/L-066-1/L-069-1 constraints + materiality bar) over the full staged diff -> R1 VERIFIED clean (no findings). s1-verification.md saved (never edited). NEXT S2 routed rec (route analysis, gemini-pro -> s1-next-session.md, L-064-6): claude/sonnet-4-6/medium (alt opus-4-8/low) for the verification_only_app.py wrapper + per-cell telemetry + report artifact session.",
+  "files_changed": [
+    "ai_router/dual_surface_verify.py",
+    "ai_router/path_aware_critique.py",
+    "ai_router/dedicated_verification.py",
+    "ai_router/tests/test_dual_surface_matrix_mode.py",
+    "ai_router/tests/test_activity_log_reader_hardening.py",
+    "docs/dual-surface-comparison.schema.json",
+    "docs/session-sets/072-verification-tuning/s1-verification.md",
+    "docs/session-sets/072-verification-tuning/s1-next-session.md",
+    "docs/session-sets/072-verification-tuning/disposition.json",
+    "docs/session-sets/072-verification-tuning/activity-log.json",
+    "docs/session-sets/072-verification-tuning/session-state.json",
+    "docs/session-sets/072-verification-tuning/session-events.jsonl"
+  ],
+  "verification_method": "api",
+  "verification_message_ids": [],
+  "next_orchestrator": {
+    "engine": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "effort": "medium",
+    "reason": {
+      "code": "other",
+      "specifics": "Routed analysis (route task_type=analysis, gemini-pro -> s1-next-session.md, per L-064-6) recommends claude/sonnet-4-6/medium for Session 2 (the External-target wrapper + per-cell telemetry + report artifact): a substantial NET-NEW module (ai_router/verification_only_app.py) that REUSES the existing run_dual_surface matrix mode + produce_path_aware_critique primitives (no new arm-execution logic) and demands strict L-066-1 produce/validate parity + provenance handling -- structured code generation that Sonnet handles near top-tier at mid-tier cost. Alternative: claude/opus-4-8/low if minimizing iterative refinement matters more than API cost. The operator chooses; a non-anthropic engine is defensible for fresh eyes."
+    }
+  },
+  "blockers": [],
+  "verification_verdict": "VERIFIED",
+  "lessons_cited": [
+    "L-069-1",
+    "L-069-2",
+    "L-066-1",
+    "L-064-10",
+    "L-064-9",
+    "L-064-6"
+  ]
+}

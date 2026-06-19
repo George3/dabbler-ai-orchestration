@@ -136,7 +136,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   2026-05-01 to avoid duplicate guidance drifting in two places.
 
 ## Always Route `ai-assignment.md` And Next-Orchestrator / Next-Set Recommendations
-<!-- lesson: id="L-064-6" last-used-set="069" status="active" scope="portable" -->
+<!-- lesson: id="L-064-6" last-used-set="072" status="active" scope="portable" -->
 
 - **Context:** Authoring `ai-assignment.md` (Step 3.5) or next-orchestrator /
   next-session-set recommendations (Step 8).
@@ -207,7 +207,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   code before routing verification.
 
 ## `git diff`-Based Verification Evidence Omits Untracked Files
-<!-- lesson: id="L-064-9" added-set="063" last-used-set="071" status="active" scope="portable" -->
+<!-- lesson: id="L-064-9" added-set="063" last-used-set="072" status="active" scope="portable" -->
 
 - **Context:** Building a cross-provider verification prompt whose
   evidence bundle includes `git diff` / `git diff --stat` output
@@ -224,7 +224,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   alongside the diff so additions are visible.
 
 ## State The Suite Baseline And Release Contract Up Front In Verification Round 1
-<!-- lesson: id="L-064-10" added-set="062" last-used-set="071" status="promoted" scope="portable" -->
+<!-- lesson: id="L-064-10" added-set="062" last-used-set="072" status="promoted" scope="portable" -->
 
 - **Promoted.** This lesson now lives at `project-guidance.md` →
   Conventions → Workflow Expectations: *"Open every session-verification
@@ -272,7 +272,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   round.
 
 ## A Pure-Python Validator Mirroring A JSON Schema Drifts Looser — Type-Check Optional Fields And Guard Numeric Equivalence
-<!-- lesson: id="L-066-1" added-set="066" last-used-set="070" status="promoted" scope="portable" -->
+<!-- lesson: id="L-066-1" added-set="066" last-used-set="072" status="promoted" scope="portable" -->
 
 - **Promoted to `project-guidance.md` → Conventions → Code Style on 2026-06-16**
   after instrumental application across Sets 066, 069, and 070. The detailed
@@ -309,7 +309,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   per-session routed verification had missed.
 
 ## A Bug Is A Bug CLASS — Fix Every Sibling Site, Not Just The Reported One
-<!-- lesson: id="L-069-1" added-set="069" last-used-set="070" status="active" scope="portable" -->
+<!-- lesson: id="L-069-1" added-set="069" last-used-set="072" status="active" scope="portable" -->
 
 - **Context:** Fixing a defect that is an instance of a *class* (a robustness gap
   in one of several parallel readers/validators that all do the same thing). Set
@@ -339,7 +339,7 @@ last-pruned-set: (none)   generated: 2026-06-18
   re-open.
 
 ## Measure A Verification Surface At Its Strongest Framing Before Demoting Or Retiring It
-<!-- lesson: id="L-069-2" added-set="069" last-used-set="071" status="active" scope="portable" -->
+<!-- lesson: id="L-069-2" added-set="069" last-used-set="072" status="active" scope="portable" -->
 
 - **Context:** Comparing two verification surfaces (e.g. snippet-fed *push* /
   routed vs. repository-reading *pull* / path-aware) to decide whether one earns

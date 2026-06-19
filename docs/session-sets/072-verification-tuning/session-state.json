@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "072-verification-tuning",
+  "status": "in-progress",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Matrix-mode seam + L-069-1 sibling-reader hardening",
+      "status": "in-progress",
+      "startedAt": "2026-06-19T06:27:49.197965-04:00",
+      "completedAt": null,
+      "orchestrator": {
+        "engine": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+        "effort": "high"
+      },
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "External-target wrapper + per-cell telemetry + report artifact",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 3,
+      "title": "Cross-run remediation aggregator",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 4,
+      "title": "Synthesis + docs + release + dogfood + first external run + close",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}

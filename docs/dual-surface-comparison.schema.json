@@ -22,6 +22,14 @@
   ],
   "allOf": [
     {
+      "$comment": "Set 072: schemaVersion 2 (the current writer) requires the 'mode' field carrying the arm-equality posture. Legacy schemaVersion 1 artifacts predate 'mode' and omit it. This mirrors validate_comparison_artifact, which requires mode on version 2 and tolerates its absence on version 1.",
+      "if": {
+        "properties": { "schemaVersion": { "const": 2 } },
+        "required": ["schemaVersion"]
+      },
+      "then": { "required": ["mode"] }
+    },
+    {
       "$comment": "provenanceComplete=true requires both unkeyed counts to be 0 AND no finding may be unkeyed (defectKey == ''). Both halves are encoded here, matching validate_comparison_artifact exactly - a schema-only consumer rejects the same artifacts the runtime does.",
       "if": {
         "properties": { "provenanceComplete": { "const": true } },
@@ -45,8 +53,13 @@
     }
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "enum": [1] },
+    "schemaVersion": { "type": "integer", "enum": [1, 2] },
     "kind": { "type": "string", "const": "dual_surface_comparison" },
+    "mode": {
+      "description": "Set 072: the arm-equality posture this run was produced under. 'equal-arms' (the steelman default - provider/model held EQUAL across arms, the only RETIRE-evidence shape) or 'matrix' (per-arm providers/models intentionally diverged to measure provider x surface interaction - a per-cell instrument the scorer rejects as RETIRE telemetry). Required on schemaVersion 2; absent on legacy version-1 artifacts.",
+      "type": "string",
+      "enum": ["equal-arms", "matrix"]
+    },
     "sessionSetName": {
       "description": "The set this comparison belongs to (identity).",
       "type": "string",

@@ -142,7 +142,18 @@ def read_path_aware_critique(session_set_dir: Union[str, Path]) -> str:
         # in this sibling (Set 069 S3 probe-template dogfood).
         return DEFAULT_PATH_AWARE_CRITIQUE
     chosen = DEFAULT_PATH_AWARE_CRITIQUE
-    for entry in log.get("entries", []):
+    if not isinstance(log, dict):
+        return chosen
+    entries = log.get("entries")
+    if not isinstance(entries, list):
+        # A non-list ``entries`` (e.g. the integer 1, or null) must NOT be
+        # iterated - that would raise TypeError and break this reader's
+        # never-raising contract on the close-out path (the L-069-1 bug-class:
+        # harden the reader, not just the writer). Treat it as no record.
+        return chosen
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         if entry.get("kind") not in _PATH_AWARE_CRITIQUE_RECORD_KINDS:
             continue
         choice = entry.get("choice")
@@ -203,10 +214,19 @@ def has_path_aware_critique_record(session_set_dir: Union[str, Path]) -> bool:
         # Invalid UTF-8 (a UnicodeError, not a JSONDecodeError) must not raise
         # here either (Set 069 S3); an unreadable log means "no durable record".
         return False
+    if not isinstance(log, dict):
+        return False
+    entries = log.get("entries")
+    if not isinstance(entries, list):
+        # Same L-069-1 hardening as read_path_aware_critique: a non-list
+        # ``entries`` must not be iterated. This reader gates the idempotent
+        # record wiring, so a TypeError here would crash the seed capture.
+        return False
     return any(
-        entry.get("kind") in _PATH_AWARE_CRITIQUE_RECORD_KINDS
+        isinstance(entry, dict)
+        and entry.get("kind") in _PATH_AWARE_CRITIQUE_RECORD_KINDS
         and entry.get("choice") in PATH_AWARE_CRITIQUE_VALUES
-        for entry in log.get("entries", [])
+        for entry in entries
     )
 
 

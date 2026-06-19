@@ -172,10 +172,23 @@ def read_verification_mode(session_set_dir: str | Path) -> str:
     try:
         with log_path.open("r", encoding="utf-8") as f:
             log = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        # UnicodeError (invalid UTF-8 bytes) is a ValueError subclass but NOT a
+        # json.JSONDecodeError, so without it an invalid-UTF-8 activity log would
+        # escape this reader's never-raising contract and crash close-out - the
+        # L-069-1 bug-class fixed in the path_aware_critique siblings, applied here.
         return DEFAULT_VERIFICATION_MODE
     chosen = DEFAULT_VERIFICATION_MODE
-    for entry in log.get("entries", []):
+    if not isinstance(log, dict):
+        return chosen
+    entries = log.get("entries")
+    if not isinstance(entries, list):
+        # A non-list ``entries`` must NOT be iterated (the L-069-1 bug-class):
+        # iterating it would raise TypeError and break the never-raises contract.
+        return chosen
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         if entry.get("kind") not in _VERIFICATION_MODE_RECORD_KINDS:
             continue
         choice = entry.get("choice")
@@ -235,12 +248,23 @@ def has_verification_mode_record(session_set_dir: str | Path) -> bool:
     try:
         with log_path.open("r", encoding="utf-8") as f:
             log = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        # Invalid UTF-8 (a UnicodeError, not a JSONDecodeError) must not raise
+        # here either (the L-069-1 bug-class); an unreadable log means "no record".
+        return False
+    if not isinstance(log, dict):
+        return False
+    entries = log.get("entries")
+    if not isinstance(entries, list):
+        # Same L-069-1 hardening: a non-list ``entries`` must not be iterated. This
+        # reader gates the idempotent capture, so a TypeError here would crash the
+        # seed-from-spec wiring before the writer could repair the shape.
         return False
     return any(
-        entry.get("kind") in _VERIFICATION_MODE_RECORD_KINDS
+        isinstance(entry, dict)
+        and entry.get("kind") in _VERIFICATION_MODE_RECORD_KINDS
         and entry.get("choice") in VERIFICATION_MODES
-        for entry in log.get("entries", [])
+        for entry in entries
     )
 
 

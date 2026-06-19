@@ -154,6 +154,25 @@ class UnequalArmsError(DualSurfaceError):
     """
 
 
+# ---------------------------------------------------------------------------
+# Arm-equality mode (Set 072 matrix-mode seam)
+#
+# The equal-arms steelman DEFAULT holds provider/model EQUAL across arms so that
+# *surface* is the only variable - the one shape that is valid as RETIRE evidence
+# (L-069-2). The opt-in MATRIX mode lets provider/model intentionally diverge per
+# arm to measure the provider x surface interaction the equal-arms instrument
+# cannot see (the Set 072 field-study finding). A matrix run keeps the strong
+# adversarial framing gate on BOTH arms (the matrix varies *provider*, never
+# framing) but is a per-cell instrument, NOT RETIRE telemetry - the scorers reject
+# it. Distinct from DUAL_SURFACE_MODE_* (off/sampled/opt-in), which is the run
+# TRIGGER, not the arm-equality posture.
+# ---------------------------------------------------------------------------
+
+RUN_MODE_EQUAL_ARMS = "equal-arms"
+RUN_MODE_MATRIX = "matrix"
+RUN_MODES = (RUN_MODE_EQUAL_ARMS, RUN_MODE_MATRIX)
+
+
 @dataclass
 class PushArmResult:
     """The push (snippet-fed, single-shot) arm's outcome."""
@@ -224,6 +243,11 @@ class DualSurfaceRun:
     pull: PullArmResult
     framing_equal: bool
     attestation: dict
+    # The arm-equality posture this run was produced under: RUN_MODE_EQUAL_ARMS
+    # (the steelman default, provider/model held equal) or RUN_MODE_MATRIX (per-arm
+    # providers/models intentionally diverged). Defaults to equal-arms so any
+    # pre-Set-072 direct construction keeps its meaning.
+    mode: str = RUN_MODE_EQUAL_ARMS
 
     def to_dict(self) -> dict:
         return {
@@ -234,6 +258,7 @@ class DualSurfaceRun:
             "sandboxDir": self.sandbox_dir,
             "provider": self.provider,
             "model": self.model,
+            "mode": self.mode,
             "framingEqual": self.framing_equal,
             "attestation": self.attestation,
             "push": self.push.to_dict(),
@@ -338,6 +363,10 @@ def run_dual_surface(
     head_ref: str = "",
     provider: str = "anthropic",
     model: Optional[str] = None,
+    push_provider: Optional[str] = None,
+    pull_provider: Optional[str] = None,
+    push_model: Optional[str] = None,
+    pull_model: Optional[str] = None,
     sandbox_dir: Optional[Union[str, Path]] = None,
     push_template: Optional[str] = None,
     pull_template: Optional[str] = None,
@@ -362,11 +391,25 @@ def run_dual_surface(
         ``committedRef`` field never overstates what was actually reviewed. (A
         frozen-checkout materialization of both arms is an S2/S3 enhancement.)
     provider / model:
-        Held **equal** across both arms by construction (one variable drives
-        both arm calls), and the equality is then **verified** against each arm's
-        actual reported provider/model - never assumed (see ``attestation``).
-        ``model`` defaults to the configured pull-verifier model pin for
-        ``provider`` so both arms run the identical model - maximal equality.
+        The **equal-arms default** (no per-arm params): held **equal** across both
+        arms by construction (one variable drives both arm calls), and the equality
+        is then **verified** against each arm's actual reported provider/model -
+        never assumed (see ``attestation``). ``model`` defaults to the configured
+        pull-verifier model pin for ``provider`` so both arms run the identical
+        model - maximal equality. In matrix mode these stay the recorded *base*
+        scalar (the per-arm truth lives in the attestation's ``push*``/``pull*``
+        keys).
+    push_provider / pull_provider / push_model / pull_model:
+        The **opt-in matrix-mode seam** (Set 072). Setting *any* of these switches
+        the run into ``RUN_MODE_MATRIX``: each arm resolves its provider/model
+        independently (an unset per-arm value falls back to the ``provider`` /
+        ``model`` scalar), the strong-adversarial **framing gate stays on both
+        arms** (the matrix varies *provider*, never framing - L-069-2), and the
+        provider/model equality refusal is **skipped** (the divergence is recorded
+        as intentional, not raised). With none set the equal-arms steelman default
+        is byte-for-byte unchanged and still refuses accidental divergence. A matrix
+        run is a per-cell instrument, NEVER RETIRE telemetry - ``_arms_held_equal``
+        rejects it.
     sandbox_dir:
         The repo the pull arm reads. Defaults to the git repo root containing the
         session-set dir (:func:`pull_critique._default_sandbox_for`), never
@@ -402,6 +445,34 @@ def run_dual_surface(
     if config is None:
         config = _load_router_config()
     model = _resolve_model(provider, model, config)
+
+    # ---- Matrix-mode seam (Set 072): resolve each arm's identity ----
+    # Matrix mode is engaged the moment ANY per-arm provider/model override is
+    # passed. Each arm's effective provider/model is its override if given, else
+    # the equal-arms scalar; an explicit per-arm model is resolved through the same
+    # pin resolver. When no per-arm value differs from the scalar, every effective
+    # identity collapses back to provider/model and the equal-arms path is unchanged.
+    matrix_mode = any(
+        v is not None for v in (push_provider, pull_provider, push_model, pull_model)
+    )
+    run_mode = RUN_MODE_MATRIX if matrix_mode else RUN_MODE_EQUAL_ARMS
+
+    def _arm_identity(arm_provider, arm_model):
+        prov = arm_provider if arm_provider is not None else provider
+        if arm_model is not None:
+            mdl = _resolve_model(prov, arm_model, config)
+        elif prov == provider:
+            mdl = model  # reuse the already-resolved scalar -> equal-arms unchanged
+        else:
+            mdl = _resolve_model(prov, None, config)
+        return prov, mdl
+
+    push_provider_eff, push_model_eff = _arm_identity(push_provider, push_model)
+    pull_provider_eff, pull_model_eff = _arm_identity(pull_provider, pull_model)
+    intentional_divergence = matrix_mode and (
+        push_provider_eff != pull_provider_eff or push_model_eff != pull_model_eff
+    )
+
     if caps is None:
         caps = caps_from_config(config)
     if sandbox_dir is None:
@@ -475,18 +546,18 @@ def run_dual_surface(
         task_type="session-verification",
         template=push_template,
     )
-    pcfg = _provider_config(provider, config)
-    gen_params = _resolve_gen_params(provider, config)
+    pcfg = _provider_config(push_provider_eff, config)
+    gen_params = _resolve_gen_params(push_provider_eff, config)
     push_raw = run_push(
-        provider=provider,
-        model=model,
+        provider=push_provider_eff,
+        model=push_model_eff,
         prompt=push_prompt,
         max_output_tokens=caps.max_output_tokens,
         provider_config=pcfg,
         generation_params=gen_params,
     )
     push_verdict, push_issues = parse_verification_response(push_raw.content)
-    in_price, out_price = _pricing_for(model, config)
+    in_price, out_price = _pricing_for(push_model_eff, config)
     push_cost = (
         push_raw.input_tokens / 1_000_000.0 * in_price
         + push_raw.output_tokens / 1_000_000.0 * out_price
@@ -509,8 +580,8 @@ def run_dual_surface(
     pull_res: PullResult = run_pull(
         sandbox_dir,
         pull_instruction,
-        provider=provider,
-        model=model,
+        provider=pull_provider_eff,
+        model=pull_model_eff,
         caps=caps,
         config=config,
     )
@@ -532,11 +603,23 @@ def run_dual_surface(
     # BOTH arms actually reported. A run_push fake that omits its identity, or a
     # pull binding that ran a different model, falsifies equality here rather than
     # being silently assumed true (honest telemetry; never hand-asserted).
-    provider_equal = (
-        push_result.provider == provider and pull_result.provider == provider
-    )
-    model_equal = push_result.model == model and pull_result.model == model
+    # In the equal-arms default, equality is measured against the requested scalar
+    # (each arm must have run the SINGLE requested provider/model). In matrix mode
+    # there is no single request, so the booleans are the measured CROSS-ARM
+    # equality (honestly False on intentional divergence). Either way these are
+    # informational; the scorer (_arms_held_equal) re-derives equality from the raw
+    # push*/pull* identities and never trusts these booleans.
+    if matrix_mode:
+        provider_equal = push_result.provider == pull_result.provider
+        model_equal = push_result.model == pull_result.model
+    else:
+        provider_equal = (
+            push_result.provider == provider and pull_result.provider == provider
+        )
+        model_equal = push_result.model == model and pull_result.model == model
     attestation = {
+        "mode": run_mode,
+        "intentionalDivergence": intentional_divergence,
         "providerEqual": provider_equal,
         "modelEqual": model_equal,
         "framingEqual": framing_equal,
@@ -545,20 +628,28 @@ def run_dual_surface(
         "bothAdversarial": both_adversarial,
         "requestedProvider": provider,
         "requestedModel": model,
+        "requestedPushProvider": push_provider_eff,
+        "requestedPushModel": push_model_eff,
+        "requestedPullProvider": pull_provider_eff,
+        "requestedPullModel": pull_model_eff,
         "pushProvider": push_result.provider,
         "pushModel": push_result.model,
         "pullProvider": pull_result.provider,
         "pullModel": pull_result.model,
     }
-    if require_equal and not (provider_equal and model_equal):
+    # Matrix mode SKIPS the provider/model equality refusal - the divergence is
+    # intentional and recorded above. The equal-arms default still refuses, so an
+    # accidental provider/model drift can never be produced as RETIRE evidence.
+    if require_equal and not matrix_mode and not (provider_equal and model_equal):
         raise UnequalArmsError(
             "dual-surface arms did not run on the equal provider/model: "
             f"requested {provider}/{model}; push ran "
             f"{push_result.provider}/{push_result.model}; pull ran "
             f"{pull_result.provider}/{pull_result.model}. A comparison whose "
             "arms differ in provider/model is invalid as RETIRE evidence "
-            "(surface is no longer the only variable). Pass require_equal=False "
-            "to capture the inequality for inspection only."
+            "(surface is no longer the only variable). Pass per-arm "
+            "push_provider/pull_provider for an intentional matrix run, or "
+            "require_equal=False to capture the inequality for inspection only."
         )
 
     return DualSurfaceRun(
@@ -571,6 +662,7 @@ def run_dual_surface(
         pull=pull_result,
         framing_equal=framing_equal,
         attestation=attestation,
+        mode=run_mode,
     )
 
 
@@ -857,7 +949,11 @@ def merge_findings(
 # ===========================================================================
 
 COMPARISON_ARTIFACT_FILENAME = "dual-surface-comparison.json"
-COMPARISON_SCHEMA_VERSIONS = (1,)
+# Set 072 added schemaVersion 2 (the optional ``mode`` field carrying the
+# arm-equality posture). Version 1 stays ACCEPTED so pre-Set-072 artifacts on
+# disk still validate; new equal-arms and matrix runs both write version 2.
+COMPARISON_SCHEMA_VERSIONS = (1, 2)
+COMPARISON_SCHEMA_VERSION_CURRENT = 2
 COMPARISON_KIND = "dual_surface_comparison"
 
 # A run is tagged by HOW it was triggered, and the two are NEVER pooled: a
@@ -877,7 +973,7 @@ COMPARISON_BAD_STRUCTURE = "comparison-bad-structure"
 
 _COMPARISON_TOP_KEYS = {
     "schemaVersion", "kind", "sessionSetName", "comparedAt", "runTag",
-    "committedRef", "provider", "model", "attestation", "provenanceComplete",
+    "committedRef", "provider", "model", "mode", "attestation", "provenanceComplete",
     "pushUnkeyed", "pullUnkeyed", "notes", "findings",
 }
 _CONTRIBUTOR_KEYS = {"surface", "description", "severity", "category"}
@@ -1065,6 +1161,21 @@ def validate_comparison_artifact(
     if "notes" in artifact and not isinstance(artifact.get("notes"), str):
         reasons.append("notes, when present, must be a string")
 
+    # ``mode`` (Set 072): required on schemaVersion 2 (the current writer always
+    # emits it), absent-tolerated on legacy version 1, and - when present on
+    # either - must be a recognized arm-equality posture. A bad mode would let an
+    # invalid posture label corrupt the equal-arms / matrix distinction the scorer
+    # keys RETIRE-evidence eligibility off of.
+    mode_val = artifact.get("mode")
+    if version == COMPARISON_SCHEMA_VERSION_CURRENT:
+        if mode_val not in RUN_MODES:
+            reasons.append(
+                f"mode must be one of {list(RUN_MODES)} on schemaVersion "
+                f"{COMPARISON_SCHEMA_VERSION_CURRENT}"
+            )
+    elif "mode" in artifact and mode_val not in RUN_MODES:
+        reasons.append(f"mode, when present, must be one of {list(RUN_MODES)}")
+
     findings = artifact.get("findings")
     if not isinstance(findings, list):
         reasons.append("findings must be an array")
@@ -1128,7 +1239,7 @@ def build_comparison_artifact(
             f"unknown run_tag {run_tag!r}; expected one of {list(RUN_TAGS)}"
         )
     artifact = {
-        "schemaVersion": 1,
+        "schemaVersion": COMPARISON_SCHEMA_VERSION_CURRENT,
         "kind": COMPARISON_KIND,
         "sessionSetName": run.session_set,
         "comparedAt": compared_at,
@@ -1136,6 +1247,7 @@ def build_comparison_artifact(
         "committedRef": run.committed_ref,
         "provider": run.provider,
         "model": run.model,
+        "mode": run.mode,
         "attestation": run.attestation,
         "provenanceComplete": merge.provenance_complete,
         "pushUnkeyed": merge.push_unkeyed,
@@ -1221,6 +1333,17 @@ def _arms_held_equal(comparison: dict) -> Tuple[bool, Tuple[str, ...]]:
     attestation = comparison.get("attestation")
     if not isinstance(attestation, dict):
         return False, ("attestation is missing or not an object",)
+    # Set 072: a matrix run is a per-cell provider x surface instrument, NEVER
+    # RETIRE telemetry - surface is no longer the only variable. Reject it on the
+    # recorded posture up front, independent of whether the (possibly equal-by-
+    # coincidence) per-arm identities would otherwise pass the re-derivation below.
+    # This STRENGTHENS the guard; it never relaxes the equal-arms checks.
+    if attestation.get("mode") == RUN_MODE_MATRIX or comparison.get("mode") == RUN_MODE_MATRIX:
+        return False, (
+            "comparison was produced in matrix mode (per-arm providers/models "
+            "intentionally diverged); a matrix run is a per-cell provider x surface "
+            "instrument, not RETIRE telemetry (surface is not the only variable)",
+        )
     failures: List[str] = []
     for name in _REQUIRED_ARM_IDENTITY_FIELDS:
         val = attestation.get(name)
@@ -2023,6 +2146,10 @@ __all__ = [
     "FRAMING_UNKNOWN",
     "load_push_template",
     "load_pull_template",
+    # Set 072 matrix-mode seam
+    "RUN_MODE_EQUAL_ARMS",
+    "RUN_MODE_MATRIX",
+    "RUN_MODES",
     # S2 merge
     "SURFACE_PUSH",
     "SURFACE_PULL",
@@ -2038,6 +2165,7 @@ __all__ = [
     # S2 comparison artifact
     "COMPARISON_ARTIFACT_FILENAME",
     "COMPARISON_SCHEMA_VERSIONS",
+    "COMPARISON_SCHEMA_VERSION_CURRENT",
     "COMPARISON_KIND",
     "RUN_TAG_SAMPLED",
     "RUN_TAG_OPT_IN",
