@@ -9,8 +9,7 @@
       "stepKey": "session-1/read-guidance",
       "dateTime": "2026-06-05T08:04:06-04:00",
       "description": "Read project-guidance.md, lessons-learned.md, session-set-authoring-guide.md, ai-led-session-workflow.md, spec.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -18,8 +17,7 @@
       "stepKey": "session-1/register-start",
       "dateTime": "2026-06-05T08:04:06-04:00",
       "description": "Ran ai_router.start_session; session-state.json -> session 1 in-progress (v4)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -27,8 +25,7 @@
       "stepKey": "session-1/reverify-tree",
       "dateTime": "2026-06-05T08:06:06-04:00",
       "description": "Re-verified live tree: session-issues-schema.md, disposition-schema.md, session_state.py (_build_sessions_array truncates vs totalSessions), writer_discipline.py (D3 content-blind/Lightweight-inert), start_session.py; captured 7 grounding facts",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -36,8 +33,7 @@
       "stepKey": "session-1/dedup-proposal",
       "dateTime": "2026-06-05T08:09:06-04:00",
       "description": "De-duplicated docs/proposals/2026-06-05-...md: kept cleaner second draft as proposal of record",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -86,8 +82,7 @@
       "stepKey": "session-1/q6-operator",
       "dateTime": "2026-06-05T08:20:06-04:00",
       "description": "Q6 split materially; surfaced to operator via AskUserQuestion -> chose hard-TTY/soft-non-TTY",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -95,8 +90,7 @@
       "stepKey": "session-1/verdict-and-lock",
       "dateTime": "2026-06-05T08:26:06-04:00",
       "description": "Wrote verdict.md, s1-audit-record.md, S1 Audit Lock block in spec.md; corrected S2 step 4 (D3-extension rejected -> content-aware close-time validator)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -121,8 +115,7 @@
       "stepKey": "session-1/fix-issues",
       "dateTime": "2026-06-05T08:34:06-04:00",
       "description": "Fixed both: scrubbed stale D3-extension text in spec.md; reframed Q6 --accept-suggestions bypass as non-locked S3 detail in verdict.md+spec.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -147,8 +140,7 @@
       "stepKey": "session-2/type-field",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Added session.type (work|verification|remediation, default work) to progress.py + preserved across writer rebuilds (_build_sessions_array); documented in session-state-schema.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -156,8 +148,7 @@
       "stepKey": "session-2/issues-schema-v2",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Extended sN-issues.json to schemaVersion 2: promoted optional finding fields (issueId/issueType/verificationMethod/suggestedTestOrCheck) + enum-enforced resolution_status/issueType when present; v1 stays valid; updated schema JSON, doc, example fixture",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -165,8 +156,7 @@
       "stepKey": "session-2/blessed-writer",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Implemented register_typed_session_start (appends typed sessions[] entry, grows totalSessions, fail-loud refusals) + start_session --type CLI branch with type-announcement banner pointing typed sessions at the workflow doc",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -174,8 +164,7 @@
       "stepKey": "session-2/close-time-validator",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Added dedicated_verification.py: content-aware close-time validator (different-engine verification before terminal close); D3 left unchanged; non-blocking advisory wired into close_session (gate strength deferred to S3)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -183,8 +172,7 @@
       "stepKey": "session-2/derivation-helper",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Added 7-state derive_workflow_state per Q3 ladder (sessions[]+verdicts+latest sN-issues+verificationMode record) + verificationMode reader/writer + seed_issues_envelope",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -192,8 +180,7 @@
       "stepKey": "session-2/tests",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Added test_dedicated_verification.py + test_typed_session_writer.py + extended schema tests; full Python suite green",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -218,8 +205,7 @@
       "stepKey": "session-2/fixes",
       "dateTime": "2026-06-05T09:36:10.458398-04:00",
       "description": "Fixed all 3 Major in-flight: validator empty-baseline fail-closed; advisory-disagreement reclassified as human-stop dispute; seed_issues_envelope rejects VERIFIED verdict; added regression tests",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -244,8 +230,7 @@
       "stepKey": "session-3/context-read",
       "dateTime": "2026-06-05T10:24:20.070289-04:00",
       "description": "S3 start: read spec S1/S2 locks, workflow doc Lightweight section, close-out ref, dedicated_verification.py, close_session.py, start_session.py, register_typed_session_start, rule-6 invariant. Locked S3 design: hand-off writer (atomic close-typed + open-next-typed), Q6 hard-TTY/soft-non-TTY gate, --verification-mode capture.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -253,8 +238,7 @@
       "stepKey": "session-3/code-handoff-writer",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "CODE: register_typed_session_handoff (atomic close-typed + open-next-typed; rule-6-safe) in session_state.py + tests (test_typed_session_writer.py)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -262,8 +246,7 @@
       "stepKey": "session-3/code-verification-mode-capture",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "CODE: --verification-mode capture (start_session) + resolve_and_record/read_spec/has_record helpers (dedicated_verification.py), made IMMUTABLE after first record per R1 finding; tests",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -271,8 +254,7 @@
       "stepKey": "session-3/code-q6-gate",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "CODE: Q6 close_session gate strength (hard-TTY/soft-non-TTY, terminal-only, --accept-suggestions); validate_dedicated_verification gained closing_session_number; _close_is_terminal helper; tests (test_dedicated_verification_close_gate.py)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -280,8 +262,7 @@
       "stepKey": "session-3/doc-workflow",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "DOC: rewrote Lightweight verification section of ai-led-session-workflow.md as per-set (L1) with Mode A/B, generic typed-session procedure, bounded rounds, seven states, Q6 gate, second-opinion tie-breaker; added --handoff CLI usage",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -289,8 +270,7 @@
       "stepKey": "session-3/doc-authoring-guide",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "DOC: session-set-authoring-guide.md verificationMode field semantics + capture mechanism + session type values",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -298,8 +278,7 @@
       "stepKey": "session-3/e2e-fixture",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "TEST: end-to-end fixture test_dedicated_verification_e2e.py (work->verification finds issues->remediation->re-verify->terminal close)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -307,8 +286,7 @@
       "stepKey": "session-3/version-bump",
       "dateTime": "2026-06-05T11:05:36.030374-04:00",
       "description": "RELEASE: dabbler-ai-router 0.15.0->0.16.0 (pyproject.toml, __init__.py, CHANGELOG.md, repository-reference.md walk); PyPI publish HELD for v0.16.0",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,

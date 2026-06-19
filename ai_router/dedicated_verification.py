@@ -385,7 +385,6 @@ def record_verification_mode(
         "dateTime": _now_iso_utc(),
         "description": f"Operator set verificationMode: {mode}.",
         "status": "complete",
-        "routedApiCalls": [],
         "kind": VERIFICATION_MODE_ENTRY_KIND,
         "choice": mode,
     }
@@ -646,7 +645,6 @@ def change_verification_mode(
             "close-out gate applies)."
         ),
         "status": "complete",
-        "routedApiCalls": [],
         "kind": VERIFICATION_MODE_CHANGE_ENTRY_KIND,
         "choice": target_mode,
         "previousMode": VERIFICATION_MODE_OUT_OF_BAND,

@@ -9,8 +9,7 @@
       "stepKey": "session-1/register-start",
       "dateTime": "2026-06-02T09:33:51.489817-04:00",
       "description": "Registered Session 1 start via ai_router.start_session with orchestrator metadata (copilot / github / gpt-5.4).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -18,8 +17,7 @@
       "stepKey": "session-1/audit-proposal",
       "dateTime": "2026-06-02T10:05:00-04:00",
       "description": "Re-verified the structured-issue data path against current code and authored proposal.md under docs/proposals/2026-06-02-structured-verification-issue-artifacts/ with the recommended Session 1 dispositions.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -43,8 +41,7 @@
       "stepKey": "session-1/design-lock",
       "dateTime": "2026-06-02T10:35:00-04:00",
       "description": "Wrote verdict.md as the authoritative Session 1 lock and updated spec.md with the S1 Audit Lock summary covering filenames, envelope shape, advisory resolution fields, clean-round behavior, helper scope, runtime scope, and release scope.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -84,8 +81,7 @@
       "stepKey": "session-1/close-out",
       "dateTime": "2026-06-02T10:19:38.997337-04:00",
       "description": "Committed and pushed the Session 1 design-lock bundle, ran close_session with s1-close-reason.md on the API path, passed all five close-out gates, flipped Session 1 to complete with verificationVerdict=VERIFIED, and sent the session-complete notification successfully.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -93,8 +89,7 @@
       "stepKey": "session-2/register-start",
       "dateTime": "2026-06-02T10:20:06.497365-04:00",
       "description": "Started Session 2 via ai_router.start_session with orchestrator metadata (copilot / github / gpt-5.4). Session 2 is now in progress and ready for the implementation/docs pass.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -102,8 +97,7 @@
       "stepKey": "session-2/orchestrator-correction",
       "dateTime": "2026-06-02T10:24:00-04:00",
       "description": "Corrected the Session 2 orchestrator block in session-state.json from the copilot SessionStart-hook attribution (copilot / github / gpt-5.4) to the actual orchestrator that performed the implementation (claude / anthropic / claude-opus-4-8), per the omit-null 4-field contract (effort omitted as not authoritatively declarable).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -111,8 +105,7 @@
       "stepKey": "session-2/implement-artifacts",
       "dateTime": "2026-06-02T10:45:00-04:00",
       "description": "Authored the locked structured-issue artifact: docs/session-issues.schema.json (JSON Schema for the envelope), docs/session-issues-schema-example.json (a concrete findings-bearing instance mixing an annotated and a bare issue), and docs/session-issues-schema.md (the orchestrator-facing reference mirroring disposition-schema.md). Added ai_router/tests/test_session_issues_schema.py (14 tests) validating the example against the schema and asserting the locked invariants. Per the S1 verdict, shipped NO helper (no real duplication: the package has no existing issue-artifact write path) and placed the schema/example under docs/ rather than the packaged ai_router/schemas/ (no runtime reader; keeps the set release-free).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -120,8 +113,7 @@
       "stepKey": "session-2/docs-updates",
       "dateTime": "2026-06-02T11:00:00-04:00",
       "description": "Updated docs/ai-led-session-workflow.md (artifact table row for sN-issues.json, retired-directory note, Step 6 persist-when-not-VERIFIED instruction, Step 7 ISSUES_FOUND structured-list persistence, cancel-history and artifacts-appear references) and docs/planning/session-set-authoring-guide.md (per-session artifact list + issue-logs retired). Committed only the Set 055 hunks of the workflow doc; the in-flight Set 056 engine-agnostic-doc-authority paragraph in the same file was left uncommitted for that independent set.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -129,8 +121,7 @@
       "stepKey": "session-2/full-suite",
       "dateTime": "2026-06-02T11:10:00-04:00",
       "description": "Ran the full Python suite via the workspace venv interpreter: 1074 passed, 1 skipped, exit 0. The +14 new tests come from test_session_issues_schema.py; no regressions.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -154,8 +145,7 @@
       "stepKey": "session-2/close-out",
       "dateTime": "2026-06-02T11:30:00-04:00",
       "description": "Authored change-log.md, disposition.json (VERIFIED, final session, no next_orchestrator), and s2-close-reason.md; committed and pushed the Set 055 implementation bundle; ran close_session on the API path to flip Session 2 and the set to complete with verificationVerdict=VERIFIED.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }

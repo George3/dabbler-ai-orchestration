@@ -9,8 +9,7 @@
       "stepKey": "session-1/register-start",
       "dateTime": "2026-06-02T11:04:37.724034-04:00",
       "description": "Registered Session 1 start via ai_router.start_session with orchestrator metadata (claude / anthropic / claude-opus-4-8, effort high). Verified the on-disk orchestrator block matches the actual orchestrator (no SessionStart-hook mis-attribution this time).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -18,8 +17,7 @@
       "stepKey": "session-1/audit-survey",
       "dateTime": "2026-06-02T11:08:00-04:00",
       "description": "Surveyed every live shared-doc surface (CLAUDE.md, AGENTS.md, GEMINI.md, docs/repository-reference.md, project-guidance.md, release-process.md, marketplace-release-process.md, review-criteria/set.md + spec.md, ai-led-session-workflow.md). Discovered the substantive migration was already applied out of band in commit e5a3476 (\"misc fixes to guidance.\") before the audit ran, with session-state.json still showing both sessions not-started. Ran a repo-wide grep for live references treating an engine file as the canonical source of shared/version/consumer facts.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -27,8 +25,7 @@
       "stepKey": "session-1/design-lock",
       "dateTime": "2026-06-02T11:12:00-04:00",
       "description": "Authored s1-audit-record.md (the authoritative S1 record): situational finding on the out-of-band commit, ratification of all four open design questions to their recommended option, the locked documentation-authority contract, verification that e5a3476 is complete and faithful, and the residual S2 scope (validation + consumer-table header nit). Added an S1 Audit Lock summary to spec.md.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -52,8 +49,7 @@
       "stepKey": "session-1/close-out",
       "dateTime": "2026-06-02T11:30:00-04:00",
       "description": "Authored disposition.json (status completed, verification_method api, verification_verdict VERIFIED_WITH_NOTES, next_orchestrator -> claude/anthropic/claude-opus-4-8 low for the S2 validation pass) and s1-close-reason.md; committed and pushed the Session 1 audit bundle; ran close_session on the API path to pass the five gates and flip Session 1 to complete.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -61,8 +57,7 @@
       "stepKey": "session-2/register-start",
       "dateTime": "2026-06-02T11:46:19.660582-04:00",
       "description": "Registered Session 2 start via ai_router.start_session with orchestrator metadata (claude / anthropic / claude-opus-4-8, effort high). Verified the on-disk orchestrator block matches the actual orchestrator.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -70,8 +65,7 @@
       "stepKey": "session-2/validate-migration",
       "dateTime": "2026-06-02T11:55:00-04:00",
       "description": "Ran the three validation steps. (1) Confirmed the canonical docs/repository-reference.md -> 'Documentation authority and release status' section is present and well-formed (principle + consumer table + release-status table + recent walk) and cross-checked the release-status table against package metadata (pyproject 0.15.0, __init__ 0.15.0, package.json 0.27.0 all match). (2) Markdown render check clean: tables well-formed, heading nesting correct, engine-file Shared repo facts pointers reference the canonical section by prose title; a repo-wide grep for the #documentation-authority-and-release-status anchor returned zero live link uses so there is no broken-anchor risk. (3) Straggler grep sweep over LIVE docs (excluding historical session-sets, consumer-paste cross-repo notices, proposals, vscode-test fixtures, CHANGELOGs, this spec): found TWO live stragglers S1's narrower grep missed -- Finding A (HARD) docs/repository-reference.md:475 CLAUDE.md file-map row says shared facts 'live in this doc' contradicting the migration and inconsistent with sibling AGENTS.md/GEMINI.md rows; Finding B (SOFT) CONTRIBUTING.md:9 cites CLAUDE.md for 'the consumer-repo map'. S2 is validation-only and edits no document: both recorded with prescribed fixes and handed to Session 3. Authored s2-validation.md.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -95,8 +89,7 @@
       "stepKey": "session-2/close-out",
       "dateTime": "2026-06-02T12:12:00-04:00",
       "description": "Authored disposition.json (status completed, verification_method api, verification_verdict VERIFIED_WITH_NOTES, next_orchestrator -> claude/anthropic/claude-opus-4-8 for the Session 3 complete-centralization pass) and s2-close-reason.md; committed and pushed the Session 2 validation bundle; ran close_session --manual-verify (API path, verification ran out-of-band) to pass the gates and flip Session 2 to complete. Set stays in-progress for Session 3.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -104,8 +97,7 @@
       "stepKey": "session-3/register-start",
       "dateTime": "2026-06-02T13:08:33.118456-04:00",
       "description": "Registered Session 3 start via ai_router.start_session with orchestrator metadata (claude / anthropic / claude-opus-4-8, effort high). Verified the on-disk orchestrator block matches the actual orchestrator.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -113,8 +105,7 @@
       "stepKey": "session-3/enumerate-and-locate-homes",
       "dateTime": "2026-06-02T13:20:00-04:00",
       "description": "Enumerated every shared operational fact CLAUDE.md carried inline (richer than AGENTS.md/GEMINI.md) and located its engine-agnostic canonical home: orchestrator-block contract -> session-state-schema.md (s Per-session orchestrator block, s Writer Contract) + ai-led-session-workflow.md (D3 writer_discipline, P4 no-Explorer, orchestrator-writer.log) -- all verified present; Building & testing + Orchestrator e2e harness Layer 1/2/3 + CI -> CONTRIBUTING.md (s Test layers richer with the Set-045 rebuild trap, s CI, s Building); session-state schema summary -> session-state-schema.md (already named authoritative). Found the router-config-editor walkthrough was the ONLY genuinely sole-sourced fact with no engine-agnostic home (repository-reference.md's extension file map had no src/configEditor/ row).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -138,8 +129,7 @@
       "stepKey": "session-3/centralize-and-symmetrize",
       "dateTime": "2026-06-02T13:55:00-04:00",
       "description": "Executed the punch-list. Relocated the router-config-editor walkthrough into a new src/configEditor/ row in repository-reference.md's extension file map (command + 3 YAML files + key source files). Fixed Finding A (repository-reference.md:475 CLAUDE.md file-map row now says shared facts live in docs/repository-reference.md, aligned with sibling rows) and Finding B (CONTRIBUTING.md:9 cites CLAUDE.md only for role+portability and repository-reference.md for the canonical consumer map / release status). Rewrote CLAUDE.md/AGENTS.md/GEMINI.md to a byte-identical shared body (## Quick start -> ## Decision-time consensus) differing only in the H1+audience header and a single final ## Engine-specific bootstrap section; dropped the consumer table (decision B); thinned CLAUDE.md's inline shared content to pointers; added the missing When-curator-work / Delegation-Discipline / Session-state-schema / Running-the-router sections to all three; upgraded the Shared repo facts pointers to clickable anchor links (item 6). CLAUDE.md 231->160 lines.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -147,8 +137,7 @@
       "stepKey": "session-3/validate",
       "dateTime": "2026-06-02T14:05:00-04:00",
       "description": "Validation (punch-list item 7). Structural diff: extracted ## Quick start .. ## Engine-specific bootstrap slice from each engine file -> sha256 identical (37242fe0...), 144 lines each, diff reports IDENTICAL across all three. No leftover ## Consumer repos / ## Orchestrator-block / Extension versioning / ai_router copy in any engine file. Straggler re-grep over live docs (excluding session-sets/proposals/cross-repo-notices/CHANGELOGs/this-set): zero live engine-file-as-canonical references; every remaining hit is a mechanism description, the correct post-migration principle, or consumer/new-project bootstrap. The lone implementation-summary-023-027.md CLAUDE.md mention is a historical Documentation-Updates summary (non-goal protects historical artifacts; S2-dispositioned out-of-scope) and was deliberately left untouched. Anchor #documentation-authority-and-release-status target exists (line 42) and all three files link it; code fences balanced; table rows well-formed. Authored s3-validation.md.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -172,8 +161,7 @@
       "stepKey": "session-3/close-out",
       "dateTime": "2026-06-02T14:30:00-04:00",
       "description": "Authored disposition.json (status completed, verification_method api, verification_verdict VERIFIED, next_orchestrator reason.code 'other' = final session / set complete) and s3-close-reason.md; committed and pushed the Session 3 complete-centralization bundle; ran close_session --manual-verify (API path, verification ran out-of-band) to pass the gates, flip Session 3 to complete, and flip the SET to complete (final session). No code, no release.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }

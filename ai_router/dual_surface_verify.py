@@ -1908,7 +1908,6 @@ def record_dual_surface_mode(
         "dateTime": _now_iso_utc(),
         "description": f"Operator set dualSurfaceMode: {value}.",
         "status": "complete",
-        "routedApiCalls": [],
         "kind": DUAL_SURFACE_MODE_ENTRY_KIND,
         "choice": value,
     }

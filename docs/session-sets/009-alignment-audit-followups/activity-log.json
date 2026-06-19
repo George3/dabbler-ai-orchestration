@@ -43,8 +43,7 @@
       "stepKey": "session-2/register-start",
       "dateTime": "2026-05-01T18:46:38.482113-04:00",
       "description": "Register Session 2 start in session-state.json",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -52,8 +51,7 @@
       "stepKey": "session-2/ai-assignment",
       "dateTime": "2026-05-01T18:46:38.483113-04:00",
       "description": "Append Session 2 block to ai-assignment.md (with Session 1 actuals)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -61,8 +59,7 @@
       "stepKey": "session-2/proposal-q2",
       "dateTime": "2026-05-01T18:46:38.483113-04:00",
       "description": "Revise proposal Open questions (revised) Q2 with doc-only resolution",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -70,8 +67,7 @@
       "stepKey": "session-2/close-out-doc",
       "dateTime": "2026-05-01T18:46:38.483113-04:00",
       "description": "Add Section 6 entry on cross-set parallelism to ai-router/docs/close-out.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -79,8 +75,7 @@
       "stepKey": "session-2/test-scenario-7",
       "dateTime": "2026-05-01T18:46:38.484113-04:00",
       "description": "Add TestScenario7CrossSetParallelRejection to test_failure_injection.py",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -88,8 +83,7 @@
       "stepKey": "session-2/pytest-run",
       "dateTime": "2026-05-01T18:46:38.484419-04:00",
       "description": "Full pytest suite: 670 passed",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -131,8 +125,7 @@
       "stepKey": "session-3/register-start",
       "dateTime": "2026-05-01T19:21:16.051638-04:00",
       "description": "Register Session 3 start in session-state.json",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -140,8 +133,7 @@
       "stepKey": "session-3/ai-assignment",
       "dateTime": "2026-05-01T19:21:16.052686-04:00",
       "description": "Append Session 3 block to ai-assignment.md (with Session 2 actuals)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -149,8 +141,7 @@
       "stepKey": "session-3/event-types",
       "dateTime": "2026-05-01T19:32:54.107273-04:00",
       "description": "Add closeout_force_used to EVENT_TYPES (frozen-enum exception)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -158,8 +149,7 @@
       "stepKey": "session-3/close-session-py",
       "dateTime": "2026-05-01T19:32:54.108284-04:00",
       "description": "Hard-scope --force in close_session.py: env-var gate, --reason-file required, closeout_force_used event, WARNING line",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -167,8 +157,7 @@
       "stepKey": "session-3/session-state-py",
       "dateTime": "2026-05-01T19:32:54.109274-04:00",
       "description": "Thread forced through _flip_state_to_closed and mark_session_complete; write forceClosed: True",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -176,8 +165,7 @@
       "stepKey": "session-3/session-set-explorer",
       "dateTime": "2026-05-01T19:32:54.110273-04:00",
       "description": "Add forceClosed field to TS LiveSession + fileSystem reader; add forceClosedBadge to SessionSetsProvider",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -185,8 +173,7 @@
       "stepKey": "session-3/close-out-doc",
       "dateTime": "2026-05-01T19:32:54.111274-04:00",
       "description": "Update close-out.md Section 5 (Manual close-out flags) and Section 2 flag-summary row with hard-scoped --force contract",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -194,8 +181,7 @@
       "stepKey": "session-3/python-tests",
       "dateTime": "2026-05-01T19:32:54.111274-04:00",
       "description": "Update existing --force tests + add 4 new ones in test_close_session_skeleton.py and test_mark_session_complete_gate.py",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -203,8 +189,7 @@
       "stepKey": "session-3/typescript-tests",
       "dateTime": "2026-05-01T19:32:54.111274-04:00",
       "description": "Add forceClosedBadge.test.ts (4 cases: true / false / null / liveSession=null)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -212,8 +197,7 @@
       "stepKey": "session-3/pytest-run",
       "dateTime": "2026-05-01T19:32:54.112777-04:00",
       "description": "Full pytest suite: 675 passed (+5 vs Session 2 baseline 670)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -221,8 +205,7 @@
       "stepKey": "session-3/typecheck",
       "dateTime": "2026-05-01T19:32:54.113782-04:00",
       "description": "Extension TS typecheck (npx tsc --noEmit -p tsconfig.json): clean",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -281,8 +264,7 @@
       "stepKey": "session-4/skipped-by-operator-decision",
       "dateTime": "2026-05-01T20:00:00.000000-04:00",
       "description": "Session 4 (F-1, F-2, D-4 follow-ups) skipped by operator decision per spec acceptance criterion 'explicitly skipped with written rationale'. Rationale recorded in ai-assignment.md Session 4 block. Audit pre-classified all three items as FOLLOW-UP (not corrective); none block re-audit verdict. F-1 deferred (lower-priority test coverage); F-2 better suited to a future outsource-last set (set 009 is outsourceMode: first); D-4 duplicative of existing unit-test coverage in test_gate_checks.py and test_cost_report.py. Set proceeds directly to Session 5 (re-audit).",
-      "status": "skipped",
-      "routedApiCalls": []
+      "status": "skipped"
     },
     {
       "sessionNumber": 5,
@@ -290,8 +272,7 @@
       "stepKey": "session-5/register-start",
       "dateTime": "2026-05-01T20:45:38.608036-04:00",
       "description": "Register Session 5 start in session-state.json (currentSession=5, status=in-progress)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
@@ -299,8 +280,7 @@
       "stepKey": "session-5/ai-assignment",
       "dateTime": "2026-05-01T20:45:38.608036-04:00",
       "description": "Append Session 4 SKIPPED block + Session 5 plan block to ai-assignment.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
@@ -308,17 +288,15 @@
       "stepKey": "session-5/trace-regeneration",
       "dateTime": "2026-05-01T21:00:00.000000-04:00",
       "description": "Regenerate failure-injection trace artifact: 8 scenarios passed in 7.55s (was 7 at original audit; +TestScenario7CrossSetParallelRejection)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
       "stepNumber": 4,
       "stepKey": "session-5/realignment-audit-doc",
       "dateTime": "2026-05-01T21:05:00.000000-04:00",
-      "description": "Write docs/proposals/2026-05-01-combined-design-realignment-audit.md with §1 D-1/D-2/D-3 evidence, §2 follow-up skip rationales, §3 test count delta, §4 corrected open questions, §5 deferred items, §§6-8 placeholders for verdicts",
-      "status": "complete",
-      "routedApiCalls": []
+      "description": "Write docs/proposals/2026-05-01-combined-design-realignment-audit.md with \u00a71 D-1/D-2/D-3 evidence, \u00a72 follow-up skip rationales, \u00a73 test count delta, \u00a74 corrected open questions, \u00a75 deferred items, \u00a7\u00a76-8 placeholders for verdicts",
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
@@ -326,8 +304,7 @@
       "stepKey": "session-5/prompt-template",
       "dateTime": "2026-05-01T21:10:00.000000-04:00",
       "description": "Author C:/temp/dabbler-realignment-audit-prompt.md and C:/temp/route_realignment_audit.py",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
@@ -369,8 +346,7 @@
       "stepKey": "session-5/verdicts-and-stamps",
       "dateTime": "2026-05-01T21:18:00.000000-04:00",
       "description": "Append both verbatim verdicts to realignment audit Sections 6 and 7; populate Section 8 synthesis. Apply completion stamps to (1) docs/proposals/2026-04-29-session-close-out-reliability.md, (2) docs/proposals/2026-04-30-combined-design-alignment-audit.md, (3) docs/proposals/2026-05-01-combined-design-realignment-audit.md",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 5,
@@ -378,8 +354,7 @@
       "stepKey": "session-5/pytest-sanity",
       "dateTime": "2026-05-01T21:20:00.000000-04:00",
       "description": "Sanity-check full ai-router test suite: 676 passed in 56.07s (no regressions; doc-only changes this session)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }

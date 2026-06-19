@@ -376,7 +376,6 @@ def record_path_aware_critique(
         "dateTime": _now_iso_utc(),
         "description": f"Operator set pathAwareCritique: {value}.",
         "status": "complete",
-        "routedApiCalls": [],
         "kind": PATH_AWARE_CRITIQUE_ENTRY_KIND,
         "choice": value,
     }

@@ -323,7 +323,6 @@ def record_contract_gate(
         "dateTime": _now_iso_utc(),
         "description": f"Operator set contractGate: {value}.",
         "status": "complete",
-        "routedApiCalls": [],
         "kind": CONTRACT_GATE_ENTRY_KIND,
         "choice": value,
     }

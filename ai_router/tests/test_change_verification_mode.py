@@ -120,7 +120,10 @@ class TestChangeSuccess:
         assert entry["sessionNumber"] == 2
         assert entry["stepKey"] == "session-002/verification-mode-change"
         assert entry["status"] == "complete"
-        assert entry["routedApiCalls"] == []
+        # routedApiCalls is no longer emitted when empty (the canonical
+        # routed-cost source is router-metrics.jsonl); the key is omitted
+        # rather than written as a misleading [].
+        assert "routedApiCalls" not in entry
 
     def test_supersedes_an_original_capture(self, tmp_path):
         # Set 057 capture said Mode A explicitly; the blessed transition

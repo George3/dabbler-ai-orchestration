@@ -36,7 +36,6 @@ The entry shape (mirrors the existing activity-log schema):
     "dateTime": "<ISO-8601 timestamp>",
     "description": "Operator answered the UAT/E2E suggested-state prompt: <choice>.",
     "status": "complete",
-    "routedApiCalls": [],
     "kind": "suggestion_disposition",
     "choice": "e2e" | "uat" | "both" | "neither"
   }
@@ -127,7 +126,6 @@ def record_suggestion_disposition(
             f"{choice}."
         ),
         "status": "complete",
-        "routedApiCalls": [],
         "kind": ENTRY_KIND,
         "choice": choice,
     }

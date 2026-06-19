@@ -47,8 +47,7 @@
       "stepKey": "session-1/handle-verification-result",
       "dateTime": "2026-05-04T14:04:12.429394-04:00",
       "description": "Round 1 raised 1 Critical, 4 Major, 1 Minor; rounds 2-4 progressively resolved all 13 issues (some new ones surfaced as deeper polish was applied). R4 returned VERIFIED with no remaining issues.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -80,8 +79,7 @@
       "stepKey": "session-2/handle-verification-result",
       "dateTime": "2026-05-04T14:25:00.000000-04:00",
       "description": "No issues raised; Round 1 returned VERIFIED with empty issues array. No fix rounds required.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }

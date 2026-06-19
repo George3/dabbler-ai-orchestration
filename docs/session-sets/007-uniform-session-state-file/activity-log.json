@@ -9,8 +9,7 @@
       "stepKey": "session-1/read-guidance",
       "dateTime": "2026-05-01T10:52:46.394674-04:00",
       "description": "Read project-guidance.md, lessons-learned.md, ai-led-session-workflow.md, spec.md, recent change-logs",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -18,8 +17,7 @@
       "stepKey": "session-1/register-start",
       "dateTime": "2026-05-01T10:52:46.394674-04:00",
       "description": "Wrote session-state.json marking session 1 in-progress (currentSession=1, totalSessions=3)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -27,8 +25,7 @@
       "stepKey": "session-1/implement-synthesizer",
       "dateTime": "2026-05-01T10:52:46.394674-04:00",
       "description": "Added synthesize_not_started_state(), atomic write-then-rename, _read_total_sessions_from_spec helper to ai-router/session_state.py",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -36,8 +33,7 @@
       "stepKey": "session-1/implement-backfill",
       "dateTime": "2026-05-01T10:52:46.395677-04:00",
       "description": "Added backfill_session_state_files() with change-log/activity-log/none branch inference; preserves existing files untouched",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -45,8 +41,7 @@
       "stepKey": "session-1/implement-cli",
       "dateTime": "2026-05-01T10:52:46.395677-04:00",
       "description": "Added ai-router/backfill_session_state.py with --base-dir and --dry-run flags, follows existing close_session/dump_session_state_schema CLI pattern",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -54,8 +49,7 @@
       "stepKey": "session-1/write-tests",
       "dateTime": "2026-05-01T10:52:46.395677-04:00",
       "description": "Added 17 tests in ai-router/tests/test_session_state_backfill.py covering synthesizer idempotency, backfill branches, dry-run, non-recursive walk, missing base-dir, CLI smoke",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -63,8 +57,7 @@
       "stepKey": "session-1/run-tests",
       "dateTime": "2026-05-01T10:52:46.395677-04:00",
       "description": "Full ai-router test suite passes: 623 tests, no regressions",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -72,8 +65,7 @@
       "stepKey": "session-1/run-backfill",
       "dateTime": "2026-05-01T10:52:46.396680-04:00",
       "description": "Ran backfill on this repo: synthesized session-state.json for sets 007/008/009 (sets 001-006 already had files and were preserved)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -98,8 +90,7 @@
       "stepKey": "session-1/fix-issues",
       "dateTime": "2026-05-01T11:01:24.069097-04:00",
       "description": "Addressed all three round-1 findings: return type changed to int per spec (paths exposed via _planned_backfill_paths internal helper); added test_existing_state_file_only_is_preserved; _atomic_write_json switched to tempfile.mkstemp for unique temp filenames with cleanup-on-error",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -124,8 +115,7 @@
       "stepKey": "session-1/run-tests-final",
       "dateTime": "2026-05-01T11:01:24.069405-04:00",
       "description": "Full ai-router test suite passes: 627 tests (623 baseline + 4 added during fix-issues)",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -133,8 +123,7 @@
       "stepKey": "session-2/register-start",
       "dateTime": "2026-05-01T12:10:02.732250-04:00",
       "description": "Registered session 2 start; session-state.json flipped to in-progress with current orchestrator metadata",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -142,8 +131,7 @@
       "stepKey": "session-2/skip-ai-assignment",
       "dateTime": "2026-05-01T12:10:02.732250-04:00",
       "description": "Skipped Step 3.5 (ai-assignment.md authoring via route()) per orchestrator-instruction memory restricting ai-router usage to end-of-session verification. No prior session set has authored ai-assignment.md; this matches current repo practice.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -151,8 +139,7 @@
       "stepKey": "session-2/add-read-status",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "Added read_status() helper in session_state.py with lazy-synth fallback (file-absent), parse-error propagation per spec risk section, and tolerant canonicalization for pre-Set-7 drift (completed->complete, done->complete) via _STATUS_ALIASES map.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -160,8 +147,7 @@
       "stepKey": "session-2/collapse-py-readers",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "Collapsed find_active_session_set (session_log.py) and print_session_set_status (__init__.py) to use read_status. Did NOT modify reconciler: its sweep already uses current_lifecycle_state(events), the authoritative source per the existing codebase comment; a coarse read_status pre-filter would either duplicate the events check or mask drift the reconciler exists to surface.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -169,8 +155,7 @@
       "stepKey": "session-2/add-ts-read-status",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "Created tools/dabbler-ai-orchestration/src/utils/sessionState.ts with readStatus + synthesizeNotStartedState mirroring Python writers. Uses fs.renameSync atomic write with PID+random temp suffix matching _atomic_write_json.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -178,8 +163,7 @@
       "stepKey": "session-2/collapse-ts-readers",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "Collapsed readSessionSets (utils/fileSystem.ts) state detection to readStatus. Updated fileSystem.test.ts fixtures to write canonical session-state.json + added regression test for completed alias canonicalization.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -187,8 +171,7 @@
       "stepKey": "session-2/add-tests",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "Added ai-router/tests/test_read_status.py with 15 tests: 4 canonical pass-through (parametrized), completed/done alias canonicalization, unknown-passes-through, lazy-synth side effect, lazy-synth idempotency on drifted file (no rewrite), 3 error-propagation (JSONDecodeError / ValueError on non-dict / ValueError on missing status), find_active_session_set integration (status overrides activity-log presence; lazy-synth from spec.md-only folder).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -196,8 +179,7 @@
       "stepKey": "session-2/run-full-tests",
       "dateTime": "2026-05-01T12:21:32.204716-04:00",
       "description": "ai-router suite: 642 passed (627 baseline + 15 new). TypeScript: tsc --noEmit clean, esbuild compile clean, eslint clean.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -222,8 +204,7 @@
       "stepKey": "session-2/fix-round-1",
       "dateTime": "2026-05-01T12:47:46.586947-04:00",
       "description": "Addressed round-1 findings: (1) extracted _load_canonical_status (Py) / loadCanonicalStatus (TS) shared by both branches of read_status/readStatus to close the post-synthesis-validation gap; (2) documented no-op-collapse rationale in close_session.py _is_already_closed and session_events.py current_lifecycle_state (both events-driven, nothing to remove); (3) added 5 new tests: 2 race-injection tests for the lazy-synth re-read path, print_session_set_status contradictory-fixture test (3 fixtures), 2 TS contradictory-fixture tests (status overrides activity-log/change-log presence).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -248,8 +229,7 @@
       "stepKey": "session-2/fix-round-2",
       "dateTime": "2026-05-01T12:47:46.588948-04:00",
       "description": "Fixed R2-1: introduced ensure_session_state_file (Py) / ensureSessionStateFile (TS) that uses _backfill_payload / backfillPayload inference (change-log -> complete, activity-log -> in-progress, neither -> not-started). read_status now routes file-absent through ensure_*, not synthesize_not_started_state. Added 4 new tests (2 Py + 2 TS) locking in legacy-folder lazy-synth classification. Synthesize_not_started_state stays as the explicit \"truly not started\" entry point used by register_session_start. R2-2 fixed by including close_session.py and session_events.py diffs in the round-3 bundle.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -274,8 +254,7 @@
       "stepKey": "session-2/fix-round-3-docstrings",
       "dateTime": "2026-05-01T12:47:46.589943-04:00",
       "description": "Updated read_status docstring (Py) and readStatus JSDoc (TS) to reference ensure_session_state_file / ensureSessionStateFile and describe the actual inference rules (change-log -> complete, activity-log -> in-progress, neither -> not-started). Cosmetic only.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -283,8 +262,7 @@
       "stepKey": "session-2/run-tests-final",
       "dateTime": "2026-05-01T12:47:46.590944-04:00",
       "description": "Final ai-router suite: 647 passed (627 baseline + 20 new in test_read_status.py). TypeScript: tsc clean, esbuild compile clean, eslint clean (only pre-existing warning).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -292,8 +270,7 @@
       "stepKey": "session-3/read-guidance",
       "dateTime": "2026-05-01T14:12:52.240627-04:00",
       "description": "Read project-guidance, lessons-learned, authoring guide, workflow doc, spec.md, prior session reviews and disposition.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -301,8 +278,7 @@
       "stepKey": "session-3/wizard-prompt-template",
       "dateTime": "2026-05-01T14:12:52.241626-04:00",
       "description": "Updated tools/dabbler-ai-orchestration/src/wizard/sessionGenPrompt.ts to instruct the AI scaffolding new session-set folders to also create session-state.json with status:not-started, with the full not-started shape embedded in the prompt.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -310,8 +286,7 @@
       "stepKey": "session-3/workflow-doc-section",
       "dateTime": "2026-05-01T14:12:52.242132-04:00",
       "description": "Added Session-Set Lifecycle and State File subsection to docs/ai-led-session-workflow.md documenting canonical status values, the file invariant, the three writers, and the lazy-synthesis fallback.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -319,8 +294,7 @@
       "stepKey": "session-3/schema-example-md",
       "dateTime": "2026-05-01T14:12:52.243133-04:00",
       "description": "Extended docs/session-state-schema-example.md with not-started and in-progress shapes (the .json file remains the closed shape).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -328,8 +302,7 @@
       "stepKey": "session-3/extension-readme",
       "dateTime": "2026-05-01T14:12:52.244133-04:00",
       "description": "Replaced file-presence state-detection table in tools/dabbler-ai-orchestration/README.md with status-driven table plus legacy-folder fallback note and backfill-CLI pointer.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -337,8 +310,7 @@
       "stepKey": "session-3/build-and-test",
       "dateTime": "2026-05-01T14:12:52.244133-04:00",
       "description": "pytest 647 passed; schema --check exit 0; tsc clean; vsce package builds 0.11.0 vsix. Extension-host integration tests blocked by pre-existing vscode-test environment breakage (Code.exe rejects launcher flags) \u2014 unrelated to this session edits.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -346,8 +318,7 @@
       "stepKey": "session-3/verification",
       "dateTime": "2026-05-01T14:12:52.245534-04:00",
       "description": "Cross-provider verification routed to GPT-5.4 (session-verification, complexity_hint 70, cost $0.16). Two findings (session-003.md self-reference; vscode-test infra) surfaced to human and adjudicated as accept-dismissal via record_adjudication.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -355,8 +326,7 @@
       "stepKey": "session-3/disposition-and-changelog",
       "dateTime": "2026-05-01T14:12:52.246117-04:00",
       "description": "Wrote disposition.json (status=completed, verification_method=api, no next_orchestrator since final session) and change-log.md for the set.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }

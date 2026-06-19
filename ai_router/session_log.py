@@ -173,8 +173,15 @@ class SessionLog:
             "dateTime": datetime.now().astimezone().isoformat(),
             "description": description,
             "status": status,
-            "routedApiCalls": api_calls or []
         }
+        # Only carry routedApiCalls when there are calls to record. The
+        # canonical source of routed-call cost is router-metrics.jsonl
+        # (written by record_call); an always-empty [] here read as
+        # "no routed calls happened" when in fact none were ever logged
+        # to this field. Omitting the key keeps the absence honest;
+        # readers (get_cost_summary, session_events) already tolerate it.
+        if api_calls:
+            entry["routedApiCalls"] = api_calls
         self._data["entries"].append(entry)
         self._save()
 

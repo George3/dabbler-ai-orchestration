@@ -5,6 +5,22 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`routedApiCalls` is omitted from activity-log entries when empty.**
+  `SessionLog.log_step` and the operator-choice capture writers
+  (`path_aware_critique`, `contract_gate`, `dedicated_verification`,
+  `dual_surface_verify`, `suggestion_disposition`) no longer emit an
+  always-empty `"routedApiCalls": []`. The canonical source of routed-call
+  cost is `router-metrics.jsonl` (written by `record_call`); an empty `[]`
+  on every entry read as "no routed calls happened" when in fact none were
+  ever logged to this field. The key is now written **only when there are
+  calls to record**, so its absence is honest. Both readers
+  (`SessionLog.get_cost_summary`, `session_events`) already tolerate a
+  missing key. Existing `docs/session-sets/*/activity-log.json` history was
+  backfilled (empty `[]` entries stripped; the 52 files with genuinely
+  recorded calls were preserved untouched). No extension / schema change.
+
 ## [0.25.0] — 2026-06-18 (Set 071 — the verifier materiality gate + nitpick-churn loop discipline)
 
 > Set 070 gave **both** reviewer surfaces their strongest devil's-advocate framing

@@ -9,8 +9,7 @@
       "stepKey": "session-001/detection-model",
       "dateTime": "2026-06-10T17:05:42.646473-04:00",
       "description": "Pure completion-detection module (src/utils/gettingStartedDetection.ts): detectCompletion/selectExplorerMode/computeGettingStarted per D3, fs injected, VS Code-free; nodeDetectionFs adapter.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -18,8 +17,7 @@
       "stepKey": "session-001/dual-mode-view",
       "dateTime": "2026-06-10T17:05:42.646473-04:00",
       "description": "Dual-mode wiring in CustomSessionSetsView (buildGettingStarted -> SnapshotPayload.gettingStarted) + protocol ExplorerMode/GettingStartedPayload; mode flips on existing docs/session-sets/** watcher (no new watcher; baseline kept at 1).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -27,8 +25,7 @@
       "stepKey": "session-001/form-shell-live-state",
       "dateTime": "2026-06-10T17:05:42.646473-04:00",
       "description": "Webview client.js dual-mode surfaces: no-folder CTA + 3-step Getting Started form shell (Full/Lightweight radio + parallel checkbox) greyed/checked per live D3 state; buttons inert (data-gs-action, not data-command). tree.css form styles.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 1,
@@ -36,8 +33,7 @@
       "stepKey": "session-001/verified",
       "dateTime": "2026-06-10T17:05:42.646473-04:00",
       "description": "Cross-provider verification routed to gpt-5-4 (session-verification); see s1-verification.md.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -45,8 +41,7 @@
       "stepKey": "session-002/build-structure",
       "dateTime": "2026-06-10T20:02:03.024497-04:00",
       "description": "Build project structure wired: structure-only no-prompt scaffold (renderStructureBootstrap + structureOnlyContext in consumerBootstrap.ts; ScaffoldDeps.structureOnly; buildProjectStructureNoPrompt in gitScaffold.ts) - engine files + start-here.md + tier-aware venv/router install, NO starter session set (D5: no title prompt; seeding a set would flip the dual-mode Explorer to list mid-form). Silent git init; folder-picker fallback when no folder open.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -54,8 +49,7 @@
       "stepKey": "session-002/plan-import",
       "dateTime": "2026-06-10T20:02:03.024497-04:00",
       "description": "Plan import wired: planImport.ts split into importPlanFromFile + copyPlanningPrompt (injectable PlanImportUi for tests); dabbler.importPlan QuickPick now delegates to the same functions; form buttons drive each path directly.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -63,8 +57,7 @@
       "stepKey": "session-002/build-session-sets",
       "dateTime": "2026-06-10T20:02:03.024497-04:00",
       "description": "Build session sets wired: buildSessionGenPrompt gains SessionGenPromptOptions.parallel (D4/D7 worktree + prerequisites decomposition guidance appended to authoring guidance); copySessionSetGenPrompt shared by command + form. Form-host protocol: GettingStartedActionMsg (5 actions, tier/parallel riders) routed via routeGettingStartedAction (pure, narrowing) + makeGettingStartedHandlers; CustomSessionSetsView refreshes after every handled action; client.js wires data-gs-action buttons w/ persistent gsState (tier/parallel survive re-renders) + disabled double-click guard. 16 new unit tests (676 passing).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 2,
@@ -113,8 +106,7 @@
       "stepKey": "session-003/env-validation",
       "dateTime": "2026-06-10T21:04:00.115353-04:00",
       "description": "D6 env-var validation: pure providerKeyPresent(env) predicate in gettingStartedDetection.ts (System+User merge + reload-window rationale documented), providerKeyPresent field on GettingStartedPayload, host passes process.env, warning rendered under the Build button (Full tier only) with client-side radio toggling. Form HTML builders extracted from client.js to media/session-sets-tree/gettingStartedHtml.js (UMD-lite, mocha-testable) per the Set 052 pure-builders pattern. 21 detection tests + 11 builder tests pass.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -122,8 +114,7 @@
       "stepKey": "session-003/worktree-info",
       "dateTime": "2026-06-10T21:04:00.115353-04:00",
       "description": "D7 parallel-worktree info note: gs-note element under the parallel checkbox (git worktrees, merged back to main when sets complete), visible only while checked, client-side checkbox toggling; checked-vs-unchecked rendering tests ship per S060-S2-V1-001 suggestedTestOrCheck.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -131,8 +122,7 @@
       "stepKey": "session-003/editor-instructions",
       "dateTime": "2026-06-10T21:07:55.423998-04:00",
       "description": "D8 static editor instructions: token-free getting-started.md.template added to the consumer-bootstrap bundle (5-step copy lifted ~verbatim from the operator SVG, typos fixed, {insert hyperlink} resolved to the tier-model GitHub URL); written to docs/dabbler/getting-started.md by BOTH scaffold paths; new commands/gettingStartedDoc.ts opens it as a markdown preview (workspace copy preferred, else bundled copy via globalStorage); CustomSessionSetsView auto-opens it once per extension session when a non-list Getting Started surface first shows.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -140,8 +130,7 @@
       "stepKey": "session-003/old-path-retired",
       "dateTime": "2026-06-10T21:20:17.739266-04:00",
       "description": "Old Get Started path retired/repointed: WizardPanel.ts + webview/wizard.html DELETED; dabbler.getStarted re-registered in commands/gettingStartedDoc.ts (focuses the Session Set Explorer + opens the D8 instructions); dabbler.setupNewProject converged on the same no-prompt structure-only scaffold (tier QuickPick only - title/purpose/count prompts, git-init modal, worktree modal all retired); planImport + sessionGenPrompt registrations moved to extension.ts; viewsWelcome + package description + 6 doc references (quick-start, tier-model SSoT, repository-reference file map, ext README, workflow doc) updated; wizard.html cold-start-closure tests replaced with getting-started.md.template pins. Decisions flagged for verifier: WizardPanel DELETED (not folded), setupNewProject KEPT as palette entry. Also fixed 3 PRE-EXISTING tsc cast errors in gettingStartedActions.test.ts (S2 latent, broke npm-test compile).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -149,8 +138,7 @@
       "stepKey": "session-003/build-and-test",
       "dateTime": "2026-06-10T21:21:59.011759-04:00",
       "description": "Build + full test pass: esbuild compile clean (bundle + dist/templates incl. new getting-started.md.template); tsc --noEmit clean (after fixing 3 pre-existing S2 cast errors); TS unit suite 695 passing / 2 failing (both the documented pre-existing Set-026 stub failures: configEditor ViewColumn + notificationsSection); cold-start goldens regenerated for the new artifact (UPDATE_GOLDEN=1); drift guard OK; Python 1185 passed / 1 skipped (no ai_router changes).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 3,
@@ -175,8 +163,7 @@
       "stepKey": "session-004/uat-feedback-fixes",
       "dateTime": "2026-06-11T05:34:46.830387-04:00",
       "description": "Folded the two operator UAT-feedback changes into S4 before the gate: (A) buildSessionGenPrompt no longer inlines the project plan - the copied prompt references docs/planning/project-plan.md (path-aware-assistant contract, same as Set 048 review prompts); existence check retained so the reference is never dangling. (B) The form tier radio now rides the build-session-sets action (untrusted-narrowed like build-structure); the prompt exemplars + an operator-tier guidance line steer the planner to the selected tier (palette command without a radio stays generic Full). Tests updated/added: path-reference pin, 3 tier-option tests, tier-rider narrowing; 699 TS passing / same 2 pre-existing stub failures; tsc + esbuild clean.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 4,
@@ -184,8 +171,7 @@
       "stepKey": "session-004/local-vsix-built",
       "dateTime": "2026-06-11T05:34:46.831392-04:00",
       "description": "Packaged dabbler-ai-orchestration-0.29.0.vsix (990.54 KB, 31 files) including the S4 fixes + extended CHANGELOG. NOTE: the 0.29.0 version bump (package.json + lock) and the base 0.29.0 CHANGELOG entry were found PRE-WRITTEN uncommitted in the working tree (authored out-of-band for the operator preliminary-UAT build); kept, extended with the S4 entries, date 2026-06-11, commit deferred to UAT pass per spec. Preliminary operator UAT: 10/11 rows pass, 1 untested (copy-plan-prompt). HANDED TO OPERATOR for the gate re-walk.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 4,
@@ -193,8 +179,7 @@
       "stepKey": "session-004/operator-uat-passed",
       "dateTime": "2026-06-11T06:10:43.931515-04:00",
       "description": "Operator UAT gate PASSED 2026-06-11: preliminary walk passed all rows (1 initially untested row - copy-plan-prompt - operator tested in follow-up: works fine; operator flipped its Passes themselves); the two feedback items were folded into the S4 build and the operator re-walked row 10 on the rebuilt 0.29.0 vsix (prompt references the plan without embedding - good to go) and explicitly authorized the Marketplace publish. Outcome recorded in 060-getting-started-redesign-uat-checklist.json (row-10 feedback note). PyPI NOT needed: ai_router packaged surface unchanged since published v0.16.0 (only Set 058 unpackaged CI script touched ai_router/ since).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 4,
@@ -202,8 +187,7 @@
       "stepKey": "session-004/version-bumped",
       "dateTime": "2026-06-11T06:10:43.931515-04:00",
       "description": "Version finalized at 0.29.0: the package.json+lock bump and base CHANGELOG entry were found PRE-WRITTEN uncommitted (operator UAT-build prep); kept, CHANGELOG extended with the S4 changes (path-referenced decomposition prompt, tier threading, setupNewProject convergence/wizard removal), entry dated 2026-06-11. repository-reference.md release status updated: 0.29.0 UAT-passed + tag push; ALSO corrected stale held wording on already-published rows (ext 0.28.0 published 2026-06-09 run 27228430570; router v0.16.0 2026-06-05, v0.15.0 2026-06-02 - verified via gh run list) and the stale 0.13.3 committed-VSIX file-map row -> 0.29.0. change-log.md authored (final-session gate).",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     },
     {
       "sessionNumber": 4,
@@ -235,8 +219,7 @@
       "stepKey": "session-004/change-log-written",
       "dateTime": "2026-06-11T06:17:18.974998-04:00",
       "description": "change-log.md authored for the set (final-session gate): why the set existed, per-session ship list, the S4 UAT-feedback fixes, deferred Set 061 candidates (Explorer UX polish + Switch-tier action), verification + cost summary.",
-      "status": "complete",
-      "routedApiCalls": []
+      "status": "complete"
     }
   ]
 }
