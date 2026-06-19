@@ -570,6 +570,41 @@ def test_aggregate_corroborates_keyed_finding_across_runs():
     assert voa.validate_remediation_backlog(json.loads(json.dumps(backlog))).ok
 
 
+def test_aggregate_preserves_severity_when_contributor_omits_it():
+    """A VALID remediation report may omit a contributor's optional severity/category
+    while the authoritative value lives at the finding level (the schema marks the
+    contributor fields optional). The aggregator must fall back to the finding-level
+    severity so a Major is not silently re-merged as unspecified and DOWN-RANKED in
+    the backlog. Regression for the Set 072 S4 path-aware dogfood Major."""
+    # A finding whose contributor carries NO severity/category, but whose
+    # finding-level severity is Major. This is a report validate_remediation_report
+    # accepts (contributor severity/category are optional).
+    bare_contributor_finding = {
+        "defectKey": "D-major",
+        "provenance": dsv.PROVENANCE_PULL_ONLY,
+        "severity": "Major",
+        "category": "correctness",
+        "surfaces": ["pull"],
+        "contributors": [{"surface": "pull", "description": "auth check missing"}],
+    }
+    # A genuinely minor finding (fully specified) to prove ordering is by severity.
+    minor = _rem_finding("D-minor", [("push", "typo in log line")], severity="Minor")
+    report = _rem_report([bare_contributor_finding, minor])
+    # Precondition: the crafted report is actually valid (the contributor omits the
+    # optional fields, so this exercises the real reachable path, not a malformed input).
+    assert voa.validate_remediation_report(report).ok
+    assert "severity" not in report["findings"][0]["contributors"][0]
+
+    backlog = voa.aggregate_remediation_reports([report], generated_at="agg-ts")
+    by_key = {f["defectKey"]: f for f in backlog["findings"]}
+    # The Major keeps its severity through the cross-run re-merge (not "" / unspecified).
+    assert by_key["D-major"]["severity"] == "Major"
+    assert by_key["D-minor"]["severity"] == "Minor"
+    # ...and therefore sorts ABOVE the Minor (severity-first ordering preserved).
+    assert backlog["findings"][0]["defectKey"] == "D-major"
+    assert voa.validate_remediation_backlog(backlog).ok
+
+
 def test_aggregate_single_run_finding_has_corroboration_one():
     run_a = _rem_report([_rem_finding("D1", [("push", "boom")])])
     backlog = voa.aggregate_remediation_reports([run_a], generated_at="agg")

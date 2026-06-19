@@ -1000,14 +1000,36 @@ def _run_ref(index: int, report: dict) -> dict:
     }
 
 
-def _raw_from_contributor(contributor: dict, key: str) -> dict:
+def _raw_from_contributor(
+    contributor: dict, key: str, *, finding: Optional[dict] = None
+) -> dict:
     """Reconstruct a Set-066 raw finding dict (carrying its stable key) from a
     remediation-report contributor, so the cross-run merge can re-run the SAME
-    :func:`merge_findings` provenance machinery over it."""
+    :func:`merge_findings` provenance machinery over it.
+
+    The remediation-report schema marks a contributor's ``severity`` / ``category``
+    **optional** (``_validate_contributor`` accepts a contributor that omits them,
+    while the parent finding's ``severity`` / ``category`` are always present). When
+    a contributor omits its own, fall back to the **parent merged finding's** value
+    so a Major whose authoritative severity lives only at the finding level is not
+    silently rebuilt as unspecified - which would let :func:`merge_findings`
+    re-derive a lower max severity and **down-rank a real defect** in the backlog.
+    The parent severity is the max across its contributors, so this fallback can
+    only preserve (never under-state) the re-merged severity.
+    """
+    parent = finding if isinstance(finding, dict) else {}
+
+    def _pick(field: str) -> str:
+        c = contributor.get(field)
+        if isinstance(c, str) and c:
+            return c
+        p = parent.get(field)
+        return p if isinstance(p, str) else ""
+
     raw = {
         "description": contributor.get("description", "") if isinstance(contributor.get("description"), str) else "",
-        "severity": contributor.get("severity", "") if isinstance(contributor.get("severity"), str) else "",
-        "category": contributor.get("category", "") if isinstance(contributor.get("category"), str) else "",
+        "severity": _pick("severity"),
+        "category": _pick("category"),
     }
     if key:
         raw["defectKey"] = key
@@ -1097,7 +1119,7 @@ def aggregate_remediation_reports(
                 if not isinstance(contributor, dict):
                     continue
                 surface = contributor.get("surface")
-                raw = _raw_from_contributor(contributor, key)
+                raw = _raw_from_contributor(contributor, key, finding=finding)
                 if surface == SURFACE_PUSH:
                     grp.push.append(raw)
                     if not key:

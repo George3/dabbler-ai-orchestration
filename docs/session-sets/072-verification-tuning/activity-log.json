@@ -86,6 +86,62 @@
       "dateTime": "2026-06-19T09:34:27.093790-04:00",
       "description": "Cross-provider gpt-5-4 R1 ISSUES_FOUND (2 Major) -> adopted corroboration-distinctness fix in full, declined the converse provenanceComplete check (S2-adjudicated/R2-confirmed over-reach) -> R2 VERIFIED. Suite 2232 passed / 5 skipped.",
       "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 1,
+      "stepKey": "session-4/synthesis-updated",
+      "dateTime": "2026-06-19T14:34:35.845362-04:00",
+      "description": "verification-surface-strategy.md SS8 + pull-verifier.md Set 072 section + L-072-1 lesson (qualifier matched to SS8 after R1)",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 2,
+      "stepKey": "session-4/released",
+      "dateTime": "2026-06-19T14:34:35.845362-04:00",
+      "description": "ai_router 0.25.0 -> 0.26.0 (pyproject + __version__ + CHANGELOG [0.26.0]); PyPI release operator-authorized via tag v0.26.0 on green-Test SHA",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 3,
+      "stepKey": "session-4/change-log-written",
+      "dateTime": "2026-06-19T14:34:35.846362-04:00",
+      "description": "docs/session-sets/072-verification-tuning/change-log.md (full set narrative)",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 4,
+      "stepKey": "session-4/dogfooded",
+      "dateTime": "2026-06-19T14:34:35.846362-04:00",
+      "description": "matrix mode over own diff (4 findings adjudicated non-substantive); path-aware-critique.json gate artifact caught + fixed 1 real Major in the S3 aggregator (severity fallback); +1 regression test; suite 2241/5",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 5,
+      "stepKey": "session-4/first-external-run",
+      "dateTime": "2026-06-19T14:34:35.847362-04:00",
+      "description": "../dabbler-access-harvester set-018 (c11038e..e17bd41); Gemini-pull cell returned VERIFIED not silence; per-cell telemetry complete; both validators round-trip",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 6,
+      "stepKey": "session-4/remediation-report-produced",
+      "dateTime": "2026-06-19T14:34:35.847362-04:00",
+      "description": "harvester-run/remediation-report.{json,md} consolidates findings with provenance; dogfood/remediation-report.{json,md} also produced",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 4,
+      "stepNumber": 7,
+      "stepKey": "session-4/s4-verified",
+      "dateTime": "2026-06-19T14:34:35.848362-04:00",
+      "description": "routed_gate REQUIRED; gpt-5-4 session-verification R1 ISSUES_FOUND 1 Minor doc-accuracy nit -> fixed, non-blocking (Set 071 materiality); verdict VERIFIED",
+      "status": "complete"
     }
   ]
 }

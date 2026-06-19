@@ -22,6 +22,17 @@
 > Major three independent provider×surface configs all flagged is a safer fix
 > target than a Major one config flagged once.
 >
+> **Severity is finding-level authoritative.** A per-run
+> [`remediation-report`](remediation-report-schema.md) contributor's `severity` /
+> `category` are **optional** (the merged finding's `severity` is the authoritative,
+> ranking value). When the aggregator reconstructs raw findings to re-run the
+> cross-run merge, a contributor that omits its own `severity` / `category` **falls
+> back to the parent finding's** value — so a Major whose authoritative severity
+> lives only at the finding level is never silently re-merged as *unspecified* and
+> down-ranked in the backlog (the parent severity is the max across its
+> contributors, so the fallback can only preserve, never under-state, the re-merged
+> severity). Set 072 S4 path-aware-dogfood fix.
+>
 > **Runtime validator.** The pure-Python
 > `ai_router.verification_only_app.validate_remediation_backlog` is the runtime
 > contract; it **never raises** and is held in produce↔validate parity with

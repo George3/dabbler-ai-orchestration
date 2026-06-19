@@ -72,6 +72,21 @@ here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Schema docs:** `docs/verification-matrix-report-schema.md`,
   `docs/remediation-report-schema.md`, `docs/remediation-backlog-schema.md`.
 
+### Fixed
+
+- **Cross-run aggregator preserves finding-level severity when a contributor omits
+  it (caught by the S4 path-aware dogfood).** A per-run `remediation-report`
+  contributor's `severity` / `category` are schema-optional (the merged finding's
+  `severity` is authoritative). `aggregate_remediation_reports` reconstructs raw
+  findings from contributors to re-run the cross-run merge; previously
+  `_raw_from_contributor` read only contributor-local fields, so a **valid** report
+  whose contributor omitted `severity` (with the authoritative value at the finding
+  level) was re-merged as *unspecified* and **down-ranked** in the backlog — a Major
+  a fixer should prioritize could sort below a Minor. The reconstruction now falls
+  back to the parent finding's `severity` / `category` (the parent severity is the
+  max across contributors, so the fallback can only preserve, never under-state, the
+  re-merged severity) + a regression test.
+
 ### Changed
 
 - **L-069-1 sibling-reader hardening.** The proven non-list-`entries` guard

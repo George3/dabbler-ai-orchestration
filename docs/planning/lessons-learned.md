@@ -487,10 +487,11 @@ last-pruned-set: (none)   generated: 2026-06-18
   **L-069-2**, and `_arms_held_equal` strengthened so a matrix artifact can never
   masquerade as the equal-arms RETIRE evidence) — **not** weakening the first instrument's
   control. And measure the interaction on **real built targets**, not synthetic toy diffs:
-  a verification-only pass over an already-built solution closes the "small snippet-fittable
-  diff" confound *for free*, does useful verification work, and emits the interaction
-  telemetry as a byproduct (the produce↔validate parity of the new report artifact follows
-  **L-066-1**). Ship best-guess defaults now and refine as real per-cell telemetry
+  a verification-only pass over an already-built solution **with a large/cross-file diff**
+  closes the "small snippet-fittable diff" confound *for free* (a small built target does
+  not — the confound closes only when the real diff is genuinely non-snippet-fittable), does
+  useful verification work, and emits the interaction telemetry as a byproduct (the
+  produce↔validate parity of the new report artifact follows **L-066-1**). Ship best-guess defaults now and refine as real per-cell telemetry
   accumulates; do not gate the useful work behind a synthetic confound-set.
 - **Action for future sessions:** Before citing an equal-arms result as decisive, ask what
   *interaction* the control made invisible. If a field signal (or first principles) says
