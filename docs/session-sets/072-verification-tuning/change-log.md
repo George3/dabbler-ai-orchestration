@@ -103,8 +103,9 @@
 
 ## Session 4 of 4 — Synthesis + docs + release + dogfood + first external run + close
 
-**Status:** CLOSED, VERIFIED. **Release: `ai_router` 0.26.0** (PyPI tag
-`v0.26.0`, operator-pushed on a green-`Test` SHA).
+**Status:** CLOSED, VERIFIED. **Release: `ai_router` 0.26.0 PUBLISHED to PyPI**
+2026-06-19 (tag `v0.26.0` on `d86f75f`, operator-pushed on a green-`Test` SHA;
+`release.yml` run **27842783381** SUCCESS).
 
 ### Shipped
 
