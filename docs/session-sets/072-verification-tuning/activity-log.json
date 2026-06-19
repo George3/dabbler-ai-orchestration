@@ -54,6 +54,38 @@
       "dateTime": "2026-06-19T09:04:59.737602-04:00",
       "description": "Routed cross-provider session-verification to gpt-5-4 (cross-provider from anthropic orchestrator; routed_gate REQUIRED). R1 ISSUES_FOUND 2 Major (cost 0.229): (1) validate_matrix_report too loose - surfaces accepted any subset + no cell-vs-run-level confound consistency; (2) cell validator looser than the comparison sibling on provenanceComplete<->unkeyed. FIXED Finding 1 in full (surfaces EXACTLY [push,pull]; cross-field equality of each cell echoed orchestrator*/diff* vs run-level orchestrator/diffShape, Set-070 precedent; doc updated) + the legitimate part of Finding 2 (_validate_cell now applies the SAME one-way provenanceComplete<->unkeyed checks as validate_comparison_artifact). DECLINED the Finding-2 over-reach (converse + exact count recompute) with reasoning: spec says MIRROR validate_comparison_artifact (the sibling deliberately checks only one-way), a false provenanceComplete is conservative not corrupting, and the producer derives flag+counts from one merge so cannot emit inconsistency. +3 tests (20 total). R2 (cost 0.130) VERIFIED: both fixes confirmed, decline judged sound (no plausible path to harm beyond what the sibling tolerates). Suite GREEN 2205/5. NOTE: a concurrent chat session edited shared writers + repo-wide activity-logs mid-run (explains a transient test_change_verification_mode flake on the first full-suite pass; passed in isolation + on re-run); my staging is surgical (explicit paths only, never -A).",
       "status": "complete"
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 1,
+      "stepKey": "cross-run-aggregator",
+      "dateTime": "2026-06-19T09:34:27.092204-04:00",
+      "description": "aggregate_remediation_reports rolls up N per-run remediation reports over one target into remediation-backlog.{json,md}; reuses merge_findings per stable key (union provenance, max severity); mixed-target/empty/missing-target guards.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 2,
+      "stepKey": "corroboration-annotation",
+      "dateTime": "2026-06-19T09:34:27.092739-04:00",
+      "description": "Each backlog finding annotated with corroboration = count of DISTINCT runs that surfaced it + the run refs; severity-then-corroboration ranked; unkeyed never corroborates.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 3,
+      "stepKey": "backlog-validator",
+      "dateTime": "2026-06-19T09:34:27.093276-04:00",
+      "description": "validate_remediation_backlog (never raises, L-066-1 parity): reuses _validate_merged_finding on a stripped core; enforces runCount==len(runs), distinct+member run refs, corroboration==distinct count, provenance<->unkeyed consistency. CLI aggregate subcommand. +docs/remediation-backlog-schema.md. +23 tests.",
+      "status": "complete"
+    },
+    {
+      "sessionNumber": 3,
+      "stepNumber": 4,
+      "stepKey": "s3-verified",
+      "dateTime": "2026-06-19T09:34:27.093790-04:00",
+      "description": "Cross-provider gpt-5-4 R1 ISSUES_FOUND (2 Major) -> adopted corroboration-distinctness fix in full, declined the converse provenanceComplete check (S2-adjudicated/R2-confirmed over-reach) -> R2 VERIFIED. Suite 2232 passed / 5 skipped.",
+      "status": "complete"
     }
   ]
 }
