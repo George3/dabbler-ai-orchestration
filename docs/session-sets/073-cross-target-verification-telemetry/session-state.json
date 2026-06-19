@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 4,
+  "sessionSetName": "073-cross-target-verification-telemetry",
+  "status": "not-started",
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Platform matrix run + cross-target telemetry record",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    },
+    {
+      "number": 2,
+      "title": "Synthesis + (conditional) template fix + close",
+      "status": "not-started",
+      "startedAt": null,
+      "completedAt": null,
+      "orchestrator": null,
+      "verificationVerdict": null
+    }
+  ]
+}
