@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "sessionSetName": "073-cross-target-verification-telemetry",
-  "status": "in-progress",
+  "status": "complete",
   "sessions": [
     {
       "number": 1,
@@ -19,16 +19,16 @@
     {
       "number": 2,
       "title": "Synthesis + (conditional) template fix + close",
-      "status": "in-progress",
+      "status": "complete",
       "startedAt": "2026-06-19T20:24:07.762892-04:00",
-      "completedAt": null,
+      "completedAt": "2026-06-19T20:37:42.870529-04:00",
       "orchestrator": {
         "engine": "claude-code",
         "provider": "anthropic",
         "model": "claude-opus-4-8",
         "effort": "medium"
       },
-      "verificationVerdict": null
+      "verificationVerdict": "VERIFIED"
     }
   ]
 }
