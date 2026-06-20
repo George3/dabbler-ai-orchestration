@@ -812,3 +812,67 @@ comparable corpus §8 says they will eventually be tuned on.
 
 Record: [`session-sets/073-cross-target-verification-telemetry/`](session-sets/073-cross-target-verification-telemetry/)
 (spec, `platform-run/` artifacts, `cross-target-comparison.md`, `change-log.md`).
+
+## 10. Set 075 — the greenfield finding-power pilot (set up, not answered)
+
+Set 075 stands up a pilot to measure **raw finding power** on fresh, not-yet-verified
+work. Where Sets 072–073 measured cost and noise on **already-built, already-remediated**
+diffs — so the defects were already removed before the matrix ran — this set moves the
+matrix to **Step 6, before remediation**, to capture yield while real defects are still
+present. The pilot measures **relative finding yield + precision against the adjudicated
+union of all findings — not true recall** (unknown-unknowns are invisible; the adjudicated
+union is a measurable proxy denominator, never the true defect set). Set 075 is a
+protocol-and-rollout set only: it ships **no `ai_router` code and triggers no release**,
+and it does **not** itself produce a finding-power verdict — a **future canonical synthesis
+set** scores the accumulated telemetry, the same data-gated pattern as RETIRE.
+
+### 10.1 Canonical assets and protocol
+
+Session 1 authored the canonical protocol assets. The core protocol is
+[`greenfield-matrix-protocol.md`](greenfield-matrix-protocol.md), which establishes
+**D1** pre-remediation timing, **D2** per-arm scoring metrics (TP, FP, precision,
+share-of-adjudicated-union, unique-TPs, cost-per-TP), **D3** a record-then-remediate
+artifact freeze, **D4** doc-only exclusion, and **D5** the committed telemetry layout +
+the required `metadata.json` contract. It is supported by a reusable instruction block,
+`ai_router/prompt-templates/greenfield-matrix-addendum.md`, and a fixed scoring guide,
+[`greenfield-adjudication-rubric.md`](greenfield-adjudication-rubric.md).
+
+### 10.2 Pilot cohort enablement
+
+Session 2 enabled the initial cohort, each consumer repo committing its own integration
+(router pin → `>=0.26.0` + the addendum wired into its `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`).
+The **LEAD** signal is `dabbler-platform` (`access-migration-generator-consumption`),
+whose source-dominated C# diffs are the primary measurement surface. `dabbler-access-harvester`
+(`019-...-dotnet-tool-packaging`) provides a **SUPPORTING but CONFOUNDED** signal — its
+small packaging diffs are snippet-fittable and favor push for the wrong reason.
+`dabbler-access-migration-orchestrator` is **DEFERRED** from the finding-power pool — its
+doc-only diffs would starve the push arm and poison the push-vs-pull comparison; an optional
+pull-only sidecar is permitted only when tagged `diffClass=docs-only-excluded` /
+`includedInFindingPower=false`.
+
+### 10.3 Validity threats and mitigations
+
+The protocol design carries two mitigations against known validity threats. To counter
+**selection bias from diff mix** (small packaging diffs favor push; large cross-file source
+diffs favor pull), telemetry is **stratified by `diffClass`** (`source-dominated`,
+`packaging-small`, `docs-only-excluded`), reported per stratum, with the platform repo
+treated as the lead signal. To counter **adjudication drift**, orchestrators adjudicate
+from a **provider-blind consolidated `remediation-report.md`** against the **fixed rubric**,
+so no high-status provider biases the true/false-positive calls (L-073-1's
+stay-within-the-evidence discipline applies to the per-finding verdicts).
+
+### 10.4 Matrix and posture (everything not-yet-earned stays held)
+
+The pilot keeps the established **2-cell** matrix — `push:anthropic × {pull:openai,
+pull:google}` — for corpus continuity with Sets 072–073, including the load-bearing
+Gemini-pull-under-strong-framing cell from §9. Per **L-069-2** the matrix varies
+**provider, not framing** — both arms stay strong adversarial. Set 075 changes **no
+posture**: the live default pull provider and the RETIRE decision remain exactly where
+Sets 072–073 left them. The matrix is still **not RETIRE evidence** (`_arms_held_equal`
+refuses a matrix artifact); RETIRE still awaits powered **equal-arms** telemetry
+(§5.1, §5.2). Defect seeding — which would permit a true recall estimate — is a designated
+**fast-follow**, not part of this pilot.
+
+Record: [`session-sets/075-greenfield-finding-power-pilot/`](session-sets/075-greenfield-finding-power-pilot/)
+(spec, `greenfield-matrix-protocol.md`, the addendum, `greenfield-adjudication-rubric.md`,
+`telemetry/`).

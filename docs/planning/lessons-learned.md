@@ -397,6 +397,31 @@ their **full text** to `lessons-archive.md` (never deleted; grep-able via
   data, and confirm the bordering held decision stays held with a one-line *why N=k does
   not move it* — especially when k is small and one property cuts the other way.
 
+## A Dependency-Pin Bump Is Not Enablement Until The Target Venv Is Upgraded And The Entrypoint Confirmed
+<!-- lesson: id="L-075-1" added-set="075" last-used-set="075" status="active" scope="portable" -->
+
+- **Context:** Rolling a new tool/version floor out to consumer repos — bumping a
+  `requirements.txt` (or equivalent) pin so a downstream session can run a newly-shipped
+  capability (Set 075 S2 wired the `verification_only_app` matrix into `dabbler-platform`
+  and `dabbler-access-harvester` by raising the `dabbler-ai-router` floor to `>=0.26.0`).
+- **Failure or friction:** A pin in `requirements.txt` is **declarative**, not effective:
+  it states the floor a fresh install *would* resolve, but it does **not** touch the repo's
+  already-provisioned `.venv`. The platform venv still had `0.10.0` installed (harvester
+  `0.18.0`) — both predating the entrypoint the pin was added to unlock — so
+  `python -m ai_router.verification_only_app` failed with `No module named …`. Had the bump
+  been treated as "done" at the edit, the **first** consumer session would have hit the
+  failure at Step 6, mid-measurement, on an expensive path.
+- **Lesson:** "Enablement" of a new entrypoint is three steps, not one: (1) bump the pin;
+  (2) actually **upgrade the target venv** to satisfy it (`pip install -U "<pkg>>=<floor>"`);
+  (3) **confirm the entrypoint is reachable and parses the exact args** the downstream step
+  will pass (a non-metered `--help` / argument-parse check, never assumed from the pin).
+  This generalizes beyond Python venvs to any "declared floor vs. installed reality" gap
+  (lockfiles, container base images, globally-installed CLIs).
+- **Action for future sessions:** When a session's job is to *make a downstream step
+  runnable*, do not stop at the manifest edit. Upgrade the environment that step actually
+  runs in and prove the entrypoint imports + accepts its args before calling the enablement
+  done. Record the resolved installed version in the close-out, not just the new floor.
+
 ---
 
 ## Repo-Specific Lessons
