@@ -6,7 +6,7 @@
 > **Gemini-pull replication** observation, the diff-shape / push-blindness contrast,
 > the per-cell findings and false-positive read, and the cross-target aggregation
 > exercise. The **authoritative replication verdict + the `verification-surface-
-> strategy.md` §8 synthesis are Session 2's routed deliverables** — this note is the
+> strategy.md` §9 synthesis are Session 2's routed deliverables** — this note is the
 > S1 evidence they build on, not the strategy update itself.
 >
 > **Both runs used the same matrix, framing, and orchestrator** — `push:anthropic ×
@@ -154,7 +154,7 @@ single mixed fix-list.
 ## 6. Summary for Session 2
 
 - **Gemini-pull non-silent: REPLICATED (N=2)** — clean `VERIFIED` on both targets under
-  strong framing. Record the replication verdict in §8 as *non-silent replicated*, with
+  strong framing. Record the replication verdict in §9 as *non-silent replicated*, with
   the honest finding-yield nuance (§2). Default-pull-provider decision stays **held**.
 - **Push-blindness contrast** confirms the field-study caveat: push non-load-bearing on a
   golden-dominated diff (harvester), a genuine reviewing surface on a source-dominated

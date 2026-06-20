@@ -696,3 +696,119 @@ Module map: `dual_surface_verify.py` (matrix seam + `_arms_held_equal` strengthe
 S1) · `docs/verification-matrix-report-schema.md` + `docs/remediation-report-schema.md` +
 `docs/remediation-backlog-schema.md`. As-built detail lives in
 [`../ai_router/docs/pull-verifier.md`](../ai_router/docs/pull-verifier.md).
+
+---
+
+## 9. Set 073 — the second cross-target datapoint and the Gemini-pull replication verdict
+
+Set 072 built the matrix instrument (§8) and ran it **once**, on
+`../dabbler-access-harvester`. That single run produced one load-bearing observation —
+the field study's "single weakest pull configuration," **Gemini-on-pull under strong
+framing, returned a clean verdict, not silence** — but **N=1** supports no
+provider×surface *interaction* conclusion. Set 073 ran the **same matrix** (`push =
+anthropic/sonnet × {pull = openai/gpt-5.4, pull = google/gemini-2.5-pro}`, both arms
+strong `adversarial-devils-advocate` framing, L-069-2 held; orchestrator
+`anthropic/claude-opus-4-8`) against a **second, independent built target**
+(`../dabbler-platform`) over a deliberately **code-focused** diff range, turning the one
+datapoint into two. **This set shipped no `ai_router` code and no release** — it is an
+application/telemetry set (the conditional template fix did not fire; see §9.3). The S1
+run artifacts live under
+[`session-sets/073-cross-target-verification-telemetry/platform-run/`](session-sets/073-cross-target-verification-telemetry/platform-run/)
+and the side-by-side analysis in
+[`cross-target-comparison.md`](session-sets/073-cross-target-verification-telemetry/cross-target-comparison.md).
+
+### 9.1 The Gemini-pull replication verdict — non-silent REPLICATED (N=2), finding-yield gap not refuted
+
+**On both independent targets, the Gemini-pull-under-strong-framing cell returned a clean
+`VERIFIED` — a verdict, NOT silence.** The Set 072 N=1 harvester observation now has an
+independent second datapoint on `dabbler-platform`. The **verdict-not-silence** property
+of `pull = gemini-2.5-pro` under our strong devil's-advocate pull framing **replicates**.
+That is consistent with the §8.3 hypothesis that the field study's "Gemini quiet on pull"
+was at least partly a **framing artifact** (the study compared whatever framing each
+harness shipped; our pull template classifies `ADVERSARIAL`).
+
+**The honest nuance — what did *not* replicate as a win.** Replication is of the
+*verdict-not-silence* property only, **not** of finding power. On the one target that had
+real pull findings to surface (platform), **Gemini-pull returned 0 findings while GPT-pull
+returned 2 Major contract-drift findings over the same repo**. So the field study's
+*finding-yield* gap (Gemini lower-yield on pull than GPT) is **not refuted** by this run —
+Gemini-pull is non-silent but, here, lower-yield than GPT-pull. The record is therefore:
+**"non-silent: replicated (N=2); relative finding-yield: Gemini-pull still trails GPT-pull
+on the target that had real pull findings."**
+
+**This does not move the live default.** Even a cleanly replicated non-silence result is
+N=2 on a single property, and the finding-yield read actually *cautions against* promoting
+Gemini to the default pull slot on this evidence. The live `router-config.yaml` default
+pull provider stays **held** exactly where Set 072 left it (§5.1 RETIRE precondition and
+§8.3 both stand) — the default-change decision waits for accumulated telemetry in a later,
+dedicated set, not for this datapoint.
+
+### 9.2 Push-blindness contrast across the two targets
+
+Both runs' diffs measured `elided=true` at the same ~61 KB push size budget, so neither
+push arm saw the *whole* committed diff. The cross-target value is in **what the elision
+dropped**:
+
+- **harvester (Set 072)** — the underlying change was dominated by a ~23.7k-line
+  golden-output regeneration, so the elided-away bulk was **generated noise**; push
+  reviewed a mostly non-load-bearing snippet and **pull was the load-bearing surface**
+  (the field study's #1 caveat: push flips toward pull on large diffs).
+- **platform (Set 073)** — the Set 072 harvester lesson was applied deliberately: a
+  **source-dominated** `.cs` feature range (`82a95ab..d66c449`, a new
+  `tools/Dabbler.CrudSlice` CLI + its tests + 2 consuming `src/` files, no
+  golden/`.db`/`pack-output` files dominant) was chosen, so the elided snippet was **real
+  source** — and push surfaced a Major in Cell A. Push was **less blind** on platform than
+  on harvester, even at the same elided budget.
+
+So the pair gives a clean contrast: **push non-load-bearing on a golden-dominated diff vs.
+push a genuine reviewing surface on a source-dominated diff**, both at the same ~61 KB
+budget — concrete confirmation of the study's "push flips toward pull on large diffs"
+caveat *and* of why the code-focused-range discipline matters. (A secondary observation:
+the two platform push arms used the identical provider/model/diff yet returned different
+verdicts — Cell A `ISSUES_FOUND`, Cell B `VERIFIED` — ordinary single-shot push
+non-determinism, a reminder that the **consolidated remediation report**, which unions both
+cells' findings, is the right unit, not any single cell's verdict.)
+
+### 9.3 The pull-template instruction-tension meta-finding did NOT recur → no template fix, no release
+
+Set 072's harvester run surfaced **one** Minor pull-only *meta*-finding: GPT-pull complained
+about a tension in our own pull template (mandatory early verdict submission vs. mandatory
+inspect-first workflow). Set 073 spec item 5 made a pull-template fix **conditional on
+recurrence** (a 2nd context). On platform, **GPT-pull emitted substantive contract-drift
+findings instead — the instruction-tension meta-complaint did not reappear.** The
+meta-finding is therefore a **single observation (N=1), not a recurring pattern.** Per the
+recurrence gate, Set 073 **records the single observation and ships no template change and
+no release** (`classify_framing_strength` stays `ADVERSARIAL` either way — nothing touched
+it). If a future run surfaces the same tension a second time, the conditional fix reopens.
+
+### 9.4 The cross-target aggregator, exercised on real independently-produced inputs
+
+Set 073 S1 ran the §8.2 cross-run aggregator (`aggregate_remediation_reports`) on a **real,
+independently-produced** remediation report for the first time (not a fixture): the platform
+report rolled into `platform-run/remediation-backlog.{json,md}` (`runCount=1`, 3 findings,
+every `corroboration=1` — a single run cannot corroborate), round-tripping
+`validate_remediation_backlog` (`report-ok`). The **`MixedTargetError` contrapositive** was
+also confirmed on real inputs: handing the aggregator the harvester report *and* the platform
+report together was correctly refused (`a backlog spans exactly one target`). There is
+therefore **no merged two-target backlog** — impossible by construction and out of scope per
+the spec; the cross-target view is the side-by-side `cross-target-comparison.md`, not a single
+mixed fix-list. Two of the three platform findings (a dead `docs/ai-led-session-workflow.md`
+SSOT link; a docs↔packaging inconsistency omitting `Dabbler.Api.Querying`) are exactly the
+**consumer-handoff value** (§8.4): real repo-state findings `dabbler-platform` can remediate
+directly from the report without re-running verification.
+
+### 9.5 What this changes about the program (and what it does not)
+
+Nothing is retired, demoted, or re-defaulted. Set 073 is **measurement**, not a posture
+change. It converts the Set 072 N=1 Gemini-pull observation into a **replication test on an
+independent built target** (non-silence replicates, N=2; finding-yield gap not refuted),
+exercises the cross-target aggregation path on real data, and produces a usable remediation
+report `dabbler-platform` acts on directly — while holding every not-yet-earned decision (the
+live default pull provider, RETIRE) exactly where Set 072 left it. Both §5 honesty caveats
+carry forward unchanged: the RETIRE decision still waits on powered **equal-arms** telemetry
+(the matrix is not RETIRE evidence — `_arms_held_equal` refuses it), and the matrix defaults
+remain *best-guess*, now refined by **one** additional real per-cell datapoint toward the
+comparable corpus §8 says they will eventually be tuned on.
+
+Record: [`session-sets/073-cross-target-verification-telemetry/`](session-sets/073-cross-target-verification-telemetry/)
+(spec, `platform-run/` artifacts, `cross-target-comparison.md`, `change-log.md`).
