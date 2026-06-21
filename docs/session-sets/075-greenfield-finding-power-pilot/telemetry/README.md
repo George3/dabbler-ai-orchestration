@@ -57,3 +57,48 @@ MUST carry:
 
 The migration-orchestrator repo is excluded from the aggregate (D4); it has no
 subdirectory here unless it ships an optional, clearly-tagged pull-only sidecar run.
+
+| `dabbler-great-psalms-scroll-font` | **candidate — to enable** (defect-dense algorithmic font-derivation) | yes (once enabled) — see Interim read |
+
+## Interim read (2026-06-20, after the first 3 datapoints) — READ BEFORE PICKING THE NEXT TARGET
+
+The first three runs (`dabbler-platform/…-s2`, `dabbler-access-harvester/019-s1`,
+`019-s2`) are **TP-starved**: the adjudicated TP union across all three is **1**
+(caught only by `pull:openai` — a cross-file doc-staleness defect the `push` arm is
+structurally blind to). Every other finding was a false positive of the rubric's two
+canonical classes (push elision; pull out-of-sandbox). **No finding-power conclusion
+can be drawn from this** — with ~1 real defect total, share-of-union / unique-TP /
+cost-per-TP are all degenerate. The cause is **defect density, not the instrument**:
+these were small, clean, packaging/decision diffs — exactly the kind a deterministic
+contract gate already covers, so there were no subtle defects left for the matrix to
+catch.
+
+**Implication for target selection — aim for defect-dense, oracle-poor source work.**
+The next runs should be **algorithmic logic** sessions (numerically/geometrically
+subtle, no cheap ground-truth oracle, interdependent steps), where real defects
+survive naive testing and a path-aware adversarial review has unique value.
+
+- **Lead target going forward: `dabbler-great-psalms-scroll-font` Stage B** (its
+  `project-plan.md` §6.2–6.7): Procrustes/GPA alignment, centerline extraction,
+  the ribbon width-profile / offset-Bézier reconstruction, outlier detection,
+  kerning derivations, ligature/run detection, and the calamus-law stroke-uniformity
+  models. **Skip** its setup/EDA/ingest sets (§7 steps 1–4) — low defect density.
+  Enablement (router pin `>=0.26.0` + addendum wiring) is pending a deferred
+  consumer-instruction sweep.
+- **Retrospective sub-corpus (NOT greenfield finding-power):** applying the matrix to
+  already-working code — the great-psalms `.scm` Script-Fu tools and the predecessor
+  repo's image downloader — is the Sets 072–073 *already-built* mode, not a fresh
+  pre-remediation run. Tag any such run `phase=retrospective` /
+  `includedInFindingPower=false` so it never contaminates the greenfield aggregate.
+  It is still useful scrutiny (those `.scm` tools were push-verified but **never**
+  pull/path-aware-reviewed). Caveat: Script-Fu (TinyScheme) is a **new language** for
+  this corpus (C#/.NET + Python so far) — record it so the synthesis does not compare
+  Scheme FP-rates against Python ones as if they share an axis.
+
+**Two methodology fixes the first runs surfaced (to fold into the addendum):**
+1. **Stage new files before the matrix run.** Untracked files are elided from
+   `git diff`, so the `push` arm hallucinates them as "missing" (the `019-s2`
+   push-elision FPs) — the instrument penalizes push for an artifact of L-064-9.
+2. **Commit *and push* the telemetry**, not just commit — the platform `…-s2`
+   LEAD datapoint was committed but left unpushed (stranded on one checkout) until a
+   later cross-check caught it. The addendum step 6 should say "commit **and push**."
